@@ -1,0 +1,36 @@
+# Private keys
+key/
+*.pem
+
+# Project-specific memory (contains per-project context)
+projects/
+
+# Claude internal data
+backups/
+cache/
+statsig/
+todos/
+debug/
+file-history/
+paste-cache/
+plans/
+plugins/
+sessions/
+shell-snapshots/
+telemetry/
+usage-data/
+config.json
+credentials.json
+.credentials.json
+.claude.json
+history.jsonl
+settings.json
+
+# Session data
+*.session
+*.lock
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
