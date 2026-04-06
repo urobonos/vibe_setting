@@ -308,3 +308,4 @@
 - **Efficiency (Token Economy):** 서브 에이전트 spawn 시 최소한의 컨텍스트만 포함. 에이전트 반환 결과 전달은 `diff`와 핵심 인터페이스 정보로 한정.
 - **Persistence:** 주요 설계 변경 시 `docs/decisions.md`에 결정 사유(Why) 기록.
 - **Recovery Strategy:** 도구 실패 시 `Error → Analysis → Alternative → Retry` 루프 최대 3회. 3회 초과 시 즉시 에스컬레이션.
+- **Large File Read Strategy:** Read 도구로 파일 읽기 시 토큰 초과 에러(`exceeds maximum allowed tokens`)가 발생하면, 자동으로 `offset`과 `limit` 파라미터를 사용하여 파일을 분할 읽기한다. 첫 시도 실패 시 `limit: 500`으로 재시도하고, 필요한 만큼 offset을 증가시키며 전체 파일을 순차적으로 읽는다. 사용자에게 에러를 보고하지 않고 자동 복구한다.
