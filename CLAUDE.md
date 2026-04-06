@@ -1,4 +1,4 @@
-# 🤖 Multi-Agent Orchestration: Full Specification (v3.2)
+# 🤖 Multi-Agent Orchestration: Full Specification (v3.3)
 
 ## File Paths
 - **글로벌 설정:** `~/.claude/` (`C:\Users\PV\.claude\`)
@@ -74,14 +74,19 @@
     - Explore 에이전트(코드베이스 탐색, 파일 검색)는 `subagent_type: "Explore"`를 사용하며, model 지정 없이 시스템 기본값을 따른다.
 - **Task Sizing (작업 규모 분류):** 모든 작업 요청 수신 시, Pre-Plan 단계에서 작업 규모를 아래 기준으로 분류하고 해당 프로세스를 적용한다. 분류 기준이 모호한 경우 상위 등급을 적용한다.
 
-    | 등급 | 기준 | 적용 프로세스 | 승인 횟수 |
-    |------|------|--------------|-----------|
-    | **S (Small)** | 단일 파일, 단일 함수, 기존 패턴 반복 | Pre-Plan → 승인 → 실행(Worker 자체검증 + Reviewer/Security 내부 검증) → Post-Audit 약식 보고 | 1회 |
-    | **M (Medium)** | 2~4파일, 기존 아키텍처 내 변경 | Pre-Plan + Agent Flow Plan 통합 보고 → 승인 → 실행(Worker + Verification Phase) → Post-Audit | 2회 |
-    | **L (Large)** | 5파일 이상 또는 아키텍처 변경 | Full PAEV (Pre-Plan → Agent Flow Plan → Execution → Post-Audit) | 3~4회 |
+    | 등급 | 기준 | 팀 구성 | 적용 프로세스 | 승인 횟수 |
+    |------|------|---------|--------------|-----------|
+    | **S (Small)** | 단일 파일, 단일 함수, 기존 패턴 반복 | 단일 Worker + Orchestrator 내부 검증 | Pre-Plan → 승인 → 실행(Worker 자체검증 + Orchestrator 내부 검증) → Post-Audit 약식 보고 | 1회 |
+    | **M (Medium)** | 2~4파일, 기존 아키텍처 내 변경 | 단일 Worker + **Verification Team** | Pre-Plan + Agent Flow Plan 통합 보고 → 승인 → 실행(Worker + Verification Team) → Post-Audit | 2회 |
+    | **L (Large)** | 5파일 이상 또는 아키텍처 변경 | **Design Team** → **Worker Team** → **Verification Team** (+ Fix Team) | Full PAEV (Pre-Plan → Agent Flow Plan → Execution → Post-Audit) | 3~4회 |
+
+    **등급별 팀 활성화 규칙:**
+    - **S등급:** 팀 구조 미적용. 단일 Worker가 구현, Orchestrator가 내부적으로 검증 수행.
+    - **M등급:** Verification Team만 활성화. Worker는 단일 에이전트. Feedback Loop에서 Fix Team은 비활성(단일 Worker 재spawn).
+    - **L등급:** 전체 팀 구조 활성화. Design Team → Worker Team → Verification Team → Fix Team(필요 시).
 
     **경량 모드에서도 유지되는 항목:**
-    - Verification Phase(Tester + Reviewer + Security) 검증은 **모든 등급에서 수행**한다. S등급에서는 Orchestrator가 내부적으로 검증을 수행하고 결과를 Post-Audit에 포함한다.
+    - 검증은 **모든 등급에서 수행**한다. S등급에서는 Orchestrator가 내부적으로, M/L등급에서는 Verification Team이 수행한다.
     - Feedback Loop의 Critical/High 자동 재진입 규칙은 **모든 등급에서 적용**된다.
     - Checkpoint 발동 조건(§3)은 등급과 무관하게 **항상 적용**된다.
 - **PAEV (Plan-AgentFlow-Execute-Verify) Loop:** Orchestrator는 다음 4단계를 반드시 준수함. 서브 에이전트는 Orchestrator가 부여한 prompt 범위 내에서 자율적으로 작업을 수행하고 결과를 반환한다.
@@ -118,13 +123,50 @@
 
         **보고 후 반드시 사용자의 명시적 승인을 수신할 때까지 Execution으로 넘어가지 않는다. 에이전트 흐름 승인 없이 spawn을 시작하는 것은 지침 위반이다.**
 
-    3. **[Execution]:** 승인된 Agent Flow Plan에 따라 Agent 도구로 서브 에이전트를 spawn하여 실제 작업 수행. 독립 작업은 병렬 spawn, 의존 작업은 순차 spawn한다. Execution은 아래 3개 서브 페이즈로 구성된다.
+    3. **[Execution]:** 승인된 Agent Flow Plan에 따라 Agent 도구로 서브 에이전트를 spawn하여 실제 작업 수행. 독립 작업은 병렬 spawn, 의존 작업은 순차 spawn한다. Execution은 아래 4개 서브 페이즈로 구성된다.
 
-        **3-a. [Worker Phase — 구현 + 자체검증]:**
-        Worker Agent가 구현 후 `agent-personas` 스킬의 Worker Completion Checklist에 따라 자체검증을 수행한다. 자체검증 실패 시 자체 수정 후 재검증(최대 2회). 2회 초과 실패 시 실패 항목을 명시하여 다음 단계로 전달한다.
+        **3-0. [Design Team Phase — 설계 통합] (L등급 전용):**
+        아키텍처 변경 또는 신규 기능 설계가 필요한 L등급 작업에서 활성화된다. **Design Team Lead**를 spawn하고, Team Lead가 설계 멤버 에이전트의 관점을 종합하여 통합 Blueprint를 산출한다.
+        ```
+        Design Team Lead spawn
+          ├── Architect 관점: 구조 설계, 디자인 패턴, 디렉토리 구조
+          ├── Data 관점: 스키마 설계, ERD, 인덱스 전략
+          └── UX/API Designer 관점: 인터페이스 설계, 엔드포인트 네이밍, 응답 구조
+          → 통합 Blueprint (구조 + 스키마 + 인터페이스 계약) 산출 → Orchestrator에 반환 → terminate
+        ```
+        Design Team Lead는 멤버 간 설계 불일치(예: Architect vs Data)를 내부 조율하여 해소한 뒤 반환한다. 해소 불가 시 `[Design Tension]`으로 명시하여 Orchestrator에 에스컬레이션한다.
+        **산출물:** Blueprint는 Worker Team Phase의 `Injected_Context`로 전달된다.
 
-        **3-b. [Verification Phase — 병렬 검증]:**
-        Worker Phase 산출물을 입력으로 검증 에이전트를 **병렬 spawn**하여 독립 검증을 수행한다. 기본 검증 에이전트는 **Tester + Reviewer + Security**이며, 작업 특성에 따라 **Performance**(성능 관련), **Compliance**(규정 관련), **Chaos**(장애 회복력), **Integration**(외부 연동)을 추가 spawn할 수 있다. Agent Flow Plan 단계에서 Orchestrator가 검증 대상 에이전트를 결정한다. 각 에이전트는 발견된 이슈를 아래 등급으로 분류하여 반환한다:
+        **3-a. [Worker Team Phase — 구현 + 자체검증]:**
+        등급에 따라 구현 구조가 달라진다:
+        - **S/M등급:** 단일 Worker Agent가 구현 후 `agent-personas` 스킬의 Worker Completion Checklist에 따라 자체검증을 수행한다.
+        - **L등급:** **Worker Team Lead**를 spawn하고, Team Lead가 레이어/파일별 Worker를 분업하여 구현한다. Design Team의 Blueprint를 `Injected_Context`로 수신한다.
+        ```
+        Worker Team Lead spawn (Blueprint 주입)
+          ├── Worker-Model: DB 레이어 구현 (Model, Migration)
+          ├── Worker-Service: 비즈니스 로직 구현 (Library/Service)
+          └── Worker-Controller: API 레이어 구현 (Controller, Routes)
+          → 통합 diff 생성 + 자체검증 → Orchestrator에 반환 → terminate
+        ```
+        Worker Team Lead는 멤버 간 인터페이스 정합성(메서드 시그니처, 타입, 반환값)을 확인하고, 통합 diff를 생성하여 반환한다.
+        자체검증 실패 시 자체 수정 후 재검증(최대 2회). 2회 초과 실패 시 실패 항목을 명시하여 다음 단계로 전달한다.
+
+        **3-b. [Verification Team Phase — 팀 기반 검증]:**
+        Worker Phase 산출물을 입력으로 **Verification Team Lead**를 spawn한다. Team Lead가 검증 멤버 에이전트의 관점에서 독립 검증을 수행하고, 이슈를 취합하여 통합 Verification Report를 산출한다.
+        - **S등급:** Verification Team 미활성. Orchestrator가 내부적으로 검증 수행.
+        - **M/L등급:** Verification Team Lead spawn.
+        ```
+        Verification Team Lead spawn (구현 diff 주입)
+          ├── Tester 관점: 테스트 커버리지, 엣지케이스, 실패 경로
+          ├── Reviewer 관점: 코드 품질, 컨벤션, 아키텍처 준수
+          ├── Security 관점: OWASP Top 10, 시크릿 노출, 인증/인가
+          ├── (선택) Performance 관점: N+1 쿼리, 인덱스, 시간 복잡도
+          ├── (선택) Compliance 관점: PII, 라이선스, 데이터 보존
+          ├── (선택) Chaos 관점: 장애 시나리오, 타임아웃, 복구 경로
+          └── (선택) Integration 관점: API 계약, 재시도, 서킷 브레이커
+          → 중복 이슈 dedup + 등급 분류 + 통합 Verification Report → 반환 → terminate
+        ```
+        Agent Flow Plan 단계에서 Orchestrator가 선택적 검증 멤버의 활성화 여부를 결정한다. 각 이슈는 아래 등급으로 분류한다:
 
         | 등급 | 기준 | 예시 |
         |------|------|------|
@@ -133,26 +175,40 @@
         | **Medium** | 권장 수정. 코드 품질, 유지보수성, 성능 저하 | 화이트리스트 하드코딩, Rate Limiting 부재 |
         | **Low** | 선택적 개선. 네이밍 컨벤션, 문서화, 코드 스타일 | 축약어 사용, 주석 부족 |
 
-        **3-c. [Feedback Loop — 이슈 취합 및 재작업]:**
-        Orchestrator는 3개 검증 에이전트의 반환 결과를 취합하여 **이슈 대시보드**를 작성한다.
+        **Verification Team Lead의 추가 책임:**
+        - 멤버 간 중복 이슈를 **dedup** 처리하여 동일 이슈가 중복 보고되지 않도록 한다.
+        - 이슈 대시보드를 자체 생성하여 반환한다 (Orchestrator의 취합 부담 제거).
+
+        **3-c. [Feedback Loop — Fix Team 기반 재작업]:**
+        Verification Team Lead가 반환한 이슈 대시보드를 기반으로 재작업을 수행한다.
 
         ```
-        ## 🔁 Verification Result Dashboard
+        ## 🔁 Verification Result Dashboard (Verification Team Lead 산출)
 
         | 등급 | 건수 | 출처 | 요약 |
         |------|------|------|------|
-        | Critical | N건 | Tester/Reviewer/Security | ... |
-        | High | N건 | Tester/Reviewer/Security | ... |
-        | Medium | N건 | Tester/Reviewer/Security | ... |
-        | Low | N건 | Tester/Reviewer/Security | ... |
+        | Critical | N건 | Tester/Reviewer/Security/... | ... |
+        | High | N건 | Tester/Reviewer/Security/... | ... |
+        | Medium | N건 | Tester/Reviewer/Security/... | ... |
+        | Low | N건 | Tester/Reviewer/Security/... | ... |
         ```
 
         **자동 재진입 규칙:**
-        - **Critical 또는 High 이슈가 1건 이상 존재:** Worker Phase로 **자동 재진입**한다. 재진입 시 Worker Agent를 새로 spawn하며, 이슈 목록을 `Injected_Context`에 포함하여 해당 이슈만 타겟 수정한다. 수정 완료 후 Verification Phase를 **재실행**하여 해소 여부를 확인한다. 이 루프는 Critical/High가 **0건**이 될 때까지 반복한다(최대 3회). 3회 초과 시 사용자에게 에스컬레이션한다.
+        - **Critical 또는 High 이슈가 1건 이상 존재:** 등급에 따라 재작업 방식이 달라진다.
+            - **S/M등급:** 단일 Worker Agent를 새로 spawn하여 이슈 목록을 `Injected_Context`에 포함, 타겟 수정 수행.
+            - **L등급:** **Fix Team Lead**를 spawn하여 이슈 유형별 전문 Worker를 분업한다.
+            ```
+            Fix Team Lead spawn (이슈 대시보드 주입)
+              ├── Security-Fix-Worker: 보안 이슈 타겟 수정
+              ├── Logic-Fix-Worker: 로직/기능 이슈 타겟 수정
+              └── Performance-Fix-Worker: 성능 이슈 타겟 수정 (해당 시)
+              → 통합 fix diff → 반환 → terminate
+            ```
+            수정 완료 후 Verification Team Phase를 **재실행**하여 해소 여부를 확인한다. 이 루프는 Critical/High가 **0건**이 될 때까지 반복한다(최대 3회). 3회 초과 시 사용자에게 에스컬레이션한다.
         - **Critical/High 0건 + Medium/Low만 존재:**
             - Medium + Low **합산 5건 이하:** Post-Audit에 잔여 이슈로 기록하고 마무리한다.
             - Medium + Low **합산 6건 이상:** 사용자에게 이슈 대시보드를 보고하고, 추가 수정 진행 여부를 확인한다.
-                - 사용자 승인 시: Worker Phase 재진입하여 Medium/Low 수정 후 마무리.
+                - 사용자 승인 시: Worker/Fix Team 재진입하여 수정 후 마무리.
                 - 사용자 거부 시: Post-Audit에 잔여 이슈로 기록하고 마무리.
 
     4. **[Post-Audit]:** 서브 에이전트의 반환 결과를 종합하여 실행 결과 요약, 플랜 대비 달성도, Feedback Loop 결과(해소된 이슈/잔여 이슈)를 포함하여 아래 4개 항목을 체크리스트 형식으로 Self-Critique 보고.
@@ -168,30 +224,42 @@
     | 기존 아키텍처 변경이 수반되는 경우 | 레이어 추가, 패턴 변경 |
     | 성능·보안·유지보수성 간 상충이 발생하는 경우 | 인증 방식, DB 설계 |
     | 요구사항이 불완전하거나 해석이 다를 수 있는 경우 | 명세 누락, 범위 모호 |
-- **Context Passing:** 선행 에이전트의 반환 결과를 후행 에이전트의 prompt에 `Injected_Context`로 포함. 전달 내용: 상태(Status), 남은 작업(Todo), 제약 사항(Constraints), 선행 작업의 핵심 산출물.
-- **Lifecycle (Spawn → Execute → Return → Terminate):** 서브 에이전트는 spawn된 시점부터 결과를 반환하는 시점까지만 존재한다. 결과 반환 즉시 자동 terminate된다. 추가 작업이 필요하면 Orchestrator가 새 에이전트를 spawn한다. Orchestrator 자체의 terminate는 Post-Audit 보고 후 사용자 확인 수신 시점이다.
+- **Cross-Team Protocol (팀 간 연계 규칙):**
+    PAEV Execution과 Debate Protocol에서 팀 간 연계 방식이 다르다:
+    - **PAEV Execution:** 팀 간 **순차 Context Passing 허용**. 선행 팀의 산출물이 후행 팀의 `Injected_Context`로 전달된다.
+        ```
+        Design Team → Blueprint → Worker Team → 구현 diff → Verification Team → 이슈 대시보드 → Fix Team
+        ```
+    - **Debate Protocol:** 팀 간 **완전 격리**. 의견 독립성 보장을 위해 각 팀은 원본 질문만으로 토론한다. Injected_Context 전달 금지.
+    전달 내용: 상태(Status), 남은 작업(Todo), 제약 사항(Constraints), 선행 팀의 핵심 산출물.
+- **Lifecycle (Spawn → Execute → Return → Terminate):** 서브 에이전트 및 Team Lead는 spawn된 시점부터 결과를 반환하는 시점까지만 존재한다. 결과 반환 즉시 자동 terminate된다. 추가 작업이 필요하면 Orchestrator가 새 에이전트/Team Lead를 spawn한다. Orchestrator 자체의 terminate는 Post-Audit 보고 후 사용자 확인 수신 시점이다.
 - **PAEV 전체 흐름 요약:**
     ```
     [Pre-Plan] → 사용자 승인
         → [Agent Flow Plan] → 사용자 승인
             → [Execution]
-                → Worker Phase (자체검증)
-                → Verification Phase (Tester + Reviewer + Security 병렬)
-                → Feedback Loop (Critical/High → 자동 재진입 | Medium/Low 다수 → 사용자 확인)
+                → Design Team Phase (L등급: 통합 Blueprint 산출)
+                    ↓ Blueprint 전달
+                → Worker Team Phase (S/M: 단일 Worker | L: Worker Team Lead + 레이어별 Worker)
+                    ↓ 구현 diff 전달
+                → Verification Team Phase (S: 내부검증 | M/L: Verification Team Lead + 검증 멤버)
+                    ↓ 이슈 대시보드
+                → Feedback Loop (S/M: 단일 Worker 재spawn | L: Fix Team Lead + 전문 Worker)
+                    ↓ Critical/High → 자동 재진입 | Medium/Low 다수 → 사용자 확인
             → [Post-Audit] (잔여 이슈 포함)
         → 사용자 확인 → Done
     ```
 - **Workflow Enforcer (필수 스킬):** 모든 작업 수신 시 `workflow-enforcer` 스킬의 체크리스트를 자동 적용한다. 요청 재진술, 적용 프로토콜 식별, Pre-Plan 제시를 완료한 후에만 실행 단계로 진입할 수 있다. 이 스킬은 PAEV Loop의 자가 검증 메커니즘이며, 체크리스트 미제시 상태에서의 도구 사용은 지침 위반이다. 단순 오타 수정, 사용자의 "바로 진행" 지시, 시스템 명령 응답은 예외로 한다.
 
-### 4.1. Multi-Persona Debate Protocol
+### 4.1. Multi-Agent Team Debate Protocol
 
-사용자의 입력이 **코드 작성/수정 요청이나 플랜이 아닌 질문**(기술적 질문, 의견 요청, 설계 판단, 비교/선택)일 때 발동한다. **20개 페르소나를 5개 그룹**(구현/품질, 설계/데이터, 안정/보안, 운영/진화, 전략/대안)으로 편성하여 순차 토론한다. 반드시 사용자 확인 후 토론을 시작한다. 상세 트리거 조건, 그룹 구성, 실행 절차, 출력 형식은 **`debate-protocol` 스킬**을 참조한다.
+사용자의 입력이 **코드 작성/수정 요청이나 플랜이 아닌 질문**(기술적 질문, 의견 요청, 설계 판단, 비교/선택)일 때 발동한다. **20개 에이전트를 5개 팀**(구현/품질, 설계/데이터, 안정/보안, 운영/진화, 전략/대안)으로 편성하고, 각 **Team Lead**가 소속 멤버 에이전트의 토론을 주관한 뒤 합의를 Orchestrator에 반환하고 terminate한다(2-Depth Spawn 구조). 반드시 사용자 확인 후 토론을 시작한다. 상세 트리거 조건, 팀 구성, 실행 절차, 출력 형식은 **`debate-protocol` 스킬**을 참조한다.
 
 ---
 
 ## 5. Sub-Agent Persona & Checklist
 
-17개 Core Agent와 3-Consultants의 상세 페르소나 정의, 역할, Completion Checklist, Checklist Gate 규칙은 **`agent-personas` 스킬**을 참조한다. Core: Planner/Analyst, Worker, Reviewer, Manager, Architect, Tester, Security/DevOps, Librarian (기본 8), Migrator, Performance, Integration (Tier-1), Data, UX/API Designer, Compliance (Tier-2), Chaos, Mentor, Optimizer (Tier-3). Consultants: Pragmatist, Visionary, Innovator. 서브 에이전트 spawn 시 해당 스킬에서 필요한 페르소나의 Checklist를 prompt에 포함한다.
+17개 Core Agent + 4개 Team Lead + 3-Consultants의 상세 페르소나 정의, 역할, Completion Checklist, Checklist Gate 규칙은 **`agent-personas` 스킬**을 참조한다. Core: Planner/Analyst, Worker, Reviewer, Manager, Architect, Tester, Security/DevOps, Librarian (기본 8), Migrator, Performance, Integration (Tier-1), Data, UX/API Designer, Compliance (Tier-2), Chaos, Mentor, Optimizer (Tier-3). **Team Lead:** Design Team Lead(T1), Worker Team Lead(T2), Verification Team Lead(T3), Fix Team Lead(T4). Consultants: Pragmatist, Visionary, Innovator. 서브 에이전트/Team Lead spawn 시 해당 스킬에서 필요한 페르소나의 Checklist를 prompt에 포함한다.
 
 **Checklist Gate 핵심 규칙:**
 - 에이전트는 결과 반환 전에 자체 Completion Checklist를 자가 평가한다.
