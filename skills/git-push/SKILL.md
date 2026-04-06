@@ -2,10 +2,10 @@
 name: git-push
 description: >
   커밋 메시지 포맷 정의 + 현재 브랜치에서 git push를 즉시 실행하는 스킬.
-  커밋 포맷의 SSOT. `[{ModuleName}] {type}: {설명}` 형식을 정의한다.
+  커밋 포맷의 SSOT. Conventional Commits v1.0.0 표준 `type(scope): 제목` 형식을 정의한다.
 triggers:
   - "push", "푸시해", "git push"
-version: 1.1.0
+version: 2.0.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -18,22 +18,67 @@ min_claude_md_version: "4.0"
 
 ---
 
-## 커밋 메시지 포맷
+## 커밋 메시지 컨벤션 (Conventional Commits v1.0.0)
+
+### 포맷
 
 ```
-[{ModuleName}] {type}: {설명}
+type(scope): 제목 (72자 이내)
+
+본문 (선택, 변경사항 상세)
+
+footer (선택)
 ```
+
+### type 목록
 
 | type | 용도 |
 |------|------|
 | `feat` | 새로운 기능 |
 | `fix` | 버그 수정 |
 | `refactor` | 리팩토링 (기능 변경 없음) |
+| `perf` | 성능 개선 |
 | `test` | 테스트 추가/수정 |
 | `docs` | 문서 변경 |
-| `chore` | 빌드, 설정, 기타 |
+| `style` | 코드 스타일 (포맷팅, 로직 무변경) |
+| `build` | 빌드/의존성 변경 (composer, npm) |
+| `ci` | CI/CD 파이프라인 변경 |
+| `chore` | 위에 해당 없는 기타 |
 
-**예시:** `[PhoneConsult] feat: 상담 요청 생성 API 추가`
+### scope 규칙
+
+- **선택사항** — 특정 모듈에 한정된 변경일 때만 사용
+- **BE:** 모듈명 PascalCase (`Auth`, `Payment`, `PhoneConsult`)
+- **FE:** 페이지/기능 단위 (`Login`, `MyPage`, `Common`)
+- **공통/인프라:** 소문자 (`config`, `infra`, `deps`)
+- **여러 모듈에 걸친 변경:** scope 생략
+
+### 핵심 규칙
+
+1. 제목은 72자 이내, 명령형("추가", "수정", "제거")
+2. 제목과 본문 사이 빈 줄 필수
+3. **1커밋 = 1변경** — feat + refactor 혼합 금지
+4. scope 안에 대괄호(`[]`) 사용하지 않음
+
+### 예시
+
+```
+docs: CLAUDE.md 서버 경로 갱신 — BE/FE 디렉토리 실제 경로 반영
+```
+
+```
+refactor(Auth): Phase 4C 완료 — new→service() DI 전환 150건+ 실행
+
+- new *Service() → service('xxx') 전환 36건 (Type A/A*/C)
+- new *Model() → service('xxxRepository')->getModel() 전환 104건+
+- 1935 tests, 2285 assertions 전부 통과
+```
+
+```
+refactor(Auth)!: session 인증 제거 → JWT 전환
+
+BREAKING CHANGE: 기존 session 기반 인증이 제거됨
+```
 
 ---
 
