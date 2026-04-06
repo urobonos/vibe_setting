@@ -17,7 +17,8 @@
 2. 현재 브랜치 및 마지막 커밋 확인 (`git status`, `git log --oneline -5`)
 3. 런타임 환경 확인 (`php -v`, `node -v` 등 프로젝트 유형에 따라)
 4. `docs/decisions.md` 존재 시 로드하여 기존 아키텍처 결정 사항 숙지
-5. `.claude/skills/` 디렉토리 존재 시 스킬 목록 확인, 현재 작업 유형과 매칭되는 스킬을 선택적으로 로드
+5. `docs/work-history/` 디렉토리 존재 시 최신 일자 파일을 로드하여 작업 히스토리 및 현황 숙지
+6. `.claude/skills/` 디렉토리 존재 시 스킬 목록 확인, 현재 작업 유형과 매칭되는 스킬을 선택적으로 로드
 
 → 완료 후 반드시 **"Context Loaded. Execution Ready."** 보고
 
@@ -72,6 +73,8 @@
     - Agent Flow Plan 테이블에 각 에이전트의 `Effort`와 `Model` 값을 반드시 명시하고, 할당 사유를 간략히 기재한다.
     - Orchestrator는 작업의 복잡도, 정확성 요구 수준, 응답 속도 필요성을 종합 판단하여 최적 조합을 선택한다.
     - Explore 에이전트(코드베이스 탐색, 파일 검색)는 `subagent_type: "Explore"`를 사용하며, model 지정 없이 시스템 기본값을 따른다.
+    - **실제 Agent 도구 호출 시에도** `model` 파라미터를 할당된 Model에 맞게 설정한다. Agent Flow Plan에서 명시한 Model과 실제 spawn 시 사용하는 model이 불일치하는 것은 지침 위반이다.
+    - Agent spawn 결과를 사용자에게 보고할 때, 각 에이전트의 **Model/Effort**를 함께 표기한다.
 - **Task Sizing (작업 규모 분류):** 모든 작업 요청 수신 시, Pre-Plan 단계에서 작업 규모를 아래 기준으로 분류하고 해당 프로세스를 적용한다. 분류 기준이 모호한 경우 상위 등급을 적용한다.
 
     | 등급 | 기준 | 팀 구성 | 적용 프로세스 | 승인 횟수 |
@@ -307,5 +310,6 @@
 - **Validation ("No Test, No Merge"):** 모든 수정은 유닛 테스트 또는 실행 로그 증빙 동반.
 - **Efficiency (Token Economy):** 서브 에이전트 spawn 시 최소한의 컨텍스트만 포함. 에이전트 반환 결과 전달은 `diff`와 핵심 인터페이스 정보로 한정.
 - **Persistence:** 주요 설계 변경 시 `docs/decisions.md`에 결정 사유(Why) 기록.
+- **Work History 자동 업데이트:** 커밋이 생성될 때마다 `docs/work-history/YYYY-MM-DD.md` 파일에 해당 커밋의 타임라인 항목(커밋 해시, 제목, 변경 내용 요약)을 추가한다. 해당 일자 파일이 없으면 새로 생성한다. 커밋 후 work-history 업데이트를 누락하는 것은 지침 위반이다.
 - **Recovery Strategy:** 도구 실패 시 `Error → Analysis → Alternative → Retry` 루프 최대 3회. 3회 초과 시 즉시 에스컬레이션.
 - **Large File Read Strategy:** Read 도구로 파일 읽기 시 토큰 초과 에러(`exceeds maximum allowed tokens`)가 발생하면, 자동으로 `offset`과 `limit` 파라미터를 사용하여 파일을 분할 읽기한다. 첫 시도 실패 시 `limit: 500`으로 재시도하고, 필요한 만큼 offset을 증가시키며 전체 파일을 순차적으로 읽는다. 사용자에게 에러를 보고하지 않고 자동 복구한다.
