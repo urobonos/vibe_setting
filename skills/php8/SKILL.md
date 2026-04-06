@@ -1,24 +1,264 @@
 ---
 name: php8
 description: >
-  PHP 8.x + CodeIgniter 4.x 환경에서 RESTful API를 설계하고 구현할 때 반드시 사용하는 스킬.
-  Controller → Library → Model의 3계층 아키텍처를 따르는 PHP 파일 생성, PHPUnit 테스트 코드,
-  Routes.php 설정까지 한 번에 생성한다. 사용자가 "API 만들어줘", "CI4 컨트롤러 만들어줘",
-  "CRUD 엔드포인트 추가해줘", "PHP 모델/서비스 만들어줘" 등의 요청을 하면 반드시 이 스킬을 사용한다.
-  부분 구현은 절대 금지 — 5가지 산출물(Controller, Library, Model, 테스트, Routes)이 항상 함께 생성되어야 한다.
+  PHP 8.4+ / CI 4.7+ Mono-repo Modular Monolith API 스킬. 듀얼 모드:
+  Legacy(app/Libraries/ → app/Models/)는 기존 유지, 신규는 Modules/{BC}/ 구조 강제.
+  신규 레이어: Controller → Service → Repository → Model + Entity/VO.
+  모듈 간 직접 클래스 참조 금지(Interface 통신만), service() DI 강제,
+  CI 4.7 Service Discovery 활용. QB 우선, raw query는 Repository에서만 named binding.
+  신규 모듈은 부분 구현 절대 금지 — 8가지 산출물이 항상 함께 생성되어야 한다.
 triggers:
   - "API 만들어줘", "엔드포인트 추가", "CRUD 만들어줘"
   - "CI4 컨트롤러 만들어줘", "PHP 모델 만들어줘", "서비스 만들어줘"
-  - app/Controllers/, app/Libraries/, app/Models/ 하위 PHP 파일 생성/수정 시
-version: 1.1.0
+  - app/Modules/ 하위 PHP 파일 생성/수정 시
+  - app/Libraries/, app/Controllers/Api/, app/Models/ 하위 PHP 파일 수정 시 (Legacy 모드)
+version: 3.1.0
+user-invocable: true
 depends_on: [mysql8, security-audit]
 conflicts_with: []
-min_claude_md_version: "3.2"
+min_claude_md_version: "4.0"
 ---
 
-# PHP 8.x + CI4.x API Architect Skill
+# PHP 8.4+ / CI 4.7+ Modular Monolith API Architect Skill
 
-PHP 8.x + CodeIgniter 4.x RESTful API를 **3계층 아키텍처**로 완전하게 구현하는 스킬.
+Mono-repo + Modular Monolith 아키텍처. **듀얼 모드**: Legacy 유지 + 신규 모듈 구조.
+
+---
+
+## 듀얼 모드 판별
+
+| 구분 | **Legacy** | **New (Modular Monolith)** |
+|------|-----------|---------------------------|
+| **적용 대상** | 기존 코드 수정 / 버그픽스 | 새 기능, 새 도메인 |
+| **경로** | `app/Controllers/Api/`, `app/Libraries/`, `app/Models/` | `app/Modules/{BC}/` |
+| **레이어** | Controller → Library/Service → Model (Repository 겸임) | Controller → Service → Repository → Model + Entity/VO |
+| **DI** | `new Service()` 또는 기존 방식 허용 | `service()` 함수 강제 |
+| **모듈 간 통신** | 직접 참조 허용 | **Interface Only** |
+| **DB 접근** | Model에서 직접 | Repository에서 QB 우선 |
+
+### 판별 기준
+- `app/Libraries/`, `app/Models/`, `app/Controllers/Api/` 수정 → **Legacy 모드** 적용
+- `app/Modules/` 하위 신규 생성/수정 → **New 모드** 적용
+- 새 도메인(기존에 없던 기능) 개발 요청 → **New 모드**로 `app/Modules/{BC}/` 생성
+
+---
+
+## Legacy 모드 (기존 코드 유지)
+
+기존 코드는 CI4 기본 플랫 MVC 구조를 유지한다. 레이어 구조를 강제로 변경하지 않는다.
+
+| 레이어 | 경로 | 역할 |
+|--------|------|------|
+| **Controller** | `app/Controllers/Api/` | HTTP 처리, 입력 검증 |
+| **Library/Service** | `app/Libraries/` | 비즈니스 로직 |
+| **Model** | `app/Models/` | DB CRUD (Repository 겸임) |
+
+**Legacy 수정 시 규칙:**
+- 기존 패턴(네이밍, DI 방식, 디렉토리 위치)을 따른다
+- 새 파일 추가가 아닌 기존 파일 수정일 경우, 해당 파일의 기존 스타일을 유지한다
+- PSR-12, 보안 규칙, 주석 규칙은 Legacy에도 동일하게 적용
+
+---
+
+## 아키텍처 원칙 (New 모드)
+
+| 원칙 | 설명 |
+|------|------|
+| **Mono-repo** | 단일 저장소에 모든 모듈(Bounded Context)을 포함 |
+| **Modular Monolith** | 배포는 단일 애플리케이션, 내부는 모듈 경계로 분리 |
+| **레이어 강제** | Controller → Service → Repository. 레이어 건너뛰기 금지 |
+| **모듈 경계** | 모듈 간 직접 클래스 참조 금지. **Interface로만 통신** |
+| **DI 강제** | `service()` 함수 사용. `new Service()`, `new Model()` 직접 호출 금지 |
+| **Query Builder 우선** | QB 사용이 기본. CTE/Window Function 등 미지원 구문만 `$db->query()` + named binding 허용 (Repository에서만) |
+
+### 레이어별 책임 / 금지
+
+| 레이어 | 책임 | 금지 |
+|--------|------|------|
+| **Controller** | Request 파싱, 입력 검증, 응답 반환 | DB 접근, 비즈니스 로직 |
+| **Service** | 비즈니스 로직, 트랜잭션 관리 | 직접 `$this->response` 반환, DB 직접 접근 |
+| **Repository** | Query Builder 쿼리, 데이터 접근 전담 | 비즈니스 판단, 응답 포맷팅 |
+| **Entity/VO** | 도메인 규칙, 유효성 검증 | 외부 의존성 (DB, HTTP, Framework) |
+| **Model** | 테이블 매핑, 필드 정의, 모델 레벨 검증 | 비즈니스 로직 (Repository에서만 사용) |
+
+---
+
+## 모듈 디렉토리 구조
+
+각 모듈은 하나의 **Bounded Context(BC)** 를 담당한다.
+
+```
+app/
+├── Controllers/Api/          ← Legacy (기존 유지)
+│   └── Traits/
+├── Libraries/                ← Legacy (Service 역할)
+├── Models/                   ← Legacy (Repository 겸임)
+│
+├── Modules/                  ← New (글로벌 신규 개발)
+│   ├── Order/                          ← BC: 주문
+│   │   ├── Controllers/OrderController.php
+│   │   ├── Services/OrderService.php
+│   │   ├── Repositories/OrderRepository.php
+│   │   ├── Models/OrderModel.php
+│   │   ├── Entities/Order.php          ← Domain Object. 순수 PHP 클래스
+│   │   ├── ValueObjects/Money.php      ← Immutable 값 객체 (선택)
+│   │   ├── Interfaces/                ← 외부 노출 계약
+│   │   │   ├── OrderServiceInterface.php
+│   │   │   └── OrderRepositoryInterface.php
+│   │   ├── Exceptions/                ← 모듈 전용 예외
+│   │   └── Config/
+│   │       ├── Routes.php
+│   │       └── Services.php            ← CI 4.7 자동 발견
+│   ├── Menu/                           ← BC: 메뉴
+│   │   ├── Controllers/
+│   │   ├── Services/
+│   │   ├── Repositories/
+│   │   ├── Models/
+│   │   ├── Interfaces/
+│   │   ├── Exceptions/
+│   │   └── Config/
+│   └── Shared/                         ← 공유 (2+ 모듈 공통)
+│       ├── Models/
+│       ├── Entities/
+│       ├── ValueObjects/               ← Money, Email, Address 등
+│       └── Interfaces/
+│
+├── Config/
+│   ├── Autoload.php                    ← PSR-4 네임스페이스 매핑
+│   ├── Routes.php                      ← 모듈 라우트 자동 로드
+│   └── Services.php                    ← Legacy DI (기존 유지)
+├── Database/
+│   ├── Migrations/
+│   └── Seeds/
+├── Filters/
+├── Helpers/
+└── ThirdParty/
+```
+
+### 네임스페이스 매핑
+
+`app/Config/Autoload.php`의 `$psr4`에 **BC별 개별 등록**한다 (CI4 auto-discovery 필수):
+
+```php
+public $psr4 = [
+    APP_NAMESPACE                => APPPATH,
+    'App\\Modules\\Order'        => APPPATH . 'Modules/Order',
+    'App\\Modules\\Menu'         => APPPATH . 'Modules/Menu',
+    // ... BC별 추가
+];
+```
+
+각 모듈 네임스페이스 형태:
+- `App\App\Modules\Order\Controllers`
+- `App\App\Modules\Order\Services`
+- `App\App\Modules\Order\Repositories`
+- `App\App\Modules\Order\Models`
+- `App\App\Modules\Order\Entities`
+- `App\App\Modules\Order\ValueObjects`
+- `App\Modules\Order\Interfaces`
+- `App\Modules\Order\Exceptions`
+
+---
+
+## 모듈 경계 규칙
+
+### 모듈 간 통신: Interface Only
+
+```
+┌─────────────┐         Interface         ┌─────────────┐
+│  Order 모듈  │ ──── OrderServiceIF ────▶ │  Payment 모듈│
+│             │ ◀── PaymentServiceIF ──── │             │
+└─────────────┘                           └─────────────┘
+```
+
+**금지:**
+```php
+// ✗ 다른 모듈의 구체 클래스를 직접 참조
+use App\App\Modules\Payment\Services\PaymentService;
+```
+
+**허용:**
+```php
+// ✓ 다른 모듈의 Interface를 참조
+use App\App\Modules\Payment\Interfaces\PaymentServiceInterface;
+```
+
+### 모듈 공개 API
+
+각 모듈은 `Interfaces/` 디렉토리에 **다른 모듈이 참조할 수 있는 Interface만** 공개한다.
+모듈 내부 클래스(Service 구체 클래스, Repository, Model)는 외부에서 직접 참조할 수 없다.
+
+### Shared 모듈
+
+2개 이상 모듈에서 공통으로 필요한 Model/Interface는 `Modules/Shared/`에 배치한다.
+전용 모델이 2번째 모듈에서 참조되는 시점에 `Shared/`로 이동을 제안한다.
+
+---
+
+## 의존성 주입 (DI)
+
+### CI 4.7 Service Discovery
+
+CI 4.7.0+에서는 모듈별 `Config/Services.php`가 **자동 발견**된다.
+메인 `app/Config/Services.php`에 수동 등록할 필요 없다.
+
+### 모듈별 DI 등록 (`Modules/{BC}/Config/Services.php`)
+
+```php
+namespace App\App\Modules\Order\Config;
+
+use CodeIgniter\Config\BaseService;
+use App\App\Modules\Order\Interfaces\OrderServiceInterface;
+use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
+use App\App\Modules\Order\Services\OrderService;
+use App\App\Modules\Order\Repositories\OrderRepository;
+use App\App\Modules\Order\Models\OrderModel;
+
+class Services extends BaseService
+{
+    /**
+     * OrderRepository DI 바인딩.
+     *
+     * @param bool $getShared 싱글턴 여부 (기본: true)
+     * @return OrderRepositoryInterface
+     */
+    public static function orderRepository(bool $getShared = true): OrderRepositoryInterface
+    {
+        if ($getShared) {
+            return static::getSharedInstance('orderRepository');
+        }
+
+        return new OrderRepository(model(OrderModel::class));
+    }
+
+    /**
+     * OrderService DI 바인딩.
+     *
+     * @param bool $getShared 싱글턴 여부 (기본: true)
+     * @return OrderServiceInterface
+     */
+    public static function orderService(bool $getShared = true): OrderServiceInterface
+    {
+        if ($getShared) {
+            return static::getSharedInstance('orderService');
+        }
+
+        return new OrderService(service('orderRepository'));
+    }
+}
+```
+
+### DI 사용 규칙
+
+| 규칙 | 설명 |
+|------|------|
+| **`service()` 함수 필수** | `service('orderService')`로 인스턴스를 가져온다 |
+| **`new` 직접 호출 금지** | Controller/Service에서 `new Service()`, `new Repository()`, `new Model()` 금지 |
+| **Controller → Service** | Controller 생성자에서 `service()`로 Service를 주입받는다 |
+| **Service → Repository** | Service 생성자에서 `service()`로 Repository를 주입받는다 |
+| **Repository → Model** | Repository 생성자에서 `model()` 헬퍼로 Model을 주입받는다 |
+| **모듈 간 의존** | `service()`로 상대 모듈의 Interface 타입을 받는다 |
+| **getShared 패턴** | 기본 싱글턴(`true`), 테스트 시 `false`로 새 인스턴스 |
 
 ---
 
@@ -26,259 +266,151 @@ PHP 8.x + CodeIgniter 4.x RESTful API를 **3계층 아키텍처**로 완전하�
 
 ### 1. PSR 준수
 
-- **PSR-1** (Basic Coding Standard): 파일은 `<?php` 또는 `<?=` 태그만 사용, UTF-8(BOM 없음), 네임스페이스와 클래스는 오토로딩 표준을 따른다.
-- **PSR-4** (Autoloading): 네임스페이스와 디렉토리 구조가 1:1로 일치해야 한다.
-- **PSR-12** (Extended Coding Style): 인덴트 **4칸 스페이스**, 줄 끝 공백 없음, 여는 중괄호는 같은 줄(메서드/클래스는 다음 줄).
+- **PSR-1**: `<?php` 태그, UTF-8(BOM 없음), 오토로딩 표준
+- **PSR-4**: 네임스페이스 = 디렉토리 구조. `Modules\{BC}\{Layer}`
+- **PSR-12**: 인덴트 **4칸 스페이스**, 여는 중괄호 같은 줄(메서드/클래스는 다음 줄)
 
-```php
-// PSR-12 준수 예시
-namespace App\Libraries;
+### 2. 추상화 / 구체화 범위
 
-use App\Contracts\ServiceInterface;
-use Exception;
+인터페이스는 해당 모듈의 `Interfaces/` 디렉토리에 배치한다.
 
-class OrderService implements ServiceInterface
-{
-    public function getById(int $id): array
-    {
-        // 인덴트 4칸 스페이스
-        if ($id <= 0) {
-            throw new Exception('유효하지 않은 ID입니다.');
-        }
-
-        return $this->model->find($id);
-    }
-}
-```
-
-### 2. 추상화 / 구체화 범위 설계
-
-인터페이스는 `app/Contracts/` 디렉토리에 배치한다.
-
-#### 추상화 필수 (인터페이스/추상 클래스 선행)
+#### 추상화 필수 (Interface 선행)
 
 | 조건 | 예시 |
 |------|------|
+| **다른 모듈에서 참조하는 Service** | 모든 공개 Service (모듈 경계 규칙) |
 | 2개 이상 구현체가 예상되는 경우 | 결제 수단별 PaymentService |
 | 외부 시스템 연동 | SMS, 이메일, 결제 게이트웨이 |
-| 교체 가능성이 있는 경우 | 캐시 드라이버, 파일 스토리지 |
-| 공통 행위를 여러 클래스가 공유하는 경우 | 기본 CRUD Service |
+| Repository | 모든 Repository는 Interface 필수 |
 
-#### 구체화 허용 (인터페이스 없이 직접 구현)
+#### 구체화 허용
 
 | 조건 | 예시 |
 |------|------|
-| 단일 구현이 명확하고 교체 가능성이 없는 경우 | 단순 CRUD Service |
-| 유틸리티/헬퍼 성격의 클래스 | 날짜 포맷터, 문자열 처리 |
+| 모듈 내부에서만 사용하는 단일 구현 Service | 단순 내부 헬퍼 |
+| 유틸리티/헬퍼 성격 | 날짜 포맷터, 문자열 처리 |
 
-#### 추상화 시 주석 필수
-
-추상화가 진행된 경우 **인터페이스/추상 클래스 상단에 추상화 사유를 반드시 주석으로 명시**한다.
-
-```php
-// Step 1: 인터페이스 정의 (app/Contracts/PaymentGatewayInterface.php)
-namespace App\Contracts;
-
-/**
- * [추상화 사유] 결제 게이트웨이가 복수(Stripe, Toss, KakaoPay)로 존재하며,
- * 향후 게이트웨이 추가/교체가 예상되므로 인터페이스로 분리한다.
- */
-interface PaymentGatewayInterface
-{
-    public function charge(int $amount, array $options): array;
-    public function refund(string $transactionId): bool;
-}
-
-// Step 2: 구체 클래스 구현 (app/Libraries/TossPaymentService.php)
-namespace App\Libraries;
-
-use App\Contracts\PaymentGatewayInterface;
-
-/**
- * Toss Payments 결제 게이트웨이 구현체.
- */
-class TossPaymentService implements PaymentGatewayInterface
-{
-    /**
-     * Toss API를 통해 결제를 요청한다.
-     *
-     * @param int   $amount  결제 금액 (원 단위)
-     * @param array $options 결제 옵션 (orderId, orderName 등)
-     * @return array 결제 결과 (transactionId, status 등)
-     */
-    public function charge(int $amount, array $options): array
-    {
-        // 구현...
-    }
-
-    /**
-     * 기존 결제 건을 환불 처리한다.
-     *
-     * @param string $transactionId 원 결제의 트랜잭션 ID
-     * @return bool 환불 성공 여부
-     */
-    public function refund(string $transactionId): bool
-    {
-        // 구현...
-    }
-}
-```
+추상화 시 인터페이스 상단에 **추상화 사유 주석 필수**.
 
 ### 3. 보안 검증 필수
 
-모든 코드는 **`security-audit` 스킬**의 보안 규칙을 준수해야 한다. 보안 검증의 Single Source of Truth는 `security-audit` 스킬이며, 이 스킬은 참조만 한다. 주요 점검 항목:
+모든 코드는 `security-audit` 스킬의 보안 규칙을 준수. SQL Injection, XSS, CSRF, Mass Assignment 등.
 
-- SQL Injection, XSS, CSRF, 입력값 검증, Mass Assignment
-- 상세 규칙, 감지 패턴, CI4 적용 방법은 `security-audit` 스킬을 참조한다.
+### 4. 사이드 이펙트 방지
 
-### 4. MVC 사이드 이펙트 방지
+파일 수정 전 모듈 내부 및 모듈 간 영향 범위를 확인한다.
 
-파일 수정/작성 전 **파생되는 MVC 패턴의 영향 범위를 반드시 확인**한다.
+- **Repository 변경 시**: 해당 Repository를 사용하는 Service 확인
+- **Service 변경 시**: Controller + 다른 모듈에서 Interface로 참조하는 곳 확인
+- **Model 변경 시**: Repository → Service → Controller 전체 확인
+- **Interface 변경 시**: 해당 Interface를 참조하는 **모든 모듈** 확인 (가장 위험)
+- **Migration 변경 시**: Model `$allowedFields`, `$validationRules` 동기화
 
-- **Model 변경 시**: 해당 Model을 사용하는 모든 Library/Service → Controller 확인
-- **Library 변경 시**: 해당 Library를 호출하는 모든 Controller 확인
-- **Controller 변경 시**: Routes.php의 라우트 매핑, 필터 설정 확인
-- **Migration 변경 시**: Model의 `$allowedFields`, `$validationRules` 동기화 확인
-
-변경으로 인한 사이드 이펙트가 감지되면 **영향받는 모든 파일을 함께 수정**한다.
-
-### 5. 공통 모델 분리
-
-2개 이상의 Service에서 참조하는 모델은 **공통 모델**로 분류하여 관리한다.
-
-| 구분 | 위치 | 기준 |
-|------|------|------|
-| **전용 모델** | `app/Models/` | 단일 Service에서만 사용 |
-| **공통 모델** | `app/Models/Common/` | 2개 이상 Service에서 참조 |
-
-- 공통 모델 변경 시 **해당 모델을 참조하는 모든 Service의 영향 범위를 확인**한다.
-- 전용 모델이 2번째 Service에서 참조되는 시점에 `Common/`으로 이동을 제안한다.
-
-```php
-// 공통 모델 예시 (app/Models/Common/UserModel.php)
-namespace App\Models\Common;
-
-use CodeIgniter\Model;
-
-/**
- * 공통 모델: OrderService, AuthService, ProfileService에서 참조.
- * 변경 시 위 Service 전체 영향 범위 확인 필수.
- */
-class UserModel extends Model
-{
-    protected $table = 'users';
-    // ...
-}
-```
-
-### 6. 주석 규칙
-
-#### 필수 주석 대상
+### 5. 주석 규칙
 
 | 대상 | 주석 내용 |
 |------|-----------|
-| **모든 함수/메서드** | `@param`, `@return`, 함수의 목적을 한 줄로 설명 |
-| **복잡한 비즈니스 로직** | 로직의 의도와 흐름을 단계별로 설명 |
-| **추상화된 클래스/인터페이스** | 추상화 사유 명시 (§2 참조) |
-| **공통 모델** | 참조하는 Service 목록 명시 (§5 참조) |
-| **비직관적인 조건/계산** | 왜 이 조건/계산이 필요한지 설명 |
-
-#### 주석 스타일
-
-```php
-/**
- * 주문의 총 금액을 계산한다.
- *
- * 할인 적용 순서: 쿠폰 할인 → 등급 할인 → 포인트 차감.
- * 할인 적용 후 최소 결제 금액(100원) 미만이 되지 않도록 보정한다.
- *
- * @param int   $orderId  주문 ID
- * @param array $discounts 적용할 할인 정보
- * @return int 최종 결제 금액 (원 단위)
- */
-public function calculateTotal(int $orderId, array $discounts): int
-{
-    // 1단계: 원가 합산
-    $subtotal = $this->getSubtotal($orderId);
-
-    // 2단계: 쿠폰 할인 적용 (정률/정액 구분)
-    $afterCoupon = $this->applyCouponDiscount($subtotal, $discounts['coupon'] ?? null);
-
-    // 3단계: 등급 할인 적용
-    $afterGrade = $this->applyGradeDiscount($afterCoupon, $discounts['grade'] ?? 0);
-
-    // 4단계: 최소 결제 금액 보정
-    return max($afterGrade, 100);
-}
-```
+| **모든 함수/메서드** | `@param`, `@return`, 목적 한 줄 |
+| **복잡한 비즈니스 로직** | 단계별 설명 |
+| **Interface** | 추상화 사유 |
+| **raw query** | QB로 불가능한 사유 명시 |
 
 ---
 
 ## 핵심 규칙
 
-새 API 엔드포인트나 기능 요청이 오면 아래 **5가지를 반드시 동시에 생성**한다:
+### New 모드 산출물
 
-1. **Controller** (`app/Controllers/Api/`)
-2. **Library/Service** (`app/Libraries/`)
-3. **Model** (`app/Models/`)
-4. **PHPUnit 테스트** (Unit + Feature)
-5. **Routes.php 설정 스니펫**
+새 API 엔드포인트나 기능 요청 시 아래 **9가지를 반드시 동시에 생성**한다:
 
-부분 구현은 허용되지 않는다.
+1. **Controller** (`Modules/{BC}/Controllers/`)
+2. **Service + Interface** (`Modules/{BC}/Services/`, `Modules/{BC}/Interfaces/`)
+3. **Repository + Interface** (`Modules/{BC}/Repositories/`, `Modules/{BC}/Interfaces/`)
+4. **Model** (`Modules/{BC}/Models/`)
+5. **Entity/VO** (`Modules/{BC}/Entities/`, `Modules/{BC}/ValueObjects/`) — 도메인 규칙이 필요한 경우
+6. **모듈 DI 등록** (`Modules/{BC}/Config/Services.php`)
+7. **PHPUnit 테스트** (Unit + Feature)
+8. **모듈 Routes** (`Modules/{BC}/Config/Routes.php`)
+9. **API 명세서** (`api-docs/{module}/{apiname}.md`)
+
+부분 구현은 허용되지 않는다. (Entity/VO는 도메인 규칙이 단순 CRUD 수준이면 생략 가능)
+
+### Legacy 모드 산출물
+
+기존 코드 수정 시 기존 패턴을 따르되, 최소한 아래를 확인한다:
+- 수정된 Controller/Library/Model의 사이드 이펙트 확인
+- 테스트 코드 갱신 (있는 경우)
+- PSR-12, 보안 규칙 준수
 
 ---
 
 ## 아키텍처 레이어
 
-### Layer 1: Controller (`app/Controllers/Api/`)
+### Layer 1: Controller (`Modules/{BC}/Controllers/`)
 
-**책임**: HTTP 요청 수신 → 입력 검증 → HTTP 응답 반환  
-**금지**: 비즈니스 로직 — 모든 처리는 Library/Service로 위임
+**책임**: HTTP 요청 수신 → 입력 검증 → HTTP 응답 반환
+**`service()` 함수로 Service를 주입받는다** — `new` 금지
 
 ```php
-namespace App\Controllers\Api;
+namespace App\App\Modules\Order\Controllers;
 
 use CodeIgniter\RESTful\ResourceController;
-use App\Libraries\{Feature}Service;
+use App\App\Modules\Order\Interfaces\OrderServiceInterface;
 use Exception;
 
-class {Feature}Controller extends ResourceController
+class OrderController extends ResourceController
 {
     protected string $format = 'json';
-    protected ${feature}Service;
+    protected OrderServiceInterface $orderService;
 
-    public function __construct(?{Feature}Service ${feature}Service = null)
+    public function __construct()
     {
-        $this->{feature}Service = ${feature}Service ?? new {Feature}Service();
+        $this->orderService = service('orderService');
     }
 
+    /**
+     * 주문 목록을 조회한다 (페이지네이션 적용).
+     *
+     * @return \CodeIgniter\HTTP\ResponseInterface
+     */
     public function index()
     {
         try {
             $page = (int)($this->request->getGet('page') ?? 1);
-            $perPage = (int)($this->request->getGet('per_page') ?? 20);
-            $result = $this->{feature}Service->getList($page, $perPage);
+            $perPage = (int)($this->request->getGet('perPage') ?? 20);
+            $result = $this->orderService->getList($page, $perPage);
             return $this->respond([
                 'status' => 'success',
                 'data' => $result['data'],
                 'meta' => $result['meta'],
             ]);
         } catch (Exception $e) {
-            log_message('error', '{feature} index error: ' . $e->getMessage());
+            log_message('error', 'order index error: ' . $e->getMessage());
             return $this->failServerError('서버 오류가 발생했습니다.');
         }
     }
 
+    /**
+     * 주문 단건을 조회한다.
+     *
+     * @param int|string|null $id 리소스 ID
+     * @return \CodeIgniter\HTTP\ResponseInterface
+     */
     public function show($id = null)
     {
         try {
-            $data = $this->{feature}Service->getById((int)$id);
+            $data = $this->orderService->getById((int)$id);
             return $this->respond(['status' => 'success', 'data' => $data]);
         } catch (Exception $e) {
             return $this->failNotFound('요청하신 데이터를 찾을 수 없습니다.');
         }
     }
 
+    /**
+     * 새 주문을 생성한다.
+     *
+     * @return \CodeIgniter\HTTP\ResponseInterface
+     */
     public function create()
     {
         $rules = [/* 요청별 규칙 */];
@@ -286,14 +418,20 @@ class {Feature}Controller extends ResourceController
             return $this->failValidationErrors($this->validator->getErrors());
         }
         try {
-            $result = $this->{feature}Service->create($this->request->getJSON(true));
+            $result = $this->orderService->create($this->request->getJSON(true));
             return $this->respondCreated(['status' => 'success', 'data' => $result]);
         } catch (Exception $e) {
-            log_message('error', '{feature} create error: ' . $e->getMessage());
+            log_message('error', 'order create error: ' . $e->getMessage());
             return $this->failServerError('서버 오류가 발생했습니다.');
         }
     }
 
+    /**
+     * 주문을 수정한다.
+     *
+     * @param int|string|null $id 리소스 ID
+     * @return \CodeIgniter\HTTP\ResponseInterface
+     */
     public function update($id = null)
     {
         $rules = [/* 요청별 규칙 */];
@@ -301,18 +439,24 @@ class {Feature}Controller extends ResourceController
             return $this->failValidationErrors($this->validator->getErrors());
         }
         try {
-            $result = $this->{feature}Service->update((int)$id, $this->request->getJSON(true));
+            $result = $this->orderService->update((int)$id, $this->request->getJSON(true));
             return $this->respond(['status' => 'success', 'data' => $result]);
         } catch (Exception $e) {
-            log_message('error', '{feature} update error: ' . $e->getMessage());
+            log_message('error', 'order update error: ' . $e->getMessage());
             return $this->failServerError('서버 오류가 발생했습니다.');
         }
     }
 
+    /**
+     * 주문을 삭제한다.
+     *
+     * @param int|string|null $id 리소스 ID
+     * @return \CodeIgniter\HTTP\ResponseInterface
+     */
     public function delete($id = null)
     {
         try {
-            $this->{feature}Service->delete((int)$id);
+            $this->orderService->delete((int)$id);
             return $this->respondDeleted(['status' => 'success', 'message' => '삭제되었습니다.']);
         } catch (Exception $e) {
             return $this->failNotFound('요청하신 데이터를 찾을 수 없습니다.');
@@ -322,100 +466,129 @@ class {Feature}Controller extends ResourceController
 ```
 
 **예외 → HTTP 상태 코드 매핑**:
-- 일반 `Exception` → `failServerError()` (500) — 내부 메시지 로깅 후 안전한 메시지 반환
-- 리소스 없음 → `failNotFound()` (404) — 안전한 메시지 반환
+- 일반 `Exception` → `failServerError()` (500) — `$e->getMessage()` 대신 안전한 메시지 반환, 내부 에러는 `log_message()`
+- 리소스 없음 → `failNotFound()` (404)
 - 권한 없음 → `failForbidden()` (403)
 - 중복/충돌 → `fail('message', 409)`
-- **주의:** `$e->getMessage()`를 HTTP 응답에 직접 노출하지 않는다. 내부 에러는 `log_message()`로 기록하고, 사용자에게는 안전한 메시지를 반환한다.
 
 ---
 
-### Layer 2: Library/Service (`app/Libraries/`)
+### Layer 2: Service (`Modules/{BC}/Services/`)
 
-**책임**: 모든 비즈니스 로직, 데이터 변환, 모델 간 오케스트레이션  
-**금지**: HTTP 관련 로직 (응답, 상태코드 등)
+**책임**: 비즈니스 로직, 데이터 변환, Repository 오케스트레이션
+**DB 직접 접근 금지** — 반드시 Repository를 통해서만 데이터에 접근
+**다른 모듈 참조 시 Interface 타입만 사용**
 
 ```php
-namespace App\Libraries;
+namespace App\App\Modules\Order\Services;
 
-use App\Models\{Feature}Model;
+use App\App\Modules\Order\Interfaces\OrderServiceInterface;
+use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
 use Exception;
 
-class {Feature}Service
+class OrderService implements OrderServiceInterface
 {
-    protected $model;
-
-    public function __construct(?{Feature}Model $model = null)
-    {
-        $this->model = $model ?? new {Feature}Model();
-    }
+    public function __construct(
+        protected OrderRepositoryInterface $repository
+    ) {}
 
     /**
-     * 페이지네이션이 적용된 목록을 반환한다.
+     * 페이지네이션이 적용된 주문 목록을 반환한다.
      *
      * @param int $page    현재 페이지 번호
      * @param int $perPage 페이지당 항목 수
-     * @return array 데이터 배열과 페이지네이션 메타 정보
+     * @return array{data: array, meta: array}
      */
     public function getList(int $page = 1, int $perPage = 20): array
     {
-        $total = $this->model->countAllResults(false);
-        $lastPage = (int)ceil($total / $perPage);
-        $data = $this->model->paginate($perPage, 'default', $page);
-
-        return [
-            'data' => $data ?: [],
-            'meta' => [
-                'current_page' => $page,
-                'per_page'     => $perPage,
-                'total'        => $total,
-                'last_page'    => $lastPage,
-            ],
-        ];
+        return $this->repository->paginate($page, $perPage);
     }
 
+    /**
+     * ID로 주문을 조회한다.
+     *
+     * @param int $id 주문 ID
+     * @return array 주문 데이터
+     * @throws Exception 데이터 없을 경우
+     */
     public function getById(int $id): array
     {
-        $item = $this->model->find($id);
+        $item = $this->repository->findById($id);
         if (!$item) {
             throw new Exception("ID {$id}에 해당하는 데이터가 없습니다.");
         }
         return $item;
     }
 
+    /**
+     * 새 주문을 생성한다.
+     *
+     * @param array $data 생성할 데이터
+     * @return array 생성된 주문
+     * @throws Exception 생성 실패 시
+     */
     public function create(array $data): array
     {
-        $id = $this->model->insert($data, true);
+        $id = $this->repository->insert($data);
         if (!$id) {
-            throw new Exception('데이터 생성에 실패했습니다: ' . implode(', ', $this->model->errors()));
+            throw new Exception('데이터 생성에 실패했습니다.');
         }
-        return $this->model->find($id);
+        return $this->repository->findById($id);
     }
 
+    /**
+     * 주문을 수정한다.
+     *
+     * @param int   $id   주문 ID
+     * @param array $data 수정할 데이터
+     * @return array 수정된 주문
+     * @throws Exception 수정 실패 시
+     */
     public function update(int $id, array $data): array
     {
-        $this->getById($id); // 존재 확인
-        if (!$this->model->update($id, $data)) {
+        $this->getById($id);
+        if (!$this->repository->update($id, $data)) {
             throw new Exception('데이터 수정에 실패했습니다.');
         }
-        return $this->model->find($id);
+        return $this->repository->findById($id);
     }
 
+    /**
+     * 주문을 삭제한다.
+     *
+     * @param int $id 주문 ID
+     * @return void
+     * @throws Exception 삭제 실패 시
+     */
     public function delete(int $id): void
     {
-        $this->getById($id); // 존재 확인
-        if (!$this->model->delete($id)) {
+        $this->getById($id);
+        if (!$this->repository->delete($id)) {
             throw new Exception('데이터 삭제에 실패했습니다.');
         }
     }
 }
 ```
 
-**멀티 스텝 작업**은 트랜잭션 사용:
+**다른 모듈 Service가 필요한 경우** — Interface로 주입:
+```php
+use App\App\Modules\Payment\Interfaces\PaymentServiceInterface;
+
+class OrderService implements OrderServiceInterface
+{
+    public function __construct(
+        protected OrderRepositoryInterface $repository,
+        protected PaymentServiceInterface $paymentService  // Interface만 참조
+    ) {}
+}
+```
+
+**멀티 스텝 작업**은 Service에서 트랜잭션 관리:
 ```php
 $db = \Config\Database::connect();
 $db->transStart();
-// ... 여러 모델 작업
+$this->repository->insert($orderData);
+$this->repository->updateStock($itemId, $qty);
 $db->transComplete();
 if (!$db->transStatus()) {
     throw new Exception('트랜잭션 처리 중 오류가 발생했습니다.');
@@ -424,27 +597,177 @@ if (!$db->transStatus()) {
 
 ---
 
-### Layer 3: Model (`app/Models/`)
+### Layer 3: Repository (`Modules/{BC}/Repositories/`)
 
-**책임**: 데이터베이스 CRUD, 데이터 무결성
+**책임**: 데이터 접근 전담. Query Builder 우선, raw query는 named binding 필수.
+**Service와 Controller는 Repository 없이 DB에 접근할 수 없다.**
 
 ```php
-namespace App\Models;
+namespace App\App\Modules\Order\Repositories;
+
+use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
+use App\App\Modules\Order\Models\OrderModel;
+
+class OrderRepository implements OrderRepositoryInterface
+{
+    public function __construct(
+        protected OrderModel $model
+    ) {}
+
+    /**
+     * ID로 주문을 조회한다.
+     *
+     * @param int $id 주문 ID
+     * @return array|null
+     */
+    public function findById(int $id): ?array
+    {
+        return $this->model->find($id);
+    }
+
+    /**
+     * 페이지네이션 목록을 반환한다.
+     *
+     * @param int $page    페이지 번호
+     * @param int $perPage 페이지당 항목 수
+     * @return array{data: array, meta: array}
+     */
+    public function paginate(int $page = 1, int $perPage = 20): array
+    {
+        $total = $this->model->countAllResults(false);
+        $lastPage = (int)ceil($total / $perPage);
+        $data = $this->model->paginate($perPage, 'default', $page);
+
+        return [
+            'data' => $data ?: [],
+            'meta' => [
+                'page'     => $page,
+                'perPage'  => $perPage,
+                'total'    => $total,
+                'lastPage' => $lastPage,
+            ],
+        ];
+    }
+
+    /**
+     * 새 레코드를 삽입한다.
+     *
+     * @param array $data 삽입할 데이터
+     * @return int|false 삽입된 ID 또는 실패 시 false
+     */
+    public function insert(array $data): int|false
+    {
+        return $this->model->insert($data, true);
+    }
+
+    /**
+     * 레코드를 수정한다.
+     *
+     * @param int   $id   레코드 ID
+     * @param array $data 수정할 데이터
+     * @return bool
+     */
+    public function update(int $id, array $data): bool
+    {
+        return $this->model->update($id, $data);
+    }
+
+    /**
+     * 레코드를 삭제한다.
+     *
+     * @param int $id 레코드 ID
+     * @return bool
+     */
+    public function delete(int $id): bool
+    {
+        return $this->model->delete($id);
+    }
+}
+```
+
+### Query Builder vs Raw Query 규칙
+
+**Query Builder 우선 (기본):**
+```php
+// ✓ QB 사용
+public function findActiveByUser(int $userId): array
+{
+    return $this->model
+        ->where('user_id', $userId)
+        ->where('status', 'active')
+        ->orderBy('created_at', 'DESC')
+        ->findAll();
+}
+```
+
+**Raw Query 허용 조건: CTE, Window Function 등 QB 미지원 구문 (Repository에서만):**
+```php
+// ✓ QB 미지원 → $db->query() + named binding (사유 주석 필수)
+/**
+ * 카테고리별 매출 순위를 조회한다.
+ *
+ * [raw query 사유] Window Function(RANK)은 CI4 Query Builder 미지원.
+ *
+ * @param string $startDate 시작일
+ * @param string $endDate   종료일
+ * @return array
+ */
+public function getSalesRanking(string $startDate, string $endDate): array
+{
+    $db = \Config\Database::connect();
+    $sql = <<<SQL
+        WITH category_sales AS (
+            SELECT category_id, SUM(amount) AS total_sales
+            FROM orders
+            WHERE created_at BETWEEN :startDate: AND :endDate:
+            GROUP BY category_id
+        )
+        SELECT cs.*, RANK() OVER (ORDER BY cs.total_sales DESC) AS sales_rank
+        FROM category_sales cs
+    SQL;
+
+    return $db->query($sql, [
+        'startDate' => $startDate,
+        'endDate'   => $endDate,
+    ])->getResultArray();
+}
+```
+
+**금지 패턴:**
+```php
+// ✗ Service/Controller에서 직접 DB 접근
+$db = \Config\Database::connect();
+$db->table('orders')->where(...)->get();
+
+// ✗ Repository에서 positional binding
+$db->query("SELECT * FROM orders WHERE id = ?", [$id]);
+
+// ✗ raw query에 사유 주석 없음
+```
+
+---
+
+### Model (`Modules/{BC}/Models/`)
+
+**책임**: 테이블 매핑, 필드 정의, 모델 레벨 검증 (2차 안전망)
+**Model은 Repository에서만 사용한다** — Service/Controller에서 직접 참조 금지
+
+```php
+namespace App\App\Modules\Order\Models;
 
 use CodeIgniter\Model;
 
-class {Feature}Model extends Model
+class OrderModel extends Model
 {
-    protected $table            = '{features}';       // 복수형 snake_case
+    protected $table            = 'orders';           // 복수형 snake_case
     protected $primaryKey       = 'id';
     protected $useAutoIncrement = true;
     protected $returnType       = 'array';
-    protected $useSoftDeletes   = false;              // 필요 시 true
+    protected $useSoftDeletes   = false;
     protected $allowedFields    = [/* 필드 목록 */];
     protected $useTimestamps    = true;
     protected $createdField     = 'created_at';
     protected $updatedField     = 'updated_at';
-    // soft delete 시 추가: protected $deletedField = 'deleted_at';
 
     protected $validationRules = [
         // 모델 레벨 검증 (2차 안전망)
@@ -454,9 +777,171 @@ class {Feature}Model extends Model
 
 ---
 
+### Interfaces (`Modules/{BC}/Interfaces/`) — 외부 노출 계약
+
+모듈의 공개 Interface. 다른 모듈은 이 Interface만 참조할 수 있다.
+
+```php
+// Modules/Order/Interfaces/OrderServiceInterface.php
+namespace App\App\Modules\Order\Interfaces;
+
+/**
+ * [추상화 사유] 모듈 경계 통신을 위한 공개 Interface.
+ * 다른 모듈(Payment, Delivery 등)에서 주문 기능에 접근할 때 사용한다.
+ */
+interface OrderServiceInterface
+{
+    public function getList(int $page = 1, int $perPage = 20): array;
+    public function getById(int $id): array;
+    public function create(array $data): array;
+    public function update(int $id, array $data): array;
+    public function delete(int $id): void;
+}
+```
+
+```php
+// Modules/Order/Interfaces/OrderRepositoryInterface.php
+namespace App\App\Modules\Order\Interfaces;
+
+interface OrderRepositoryInterface
+{
+    public function findById(int $id): ?array;
+    public function paginate(int $page, int $perPage): array;
+    public function insert(array $data): int|false;
+    public function update(int $id, array $data): bool;
+    public function delete(int $id): bool;
+}
+```
+
+---
+
+### Entity (`Modules/{BC}/Entities/`) — Domain Object. 순수 PHP 클래스
+
+**책임**: 도메인 규칙, 상태 관리, 비즈니스 불변식(invariant) 보장
+**외부 의존성 금지** — DB, HTTP, Framework 클래스를 import하지 않는다
+
+```php
+namespace App\App\Modules\Order\Entities;
+
+use App\App\Modules\Order\ValueObjects\Money;
+use InvalidArgumentException;
+
+/**
+ * 주문 도메인 엔티티.
+ * 주문 상태 전이, 금액 계산 등 도메인 규칙을 캡슐화한다.
+ */
+class Order
+{
+    public function __construct(
+        private readonly int $id,
+        private string $status,
+        private Money $totalAmount,
+        private readonly \DateTimeImmutable $createdAt
+    ) {}
+
+    /**
+     * 주문을 취소한다.
+     *
+     * @throws InvalidArgumentException 취소 불가 상태인 경우
+     */
+    public function cancel(): void
+    {
+        if (!in_array($this->status, ['pending', 'confirmed'])) {
+            throw new InvalidArgumentException(
+                "'{$this->status}' 상태의 주문은 취소할 수 없습니다."
+            );
+        }
+        $this->status = 'cancelled';
+    }
+
+    /**
+     * 주문이 환불 가능한지 확인한다.
+     *
+     * @return bool
+     */
+    public function isRefundable(): bool
+    {
+        return $this->status === 'completed'
+            && $this->createdAt > new \DateTimeImmutable('-30 days');
+    }
+
+    public function getId(): int { return $this->id; }
+    public function getStatus(): string { return $this->status; }
+    public function getTotalAmount(): Money { return $this->totalAmount; }
+}
+```
+
+### ValueObject (`Modules/{BC}/ValueObjects/` 또는 `Modules/Shared/ValueObjects/`) — Immutable 값 객체 (선택)
+
+**책임**: 값의 동등성, 불변성, 자체 유효성 검증
+**외부 의존성 금지** — 순수 PHP만 사용
+
+```php
+namespace App\App\Modules\Shared\ValueObjects;
+
+use InvalidArgumentException;
+
+/**
+ * 금액을 표현하는 값 객체.
+ * 불변이며, 통화 단위와 금액의 유효성을 보장한다.
+ */
+final readonly class Money
+{
+    public function __construct(
+        private int $amount,
+        private string $currency = 'USD'
+    ) {
+        if ($amount < 0) {
+            throw new InvalidArgumentException('금액은 0 이상이어야 합니다.');
+        }
+        if (!in_array($currency, ['USD', 'KRW', 'JPY'])) {
+            throw new InvalidArgumentException("지원하지 않는 통화: {$currency}");
+        }
+    }
+
+    /**
+     * 두 금액을 합산한다.
+     *
+     * @param Money $other 합산할 금액
+     * @return self 합산된 새 Money 인스턴스
+     * @throws InvalidArgumentException 통화 불일치 시
+     */
+    public function add(Money $other): self
+    {
+        if ($this->currency !== $other->currency) {
+            throw new InvalidArgumentException('통화가 일치하지 않습니다.');
+        }
+        return new self($this->amount + $other->amount, $this->currency);
+    }
+
+    public function getAmount(): int { return $this->amount; }
+    public function getCurrency(): string { return $this->currency; }
+
+    public function equals(Money $other): bool
+    {
+        return $this->amount === $other->amount
+            && $this->currency === $other->currency;
+    }
+}
+```
+
+### Entity/VO 사용 규칙
+
+| 규칙 | 설명 |
+|------|------|
+| **외부 의존성 금지** | `use CodeIgniter\...`, `use Config\...` 등 Framework import 불가 |
+| **불변 우선** | `readonly` 프로퍼티, `DateTimeImmutable` 사용 권장 |
+| **자체 유효성** | 생성자에서 도메인 규칙 검증. 유효하지 않으면 `InvalidArgumentException` |
+| **Service에서 사용** | Service가 Entity를 생성·조작, Repository가 Entity↔DB 변환 |
+| **VO 동등성** | `equals()` 메서드로 값 비교 (참조 비교 대신) |
+| **Shared VO** | 2+ 모듈에서 공통 사용하는 VO는 `Modules/Shared/ValueObjects/` |
+| **생략 가능** | 단순 CRUD로 도메인 규칙이 불필요한 경우 Entity/VO 생략 허용 |
+
+---
+
 ## 검증 표준
 
-Controller에서 먼저 검증, Model 검증은 2차 안전망:
+Controller에서 1차 검증, Model 검증은 2차 안전망:
 
 | 필드 유형 | 검증 규칙 |
 |-----------|-----------|
@@ -470,80 +955,83 @@ Controller에서 먼저 검증, Model 검증은 2차 안전망:
 
 ## 테스트 코드
 
-### Unit Test (Library 검증)
+### Unit Test (Service 검증 — Repository Mock 주입)
 ```php
-namespace Tests\Unit\Libraries;
+namespace Tests\Modules\Order;
 
-use App\Libraries\{Feature}Service;
+use App\App\Modules\Order\Services\OrderService;
+use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
 use CodeIgniter\Test\CIUnitTestCase;
 
-class {Feature}ServiceTest extends CIUnitTestCase
+class OrderServiceTest extends CIUnitTestCase
 {
-    protected $service;
-    protected $mockModel;
+    protected OrderService $service;
+    protected OrderRepositoryInterface $mockRepo;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mockModel = $this->createMock({Feature}Model::class);
-        $this->service = new {Feature}Service($this->mockModel);
+        $this->mockRepo = $this->createMock(OrderRepositoryInterface::class);
+        $this->service = new OrderService($this->mockRepo);
     }
 
-    public function testGetListReturnsArray()
+    public function testGetListReturnsArray(): void
     {
-        $this->mockModel->method('countAllResults')->willReturn(0);
-        $this->mockModel->method('paginate')->willReturn([]);
+        $this->mockRepo->method('paginate')->willReturn([
+            'data' => [],
+            'meta' => ['page' => 1, 'perPage' => 20, 'total' => 0, 'lastPage' => 0],
+        ]);
         $result = $this->service->getList();
         $this->assertIsArray($result);
         $this->assertArrayHasKey('data', $result);
         $this->assertArrayHasKey('meta', $result);
     }
 
-    public function testCreateReturnsNewRecord()
+    public function testGetByIdThrowsWhenNotFound(): void
     {
-        $data = [/* 유효한 테스트 데이터 */];
-        $result = $this->service->create($data);
-        $this->assertArrayHasKey('id', $result);
+        $this->mockRepo->method('findById')->willReturn(null);
+        $this->expectException(\Exception::class);
+        $this->service->getById(999);
     }
 }
 ```
 
 ### Feature Test (HTTP 엔드포인트 검증)
 ```php
-namespace Tests\Feature;
+namespace Tests\Modules\Order;
 
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\FeatureTestTrait;
 
-class {Feature}ApiTest extends CIUnitTestCase
+class OrderApiTest extends CIUnitTestCase
 {
     use FeatureTestTrait;
 
-    public function testIndexReturns200()
+    public function testIndexReturns200(): void
     {
-        $result = $this->get('api/{features}');
+        $result = $this->get('api/commerce/orders');
         $result->assertStatus(200);
         $result->assertJSONFragment(['status' => 'success']);
     }
 
-    public function testCreateWithValidData()
+    public function testCreateWithValidData(): void
     {
         $result = $this->withBodyFormat('json')
-                       ->post('api/{features}', [/* 유효한 데이터 */]);
+                       ->post('api/commerce/orders', [/* 유효한 데이터 */]);
         $result->assertStatus(201);
         $result->assertJSONFragment(['status' => 'success']);
     }
 
-    public function testCreateFailsWithInvalidData()
+    public function testCreateFailsWithInvalidData(): void
     {
         $result = $this->withBodyFormat('json')
-                       ->post('api/{features}', []);
+                       ->post('api/commerce/orders', []);
         $result->assertStatus(400);
     }
 
-    public function testShowNotFound()
+    public function testShowNotFound(): void
     {
-        $result = $this->get('api/{features}/99999');
+        $result = $this->get('api/commerce/orders/99999');
         $result->assertStatus(404);
     }
 }
@@ -551,35 +1039,244 @@ class {Feature}ApiTest extends CIUnitTestCase
 
 ---
 
-## Routes.php 설정
+## 모듈 Routes 설정
 
-```php
-// app/Config/Routes.php 에 추가
-$routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes) {
-    $routes->resource('{features}', ['controller' => '{Feature}Controller']);
-    // 커스텀 라우트 (필요 시):
-    // $routes->get('{features}/search', '{Feature}Controller::search');
-});
+### API URL 규격
+
 ```
+/{module}/{resource}
+```
+
+| 모듈 | URL 예시 | 설명 |
+|------|----------|------|
+| Call | `/phone-consult/calls` | 전화 상담 |
+| Commerce | `/commerce/payments` | 결제 |
+| Member | `/member/profile` | 회원 프로필 |
+
+- **module**: BC명의 kebab-case (비즈니스 도메인 표현)
+- **resource**: 복수형 snake_case 또는 단수형 (리소스 성격에 따라)
+- BC 디렉토리명과 URL module명은 다를 수 있다 (예: `Call` BC → `/phone-consult/`)
+
+### 모듈 라우트 (`Modules/{BC}/Config/Routes.php`)
+```php
+// Modules/Order/Config/Routes.php
+$routes->group('api/commerce', ['namespace' => 'App\Modules\Order\Controllers'], function ($routes) {
+    $routes->resource('orders', ['controller' => 'OrderController']);
+});
+// → /api/commerce/orders
+```
+
+### 메인 Routes에서 모듈 자동 로드 (`app/Config/Routes.php`)
+```php
+$moduleRoutes = glob(APPPATH . 'Modules/*/Config/Routes.php');
+foreach ($moduleRoutes as $routeFile) {
+    require $routeFile;
+}
+```
+
+---
+
+## API 명세서 (API Docs)
+
+API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한다.
+
+### 경로 규칙
+
+| 항목 | 규칙 | 예시 |
+|------|------|------|
+| **디렉토리** | `api-docs/{module}/` | `api-docs/commerce/` |
+| **module** | URL 규격의 kebab-case | `commerce`, `phone-consult`, `member` |
+| **파일명** | 리소스명 kebab-case + `.md` | `orders.md`, `calls.md`, `profile.md` |
+
+### 템플릿
+
+```markdown
+# {API 이름}
+
+> **모듈**: {BC명} | **Base Path**: `/api/{module}/{resource}`
+
+---
+
+## 엔드포인트 목록
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/{module}/{resource}` | 목록 조회 |
+| GET | `/api/{module}/{resource}/{id}` | 단건 조회 |
+| POST | `/api/{module}/{resource}` | 생성 |
+| PUT | `/api/{module}/{resource}/{id}` | 수정 |
+| DELETE | `/api/{module}/{resource}/{id}` | 삭제 |
+
+---
+
+## 공통
+
+### Headers
+| Header | 필수 | 값 |
+|--------|------|----|
+| Content-Type | Y | `application/json` |
+| Authorization | Y/N | `Bearer {token}` |
+
+### 공통 쿼리 파라미터 (목록 조회)
+| 파라미터 | 타입 | 기본값 | 설명 |
+|----------|------|--------|------|
+| page | int | 1 | 페이지 번호 |
+| perPage | int | 20 | 페이지당 항목 수 |
+| sort | string | createdAt | 정렬 기준 |
+| order | string | desc | 정렬 방향 (asc/desc) |
+| search | string | — | 검색 키워드 |
+
+---
+
+## 상세
+
+### GET `/api/{module}/{resource}` — 목록 조회
+
+**Response 200**
+```json
+{
+  "status": "success",
+  "data": [],
+  "meta": {
+    "currentPage": 1,
+    "perPage": 20,
+    "total": 0,
+    "lastPage": 1
+  }
+}
+```
+
+### GET `/api/{module}/{resource}/{id}` — 단건 조회
+
+**Path Parameters**
+| 파라미터 | 타입 | 설명 |
+|----------|------|------|
+| id | int | 리소스 ID |
+
+**Response 200**
+```json
+{
+  "status": "success",
+  "data": {}
+}
+```
+
+**Error 404**
+```json
+{
+  "status": "error",
+  "error": { "code": "RESOURCE_NOT_FOUND", "message": "..." }
+}
+```
+
+### POST `/api/{module}/{resource}` — 생성
+
+**Request Body**
+| 필드 | 타입 | 필수 | 설명 |
+|------|------|------|------|
+| (필드명) | (타입) | Y/N | (설명) |
+
+**Response 201**
+```json
+{
+  "status": "success",
+  "data": {}
+}
+```
+
+**Error 400**
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "입력값이 유효하지 않습니다.",
+    "details": {}
+  }
+}
+```
+
+### PUT `/api/{module}/{resource}/{id}` — 수정
+
+**Request Body**: POST와 동일 (부분 수정 허용 시 명시)
+
+**Response 200**
+```json
+{
+  "status": "success",
+  "data": {}
+}
+```
+
+### DELETE `/api/{module}/{resource}/{id}` — 삭제
+
+**Response 200**
+```json
+{
+  "status": "success",
+  "message": "삭제되었습니다."
+}
+```
+
+---
+
+## 에러 코드
+
+| 에러 코드 | HTTP | 설명 |
+|-----------|------|------|
+| VALIDATION_FAILED | 400 | 입력값 유효성 검증 실패 |
+| UNAUTHORIZED | 401 | 인증 실패 |
+| FORBIDDEN | 403 | 권한 없음 |
+| RESOURCE_NOT_FOUND | 404 | 리소스를 찾을 수 없음 |
+| CONFLICT | 409 | 중복/충돌 |
+| SERVER_ERROR | 500 | 서버 내부 오류 |
+
+---
+
+## 변경 이력
+
+| 날짜 | 변경 내용 |
+|------|----------|
+| {YYYY-MM-DD} | 최초 작성 |
+```
+
+### 작성 규칙
+
+- CRUD 중 구현하지 않는 엔드포인트는 템플릿에서 제거한다
+- 비표준 엔드포인트(예: `POST /api/commerce/orders/{id}/cancel`)는 상세 섹션에 추가한다
+- Request Body의 필드는 실제 Model/Entity 기준으로 모두 기재한다
+- Response 예시의 `data`는 실제 필드를 포함한 구체적 예시를 작성한다
+- 인증 필요 여부(`Authorization` 헤더)는 엔드포인트별로 정확히 표기한다
+- 명세서 생성/수정 시 `api-docs/README.md` 인덱스에 해당 항목을 추가/갱신한다
 
 ---
 
 ## 출력 형식
 
-모든 API 요청에 대해 아래 순서로 응답한다:
+### New 모드 출력 순서
 
-1. **📋 API 설계 요약** — 구현 내용 간략 설명
-2. **📂 Controller** — 전체 코드 + 파일 경로
-3. **📂 Library (Service)** — 전체 코드 + 파일 경로
-4. **📂 Model** — 전체 코드 + 파일 경로
-5. **🧪 테스트 코드** — Unit 테스트 + Feature 테스트 + 파일 경로
-6. **🛣️ Routes.php 설정** — 추가할 정확한 스니펫
-7. **📌 추가 참고사항** — 마이그레이션 SQL, 환경 고려사항, 후속 권고사항
+1. **API 설계 요약** — 모듈명(BC), 구현 내용 간략 설명
+2. **Controller** — 전체 코드 + 파일 경로
+3. **Service + Interface** — 전체 코드 + 파일 경로
+4. **Repository + Interface** — 전체 코드 + 파일 경로
+5. **Model** — 전체 코드 + 파일 경로
+6. **Entity/VO** — 도메인 규칙이 있는 경우 (단순 CRUD는 생략 가능)
+7. **모듈 DI 등록** (`Modules/{BC}/Config/Services.php`)
+8. **테스트 코드** — Unit + Feature + 파일 경로
+9. **모듈 Routes** — 라우트 파일 + 메인 로드 확인
+10. **API 명세서** — `api-docs/{module}/{apiname}.md` 생성
+11. **추가 참고사항** — 마이그레이션 SQL, 모듈 간 의존 관계, 후속 권고
+
+### Legacy 모드 출력 순서
+
+1. **수정 요약** — 변경 대상 파일, 변경 내용
+2. **변경 코드** — diff 또는 전체 코드 + 파일 경로
+3. **사이드 이펙트 확인** — 영향받는 파일 목록
+4. **테스트** — 갱신 필요한 테스트 (있는 경우)
 
 ### 에러 응답 표준
 
 ```json
-// 일반 에러
 {
   "status": "error",
   "error": {
@@ -587,8 +1284,9 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
     "message": "요청하신 항목을 찾을 수 없습니다."
   }
 }
+```
 
-// 유효성 검증 에러
+```json
 {
   "status": "error",
   "error": {
@@ -616,29 +1314,56 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
 
 ## 자가 검증 체크리스트
 
-응답 작성 전 반드시 확인:
-- [ ] 3개 레이어(Controller, Library, Model) 모두 존재
+### 0. 모드 판별 (최우선)
+- [ ] Legacy 수정인가, New 모듈 생성인가 판별했는가
+- [ ] 판별 결과에 따라 아래 해당 체크리스트를 적용
+
+### New 모드 체크리스트
+
+#### 아키텍처
+- [ ] 모듈 구조(`app/Modules/{BC}/`)로 파일이 배치되었는가
+- [ ] Controller → Service → Repository 레이어 모두 존재
 - [ ] Controller에 비즈니스 로직 없음
-- [ ] Library에 HTTP/응답 로직 없음
-- [ ] Controller에서 입력 검증 수행
-- [ ] Controller의 모든 Service 호출이 try-catch로 감싸짐
+- [ ] Service에 HTTP/응답 로직 없음, DB 직접 접근 없음
+- [ ] Repository에서만 DB 접근
+- [ ] Model은 Repository에서만 사용
+
+#### Entity/VO
+- [ ] 도메인 규칙이 있는 경우 Entity/VO가 생성되었는가
+- [ ] Entity/VO에 외부 의존성(DB, HTTP, Framework)이 없는가
+- [ ] VO는 불변(`readonly`)이고 자체 유효성 검증이 있는가
+- [ ] 공유 VO는 `Modules/Shared/ValueObjects/`에 배치했는가
+
+#### 모듈 경계
+- [ ] 모듈 간 직접 클래스 참조 없음 (Interface만 사용)
+- [ ] 공개 Interface가 `Interfaces/`에 정의되었는가
+- [ ] 공통 리소스(2+ 모듈 참조)는 `Modules/Shared/`에 배치했는가
+
+#### DI
+- [ ] `service()` 함수로 의존성을 주입받는가
+- [ ] `new Service()`, `new Repository()`, `new Model()` 직접 호출이 없는가
+- [ ] 모듈별 `Config/Services.php`에 바인딩이 등록되었는가
+
+#### 데이터 접근
+- [ ] Query Builder를 우선 사용했는가
+- [ ] raw query 사용 시: Repository에서만 + named binding + 사유 주석이 있는가
+
+#### 기타
+- [ ] Controller의 catch에서 안전한 메시지만 반환하는가
 - [ ] Unit 테스트 + Feature 테스트 모두 포함
-- [ ] Routes.php 스니펫 제공
-- [ ] 파일 경로가 CI4 컨벤션에 맞게 명시
-- [ ] Model의 `$allowedFields`가 완전하고 정확함
-- [ ] 네임스페이스가 CI4 컨벤션과 일치
-- [ ] PSR-12 코딩 스타일 준수 (인덴트 4칸 스페이스)
-- [ ] 추상화 대상 판별: 추상화 필수 조건에 해당하면 인터페이스 선행, 아니면 구체화 허용
-- [ ] 추상화 진행 시 인터페이스/추상 클래스 상단에 추상화 사유 주석이 있는가
-- [ ] 공통 모델(2+ Service 참조)은 `app/Models/Common/`에 배치했는가
-- [ ] 모든 함수/메서드에 목적, `@param`, `@return` 주석이 있는가
-- [ ] 복잡한 비즈니스 로직에 단계별 설명 주석이 있는가
-- [ ] 보안 검증 통과 (SQL Injection, XSS, CSRF, 입력값 검증, Mass Assignment)
-- [ ] 변경 파일의 MVC 파생 영향 범위를 확인하고 사이드 이펙트가 없는가
-- [ ] Controller/Service 생성자에 선택적 DI가 적용되어 있는가
-- [ ] Controller의 catch 블록에서 `$e->getMessage()`를 HTTP 응답에 직접 노출하지 않는가
-- [ ] 목록 조회에 페이지네이션이 적용되어 있는가
+- [ ] 모듈 Routes.php 제공
+- [ ] API 명세서(`api-docs/{module}/{apiname}.md`)가 생성되었는가
+- [ ] `api-docs/README.md` 인덱스에 항목이 추가되었는가
+- [ ] PSR-12 코딩 스타일 준수
+- [ ] 보안 검증 통과
 - [ ] 에러 응답이 표준 에러 코드 체계를 따르는가
+
+### Legacy 모드 체크리스트
+- [ ] 기존 파일의 네이밍/DI/디렉토리 패턴을 유지했는가
+- [ ] 변경으로 인한 사이드 이펙트를 확인했는가
+- [ ] PSR-12 코딩 스타일 준수
+- [ ] 보안 검증 통과
+- [ ] 테스트 코드 갱신 (있는 경우)
 
 ---
 
@@ -647,6 +1372,8 @@ $routes->group('api', ['namespace' => 'App\Controllers\Api'], function ($routes)
 - JSON 요청 바디: `$this->request->getJSON(true)` 사용
 - 폼 데이터: `$this->request->getVar()` 사용
 - API 컨트롤러에 `protected string $format = 'json';` 항상 설정
-- 모델 검증 에러 조회: `$model->errors()`
-- 단순 조회 시 raw 쿼리보다 `$model->find($id)` 선호
+- **DI**: `service('{name}')` 함수로 Service/Repository 인스턴스를 가져온다
+- **Model 생성**: Repository에서 `model(ClassName::class)` 헬퍼 사용
+- **테스트 DI 오버라이드**: Mock을 생성자에 직접 주입하여 단위 테스트
+- **PHP 8.4+ 기능**: Constructor Promotion, Named Arguments, Enums, `readonly`, Union Types
 - 소프트 딜리트: `$useSoftDeletes = true` + 스키마에 `deleted_at` 포함

@@ -6,9 +6,10 @@ description: >
 triggers:
   - "스킬 검증", "skill validate", "스킬 점검"
 version: 1.0.0
+user-invocable: true
 depends_on: []
 conflicts_with: []
-min_claude_md_version: "3.2"
+min_claude_md_version: "4.0"
 ---
 
 # Skill Validator Skill
@@ -95,9 +96,9 @@ min_claude_md_version: "3.2"
 **검사 항목:**
 | # | 검사 | 심각도 | 검사 방법 |
 |---|------|--------|-----------|
-| C-1 | 심각도 등급이 CLAUDE.md §7 체계(Critical/High/Medium)와 호환되는가 | **High** | 스킬 내 심각도가 §7 정의와 일치 |
-| C-2 | Checkpoint 발동 조건이 §3과 모순되지 않는가 | **High** | 스킬이 §3보다 낮은 기준으로 Checkpoint를 생략하지 않는지 |
-| C-3 | 스킬 내 도구 사용 규칙이 §4 PAEV와 충돌하지 않는가 | **High** | Pre-Plan 없이 도구 사용을 허용하는 규칙이 없는지 |
+| C-1 | 심각도 등급이 `security-audit` 스킬의 4등급 체계(Critical/High/Medium/Low)와 호환되는가 | **High** | 스킬 내 심각도가 정의와 일치 |
+| C-2 | Checkpoint 발동 조건이 CLAUDE.md §3과 모순되지 않는가 | **High** | 스킬이 §3보다 낮은 기준으로 Checkpoint를 생략하지 않는지 |
+| C-3 | 스킬 내 도구 사용 규칙이 `orchestration` 스킬의 3-Team 워크플로우와 충돌하지 않는가 | **High** | Team 1 분석 없이 도구 사용을 허용하는 규칙이 없는지 |
 | C-4 | `compatibility` 필드가 정의된 경우 실제로 호환되는가 | **Medium** | 선언된 호환성이 실제 내용과 일치 |
 
 **반환 형식:**

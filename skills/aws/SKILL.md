@@ -14,16 +14,17 @@ triggers:
   - "IAM 역할", "IAM 정책", "최소 권한"
   - AWS 관련 코드(Python Lambda, serverless.yml, SAM template) 작성/수정 시
 version: 1.0.0
+user-invocable: true
 depends_on: [mysql8, security-audit]
 conflicts_with: []
-min_claude_md_version: "3.2"
+min_claude_md_version: "4.0"
 ---
 
 # AWS Service Skill
 
 AWS 서비스 연동을 위한 스킬. Lambda(Python)를 중심으로 SQS/SNS 트리거, Aurora MySQL 연결, EC2, RDS Proxy, IAM/보안 그룹 설정을 다룬다.
 
-> **[Checkpoint 필수]** Lambda 함수를 새로 생성할 때, Python 런타임 버전을 반드시 사용자에게 확인받는다. 임의로 버전을 지정하지 않는다.
+> **[Checkpoint 필수]** Lambda 함수를 새로 생성할 때, Python 런타임 버전을 반드시 사용자에게 확인받는다. 사용자에게 확인 후 버전을 지정한다.
 
 ---
 
@@ -82,8 +83,8 @@ def process(event):
 |------|------|
 | **런타임 버전 확인** | Lambda 함수 신규 생성 시 Python 런타임 버전을 반드시 사용자에게 Checkpoint로 확인. 임의 지정 금지 |
 | **핸들러 ≠ 비즈니스 로직** | `handler()`는 이벤트 파싱 + 응답 래핑만. 실제 로직은 별도 함수/모듈로 분리 |
-| **환경변수 사용** | 시크릿, 엔드포인트, 설정값은 `os.environ.get()` 사용. 하드코딩 금지 |
-| **로깅 필수** | 모든 핸들러에 `logging` 모듈 사용. `print()` 금지 |
+| **환경변수 사용** | 시크릿, 엔드포인트, 설정값은 `os.environ.get()` 사용. 환경변수/시크릿 매니저로 관리한다 |
+| **로깅 필수** | 모든 핸들러에 `logging` 모듈을 사용한다 |
 | **에러 핸들링** | 최상위 `try-except`로 감싸고 에러 로깅. 내부 정보 외부 노출 금지 |
 | **타임아웃 고려** | 외부 호출(DB, API)에 timeout 설정. Lambda 제한시간 내 완료 보장 |
 | **멱등성** | SQS/SNS 트리거 시 동일 메시지 재처리에 안전해야 함 |
@@ -425,7 +426,7 @@ sg-ec2:
 
 ### IAM 역할 바인딩
 
-- EC2에는 **IAM Instance Profile**을 통해 역할 부여. 액세스 키 직접 사용 금지
+- EC2에는 **IAM Instance Profile**을 통해 역할 부여. IAM Instance Profile로 인증한다
 - S3, SQS 등 접근 시 Instance Profile 권한으로 처리
 
 ### 사용자 데이터 스크립트
@@ -433,7 +434,7 @@ sg-ec2:
 ```bash
 #!/bin/bash
 # 사용자 데이터 스크립트 규칙:
-# - 시크릿 하드코딩 금지 → SSM Parameter Store 또는 Secrets Manager 참조
+# - 시크릿은 SSM Parameter Store 또는 Secrets Manager로 관리한다
 # - 로그는 /var/log/user-data.log에 기록
 # - 실패 시 CloudWatch에 알림 전송
 ```
@@ -504,7 +505,7 @@ def get_connection():
 
 ### 핵심 규칙
 
-- Lambda에서 Aurora 직접 연결 금지 → **반드시 RDS Proxy 경유**
+- Lambda에서 Aurora는 RDS Proxy를 경유한다
 - Aurora Writer/Reader 엔드포인트 대신 **Proxy 엔드포인트** 사용
 - IAM 인증 활성화 시 **Secrets Manager에 DB 자격 증명 저장** 필수
 - 페일오버 시 RDS Proxy가 자동으로 새 인스턴스로 라우팅 — 애플리케이션 레벨 재연결 로직 불필요
@@ -539,7 +540,7 @@ Lambda 실행 역할에는 **필요한 권한만** 부여한다.
 
 | 규칙 | 설명 |
 |------|------|
-| **와일드카드 리소스 금지** | `Resource: "*"` 사용 금지. 특정 ARN으로 제한 |
+| **와일드카드 리소스 제한** | `Resource`는 특정 ARN으로 제한한다 |
 | **인라인 정책 지양** | 관리형 정책 또는 고객 관리형 정책 사용 |
 | **역할 분리** | Lambda 함수별로 별도 IAM 역할 생성. 하나의 역할을 여러 함수가 공유하지 않음 |
 | **액세스 키 미사용** | Lambda는 IAM 역할로 인증. 액세스 키 하드코딩/환경변수 주입 금지 |
@@ -607,7 +608,7 @@ Lambda가 Aurora에 접근하려면 **VPC 내에 배치**해야 한다.
 |------|------|
 | **0.0.0.0/0 Inbound 최소화** | SSH는 관리자 IP만, HTTP/HTTPS는 ALB 경유 |
 | **보안 그룹 간 참조** | IP 대신 보안 그룹 ID로 참조 (sg-xxx). IP 변경에 안전 |
-| **포트 범위 금지** | `0-65535` 같은 전체 포트 개방 금지. 필요한 포트만 명시 |
+| **포트 범위 제한** | `0-65535` 같은 범위 대신 필요한 포트만 명시적으로 개방한다 |
 | **변경 시 Checkpoint** | 보안 그룹 규칙 추가/수정/삭제 시 반드시 사용자 승인 |
 
 ---

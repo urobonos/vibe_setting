@@ -11,9 +11,10 @@ triggers:
   - "인덱스 추가", "인덱스 설계", "실행계획 분석"
   - MySQL/DB 관련 코드 작성/수정, 마이그레이션 파일(app/Database/Migrations/) 작업 시
 version: 1.0.0
+user-invocable: true
 depends_on: []
 conflicts_with: []
-min_claude_md_version: "3.2"
+min_claude_md_version: "4.0"
 ---
 
 # MySQL 8.x Query & Schema Skill
@@ -39,7 +40,7 @@ SELECT COALESCE(column_name, 'default') FROM table_name;
 
 ### 2. 필요한 컬럼만 SELECT
 
-- `SELECT *` 는 **절대 금지**한다.
+- **필요 컬럼만 명시**한다.
 - 쿼리빌더 사용 시에도 사용하는 컬럼만 명시적으로 지정한다.
 
 ```php
@@ -52,7 +53,7 @@ $builder->select('id, name, email, created_at')->get();
 
 ### 3. N+1 문제 방지
 
-- 루프 안에서 쿼리를 실행하지 않는다.
+- **JOIN/서브쿼리로 일괄 조회**한다.
 - 관련 데이터는 **JOIN** 또는 **서브쿼리**로 한 번에 조회한다.
 
 ```php
@@ -128,7 +129,7 @@ GROUP BY sub.name;
 
 ### 7. 인덱스 추가/수정 — 사용자 승인 필수
 
-- 인덱스 추가, 수정, 삭제가 필요하다고 판단되면 **제안만 하고 실행하지 않는다**.
+- 인덱스 추가, 수정, 삭제가 필요하다고 판단되면 **제안만 하고 사용자 승인 후 적용한다**.
 - 반드시 아래 형식으로 보고 후 사용자 승인을 받는다:
 
 ```
@@ -152,6 +153,17 @@ GROUP BY sub.name;
 ## CI4 쿼리빌더 사용 시 적용 규칙
 
 CI4 쿼리빌더를 사용할 때도 위 원칙을 동일하게 적용한다.
+
+### CI4 QB 미지원 — Raw 쿼리 필수 기능
+
+아래 MySQL 8.0 기능은 CI4 Query Builder로 빌드할 수 없으므로 `$db->query()`로 직접 작성한다.
+
+| 기능 | 예시 |
+|------|------|
+| `WITH` (CTE) | `WITH cte AS (SELECT ...)` |
+| Window Functions | `RANK() OVER (...)`, `ROW_NUMBER() OVER (...)` |
+| `JSON_TABLE()` | `JSON_TABLE(col, '$.path' COLUMNS(...))` |
+| `LATERAL JOIN` | `JOIN LATERAL (SELECT ...)` |
 
 ```php
 // 올바른 CI4 쿼리빌더 패턴

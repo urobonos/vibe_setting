@@ -8,9 +8,10 @@ triggers:
   - 프론트엔드 관련 파일(.tsx, .ts, .jsx, .js, next.config.*, tailwind.config.*, package.json) 생성/수정/삭제 요청 시 자동 적용
   - "프론트엔드 수정", "React 컴포넌트", "Next.js 페이지"
 version: 1.0.0
+user-invocable: true
 depends_on: []
 conflicts_with: []
-min_claude_md_version: "3.2"
+min_claude_md_version: "4.0"
 ---
 
 # Frontend Guard Skill
