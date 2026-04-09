@@ -5,7 +5,7 @@
 - **글로벌 스킬:** `~/.claude/skills/{skill-name}/SKILL.md`
 - **프로젝트 로컬 스킬:** `./.claude/skills/{skill-name}/SKILL.md`
 - 스킬 파일을 생성하거나 수정할 때, **반드시 대상 경로(글로벌 vs 프로젝트 로컬)를 사용자에게 확인** 후 작업한다. 확인 없이 경로를 임의 결정하는 것은 지침 위반이다.
-- **Notion 문서 동기화:** 글로벌 지침(`CLAUDE.md`) 또는 스킬 파일(`~/.claude/skills/`)을 생성·수정·삭제할 때, Notion의 **"클로드코드_문서"**에도 변경 내용을 반영한다. 지침/스킬 수정 완료 후 Notion 업데이트를 누락하는 것은 지침 위반이다.
+- **Notion 문서 동기화:** 글로벌 지침(`~/.claude/CLAUDE.md`) 또는 프로젝트 지침(`CLAUDE.md`)을 수정할 때, Notion에도 변경 내용을 반영한다. 지침 수정 완료 후 Notion 업데이트를 누락하는 것은 지침 위반이다.
 - **Notion 수정 절차:** (1) `notion-fetch`로 현재 내용 다운로드 → (2) 로컬 지침과 대조하여 갱신 내용 작성 → (3) `replace_content`로 전체 덮어쓰기. 부분 패치(`update_content`)보다 전체 교체를 기본으로 한다.
 
 ---
@@ -50,3 +50,5 @@
 - **Readability:** 주석 없이 읽히는 명시적 코드. 전체 단어(fullName, index 등) 사용.
 - **Validation ("No Test, No Merge"):** 모든 수정은 유닛 테스트 또는 실행 로그 증빙 동반.
 - **Persistence (필수):** 모든 작업 완료 시 `docs/work-history/history.md`에 `YYYY.MM.DD` 항목으로 처리 내역을 기록한다. 누락은 지침 위반.
+- **타당성 검토 (Feasibility Review, 필수):** 모든 분석(analyze), 사전 계획(preplan), 설계(SDD/SRS/SDP/IDD) 산출물에 **"타당성 검토"** 섹션을 포함한다. 근거 확보는 `docset-ref` 스킬의 검색 절차를 따른다 (Docset SQLite 검색 → 마크다운 캐시 → WebFetch fallback). 근거 없는 주장·권고는 지침 위반이다.
+- **변경 영향 기록 (Change Impact Log, 필수):** analyze/preplan 결과를 반영할 때, **변경되는 사항**, **개선점**, **왜 해야 하는지(수행 이유)**를 산출물에 필수 기록한다. 변경 사항만 나열하고 이유를 생략하는 것은 지침 위반이다.
