@@ -1,7 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(bash hooks/gate-approve.sh)",
+      "Bash(bash C:/Users/PV/.claude/hooks/gate-approve.sh)",
+      "Bash(ls /tmp/claude_gate_*)",
+      "Bash(cat /tmp/claude_gate_*)",
+      "Bash(chmod +x:*)",
+      "Bash(bash -n C:/Users/PV/.claude/hooks/no-test-no-merge.sh)",
+      "Bash(bash -n C:/Users/PV/.claude/hooks/test-run-flag.sh)",
+      "Bash(bash -n C:/Users/PV/.claude/hooks/gate-enforce.sh)",
+      "Bash(bash -n C:/Users/PV/.claude/hooks/gate-approve.sh)",
+      "Bash(bash -n C:/Users/PV/.claude/hooks/session-completeness-check.sh)",
+      "Bash(bash -n C:/Users/PV/.claude/hooks/edit-write-flag.sh)",
+      "Bash(npx -y @anthropic-ai/claude-code@latest --print \"Search the web for 'Bitbucket MCP server' and find all available tools/features. Check official Atlassian implementations and community packages on npm and GitHub. I need: 1\\) Package names and repos 2\\) Complete list of tool names each server provides 3\\) What each tool does. Check these specifically: @anthropic-ai/bitbucket-mcp, atlassian-labs bitbucket MCP, any npm packages with 'bitbucket' and 'mcp' in the name, and GitHub repos. Be thorough and list every tool.\")",
+      "Bash(npm search:*)",
+      "Bash(npm list:*)",
+      "Bash(npx @aashari/mcp-server-atlassian-bitbucket --help)",
+      "Bash(cat ~/.claude/teams/default/inboxes/*.json)",
+      "Bash(xargs -0 -I{} du -sh \"{}\")",
+      "Bash(wc -c docs/**/* monitoring/**/* teams/**/* commands/* skills.zip stats-cache.json mcp-needs-auth-cache.json)",
+      "Bash(find . -not -path './.git/*' -type f -exec du -b {} +)",
+      "Bash(powershell:*)"
     ]
   }
 }
