@@ -30,6 +30,9 @@ settings.json
 *.session
 *.lock
 
+# API tokens
+*.token
+
 # Large assets (docsets, archives)
 docs/references/
 skills.zip
