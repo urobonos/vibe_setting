@@ -61,6 +61,51 @@ min_claude_md_version: "4.0"
 3. **권고 조치** — 각 발견 사항별 구체적 수정 방법
 4. **설정 변경** — Filters, Security, Cors, Nginx 등 설정 파일 수정 사항
 5. **보안 테스트** — 추가해야 할 테스트 케이스
+6. **타당성 검토 (Feasibility Review)** — 각 권고 조치의 공식 근거를 명시한다. OWASP, CWE, ASVS, CIS Benchmark 등 적용한 프레임워크의 **정확한 버전과 항목 번호**를 출처로 기재한다. 근거 없는 보안 권고는 지침 위반.
+7. **변경 영향 기록 (Change Impact Log)** — 보안 감사 결과 반영 시 변경되는 사항, 개선점, 왜 해야 하는지(수행 이유)를 필수 기록한다. 이유 생략은 지침 위반.
+
+---
+
+## 보안 정책
+
+### CORS 정책 (7-2)
+- Same-Origin 아키텍처(Nginx 리버스 프록시)이므로 **CORS 헤더 불필요**
+- `Access-Control-Allow-Origin: *` 설정 금지
+- 크로스 오리진 요청이 필요한 경우 Checkpoint 발동
+
+### Cookie 보안 (7-3)
+| 속성 | 값 | 비고 |
+|------|-----|------|
+| `SameSite` | `Strict` | 크로스 사이트 요청 시 쿠키 미전송 |
+| `HttpOnly` | `true` | JavaScript 접근 차단 |
+| `Secure` | `true` | HTTPS에서만 전송 |
+| `prefix` | `hc_` | 홍카페 프로젝트 접두어 |
+
+### 암호화 규격 (7-6)
+- **알고리즘**: AES-256-CBC
+- **IV(Initialization Vector)**: 매 암호화마다 랜덤 IV 생성 필수
+- CI4 Encryption 라이브러리 사용 시 `Config\Encryption`에 키/드라이버 명시
+
+### CSRF + JWT 인증 정책 (7-4)
+
+- **JWT 저장**: HttpOnly 쿠키 전용 (7-1)
+- **CSRF 필수**: HttpOnly 쿠키는 브라우저가 자동 첨부하므로 CSRF 방어 필수
+- **CSRF 방식**: CI4 CSRF 필터 적용 (Session-Based 권장, Cookie-Based는 Same-site 공격 방어 불가)
+- **토큰 갱신**: Refresh Token은 별도 HttpOnly 쿠키, Access Token은 짧은 만료(15분 권장)
+- **SameSite=Strict**: CSRF 보조 수단으로 병행 (단독 방어 불가 — OWASP)
+
+### SecureHeaders 필터 (7-9)
+- Phase 1 즉시 적용 헤더:
+
+| 헤더 | 값 |
+|------|-----|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `X-XSS-Protection` | `0` (CSP로 대체) |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+
+- CI4 `app/Filters/SecureHeadersFilter.php`로 구현, 글로벌 필터 등록
 
 ---
 

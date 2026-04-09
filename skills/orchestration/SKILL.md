@@ -282,6 +282,10 @@ Orchestrator → Analyst Lead spawn (Max/opus)
 
 **산출물:** `docs/tasks/YYYYMMDD/{분석명}-analyze.md`
 
+**필수 포함 섹션:**
+- **타당성 검토 (Feasibility Review):** 모든 분석 권고에 앤트로픽 공식 문서, 프레임워크/라이브러리 공식 문서, 공신력 있는 기술 채널(RFC, IEEE, OWASP 등)을 근거로 제시한다. 근거 없는 주장·권고는 지침 위반.
+- **변경 영향 기록 (Change Impact Log):** 분석 결과 반영 시 변경되는 사항, 개선점, 왜 해야 하는지(수행 이유)를 필수 기록한다. 이유 생략은 지침 위반.
+
 ## 4.2. Team 2: Plan
 
 **목적:** analyze.md 기반으로 실행 계획 수립, Blueprint 설계, 구현 가능성 검증
@@ -307,6 +311,10 @@ Orchestrator → Analyst Lead spawn (Max/opus, Context_Path: analyze.md 경로)
 **M/L등급:** Lead + Architect + Worker + Security (4명)
 
 **산출물:** `docs/tasks/YYYYMMDD/{분석명}-plan.md`
+
+**필수 포함 섹션:**
+- **타당성 검토 (Feasibility Review):** 모든 설계·계획에 공식 문서 기반 근거를 제시한다. 근거 없는 설계 결정은 지침 위반.
+- **변경 영향 기록 (Change Impact Log):** plan 반영 시 변경되는 사항, 개선점, 왜 해야 하는지(수행 이유)를 필수 기록한다. 이유 생략은 지침 위반.
 
 ## 4.3. Team 3: Execute
 

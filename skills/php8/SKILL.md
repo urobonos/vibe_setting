@@ -1,9 +1,9 @@
 ---
 name: php8
 description: >
-  PHP 8.4+ / CI 4.7+ Mono-repo Modular Monolith API 스킬. 듀얼 모드:
-  Legacy(app/Libraries/ → app/Models/)는 기존 유지, 신규는 Modules/{BC}/ 구조 강제.
-  신규 레이어: Controller → Service → Repository → Model + Entity/VO.
+  PHP 8.4+ / CI 4.7+ Mono-repo Modular Monolith API 스킬.
+  아키텍처: Modular Monolith. 레거시 코드(app/Libraries/ 등)는 마이그레이션 완료까지 유지.
+  레이어: Controller → Service → Repository → Model + Entity/VO.
   모듈 간 직접 클래스 참조 금지(Interface 통신만), service() DI 강제,
   CI 4.7 Service Discovery 활용. QB 우선, raw query는 Repository에서만 named binding.
   신규 모듈은 부분 구현 절대 금지 — 8가지 산출물이 항상 함께 생성되어야 한다.
@@ -21,7 +21,7 @@ min_claude_md_version: "4.0"
 
 # PHP 8.4+ / CI 4.7+ Modular Monolith API Architect Skill
 
-Mono-repo + Modular Monolith 아키텍처. **듀얼 모드**: Legacy 유지 + 신규 모듈 구조.
+Mono-repo + **Modular Monolith** 아키텍처. 레거시 코드는 마이그레이션 완료까지 유지하되, 신규 개발은 모듈 구조 강제.
 
 ---
 
@@ -262,6 +262,25 @@ class Services extends BaseService
 
 ---
 
+## 의존성 관리
+
+- **Composer 버전**: 2.x
+- **버전 고정 정책**: exact 또는 caret(`^`) 사용. `composer.lock` 파일 반드시 커밋
+- **PSR-4 Autoload**: `App\` 단일 루트 매핑으로 `app/` 하위 전체 자동 해석
+
+## 미적용 DDD 요소
+
+아래 DDD 요소는 현재 프로젝트에서 **의도적으로 미적용**:
+
+| 요소 | 미적용 사유 |
+|------|-----------|
+| Aggregate Root | CI4 Model/Entity 구조에서 Aggregate 경계 강제가 과도한 복잡성 유발 |
+| CQRS | 단일 DB(Aurora MySQL) 사용, 읽기/쓰기 분리 불필요 |
+| Event Sourcing | 이벤트 저장소 인프라 미구축, 현 규모에서 오버엔지니어링 |
+| Domain Event Bus | 모듈 간 통신은 Interface 기반 동기 호출로 충분. 비동기 필요 시 SNS/SQS 사용 |
+
+---
+
 ## PHP / CI4 코딩 표준
 
 ### 1. PSR 준수
@@ -269,6 +288,19 @@ class Services extends BaseService
 - **PSR-1**: `<?php` 태그, UTF-8(BOM 없음), 오토로딩 표준
 - **PSR-4**: 네임스페이스 = 디렉토리 구조. `Modules\{BC}\{Layer}`
 - **PSR-12**: 인덴트 **4칸 스페이스**, 여는 중괄호 같은 줄(메서드/클래스는 다음 줄)
+- **Strict Types**: 모든 PHP 파일에 `declare(strict_types=1);` 선언 필수
+- **mixed 반환 타입 금지**: 함수/메서드 반환 타입에 `mixed` 사용 금지. 구체적 타입(`string`, `int`, `array`, `?Type` 등)을 명시
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\Commerce\Services;
+```
+
+> `declare(strict_types=1)`은 `<?php` 바로 다음, namespace 선언 전에 위치한다.
+> 해당 파일 내에서 호출하는 함수의 파라미터/반환값에 대해 자동 타입 캐스팅을 차단한다.
 
 ### 2. 추상화 / 구체화 범위
 
@@ -955,9 +987,31 @@ Controller에서 1차 검증, Model 검증은 2차 안전망:
 
 ## 테스트 코드
 
+### 테스트 디렉토리 구조
+
+```
+tests/
+├── Unit/
+│   └── Modules/
+│       ├── Order/
+│       │   └── OrderServiceTest.php
+│       └── Auth/
+│           └── AuthServiceTest.php
+├── Feature/
+│   └── Modules/
+│       ├── Order/
+│       │   └── OrderApiTest.php
+│       └── Auth/
+│           └── AuthApiTest.php
+└── _support/
+```
+
+- **타입별(Unit/Feature) 1차 분류**, 모듈별 2차 분류
+- 네임스페이스: `Tests\Unit\Modules\{BC}\`, `Tests\Feature\Modules\{BC}\`
+
 ### Unit Test (Service 검증 — Repository Mock 주입)
 ```php
-namespace Tests\Modules\Order;
+namespace Tests\Unit\Modules\Order;
 
 use App\App\Modules\Order\Services\OrderService;
 use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
@@ -998,7 +1052,7 @@ class OrderServiceTest extends CIUnitTestCase
 
 ### Feature Test (HTTP 엔드포인트 검증)
 ```php
-namespace Tests\Modules\Order;
+namespace Tests\Feature\Modules\Order;
 
 use CodeIgniter\Test\CIUnitTestCase;
 use CodeIgniter\Test\FeatureTestTrait;
@@ -1053,6 +1107,7 @@ class OrderApiTest extends CIUnitTestCase
 | Commerce | `/commerce/payments` | 결제 |
 | Member | `/member/profile` | 회원 프로필 |
 
+- **API 버전 prefix 금지**: URL에 `/v1/`, `/v2/` 등 버전 prefix 사용 금지 (폐기 확정)
 - **module**: BC명의 kebab-case (비즈니스 도메인 표현)
 - **resource**: 복수형 snake_case 또는 단수형 (리소스 성격에 따라)
 - BC 디렉토리명과 URL module명은 다를 수 있다 (예: `Call` BC → `/phone-consult/`)
@@ -1165,7 +1220,7 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 ```json
 {
   "status": "error",
-  "error": { "code": "RESOURCE_NOT_FOUND", "message": "..." }
+  "error": { "code": "NOT_FOUND", "message": "..." }
 }
 ```
 
@@ -1189,7 +1244,7 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 {
   "status": "error",
   "error": {
-    "code": "VALIDATION_FAILED",
+    "code": "INVALID_INPUT",
     "message": "입력값이 유효하지 않습니다.",
     "details": {}
   }
@@ -1220,16 +1275,43 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 
 ---
 
-## 에러 코드
+## API 응답 표준
+
+### 원칙
+- **HTTP 상태코드가 성공/실패의 SSOT** (Google API Design Guide, RFC 7231)
+- CI4 ResponseTrait의 `respond()`, `failNotFound()` 등이 HTTP 코드를 자동 설정
+- body 내 `status` 필드는 프론트엔드 편의를 위해 유지하되, HTTP 코드와 항상 일치
+
+### 에러 코드 (현상 서술형, suffix 없음)
 
 | 에러 코드 | HTTP | 설명 |
 |-----------|------|------|
-| VALIDATION_FAILED | 400 | 입력값 유효성 검증 실패 |
+| INVALID_INPUT | 400 | 입력값 유효성 검증 실패 |
 | UNAUTHORIZED | 401 | 인증 실패 |
 | FORBIDDEN | 403 | 권한 없음 |
-| RESOURCE_NOT_FOUND | 404 | 리소스를 찾을 수 없음 |
+| NOT_FOUND | 404 | 리소스를 찾을 수 없음 |
 | CONFLICT | 409 | 중복/충돌 |
-| SERVER_ERROR | 500 | 서버 내부 오류 |
+| INTERNAL | 500 | 서버 내부 오류 |
+
+> 업계 표준(Google Cloud `INVALID_ARGUMENT`, Stripe `card_declined` 등) 참조.
+> `_ERROR`/`_FAILED` suffix 대신 현상 서술형 코드 사용.
+
+### 페이지네이션 메타 키
+
+```json
+{
+  "data": [],
+  "meta": {
+    "currentPage": 1,
+    "perPage": 20,
+    "total": 0,
+    "lastPage": 1
+  }
+}
+```
+
+- camelCase 통일 (`currentPage`, `perPage`, `lastPage`)
+- CI4 Pager 라이브러리는 JSON 키를 정의하지 않으므로 프로젝트 표준으로 확정
 
 ---
 
@@ -1290,7 +1372,7 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 {
   "status": "error",
   "error": {
-    "code": "VALIDATION_FAILED",
+    "code": "INVALID_INPUT",
     "message": "입력값이 유효하지 않습니다.",
     "details": {
       "email": ["이메일 형식이 올바르지 않습니다."],
@@ -1355,6 +1437,7 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 - [ ] API 명세서(`api-docs/{module}/{apiname}.md`)가 생성되었는가
 - [ ] `api-docs/README.md` 인덱스에 항목이 추가되었는가
 - [ ] PSR-12 코딩 스타일 준수
+- [ ] 모든 PHP 파일에 `declare(strict_types=1)` 선언
 - [ ] 보안 검증 통과
 - [ ] 에러 응답이 표준 에러 코드 체계를 따르는가
 
@@ -1362,6 +1445,7 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 - [ ] 기존 파일의 네이밍/DI/디렉토리 패턴을 유지했는가
 - [ ] 변경으로 인한 사이드 이펙트를 확인했는가
 - [ ] PSR-12 코딩 스타일 준수
+- [ ] 신규/수정 PHP 파일에 `declare(strict_types=1)` 선언
 - [ ] 보안 검증 통과
 - [ ] 테스트 코드 갱신 (있는 경우)
 
@@ -1375,5 +1459,10 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 - **DI**: `service('{name}')` 함수로 Service/Repository 인스턴스를 가져온다
 - **Model 생성**: Repository에서 `model(ClassName::class)` 헬퍼 사용
 - **테스트 DI 오버라이드**: Mock을 생성자에 직접 주입하여 단위 테스트
-- **PHP 8.4+ 기능**: Constructor Promotion, Named Arguments, Enums, `readonly`, Union Types
+- **활용 권장 PHP 8.x 기능**:
+  - 8.0: Constructor Promotion, Named Arguments, Union Types, match 표현식
+  - 8.1: Enums, readonly property, Fibers, Intersection Types
+  - 8.2: readonly class, DNF Types
+  - 8.3: Typed Constants, json_validate(), #[\Override]
+  - 8.4: Property Hooks, new without parentheses, Asymmetric Visibility
 - 소프트 딜리트: `$useSoftDeletes = true` + 스키마에 `deleted_at` 포함

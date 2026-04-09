@@ -674,6 +674,33 @@ class TestHandler:
 
 ---
 
+## 10. 메시징 아키텍처 (SNS + SQS + Lambda)
+
+| 구성 요소 | 역할 | 비고 |
+|-----------|------|------|
+| **SNS** | 이벤트 발행 (Pub) | 토픽별 도메인 이벤트 분류 |
+| **SQS (FIFO)** | 이벤트 구독 (Sub) | 순서 보장, 중복 제거(deduplication) |
+| **Lambda** | 이벤트 처리 | SQS 트리거, 배치 부분 실패 처리 |
+
+- SNS → SQS → Lambda 파이프라인이 기본 패턴
+- FIFO 큐 사용 시 `MessageGroupId`로 순서 보장 범위 지정
+- DLQ(Dead Letter Queue) 필수 설정 — 3회 재시도 후 DLQ 이동
+
+## 11. S3 / CloudFront 스토리지 정책
+
+| 항목 | 설정 |
+|------|------|
+| **S3 버킷** | 국가별 분리 또는 prefix 분리 (`us/`, `kr/`, `jp/`) |
+| **CloudFront** | S3 Origin Access Control(OAC)로 직접 접근 차단 |
+| **CRR (Cross-Region Replication)** | 글로벌 확장 시 리전 간 복제 검토 (비용 대비 레이턴시 이점 평가) |
+| **버저닝** | 프로덕션 버킷 버저닝 활성화 |
+| **수명 주기** | 비활성 객체 90일 후 Glacier 전환 검토 |
+
+- S3 퍼블릭 접근 차단 (Block Public Access 활성화)
+- CloudFront 캐시 무효화는 배포 스크립트에 포함
+
+---
+
 ## 자가 검증 체크리스트
 
 AWS 관련 코드 작성/수정 시 반드시 확인:
@@ -689,3 +716,22 @@ AWS 관련 코드 작성/수정 시 반드시 확인:
 - [ ] 보안 그룹이 필요한 포트만 개방하고 보안 그룹 간 참조를 사용하는가
 - [ ] 모든 함수에 docstring이 있는가
 - [ ] 테스트 코드가 포함되어 있는가
+
+---
+
+## 참고: EC2 인증서 파일
+
+| 항목 | 값 |
+|------|-----|
+| 파일 | `~/.claude/skills/aws/ec2-user@<EC2_HOST>.pem` |
+| 용도 | EC2 SSH 접속용 (현재 키 불일치로 사용 불가) |
+| 접속 방식 | **SSM Session Manager** 경유 필수 |
+
+## 참고: .env 비밀번호 관리 가이드
+
+| 환경 | 방식 | 비고 |
+|------|------|------|
+| **개발 (로컬)** | `.env` 파일에 평문 저장 허용 | `.gitignore`로 커밋 차단 필수 |
+| **프로덕션 (EC2)** | `/works/hongcafe-global/config/.env` symlink | 릴리즈별 `.env` symlink 참조, 서버 내 파일 직접 관리 |
+
+> 프로덕션 DB 비밀번호가 `.env` 평문 저장인 점은 현재 운영 방식. 향후 AWS Secrets Manager 전환 권장.
