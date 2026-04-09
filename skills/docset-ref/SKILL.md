@@ -149,9 +149,10 @@ print(text[:3000])
 1. **근거 키워드 도출** — 권고 사항에서 검증할 기술 키워드 추출
 2. **docset 검색** — 2-1 또는 2-2로 관련 항목 검색
 3. **원문 확인** — 3-2로 해당 문서 텍스트 추출하여 근거 확인
-4. **마크다운 캐시 확인** — docset에 없으면 기존 `.md` 캐시 Read
-5. **WebFetch fallback** — 1~4에서 미수록 시 WebFetch로 확보 후 `.md`로 캐시 추가
-6. **출처 기재** — 타당성 검토 테이블에 docset명 + 항목명 또는 URL 기재
+4. **보안 지식베이스 검색** — `docs/references/security/` 하위 문서 Read (OWASP, CWE, JWT, AWS 등)
+5. **마크다운 캐시 확인** — docset에 없으면 기존 `.md` 캐시 Read
+6. **WebFetch fallback** — 1~5에서 미수록 시 WebFetch로 확보 후 `.md`로 캐시 추가
+7. **출처 기재** — 타당성 검토 테이블에 docset명 + 항목명 또는 URL 기재
 
 ### 출처 표기 형식
 
@@ -160,6 +161,7 @@ print(text[:3000])
 | Docset | `[PHP.docset] password_hash (func)` |
 | Docset 문서 | `[CodeIgniter.docset] Controller Filters (Guide)` |
 | 캐시 .md | `~/.claude/docs/references/owasp-top10.md` |
+| 보안 KB | `~/.claude/docs/references/security/owasp-api-security-top10.md` |
 | WebFetch | 원본 URL |
 
 ---
