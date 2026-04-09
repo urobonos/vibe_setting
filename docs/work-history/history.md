@@ -1,5 +1,13 @@
 # Work History
 
+## 2026.04.09
+
+### 주제별 커밋 정리 및 .gitignore 정비
+
+- `.gitignore` 업데이트 — `docs/references/`(4.85GB docset), `*.token`, `skills.zip`, 캐시 파일 제외
+- 10개 주제별 커밋 생성: CLAUDE.md 지침, hooks 12개, 스킬 6개 업데이트+4개 신규, docs/commands, monitoring, tasks/teams, settings
+- API 토큰(`.token`) 커밋 방지 — gitignore 추가 후 재커밋
+
 ## 2026.04.08
 
 ### Claude Max 구독 업그레이드 타당성 보고서 작성
