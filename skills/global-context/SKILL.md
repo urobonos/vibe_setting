@@ -1,0 +1,179 @@
+---
+name: global-context
+description: >
+  글로벌 다국가 서비스 컨텍스트 스킬. 국가코드 전달, Country Resolver,
+  국가별 Config, Feature Flag, i18n, 타임존, 배포 환경 분리 규칙 정의.
+triggers:
+  - "국가", "country", "i18n", "다국어", "타임존", "timezone"
+  - "Feature Flag", "피처플래그"
+  - "배포 환경", "deploy"
+  - app/Config/Countries/ 하위 파일 생성/수정 시
+  - Language/ 하위 파일 생성/수정 시
+version: 1.0.0
+user-invocable: false
+depends_on: [php8]
+conflicts_with: []
+min_claude_md_version: "4.0"
+---
+
+# 글로벌 다국가 서비스 컨텍스트
+
+HongCafe Global 프로젝트의 다국가 서비스 운영에 필요한 국가 컨텍스트, 국제화, 타임존, Feature Flag, 배포 환경 분리 규칙.
+
+---
+
+## 1. 국가코드 전달 (6-1)
+
+클라이언트 → 서버 국가코드 전달 방식:
+
+| 방식 | 설명 | 우선순위 |
+|------|------|---------|
+| **JWT claim** | 토큰 내 `country` 클레임 | 1순위 (인증된 사용자) |
+| **X-Country-Code 헤더** | 커스텀 HTTP 헤더 | 2순위 (비인증 요청) |
+| **.env 기본값** | `app.defaultCountry` | 3순위 (fallback) |
+
+- 국가코드는 **ISO 3166-1 alpha-2** (대문자 2자리: `US`, `KR`, `JP`)
+- 모든 API 요청에서 국가 컨텍스트를 결정한 후 비즈니스 로직 실행
+
+---
+
+## 2. Country Resolver (6-2)
+
+국가 컨텍스트 결정 우선순위:
+
+```
+JWT country claim  →  X-Country-Code 헤더  →  .env 기본값  →  Accept-Language 추론
+```
+
+- Country Resolver는 CI4 Filter로 구현하여 모든 요청에 자동 적용
+- 결정된 국가코드는 `Services::country()` 또는 `service('country')` 로 접근
+- Controller/Service/Repository 어디서든 현재 국가 컨텍스트 참조 가능
+
+---
+
+## 3. 국가별 Config (6-3)
+
+```
+app/Config/Countries/
+├── US.php      # 미국 설정
+├── KR.php      # 한국 설정
+└── JP.php      # 일본 설정
+```
+
+각 국가 Config 파일 구조:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+return [
+    'currency'     => 'USD',
+    'timezone'     => 'America/New_York',
+    'locale'       => 'en_US',
+    'dateFormat'   => 'M d, Y',
+    'phonePrefix'  => '+1',
+    'taxRate'      => 0.0,
+    'features'     => [],  // 국가별 Feature Flag 오버라이드
+];
+```
+
+- 국가 Config는 Country Resolver가 결정한 국가코드로 자동 로드
+- `config('Countries/' . $countryCode)` 로 접근
+
+---
+
+## 4. Feature Flag (6-4)
+
+국가별/기능별 Feature Flag 관리:
+
+| 저장소 | 역할 |
+|--------|------|
+| **DB** (`tb_feature_flags`) | SSOT — 기능명, 국가, 활성 여부, 시작/종료일 |
+| **Redis 캐시** | 읽기 성능 — TTL 5분, DB 변경 시 캐시 무효화 |
+
+- Feature Flag 조회: `service('featureFlag')->isEnabled('feature_name', $countryCode)`
+- 새 기능 배포 시 DB에 Flag 등록 → 국가별 점진적 활성화
+- Flag 미등록 기능은 기본 비활성(fail-closed)
+
+---
+
+## 5. i18n 파일 구조 (6-5)
+
+```
+app/Language/
+├── en/
+│   └── Messages.php
+├── ko/
+│   └── Messages.php
+└── ja/
+    └── Messages.php
+```
+
+- CI4 기본 Language 디렉토리 구조 활용
+- `lang('Messages.welcome')` 형태로 호출
+- 로케일은 Country Resolver가 결정한 국가 Config의 `locale` 값으로 자동 설정
+- API 응답 메시지(에러/성공)는 반드시 i18n 키 사용, 하드코딩 금지
+
+---
+
+## 6. DB 타임존 (6-6)
+
+| 구간 | 타임존 | 비고 |
+|------|--------|------|
+| **DB 저장** | **UTC 고정** (SSOT) | 모든 DATETIME/TIMESTAMP 컬럼은 UTC |
+| **서버 처리** | UTC | PHP `date_default_timezone_set('UTC')` |
+| **API 응답** | UTC (ISO 8601) | `2026-04-08T09:30:00Z` 형식 |
+| **클라이언트 표시** | 사용자 타임존 | 프론트엔드에서 변환 |
+
+- DB `SET time_zone = '+00:00'` 연결 시 강제
+- Aurora MySQL 서버 타임존도 UTC 고정
+
+---
+
+## 7. DateTimeImmutable 강제 (6-7)
+
+| 허용 | 금지 |
+|------|------|
+| `new \DateTimeImmutable()` | `date()` |
+| `\DateTimeImmutable::createFromFormat()` | `time()` |
+| `CarbonImmutable` (사용 시) | `strtotime()` |
+| | `DateTime` (mutable) |
+
+- 모든 날짜/시간 처리는 **`\DateTimeImmutable`** 전용
+- mutable `DateTime` 사용 금지 — 의도치 않은 상태 변경 방지
+- 타임존 변환: `$dt->setTimezone(new \DateTimeZone($userTz))`
+
+---
+
+## 8. 배포 환경 분리 (6-8)
+
+```
+deploy/
+├── us/
+│   ├── .env
+│   └── deploy.sh
+├── kr/
+│   ├── .env
+│   └── deploy.sh
+└── jp/
+    ├── .env
+    └── deploy.sh
+```
+
+- 국가별 `.env` 파일로 DB 접속, API 키, 외부 서비스 엔드포인트 분리
+- 배포 스크립트(`deploy.sh`)도 국가별 분리 — 리전, 인스턴스 ID 등 차이
+- CI/CD 파이프라인에서 `COUNTRY` 환경변수로 대상 국가 지정
+
+---
+
+## 자가 검증 체크리스트
+
+- [ ] 국가코드는 ISO 3166-1 alpha-2를 사용하는가
+- [ ] Country Resolver 우선순위(JWT → 헤더 → .env → Accept-Language)를 준수하는가
+- [ ] 국가별 Config 파일이 `app/Config/Countries/{CODE}.php`에 존재하는가
+- [ ] Feature Flag 조회 시 캐시(Redis) → DB fallback 순서인가
+- [ ] 모든 DB DATETIME 컬럼이 UTC로 저장되는가
+- [ ] `date()`, `time()`, `strtotime()`, `DateTime` 사용이 없는가
+- [ ] API 응답 메시지가 i18n 키를 사용하는가 (하드코딩 없음)
+- [ ] 배포 환경이 국가별로 분리되어 있는가
