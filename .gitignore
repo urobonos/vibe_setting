@@ -30,6 +30,18 @@ settings.json
 *.session
 *.lock
 
+# Large assets (docsets, archives)
+docs/references/
+skills.zip
+
+# Cache / temp
+stats-cache.json
+mcp-needs-auth-cache.json
+.claude/worktrees/
+
+# Duplicate settings
+settings.local.json
+
 # OS files
 .DS_Store
 Thumbs.db
