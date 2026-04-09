@@ -1,0 +1,9 @@
+{
+  "id": "1",
+  "subject": "인프라 종합 감사 산출물 생성",
+  "description": "analyze.md + result.md 작성, history.md 업데이트",
+  "activeForm": "산출물 문서 생성 중",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

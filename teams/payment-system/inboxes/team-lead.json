@@ -1,0 +1,9 @@
+[
+  {
+    "from": "payment-tester-1",
+    "text": "{\"type\":\"idle_notification\",\"from\":\"payment-tester-1\",\"timestamp\":\"2026-03-24T06:09:06.928Z\",\"idleReason\":\"available\"}",
+    "timestamp": "2026-03-24T06:09:06.928Z",
+    "color": "orange",
+    "read": false
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "id": "1",
+  "subject": "Team 1: 프로젝트 전체 검증 분석",
+  "description": "6개 영역 분석: PHPUnit 테스트, 3-Layer 아키텍처, API 응답 표준, 라우팅, 보안, 코드 품질",
+  "activeForm": "프로젝트 전체 검증 분석 중",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}
