@@ -1,0 +1,41 @@
+{
+  "session_id": "dda90e96-fe16-4189-974f-41c070c162c0",
+  "project": "C:\\\\Works\\\\<PROJECT_BE>",
+  "date": "2026-04-02",
+  "ended_at": "2026-04-02T02:45:09.261226+00:00",
+  "snapshot_at": "2026-04-01T07:28:32.417342+00:00",
+  "has_snapshot": true,
+  "note": "stats-cache.json 스냅샷 기반 추정값",
+  "totals": {
+    "input_tokens": 554185,
+    "output_tokens": 1157990,
+    "cache_read_tokens": 263743006,
+    "cache_creation_tokens": 23974390,
+    "cache_hit_rate_pct": 99.8
+  },
+  "by_model": {
+    "claude-opus-4-6": {
+      "input_tokens": 497396,
+      "output_tokens": 1038808,
+      "cache_read_tokens": 232489558,
+      "cache_creation_tokens": 18481515,
+      "cache_hit_rate_pct": 99.8
+    },
+    "claude-sonnet-4-6": {
+      "input_tokens": 1748,
+      "output_tokens": 17827,
+      "cache_read_tokens": 3594246,
+      "cache_creation_tokens": 407300,
+      "cache_hit_rate_pct": 100.0
+    },
+    "claude-haiku-4-5-20251001": {
+      "input_tokens": 55041,
+      "output_tokens": 101355,
+      "cache_read_tokens": 27659202,
+      "cache_creation_tokens": 5085575,
+      "cache_hit_rate_pct": 99.8
+    }
+  },
+  "cache_grade": "S",
+  "cache_grade_label": "매우 효율적"
+}

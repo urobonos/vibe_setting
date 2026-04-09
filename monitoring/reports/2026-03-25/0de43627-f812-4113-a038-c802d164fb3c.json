@@ -1,0 +1,34 @@
+{
+  "session_id": "0de43627-f812-4113-a038-c802d164fb3c",
+  "project": "C:\\Works\\<PROJECT_BE>",
+  "date": "2026-03-25",
+  "ended_at": "2026-03-25T00:20:45.813802+00:00",
+  "snapshot_at": null,
+  "has_snapshot": false,
+  "note": "스냅샷 없음 — 누적 전체값",
+  "totals": {
+    "input_tokens": 104022,
+    "output_tokens": 1051965,
+    "cache_read_tokens": 433770200,
+    "cache_creation_tokens": 11481336,
+    "cache_hit_rate_pct": 100.0
+  },
+  "by_model": {
+    "claude-opus-4-6": {
+      "input_tokens": 98588,
+      "output_tokens": 1013760,
+      "cache_read_tokens": 423196425,
+      "cache_creation_tokens": 10894115,
+      "cache_hit_rate_pct": 100.0
+    },
+    "claude-sonnet-4-6": {
+      "input_tokens": 5434,
+      "output_tokens": 38205,
+      "cache_read_tokens": 10573775,
+      "cache_creation_tokens": 587221,
+      "cache_hit_rate_pct": 99.9
+    }
+  },
+  "cache_grade": "S",
+  "cache_grade_label": "매우 효율적"
+}

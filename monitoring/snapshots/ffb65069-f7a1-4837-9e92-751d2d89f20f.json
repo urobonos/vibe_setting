@@ -1,0 +1,28 @@
+{
+  "session_id": "ffb65069-f7a1-4837-9e92-751d2d89f20f",
+  "snapshot_at": "2026-03-23T23:47:30.394076+00:00",
+  "model_usage": {
+    "claude-sonnet-4-6": {
+      "inputTokens": 5434,
+      "outputTokens": 38205,
+      "cacheReadInputTokens": 10573775,
+      "cacheCreationInputTokens": 587221,
+      "webSearchRequests": 0,
+      "costUSD": 0,
+      "contextWindow": 0,
+      "maxOutputTokens": 0
+    },
+    "claude-opus-4-6": {
+      "inputTokens": 81215,
+      "outputTokens": 737029,
+      "cacheReadInputTokens": 310263330,
+      "cacheCreationInputTokens": 6731649,
+      "webSearchRequests": 0,
+      "costUSD": 0,
+      "contextWindow": 0,
+      "maxOutputTokens": 0
+    }
+  },
+  "total_messages": 10756,
+  "total_sessions": 68
+}

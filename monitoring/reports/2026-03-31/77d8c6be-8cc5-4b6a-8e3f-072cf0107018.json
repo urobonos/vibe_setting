@@ -1,0 +1,19 @@
+{
+  "session_id": "77d8c6be-8cc5-4b6a-8e3f-072cf0107018",
+  "project": "C:\\\\Works\\\\<PROJECT_BE>",
+  "date": "2026-03-31",
+  "ended_at": "2026-03-31T04:25:24.655636+00:00",
+  "snapshot_at": "2026-03-31T02:33:40.564390+00:00",
+  "has_snapshot": true,
+  "note": "stats-cache.json 스냅샷 기반 추정값",
+  "totals": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cache_read_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_hit_rate_pct": 0
+  },
+  "by_model": {},
+  "cache_grade": "D",
+  "cache_grade_label": "캐시 미활용"
+}

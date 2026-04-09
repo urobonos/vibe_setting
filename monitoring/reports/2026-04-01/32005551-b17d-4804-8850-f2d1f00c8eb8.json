@@ -1,0 +1,19 @@
+{
+  "session_id": "32005551-b17d-4804-8850-f2d1f00c8eb8",
+  "project": "C:\\\\Users\\\\PV\\\\.claude",
+  "date": "2026-04-01",
+  "ended_at": "2026-04-01T07:55:50.454986+00:00",
+  "snapshot_at": "2026-04-01T07:50:21.878117+00:00",
+  "has_snapshot": true,
+  "note": "stats-cache.json 스냅샷 기반 추정값",
+  "totals": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cache_read_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_hit_rate_pct": 0
+  },
+  "by_model": {},
+  "cache_grade": "D",
+  "cache_grade_label": "캐시 미활용"
+}
