@@ -21,7 +21,26 @@
       "Bash(xargs -0 -I{} du -sh \"{}\")",
       "Bash(wc -c docs/**/* monitoring/**/* teams/**/* commands/* skills.zip stats-cache.json mcp-needs-auth-cache.json)",
       "Bash(find . -not -path './.git/*' -type f -exec du -b {} +)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(sqlite3 --version)",
+      "Bash(export PATH=\"$PATH:/c/Users/PV/AppData/Local/Microsoft/WinGet/Links\")",
+      "Read(//c/Users/PV/AppData/Local/Microsoft/WinGet/Packages/**)",
+      "Read(//c/Users/PV/AppData/Local//**)",
+      "Bash(/c/Users/PV/AppData/Local/Microsoft/WinGet/Packages/SQLite.SQLite_Microsoft.Winget.Source_8wekyb3d8bbwe/sqlite3.exe:*)",
+      "Bash(mkdir -p docs/references/security)",
+      "Bash(mv docs/references/owasp-top10.md docs/references/owasp-csrf.md docs/references/owasp-headers.md docs/references/php-security.md docs/references/ci4-security.md docs/references/security/)",
+      "WebFetch(domain:owasp.org)",
+      "WebFetch(domain:cheatsheetseries.owasp.org)",
+      "WebFetch(domain:cwe.mitre.org)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:upstash.com)",
+      "WebFetch(domain:news.ycombinator.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:docs.ref.tools)",
+      "WebFetch(domain:dev.to)",
+      "Bash(mkdir -p docs/tasks/20260409)",
+      "Bash(mv docs/references/context7-vs-local-kb-comparison.md docs/tasks/20260409/)"
     ]
   }
 }

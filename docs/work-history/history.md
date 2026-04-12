@@ -2,6 +2,13 @@
 
 ## 2026.04.09
 
+### KPI 정량평가 산출 + 주간 업무 리포트 + report 템플릿 수정
+
+- Q1(1.1~3.31) KPI 정량평가 산출: DB설계 25건, 백엔드 75건, AWS 20건 = 총 120건, 소계 70.0/70
+- 데이터 소스: 로컬 work-history 4개 프로젝트 + Notion "작업 목록" DB(7건) + 프로젝트 메모리 32파일
+- 주간(4.6~4.9) 업무 리포트 생성
+- `~/.claude/commands/report.md` 출력 형식 수정: `[글로벌][백엔드]` → `[글로벌]-[백엔드]-` 하이픈 구분자
+
 ### 주제별 커밋 정리 및 .gitignore 정비
 
 - `.gitignore` 업데이트 — `docs/references/`(4.85GB docset), `*.token`, `skills.zip`, 캐시 파일 제외
