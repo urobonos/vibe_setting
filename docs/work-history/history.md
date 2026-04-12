@@ -1,5 +1,17 @@
 # Work History
 
+## 2026.04.10
+
+### <PROJECT_BE> — 전체 API 검증 + CSRF 방어 구현
+
+- 전체 API 컨트롤러 검증 (12개 모듈 병렬 감사): Critical 6건, High 14건, Medium 30건+ 식별 및 수정
+- SDD 문서 19개 파일 생성 (docs/api-docs/, ~268개 엔드포인트)
+- CSRF Signed Double Submit Cookie 방어 구현 (HMAC-SHA256, CsrfTokenService/Filter)
+- respondLegacy → 표준 응답 전환 리팩토링 (Board, Call, Chat 등 10개 모듈)
+- (:any) 와일드카드 → 명시적 라우트 전환 (Call, Chat, Member)
+- Swagger YAML 17개 생성 + api-docs 경로 통합
+- 총 34개 커밋, 테스트 2,269건 통과
+
 ## 2026.04.09
 
 ### KPI 정량평가 산출 + 주간 업무 리포트 + report 템플릿 수정
