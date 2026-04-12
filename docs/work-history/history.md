@@ -1,5 +1,13 @@
 # Work History
 
+## 2026.04.13
+
+### .claude 레포 정리 — 미커밋 변경 커밋 + 작업 이력 보충
+
+- 지난주(4/6~4/12) 미완료 작업 조사: work-history, git log, monitoring reports 교차 확인
+- 미커밋 변경사항 커밋: settings 권한 추가, report 템플릿 하이픈 구분자, 04.09 이력 보충, 모니터링 리포트 보정
+- 04.10 작업 이력 신규 기록: <PROJECT_BE> 34커밋 (API 검증, CSRF 방어, respondLegacy 전환, SDD 19개)
+
 ## 2026.04.10
 
 ### <PROJECT_BE> — 전체 API 검증 + CSRF 방어 구현
