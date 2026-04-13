@@ -1331,6 +1331,55 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 - 인증 필요 여부(`Authorization` 헤더)는 엔드포인트별로 정확히 표기한다
 - 명세서 생성/수정 시 `api-docs/README.md` 인덱스에 해당 항목을 추가/갱신한다
 
+### Swagger OpenAPI YAML
+
+API 생성/수정 시 Markdown 명세서와 함께 `api-docs/{module}/{apiname}.yaml` (OpenAPI 3.0.3)을 생성/갱신한다.
+
+| 항목 | 규칙 |
+|------|------|
+| **파일명** | Markdown과 동일 경로에 `.yaml` 확장자 (`goods-api.yaml`) |
+| **서버** | `https://gl.hongcafe.com` (Production) |
+| **인증** | Routes.php의 `'filter' => 'auth:jwt'` → `security: - bearerAuth: []`, `auth:apikey` → `security: - apiKeyAuth: []`, 공개 → security 없음 |
+| **경로** | 반드시 `/api/` prefix 포함 |
+
+```yaml
+openapi: 3.0.3
+info:
+  title: HongCafe Global - {Controller} API
+  version: 1.0.0
+servers:
+  - url: https://gl.hongcafe.com
+    description: Production
+paths:
+  /api/{prefix}/{method}:
+    post:
+      tags: [{Tag}]
+      summary: "{설명}"
+      security:
+        - bearerAuth: []   # auth:jwt 라우트만
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                param:
+                  type: string
+      responses:
+        "200":
+          description: 성공
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+```
+
 ---
 
 ## 출력 형식
@@ -1347,7 +1396,8 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 8. **테스트 코드** — Unit + Feature + 파일 경로
 9. **모듈 Routes** — 라우트 파일 + 메인 로드 확인
 10. **API 명세서** — `api-docs/{module}/{apiname}.md` 생성
-11. **추가 참고사항** — 마이그레이션 SQL, 모듈 간 의존 관계, 후속 권고
+11. **Swagger YAML** — `api-docs/{module}/{apiname}.yaml` 생성 (OpenAPI 3.0.3)
+12. **추가 참고사항** — 마이그레이션 SQL, 모듈 간 의존 관계, 후속 권고
 
 ### Legacy 모드 출력 순서
 
@@ -1435,6 +1485,7 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 - [ ] Unit 테스트 + Feature 테스트 모두 포함
 - [ ] 모듈 Routes.php 제공
 - [ ] API 명세서(`api-docs/{module}/{apiname}.md`)가 생성되었는가
+- [ ] Swagger YAML(`api-docs/{module}/{apiname}.yaml`)이 생성/갱신되었는가
 - [ ] `api-docs/README.md` 인덱스에 항목이 추가되었는가
 - [ ] PSR-12 코딩 스타일 준수
 - [ ] 모든 PHP 파일에 `declare(strict_types=1)` 선언
