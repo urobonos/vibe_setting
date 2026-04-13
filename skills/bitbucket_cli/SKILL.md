@@ -22,12 +22,12 @@ min_claude_md_version: "1.0"
 ## 인증
 
 - **방식:** Basic Auth (`-u "email:token"`)
-- **설정 파일:** `~/.claude/skills/bitbucket_cli/.config` (`BITBUCKET_EMAIL`, `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_BE`, `BITBUCKET_REPO_FE`)
+- **설정 파일:** `~/.claude/.config` (`BITBUCKET_EMAIL`, `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_BE`, `BITBUCKET_REPO_FE`)
 - **토큰 파일:** `~/.claude/skills/bitbucket_cli/.token`
 
 ### 인증 헤더 구성
 ```bash
-source ~/.claude/skills/bitbucket_cli/.config
+source ~/.claude/.config
 TOKEN=$(cat ~/.claude/skills/bitbucket_cli/.token)
 AUTH="$BITBUCKET_EMAIL:$TOKEN"
 ```
@@ -43,7 +43,7 @@ AUTH="$BITBUCKET_EMAIL:$TOKEN"
 
 ### 단축 변수
 ```bash
-source ~/.claude/skills/bitbucket_cli/.config
+source ~/.claude/.config
 TOKEN=$(cat ~/.claude/skills/bitbucket_cli/.token)
 AUTH="$BITBUCKET_EMAIL:$TOKEN"
 BASE="https://api.bitbucket.org/2.0/repositories/$BITBUCKET_WORKSPACE"
