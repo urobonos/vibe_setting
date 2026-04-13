@@ -732,6 +732,6 @@ AWS 관련 코드 작성/수정 시 반드시 확인:
 | 환경 | 방식 | 비고 |
 |------|------|------|
 | **개발 (로컬)** | `.env` 파일에 평문 저장 허용 | `.gitignore`로 커밋 차단 필수 |
-| **프로덕션 (EC2)** | `/works/hongcafe-global/config/.env` symlink | 릴리즈별 `.env` symlink 참조, 서버 내 파일 직접 관리 |
+| **프로덕션 (EC2)** | `/works/<PROJECT>/config/.env` symlink | 릴리즈별 `.env` symlink 참조, 서버 내 파일 직접 관리 |
 
 > 프로덕션 DB 비밀번호가 `.env` 평문 저장인 점은 현재 운영 방식. 향후 AWS Secrets Manager 전환 권장.
