@@ -30,8 +30,9 @@ settings.json
 *.session
 *.lock
 
-# API tokens
+# API tokens & credentials
 *.token
+*.config
 
 # Large assets (docsets + sqlite index)
 docs/references/*.docset/

@@ -22,32 +22,33 @@ min_claude_md_version: "1.0"
 ## 인증
 
 - **방식:** Basic Auth (`-u "email:token"`)
-- **이메일:** `<BITBUCKET_EMAIL>`
+- **설정 파일:** `~/.claude/skills/bitbucket_cli/.config` (`BITBUCKET_EMAIL`, `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_BE`, `BITBUCKET_REPO_FE`)
 - **토큰 파일:** `~/.claude/skills/bitbucket_cli/.token`
-- **토큰 읽기:** `TOKEN=$(cat ~/.claude/skills/bitbucket_cli/.token)`
 
 ### 인증 헤더 구성
 ```bash
+source ~/.claude/skills/bitbucket_cli/.config
 TOKEN=$(cat ~/.claude/skills/bitbucket_cli/.token)
-AUTH="<BITBUCKET_EMAIL>:$TOKEN"
+AUTH="$BITBUCKET_EMAIL:$TOKEN"
 ```
 
 ## 기본 설정
 
-| 항목 | 값 |
-|------|-----|
+| 항목 | 참조 |
+|------|------|
 | API Base URL | `https://api.bitbucket.org/2.0` |
-| Workspace | `<WORKSPACE>` |
-| Backend Repo | `<PROJECT_BE>` |
-| Frontend Repo | `<PROJECT_FE>` |
+| Workspace | `.config` → `BITBUCKET_WORKSPACE` |
+| Backend Repo | `.config` → `BITBUCKET_REPO_BE` |
+| Frontend Repo | `.config` → `BITBUCKET_REPO_FE` |
 
 ### 단축 변수
 ```bash
+source ~/.claude/skills/bitbucket_cli/.config
 TOKEN=$(cat ~/.claude/skills/bitbucket_cli/.token)
-AUTH="<BITBUCKET_EMAIL>:$TOKEN"
-BASE="https://api.bitbucket.org/2.0/repositories/<WORKSPACE>"
-BE="<PROJECT_BE>"
-FE="<PROJECT_FE>"
+AUTH="$BITBUCKET_EMAIL:$TOKEN"
+BASE="https://api.bitbucket.org/2.0/repositories/$BITBUCKET_WORKSPACE"
+BE="$BITBUCKET_REPO_BE"
+FE="$BITBUCKET_REPO_FE"
 ```
 
 ## API 명령 템플릿

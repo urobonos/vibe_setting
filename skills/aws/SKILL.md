@@ -723,7 +723,7 @@ AWS 관련 코드 작성/수정 시 반드시 확인:
 
 | 항목 | 값 |
 |------|-----|
-| 파일 | `~/.claude/skills/aws/ec2-user@<EC2_HOST>.pem` |
+| 설정 파일 | `~/.claude/skills/aws/.config` (`EC2_HOST`, `EC2_USER`, `EC2_PEM`) |
 | 용도 | EC2 SSH 접속용 (현재 키 불일치로 사용 불가) |
 | 접속 방식 | **SSM Session Manager** 경유 필수 |
 
