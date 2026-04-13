@@ -33,8 +33,9 @@ settings.json
 # API tokens
 *.token
 
-# Large assets (docsets only, markdown은 추적)
+# Large assets (docsets + sqlite index)
 docs/references/*.docset/
+docs/references/*.sqlite
 skills.zip
 
 # Cache / temp
@@ -44,6 +45,13 @@ mcp-needs-auth-cache.json
 
 # Duplicate settings
 settings.local.json
+
+# Python cache
+__pycache__/
+
+# Temp / build artifacts
+scripts/_*.b64
+scripts/_gen.py
 
 # OS files
 .DS_Store
