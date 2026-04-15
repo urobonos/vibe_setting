@@ -59,7 +59,10 @@
       "Bash(rm /c/Users/PV/.claude/docs/claude-max-upgrade-justification.md)",
       "Bash(rm /c/Users/PV/.claude/docs/tasks/20260409/context7-vs-local-kb-comparison.md)",
       "Bash(rm /c/Users/PV/.claude/docs/work-history/20260407.md /c/Users/PV/.claude/docs/work-history/20260408.md /c/Users/PV/.claude/docs/work-history/20260409.md /c/Users/PV/.claude/docs/work-history/20260410.md /c/Users/PV/.claude/docs/work-history/20260413.md /c/Users/PV/.claude/docs/work-history/20260414.md /c/Users/PV/.claude/docs/work-history/history.md)",
-      "Bash(rmdir /c/Users/PV/.claude/docs/work-history)"
+      "Bash(rmdir /c/Users/PV/.claude/docs/work-history)",
+      "Bash(cd *)",
+      "Bash(cp __TRACKED_VAR__/user_profile.md __TRACKED_VAR__/user_profile.md)",
+      "Bash(rm __TRACKED_VAR__/user_profile.md)"
     ]
   }
 }

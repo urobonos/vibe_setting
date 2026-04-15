@@ -148,6 +148,23 @@ GROUP BY sub.name;
 - 옵티마이저가 최적 실행계획을 선택하도록 인덱스 설계와 쿼리 구조로 해결한다.
 - 힌트가 불가피하다고 판단되면 Checkpoint를 발동하여 사용자에게 보고한다.
 
+### 9. 문자셋 — utf8mb4 통일
+
+- 모든 테이블/컬럼의 문자셋은 **`utf8mb4`**, collation은 **`utf8mb4_unicode_ci`** 를 기본으로 한다.
+- 레거시 `utf8`(=`utf8mb3`)은 상위 호환이므로 기존 데이터 문제는 없으나, **신규 테이블 생성 시 반드시 `utf8mb4`를 명시**한다.
+- 기존 `utf8` 테이블은 마이그레이션 시 `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`로 변환한다.
+
+```sql
+-- 신규 테이블 생성 시 필수
+CREATE TABLE tb_example (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 기존 테이블 변환
+ALTER TABLE tb_legacy CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
 ---
 
 ## CI4 쿼리빌더 사용 시 적용 규칙
@@ -204,6 +221,42 @@ $result = $builder->get()->getResultArray();
 
 ---
 
+## 스키마 마이그레이션 SQL 관리
+
+### 파일 경로 및 네이밍
+
+- **경로**: `database/schema/`
+- **네이밍**: `{항목코드}_{테이블명}_{변경유형}.sql`
+  - 항목코드: 작업 식별자 (예: `D-04`, `D-06`, `D-08`)
+  - 변경유형: `create` (신규 테이블), `alter` (컬럼/인덱스 추가·변경), `drop` (삭제)
+- **예시**: `D-04_tb_account_agree_fields.sql`, `D-08_tb_refresh_token_create.sql`
+
+### 분리 원칙
+
+- **테이블 단위 1파일** — 하나의 SQL 파일에 여러 테이블 변경을 혼합하지 않는다.
+- 동일 테이블의 ALTER + 데이터 마이그레이션(UPDATE)은 같은 파일에 포함 가능.
+
+### 헤더 주석 표준
+
+모든 스키마 SQL 파일 상단에 아래 형식의 헤더를 필수 포함한다:
+
+```sql
+-- =============================================================================
+-- {항목코드}: {변경 요약} ({대상 테이블})
+-- 근거: {법적 근거, RFC, CWE, 보안 요건 등}
+-- 대상 DB: {DB명} ({엔진 버전})
+-- 주의: 프로덕션 반영 전 반드시 스테이징에서 검증
+-- =============================================================================
+```
+
+### 반영 절차
+
+1. `database/schema/`에 SQL 파일 작성
+2. 스테이징 환경에서 실행 및 검증
+3. 검증 완료 후 프로덕션 반영 (사용자 승인 필수)
+
+---
+
 ## 자가 검증 체크리스트
 
 쿼리 응답 작성 전 반드시 확인:
@@ -216,3 +269,4 @@ $result = $builder->get()->getResultArray();
 - [ ] 인덱스 변경이 필요한 경우 Checkpoint로 보고했는가
 - [ ] 쿼리 힌트를 사용하지 않았는가
 - [ ] CTE 사용 시 서브쿼리 대안을 병기했는가
+- [ ] 신규 테이블/컬럼에 `utf8mb4` charset을 명시했는가

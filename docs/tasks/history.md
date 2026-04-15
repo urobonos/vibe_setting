@@ -2,6 +2,15 @@
 
 ## 2026.04.15
 
+### 전체 프로젝트 문서 doc-template 양식 일괄 적용
+
+- YAML 프론트매터 제거 → `## 작성 정보` 테이블 변환
+- `## 체크리스트`, `## 변경 기록` 섹션 추가
+- task 파일명 `{작업명}-` 접두어 적용 (infra 32건 리네임)
+- specs 프론트매터 보강 (문서 ID, 버전, 관련 문서)
+- 대상: infra 49건 + BE 67건 + FE 9건 = **총 125건**
+- 기준 템플릿: `~/.claude/templates/doc-template.md`
+
 ### 지침/스킬 최적화 — frontend-guard 흡수 + Hook 통합 (22→14)
 
 - `frontend-guard` 스킬 삭제 → `sensitive-file-guard.sh` hook에 흡수 (package.json/yarn.lock/pnpm-lock.yaml 차단 추가)

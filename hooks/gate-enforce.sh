@@ -80,6 +80,11 @@ except:
     print('')
 " 2>/dev/null)
 
+  # docs/specs/ — IEEE 산출물 경로 (게이트 면제)
+  if echo "$FILE_PATH" | grep -qE '(^|/)docs/specs/'; then
+    exit 0
+  fi
+
   # 비코드 경로 판별
   IS_NON_CODE=false
 

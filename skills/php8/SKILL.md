@@ -347,6 +347,23 @@ namespace App\Modules\Commerce\Services;
 | **Interface** | 추상화 사유 |
 | **raw query** | QB로 불가능한 사유 명시 |
 
+### 6. 날짜/시간 처리
+
+- `date()`, `time()` **사용 금지**. `DateTimeImmutable` 필수.
+- 타임스탬프 필요 시 `(new DateTimeImmutable())->getTimestamp()` 사용
+- DB/서버 타임존: UTC 통일
+
+```php
+// 금지
+$now = date('Y-m-d H:i:s');
+$timestamp = time();
+
+// 올바른 사용
+$now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+$timestamp = $now->getTimestamp();
+$formatted = $now->format('Y-m-d H:i:s');
+```
+
 ---
 
 ## 핵심 규칙
@@ -962,7 +979,7 @@ final readonly class Money
 | 규칙 | 설명 |
 |------|------|
 | **외부 의존성 금지** | `use CodeIgniter\...`, `use Config\...` 등 Framework import 불가 |
-| **불변 우선** | `readonly` 프로퍼티, `DateTimeImmutable` 사용 권장 |
+| **불변 우선** | `readonly` 프로퍼티, `DateTimeImmutable` 필수 (§5.6). `date()`/`time()` 금지 |
 | **자체 유효성** | 생성자에서 도메인 규칙 검증. 유효하지 않으면 `InvalidArgumentException` |
 | **Service에서 사용** | Service가 Entity를 생성·조작, Repository가 Entity↔DB 변환 |
 | **VO 동등성** | `equals()` 메서드로 값 비교 (참조 비교 대신) |
@@ -1281,6 +1298,7 @@ API 생성 시 `api-docs/{module}/{apiname}.md`에 명세서를 자동 생성한
 - **HTTP 상태코드가 성공/실패의 SSOT** (Google API Design Guide, RFC 7231)
 - CI4 ResponseTrait의 `respond()`, `failNotFound()` 등이 HTTP 코드를 자동 설정
 - body 내 `status` 필드는 프론트엔드 편의를 위해 유지하되, HTTP 코드와 항상 일치
+- **응답 키 네이밍**: DB `snake_case` → API 응답 `camelCase` 변환 필수 (`created_at` → `createdAt`, `ac_nick` → `acNick`)
 
 ### 에러 코드 (현상 서술형, suffix 없음)
 
@@ -1529,6 +1547,7 @@ components:
 - [ ] 모든 PHP 파일에 `declare(strict_types=1)` 선언
 - [ ] 보안 검증 통과
 - [ ] 에러 응답이 표준 에러 코드 체계를 따르는가
+- [ ] `date()`, `time()` 사용 없이 `DateTimeImmutable`만 사용했는가
 
 ### Legacy 모드 체크리스트
 - [ ] 기존 파일의 네이밍/DI/디렉토리 패턴을 유지했는가
