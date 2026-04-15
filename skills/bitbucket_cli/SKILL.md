@@ -14,7 +14,7 @@ version: 1.0.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
-min_claude_md_version: "1.0"
+min_claude_md_version: "4.0"
 ---
 
 # Bitbucket Cloud REST API Skill

@@ -1,7 +1,17 @@
 ---
 name: docset-ref
-description: "Dash docset 기반 오프라인 기술 레퍼런스 검색. 타당성 검토 시 공식 문서 근거를 docSet.dsidx SQLite 인덱스에서 조회하고 HTML 원문을 추출한다."
-trigger: "타당성 검토(Feasibility Review) 수행 시, 공식 문서 근거가 필요할 때, 사용자가 기술 레퍼런스를 요청할 때 자동 로드"
+description: >
+  Dash docset 기반 오프라인 기술 레퍼런스 검색.
+  타당성 검토 시 공식 문서 근거를 docSet.dsidx SQLite 인덱스에서 조회하고 HTML 원문을 추출한다.
+triggers:
+  - "타당성 검토(Feasibility Review) 수행 시"
+  - "공식 문서 근거가 필요할 때"
+  - "기술 레퍼런스 요청"
+version: 1.0.0
+user-invocable: false
+depends_on: []
+conflicts_with: []
+min_claude_md_version: "4.0"
 ---
 
 # Docset Reference Skill

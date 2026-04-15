@@ -1,7 +1,7 @@
 ---
 name: debate
 description: >
-  Multi-Agent Team Debate Protocol. 질문 유형 시 4팀 12에이전트 토론을 수행한다.
+  Multi-Agent Subagent Debate Protocol. 질문 유형 시 4그룹 12 서브에이전트 토론을 수행한다.
   토론만 수행하며, 코드 구현·커밋은 별도 3-Team 워크플로우로 처리한다.
 triggers:
   - "~는 어떻게?", "~가 뭐야?", "~차이가 뭐야?"
@@ -25,7 +25,7 @@ min_claude_md_version: "4.0"
 
 frontmatter `triggers` 참조. **트리거 제외:** 코드 작성/수정 요청, 플랜 요청, 단순 사실 확인
 
-## 팀 구성 (4팀, 12에이전트 + 4 Lead)
+## 그룹 구성 (4그룹, 12 서브에이전트 + 4 Lead)
 
 | 팀 | Lead 역할 | 멤버 | 핵심 질문 |
 |----|----------|------|-----------|

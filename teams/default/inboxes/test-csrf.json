@@ -1,9 +1,0 @@
-[
-  {
-    "from": "team-lead",
-    "text": "승인. 13개 테스트 케이스 전부 생성 진행해. gate 파일이 차단하면 Bash로 직접 파일을 생성해.",
-    "summary": "Approve CSRF filter test creation",
-    "timestamp": "2026-04-10T01:42:49.619Z",
-    "read": false
-  }
-]

@@ -1338,8 +1338,8 @@ API 생성/수정 시 Markdown 명세서와 함께 `api-docs/{module}/{apiname}.
 | 항목 | 규칙 |
 |------|------|
 | **파일명** | Markdown과 동일 경로에 `.yaml` 확장자 (`goods-api.yaml`) |
-| **서버** | `https://gl.hongcafe.com` (Production) |
-| **인증** | Routes.php의 `'filter' => 'auth:jwt'` → `security: - bearerAuth: []`, `auth:apikey` → `security: - apiKeyAuth: []`, 공개 → security 없음 |
+| **서버** | 3개 환경 필수: `http://prd.gl.hongcafe.com` (Production), `http://stg.gl.hongcafe.com` (Staging), `http://dev.gl.hongcafe.com` (Development) |
+| **인증** | Routes.php의 `'filter' => 'auth'` → `security: - cookieAuth: []`, 공개 → security 없음. `bearerAuth` 스키마 사용 금지 (쿠키 기반 아키텍처) |
 | **경로** | 반드시 `/api/` prefix 포함 |
 
 ```yaml
@@ -1348,15 +1348,22 @@ info:
   title: HongCafe Global - {Controller} API
   version: 1.0.0
 servers:
-  - url: https://gl.hongcafe.com
+  - url: http://prd.gl.hongcafe.com
     description: Production
+  - url: http://stg.gl.hongcafe.com
+    description: Staging
+  - url: http://dev.gl.hongcafe.com
+    description: Development
 paths:
   /api/{prefix}/{method}:
     post:
       tags: [{Tag}]
       summary: "{설명}"
       security:
-        - bearerAuth: []   # auth:jwt 라우트만
+        - cookieAuth: []   # auth 필터 적용 라우트만
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
       requestBody:
         content:
           application/json:
@@ -1370,14 +1377,32 @@ paths:
           description: 성공
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-    apiKeyAuth:
+    cookieAuth:
       type: apiKey
+      in: cookie
+      name: hc_access
+      description: JWT Access Token (HttpOnly, Secure, SameSite=Lax, 15분 TTL)
+    refreshCookieAuth:
+      type: apiKey
+      in: cookie
+      name: hc_refresh
+      description: Refresh Token (HttpOnly, Secure, single-use, 7일 TTL)
+  parameters:
+    XCsrfToken:
+      name: X-CSRF-TOKEN
       in: header
-      name: X-Api-Key
+      required: true
+      schema:
+        type: string
+      description: CSRF 토큰 (hc_csrf 쿠키 값)
+    XForwardedProto:
+      name: X-Forwarded-Proto
+      in: header
+      required: true
+      schema:
+        type: string
+        default: https
+      description: 모든 환경 필수
 ```
 
 ---
@@ -1441,6 +1466,19 @@ components:
 | `RESOURCE_NOT_FOUND` | 404 | 리소스를 찾을 수 없음 |
 | `CONFLICT` | 409 | 중복/충돌 |
 | `SERVER_ERROR` | 500 | 서버 내부 오류 |
+
+---
+
+## Mental Dry-Run (코드 사전 검증, 필수)
+
+코드 생성·수정 시, **실제 파일에 기록하기 전에** 다음 절차를 반드시 수행한다.
+
+1. **1차 작성** — 응답(메모리) 상에서만 코드를 작성한다. 실제 파일에는 기록하지 않는다.
+2. **1차 재검토** — 작성한 코드를 스킬 규칙·자가 검증 체크리스트 기준으로 검토한다.
+3. **2차 재검토** — 엣지 케이스, 사이드 이펙트, 기존 코드와의 정합성을 추가 검토한다.
+4. **파일 반영** — 2회 검토 후 문제가 없다고 판단될 경우에만 실제 파일에 기록한다.
+
+> 검토 중 문제가 발견되면 메모리 상에서 수정 후 다시 1차 재검토부터 반복한다.
 
 ---
 

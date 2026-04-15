@@ -32,22 +32,26 @@ fi
 BASENAME=$(basename "$FILE")
 LOWER_BASENAME=$(echo "$BASENAME" | tr '[:upper:]' '[:lower:]')
 
-# 1. 프론트엔드 파일 차단 (frontend-guard)
+# 1. 프론트엔드 파일 차단 — Read만 허용, Edit/Write 차단
+#    백엔드(CI4) API 변경만 수행 가능. 프론트엔드 코드는 읽기 전용 참조만 허용.
 case "$LOWER_BASENAME" in
   *.tsx|*.jsx)
-    echo "[BLOCKED] 프론트엔드 파일 수정 차단: $BASENAME — frontend-guard 정책. 프론트엔드 담당자에게 요청하세요." >&2
+    echo "[BLOCKED] 프론트엔드 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
     exit 2 ;;
   *.ts)
-    echo "[BLOCKED] TypeScript 파일 수정 차단: $BASENAME — frontend-guard 정책." >&2
+    echo "[BLOCKED] TypeScript 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
     exit 2 ;;
   *.js)
-    echo "[BLOCKED] JavaScript 파일 수정 차단: $BASENAME — frontend-guard 정책." >&2
+    echo "[BLOCKED] JavaScript 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
     exit 2 ;;
   *.css|*.scss)
-    echo "[BLOCKED] 스타일 파일 수정 차단: $BASENAME — frontend-guard 정책." >&2
+    echo "[BLOCKED] 스타일 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
     exit 2 ;;
   next.config.*|tailwind.config.*|postcss.config.*|middleware.ts)
-    echo "[BLOCKED] 프론트엔드 설정 파일 수정 차단: $BASENAME — frontend-guard 정책." >&2
+    echo "[BLOCKED] 프론트엔드 설정 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
+    exit 2 ;;
+  package.json|yarn.lock|pnpm-lock.yaml)
+    echo "[BLOCKED] 프론트엔드 패키지 파일 수정 차단: $BASENAME — npm/yarn/pnpm 명령으로 관리하세요." >&2
     exit 2 ;;
 esac
 

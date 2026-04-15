@@ -1,0 +1,38 @@
+{
+  "session_id": "6edcbd2c-0f52-454d-a423-f85cfd76daca",
+  "snapshot_at": "2026-04-14T04:33:51.120281+00:00",
+  "model_usage": {
+    "claude-sonnet-4-6": {
+      "inputTokens": 88975,
+      "outputTokens": 1107214,
+      "cacheReadInputTokens": 152430190,
+      "cacheCreationInputTokens": 10446484,
+      "webSearchRequests": 0,
+      "costUSD": 0,
+      "contextWindow": 0,
+      "maxOutputTokens": 0
+    },
+    "claude-opus-4-6": {
+      "inputTokens": 1366380,
+      "outputTokens": 9551059,
+      "cacheReadInputTokens": 3222225788,
+      "cacheCreationInputTokens": 110820539,
+      "webSearchRequests": 0,
+      "costUSD": 0,
+      "contextWindow": 0,
+      "maxOutputTokens": 0
+    },
+    "claude-haiku-4-5-20251001": {
+      "inputTokens": 305252,
+      "outputTokens": 538569,
+      "cacheReadInputTokens": 130723326,
+      "cacheCreationInputTokens": 20945600,
+      "webSearchRequests": 0,
+      "costUSD": 0,
+      "contextWindow": 0,
+      "maxOutputTokens": 0
+    }
+  },
+  "total_messages": 50128,
+  "total_sessions": 244
+}

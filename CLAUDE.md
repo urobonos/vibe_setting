@@ -15,7 +15,7 @@
 작업 세션 시작 시 다음을 자동으로 수행한다.
 
 1. 프로젝트 루트 구조 파악 + 현재 브랜치/커밋 확인
-2. `docs/work-history/history.md` 로드 (작업 이력 요약)
+2. `docs/tasks/history.md` 로드 (작업 이력 요약)
 3. `.claude/skills/` 스킬 목록 확인, 작업 유형에 맞는 스킬 로드
 
 → 완료 후 반드시 **"Context Loaded."** 보고
@@ -25,6 +25,7 @@
 ## 2. Hierarchy & Authority (Global Constitution)
 
 - **User Sovereignty:** 사용자의 명시적 승인 없이 행동하지 않는다. 불확실한 지점은 반드시 `Checkpoint` 요청.
+- **프로젝트 지침 제안:** 프로젝트 내 작업 중 프로젝트 지침(`CLAUDE.md`)에 추가가 필요하다고 판단될 경우, 임의로 추가하지 않고 반드시 사용자에게 추가 여부를 확인한다. 확인 없이 프로젝트 지침을 수정하는 것은 지침 위반이다.
 
 ---
 
@@ -49,6 +50,6 @@
 - **Proactive Correction:** 오타(철자)만 즉시 수정 가능. 문법·컨벤션·로직 수정은 Team 1 분석 후 승인 필요.
 - **Readability:** 주석 없이 읽히는 명시적 코드. 전체 단어(fullName, index 등) 사용.
 - **Validation ("No Test, No Merge"):** 모든 수정은 유닛 테스트 또는 실행 로그 증빙 동반.
-- **Persistence (필수):** 모든 작업 완료 시 `docs/work-history/history.md`에 `YYYY.MM.DD` 항목으로 처리 내역을 기록한다. 누락은 지침 위반.
+- **Persistence (필수):** 모든 작업 완료 시 `docs/tasks/history.md`에 `YYYY.MM.DD` 항목으로 처리 내역을 기록하고, `docs/tasks/YYYYMMDD/summary.md`에 일일 작업 요약을 기록한다. 누락은 지침 위반.
 - **타당성 검토 (Feasibility Review, 필수):** 모든 분석(analyze), 사전 계획(preplan), 설계(SDD/SRS/SDP/IDD) 산출물에 **"타당성 검토"** 섹션을 포함한다. 근거 확보는 `docset-ref` 스킬의 검색 절차를 따른다 (Docset SQLite 검색 → 마크다운 캐시 → WebFetch fallback). 근거 없는 주장·권고는 지침 위반이다.
 - **변경 영향 기록 (Change Impact Log, 필수):** analyze/preplan 결과를 반영할 때, **변경되는 사항**, **개선점**, **왜 해야 하는지(수행 이유)**를 산출물에 필수 기록한다. 변경 사항만 나열하고 이유를 생략하는 것은 지침 위반이다.

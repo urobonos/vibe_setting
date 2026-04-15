@@ -1,3 +1,20 @@
+---
+name: notion_cli
+description: >
+  Notion API curl 기반 CLI 스킬.
+  페이지 조회/생성/수정, 데이터베이스 검색, 블록 조작을 수행한다.
+triggers:
+  - "노션"
+  - "notion"
+  - "노션 페이지"
+  - "노션 검색"
+version: 1.0.0
+user-invocable: true
+depends_on: []
+conflicts_with: []
+min_claude_md_version: "4.0"
+---
+
 # Notion CLI Skill
 
 ## 인증

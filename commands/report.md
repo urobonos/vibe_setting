@@ -2,23 +2,23 @@
 
 ## 수행 절차
 
-1. 아래 프로젝트 경로에서 `docs/work-history/` 디렉토리를 탐색한다:
+1. 아래 프로젝트 경로에서 `docs/tasks/` 디렉토리를 탐색한다:
    - `C:/Works/<PROJECT_BE>` → [백엔드]
    - `C:/Works/<PROJECT_FE>` → [프론트]
    - `C:/Works/infra` → [인프라]
    - 추가 프로젝트가 있으면 동일 패턴으로 탐색
 
-2. 각 프로젝트의 `docs/work-history/history.md`와 오늘 날짜 파일(`YYYYMMDD.md`)을 읽는다.
+2. 각 프로젝트의 `docs/tasks/history.md`와 오늘 날짜 요약(`YYYYMMDD/summary.md`)을 읽는다.
 
-3. 오늘 날짜 파일이 없으면 `history.md`에서 가장 최근 항목을 확인한다.
+3. 오늘 날짜 요약이 없으면 `history.md`에서 가장 최근 항목을 확인한다.
 
-4. `docs/tasks/YYYYMMDD/` 하위 디렉토리도 탐색하여 진행 상태를 판단한다:
+4. `docs/tasks/YYYYMMDD/` 하위 디렉토리를 탐색하여 진행 상태를 판단한다:
    - `analyze.md`만 존재 → 분석 중 (30%)
    - `analyze.md` + `plan.md` → 계획 완료 (50%)
    - `analyze.md` + `plan.md` + `result.md` → 완료 (100%)
    - 디렉토리 없음 → 오늘 작업 없음
 
-5. `docs/work-history/YYYYMMDD-todo.md` 파일이 있으면 미완료 항목도 포함한다.
+5. `docs/tasks/YYYYMMDD/todo.md` 파일이 있으면 미완료 항목도 포함한다.
 
 6. 여러 프로젝트에 걸친 작업(CloudFront, 도메인, 공통 인프라 등)은 [글로벌]로 분류한다.
 

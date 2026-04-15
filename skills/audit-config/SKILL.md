@@ -1,8 +1,17 @@
 ---
 name: audit-config
-description: Claude Code 설정 전체(CLAUDE.md, settings, hooks, commands, skills, agents, memory)를 정보망 베스트 프랙티스 대비 정량적으로 검증. 사용자가 /audit-config 명시적 요청 시에만 실행.
+description: >
+  Claude Code 설정 전체(CLAUDE.md, settings, hooks, commands, skills, agents, memory)를
+  정보망 베스트 프랙티스 대비 정량적으로 검증. 사용자가 /audit-config 명시적 요청 시에만 실행.
+triggers:
+  - "/audit-config"
+  - "설정 감사"
+  - "config audit"
 version: 1.0.0
 user-invocable: true
+depends_on: []
+conflicts_with: []
+min_claude_md_version: "4.0"
 ---
 
 # Task: Claude Code 설정 감사
