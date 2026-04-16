@@ -26,6 +26,10 @@ credentials.json
 history.jsonl
 settings.json
 
+# Monitoring & task data
+monitoring/
+tasks/
+
 # Session data
 *.session
 *.lock
