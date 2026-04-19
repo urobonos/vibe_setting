@@ -340,12 +340,38 @@ namespace App\Modules\Commerce\Services;
 
 ### 5. 주석 규칙
 
-| 대상 | 주석 내용 |
-|------|-----------|
-| **모든 함수/메서드** | `@param`, `@return`, 목적 한 줄 |
-| **복잡한 비즈니스 로직** | 단계별 설명 |
-| **Interface** | 추상화 사유 |
-| **raw query** | QB로 불가능한 사유 명시 |
+#### PHPDoc 표준 양식
+
+```php
+/**
+ * 목적 한 줄 설명. (한국어, 동사형 `~한다`)
+ *
+ * @param  string      $token       파라미터 설명
+ * @param  int         $expSeconds  파라미터 설명
+ * @return array|null  반환값 설명
+ * @throws \RuntimeException 예외 조건
+ */
+```
+
+#### 대상별 규칙
+
+| 대상 | 필수 여부 | 주석 내용 |
+|------|-----------|-----------|
+| **클래스** | 필수 | 클래스명 + 역할 설명 (여러 줄 허용) |
+| **public/protected 메서드** | 필수 | 목적 한 줄 + `@param` + `@return` + `@throws` |
+| **private 메서드** | 권장 | 목적 한 줄 + `@param` + `@return` |
+| **Interface** | 필수 | 추상화 사유 + 메서드별 `@param`/`@return` |
+| **복잡한 비즈니스 로직** | 필수 | 단계별 인라인 설명 |
+| **raw query** | 필수 | QB로 불가능한 사유 명시 |
+
+#### 작성 규칙
+
+- 첫 줄: 목적 한 줄 (한국어, `~한다` 종결)
+- 빈 줄: 설명과 태그 사이 1줄
+- `@param`: 타입 + 변수명 + 설명 (타입 정렬)
+- `@return`: 타입 + 설명 (void 생략 가능)
+- `@throws`: 예외 클래스 + 발생 조건
+- 제네릭 반환: `@return array{key: type}` 형태로 구조 명시
 
 ### 6. 날짜/시간 처리
 

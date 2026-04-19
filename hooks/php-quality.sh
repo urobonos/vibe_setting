@@ -191,11 +191,67 @@ if echo "$FILE" | grep -qE '/(ValueObjects)/'; then
   fi
 fi
 
+# 15. PHPDoc 누락/불완전 감지 (public/protected 함수에 PHPDoc 표준 양식 필수)
+MISSING_DOC=""
+INCOMPLETE_DOC=""
+MISSING_COUNT=0
+INCOMPLETE_COUNT=0
+while IFS= read -r line; do
+  LINENO_NUM=$(echo "$line" | cut -d: -f1)
+  FUNC_SIG=$(echo "$line" | cut -d: -f2-)
+  # 해당 라인 위 20줄 내에서 PHPDoc 블록 추출
+  START=$((LINENO_NUM - 20))
+  [ "$START" -lt 1 ] && START=1
+  DOC_BLOCK=$(sed -n "${START},$((LINENO_NUM - 1))p" "$FILE" 2>/dev/null)
+  HAS_DOC=$(echo "$DOC_BLOCK" | grep -c '/\*\*')
+  if [ "$HAS_DOC" -eq 0 ]; then
+    MISSING_DOC="${MISSING_DOC}\n  L${LINENO_NUM}: ${FUNC_SIG}"
+    ((MISSING_COUNT++))
+  else
+    # 파라미터가 있는 함수인지 확인
+    HAS_PARAMS=$(echo "$FUNC_SIG" | grep -cE '\(\s*[^)]+\)')
+    EMPTY_PARAMS=$(echo "$FUNC_SIG" | grep -cE '\(\s*\)')
+    # @param 태그 확인 (파라미터가 있는 함수만)
+    if [ "$HAS_PARAMS" -gt 0 ] && [ "$EMPTY_PARAMS" -eq 0 ]; then
+      HAS_PARAM_TAG=$(echo "$DOC_BLOCK" | grep -c '@param')
+      if [ "$HAS_PARAM_TAG" -eq 0 ]; then
+        INCOMPLETE_DOC="${INCOMPLETE_DOC}\n  L${LINENO_NUM}: @param 누락 — ${FUNC_SIG}"
+        ((INCOMPLETE_COUNT++))
+      fi
+    fi
+    # @return 태그 확인 (void/생성자 제외)
+    IS_CONSTRUCTOR=$(echo "$FUNC_SIG" | grep -c '__construct')
+    HAS_VOID=$(echo "$FUNC_SIG" | grep -cE ':\s*void')
+    if [ "$IS_CONSTRUCTOR" -eq 0 ] && [ "$HAS_VOID" -eq 0 ]; then
+      HAS_RETURN_TAG=$(echo "$DOC_BLOCK" | grep -c '@return')
+      if [ "$HAS_RETURN_TAG" -eq 0 ]; then
+        INCOMPLETE_DOC="${INCOMPLETE_DOC}\n  L${LINENO_NUM}: @return 누락 — ${FUNC_SIG}"
+        ((INCOMPLETE_COUNT++))
+      fi
+    fi
+  fi
+done < <(grep -nE '^\s*(public|protected)\s+function\s+\w+' "$FILE" 2>/dev/null)
+if [ "$MISSING_COUNT" -gt 0 ]; then
+  WARNINGS="${WARNINGS}\n[PHPDoc 누락] ${MISSING_COUNT}건의 메서드에 PHPDoc 블록이 없습니다:${MISSING_DOC}\n  양식: /** 목적 한 줄(~한다) + @param 타입 \$변수 설명 + @return 타입 설명 + @throws 예외 조건 */\n"
+  ((COUNT++))
+  PHPDOC_MISSING=1
+fi
+if [ "$INCOMPLETE_COUNT" -gt 0 ]; then
+  WARNINGS="${WARNINGS}\n[PHPDoc 불완전] ${INCOMPLETE_COUNT}건의 태그 누락:${INCOMPLETE_DOC}\n  @param: 파라미터가 있는 메서드에 필수 | @return: void/생성자 외 필수\n"
+  ((COUNT++))
+  PHPDOC_MISSING=1
+fi
+
 # 경고가 있으면 Claude에게 주입
 if [ "$COUNT" -gt 0 ]; then
   echo ""
   echo "━━━ PHP Pattern Lint: ${COUNT}건 위반 감지 (${FILE}) ━━━"
   echo -e "$WARNINGS"
+  if [ "${PHPDOC_MISSING:-0}" -eq 1 ]; then
+    echo "PHPDoc 누락 메서드에 /** @param @return 목적 한 줄 */ 블록을 추가하세요. 추가 완료 후 다시 저장하세요."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    exit 1
+  fi
   echo "위 위반 사항을 즉시 수정하세요. php8 스킬 규칙 참조."
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi

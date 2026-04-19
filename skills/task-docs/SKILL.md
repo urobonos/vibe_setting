@@ -4,14 +4,14 @@ description: >
   작업 문서 생명주기(분석→계획→결과)를 docs/tasks/YYYYMMDD/{작업명}/ 디렉토리에 표준 템플릿으로 생성한다.
   일일 작업 요약을 docs/tasks/YYYYMMDD/summary.md에, 전체 이력을 docs/tasks/history.md에 기록한다.
   {작업명}-analyze.md, {작업명}-plan.md, {작업명}-result.md 3종 문서를 작업별 서브디렉토리에서 관리한다.
-  보고용 산출물은 docs/output/{제목}/{파일명}.md에, 소프트웨어 개발 산출물(SDP/SRS/SDD/IDD)은 docs/specs/에 생성·관리한다.
+  보고용 산출물은 docs/output/{제목}/{파일명}.md에, 소프트웨어 개발 산출물(SDP/SRS/SDD/IDD/STP/STD)은 docs/specs/에 생성·관리한다.
 triggers:
   - "/plan"
   - "/research"
   - "플랜 작성", "계획 세워줘"
   - "리서치 해줘", "분석 해줘", "코드 분석", "영향 범위 조사"
   - 3-Team 워크플로우의 Team 1(Analyze), Team 2(Plan), Team 3(Execute) 완료 시 자동 적용
-  - "/task-docs specs", "SDP 작성", "SRS 작성", "SDD 작성", "IDD 작성"
+  - "/task-docs specs", "SDP 작성", "SRS 작성", "SDD 작성", "IDD 작성", "STP 작성", "STD 작성"
 mandatory: false
 version: 3.0.0
 user-invocable: true
@@ -63,7 +63,7 @@ min_claude_md_version: "4.0"
     ---
     ```
     **문서 유형별 필수 필드:**
-    | 필드 | specs (SDP/SRS/SDD/IDD) | tasks (analyze/plan/result) | output (보고서) |
+    | 필드 | specs (SDP/SRS/SDD/IDD/STP/STD) | tasks (analyze/plan/result) | output (보고서) |
     |------|:-:|:-:|:-:|
     | 문서명 | ● | ● | ● |
     | 문서 ID | ● | — | — |
@@ -96,7 +96,7 @@ docs/tasks/
 docs/output/
 ├── {제목}/                       ← 보고용 산출물 (kebab-case 주제별 폴더)
 │   └── {파일명}.md
-├── specs/                        ← 소프트웨어 개발 산출물 (SDP/SRS/SDD/IDD)
+├── specs/                        ← 소프트웨어 개발 산출물 (SDP/SRS/SDD/IDD/STP/STD)
 │   └── {모듈}-{문서타입}.md
 ```
 
@@ -596,7 +596,7 @@ Team 3 (Execute) 완료 후 결과를 기록한다.
 
 # Part 5. 소프트웨어 개발 산출물 — IEEE 표준 기반 (docs/specs/)
 
-소프트웨어 개발 산출물 4종(SDP, SRS, SDD, IDD)을 `docs/specs/` 디렉토리에 플랫하게 관리한다.
+소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)을 `docs/specs/` 디렉토리에 플랫하게 관리한다.
 보고용 산출물은 `docs/output/{제목}/{파일명}.md` 형식으로 주제별 폴더에 저장한다.
 
 ### 적용 표준
@@ -607,12 +607,14 @@ Team 3 (Execute) 완료 후 결과를 기록한다.
 | SRS | **IEEE/ISO/IEC 29148:2018** | 모듈(BC)별 |
 | SDD | **IEEE 1016-2009** (Multi-Viewpoint) | 모듈(BC)별 |
 | IDD | **MIL-STD-498 DI-IPSC-81436** | 모듈(BC)별 또는 시스템 간 |
+| STP | **IEEE 29119-3:2021** | 프로젝트 전체 (1회성) |
+| STD | **IEEE 829-2008** | 모듈(BC)별 |
 
 ## 공통 규칙
 
 1. **단일 디렉토리:** 모든 산출물은 `docs/specs/`에 저장한다. 문서 타입별 하위 폴더를 만들지 않는다.
 2. **파일 네이밍:** `{모듈 또는 주제}-{문서타입}.md` (kebab-case)
-   - 예: `auth-srs.md`, `commerce-idd.md`, `project-sdp.md`
+   - 예: `auth-srs.md`, `commerce-idd.md`, `project-sdp.md`, `project-stp.md`, `auth-std.md`
 3. **Glob 패턴으로 타입별 조회 가능:** `specs/*-srs.md`, `specs/*-sdd.md` 등
 4. **기존 파일 덮어쓰기 허용:** specs 문서는 요구사항·설계 변경 시 갱신한다. (tasks 문서와 다름)
 5. **버전 관리:** 문서 상단 `version`과 `lastUpdated` 필드로 변경 이력을 추적한다.
@@ -1189,9 +1191,149 @@ public function method(Type $param): ReturnType;
 
 ---
 
+## 5-5. STP — Software Test Plan (IEEE 29119-3:2021)
+
+### 파일 경로
+```
+docs/specs/project-stp.md
+```
+
+### 필수 섹션
+
+```markdown
+---
+문서명: Project — Software Test Plan
+문서 ID: project-stp
+버전: v{버전}
+상태: {초안|승인됨}
+생성일: {YYYY-MM-DD}
+최종 수정일: {YYYY-MM-DD}
+작성자: jypark
+대상 시스템: HongCafe Global Backend
+관련 문서: project-sdp.md, {모듈}-srs.md, {모듈}-std.md
+적용 표준: IEEE 29119-3:2021
+---
+
+# Project — Software Test Plan (STP)
+
+> IEEE 29119-3:2021 | version: {버전} | lastUpdated: {YYYY-MM-DD}
+
+## 1. Introduction
+### 1.1 Purpose
+### 1.2 Scope
+### 1.3 Definitions
+### 1.4 References
+### 1.5 Overview
+
+## 2. Test Strategy
+- 테스트 수준: Unit / Feature / Integration
+- 접근법 (구조적, 행위적, 경험 기반)
+- 설계 기법
+
+## 3. Test Environment
+- PHP/PHPUnit/CI4 버전
+- phpunit.xml 설정
+- Mock/Stub 전략
+
+## 4. Test Schedule & Resources
+- SDP 마일스톤 연동
+
+## 5. Test Deliverables
+- 모듈별 STD 참조 테이블
+
+## 6. Entry/Exit Criteria
+- Entry 조건 (테스트 시작 요건)
+- Exit 조건 (테스트 종료 요건)
+- Suspension 조건
+
+## 7. Risk Analysis
+- 테스트 리스크 식별 및 대응
+
+## 8. Module Coverage Matrix
+- 13개 모듈별 테스트 파일 수, 테스트 수, 커버리지 목표
+
+## 9. 타당성 검토 (Feasibility Review)
+
+## 10. 변경 영향 기록
+
+## 11. 변경 로그
+```
+
+---
+
+## 5-6. STD — Software Test Documentation (IEEE 829-2008)
+
+### 파일 경로
+```
+docs/specs/{모듈}-std.md
+```
+
+### 필수 섹션
+
+```markdown
+---
+문서명: {Module} — Software Test Documentation
+문서 ID: {module}-std
+버전: v{버전}
+상태: {초안|승인됨}
+생성일: {YYYY-MM-DD}
+최종 수정일: {YYYY-MM-DD}
+작성자: jypark
+대상 시스템: {Module} Module
+관련 문서: {module}-srs.md, {module}-sdd.md, {module}-idd.md, project-stp.md
+적용 표준: IEEE 829-2008
+---
+
+# {Module} — Software Test Documentation (STD)
+
+> IEEE 829-2008 | version: {버전} | lastUpdated: {YYYY-MM-DD} | module: {Module}
+
+## 1. Introduction
+### 1.1 Purpose
+### 1.2 Scope
+### 1.3 References
+- SRS/SDD/IDD 상호참조 필수
+
+## 2. Test Items
+- 테스트 대상 클래스/메서드 목록 (Unit/Feature 구분)
+
+## 3. Test Cases
+| TC ID | 테스트 메서드 | 설명 | 입력 | 기대결과 | 우선순위 |
+|-------|-------------|------|------|---------|---------|
+- 실제 테스트 파일의 메서드명을 가공 없이 기재
+
+## 4. Test Execution Results
+| 항목 | 값 |
+|------|-----|
+| 총 TC | {N} |
+| PASS | {N} |
+| FAIL | {N} |
+| SKIP | {N} |
+| 최종 실행일 | {YYYY-MM-DD} |
+
+## 5. Traceability Matrix
+| SRS 요구사항 ID | 요구사항 요약 | TC ID | 커버리지 |
+|----------------|-------------|-------|---------|
+- SRS FR/NFR ↔ TC 매핑 필수
+
+## 6. Defects & Issues
+| DEF ID | 설명 | 심각도 | 상태 |
+|--------|------|--------|------|
+
+## 7. 변경 로그
+```
+
+### STD 작성 규칙
+
+1. **테스트 파일 기반:** 실제 `tests/Modules/{Module}/` 하위 파일의 메서드명을 TC로 등록한다. 가상 TC를 만들지 않는다.
+2. **SRS 매핑 필수:** Traceability Matrix에서 SRS의 모든 FR/NFR이 최소 1개 TC에 매핑되거나, 미커버 사유를 명시한다.
+3. **결과 실측:** PASS/FAIL/SKIP 수치는 PHPUnit 실행 결과 기반이다. 추정값을 쓰지 않는다.
+
+---
+
 # Part 6. 3-Round IEEE 적합성 재검토
 
-소프트웨어 개발 산출물(SDP/SRS/SDD/IDD) 생성 또는 갱신 후, **반드시 3회 재검토를 수행한다**. 재검토를 거치지 않은 산출물은 "초안" 상태로 간주하며, "승인됨" 상태로 전환할 수 없다.
+소프트웨어 개발 산출물(SDP/SRS/SDD/IDD/STP/STD) 생성 또는 갱신 후, **반드시 3회 재검토를 수행한다**. 재검토를 거치지 않은 산출물은 "초안" 상태로 간주하며, "승인됨" 상태로 전환할 수 없다.
 
 ## Round 1: 구조 검증 (Structure Compliance)
 
