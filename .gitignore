@@ -58,6 +58,19 @@ __pycache__/
 scripts/_*.b64
 scripts/_gen.py
 
+# Project-specific data dumps (운영 DB 스키마/샘플 — 커밋 금지)
+scripts/debug_env.php
+scripts/schema_extract.php
+scripts/schema_raw.tsv
+scripts/extract_*.py
+scripts/extract_*.sh
+scripts/insert_samples.py
+scripts/build_schema_db.py
+scripts/count_rows.sh
+docs/references/hongcafe-*.db
+docs/references/hongcafe-*.db.bak.*
+docs/output/signup-flow-analysis/
+
 # OS files
 .DS_Store
 Thumbs.db
