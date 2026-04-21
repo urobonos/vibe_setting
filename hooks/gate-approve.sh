@@ -7,22 +7,41 @@
 
 STDIN_DATA=$(cat)
 
-# session_id와 prompt 추출
-eval "$(echo "$STDIN_DATA" | python -c "
+# --- 디버그 로그 설정 ---
+LOG_FILE="$HOME/.claude/gate-approve.log"
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
+log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$LOG_FILE" 2>/dev/null; }
+
+# session_id와 prompt 추출 (python3 우선, 실패 시 grep/sed fallback)
+PARSE_OK=0
+PARSED=$(echo "$STDIN_DATA" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
-    sid = data.get('session_id', 'default')
+    sid = data.get('session_id', '')
     prompt = data.get('prompt', '')
-    # shell-safe 출력
-    print(f'SESSION_ID=\"{sid}\"')
-    # 줄바꿈 제거, 따옴표 이스케이프
+    if not sid:
+        sys.exit(2)
     safe = prompt.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"').replace('\n', ' ')
+    print(f'SESSION_ID=\"{sid}\"')
     print(f'PROMPT=\"{safe}\"')
-except:
-    print('SESSION_ID=\"default\"')
-    print('PROMPT=\"\"')
-" 2>/dev/null)"
+except Exception as e:
+    print(f'# parse_error: {e}', file=sys.stderr)
+    sys.exit(1)
+" 2>>"$LOG_FILE")
+if [ -n "$PARSED" ]; then
+  eval "$PARSED"
+  PARSE_OK=1
+fi
+
+# Fallback: python3 실패 시 grep/sed로 session_id/prompt 추출
+if [ "$PARSE_OK" -eq 0 ]; then
+  SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+  # prompt 단순 추출 (escape된 따옴표는 일단 잘릴 수 있으나 승인 키워드 매칭용으로 충분)
+  PROMPT=$(echo "$STDIN_DATA" | grep -o '"prompt"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"prompt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+  SESSION_ID=${SESSION_ID:-default}
+  log "WARN fallback-grep used session_id=[$SESSION_ID] prompt_len=${#PROMPT}"
+fi
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 
@@ -79,39 +98,48 @@ fi
 if [ "$APPROVED" = true ]; then
   CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
   NEW_LEVEL=$((CURRENT + 1))
+  log "APPROVE sid=$SESSION_ID prompt_len=${#PROMPT} current=$CURRENT new=$NEW_LEVEL"
 
   # --- task-docs 체이닝 검증 ---
   # gate 1→2 진입 시: analyze.md 존재 필수
   if [ "$CURRENT" -eq 1 ] && [ "$NEW_LEVEL" -eq 2 ]; then
     TODAY=$(date +%Y%m%d)
-    CWD=$(echo "$STDIN_DATA" | python -c "
+    CWD=$(echo "$STDIN_DATA" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
     print(data.get('cwd', '.'))
 except:
     print('.')
-" 2>/dev/null)
+" 2>>"$LOG_FILE")
+    # Fallback: python3 실패 시 grep/sed
+    if [ -z "$CWD" ] || [ "$CWD" = "." ]; then
+      CWD_FB=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+      [ -n "$CWD_FB" ] && CWD="$CWD_FB"
+    fi
     TASK_DIR="$CWD/docs/tasks/$TODAY"
 
     if [ -d "$TASK_DIR" ]; then
-      # task 디렉토리 안에 서브디렉토리가 있는지 확인
-      SUBDIRS=$(find "$TASK_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -1)
-      if [ -n "$SUBDIRS" ]; then
-        # 서브디렉토리 ��재 = 정식 경로 → analyze.md + plan.md 체���닝 검증
-        ANALYZE_FOUND=$(find "$TASK_DIR" -name "*analyze.md" -type f 2>/dev/null | head -1)
+      # A. 최근 30분 이내 수정된 서브디렉토리만 검사 대상
+      # → 이전 작업 잔재(analyze만 있고 plan 없는 폴더)로 인한 오탐 차단
+      RECENT_SUBDIR=$(find "$TASK_DIR" -mindepth 1 -maxdepth 1 -type d -mmin -30 2>/dev/null | head -1)
+      if [ -n "$RECENT_SUBDIR" ]; then
+        # 최근 수정 서브디렉토리 = 현재 진행 작업 → analyze.md + plan.md 체이닝 검증
+        ANALYZE_FOUND=$(find "$RECENT_SUBDIR" -name "*analyze.md" -type f 2>/dev/null | head -1)
         if [ -z "$ANALYZE_FOUND" ]; then
-          echo "[TASK-DOCS GATE] analyze.md 미생성 — gate 1→2 차단. docs/tasks/$TODAY/{작업��}/analyze.md를 먼저 생성하세��." >&2
+          log "BLOCK analyze.md missing subdir=$RECENT_SUBDIR"
+          echo "[TASK-DOCS GATE] analyze.md 미생성 — gate 1→2 차단. $RECENT_SUBDIR/analyze.md를 먼저 생성하세요." >&2
           exit 2
         fi
 
-        PLAN_FOUND=$(find "$TASK_DIR" -name "*plan.md" -type f 2>/dev/null | head -1)
+        PLAN_FOUND=$(find "$RECENT_SUBDIR" -name "*plan.md" -type f 2>/dev/null | head -1)
         if [ -z "$PLAN_FOUND" ]; then
-          echo "[TASK-DOCS GATE] plan.md 미생성 — gate 1→2 차단. analyze.md→plan.md 순서를 준수하세��." >&2
+          log "BLOCK plan.md missing subdir=$RECENT_SUBDIR"
+          echo "[TASK-DOCS GATE] plan.md 미생성 — gate 1→2 차단. analyze.md→plan.md 순서를 준수하세요." >&2
           exit 2
         fi
       fi
-      # 서브��렉토리 없음 (빈 폴더) = S등급 경��� 경로 → 통과
+      # 최근 30분 내 수정 서브디렉토리 없음 = 현재 세션은 task-docs 구조 미사용(또는 이전 완료 작업만 존재) → 통과
     fi
     # task_dir 자체가 없으면 S등급 경량 경로로 판단 → 통과
   fi
@@ -121,6 +149,7 @@ except:
     NEW_LEVEL=2
   fi
   echo "$NEW_LEVEL" > "$GATE_FILE"
+  log "SAVED sid=$SESSION_ID gate=$NEW_LEVEL"
 fi
 
 exit 0
