@@ -48,6 +48,9 @@ stats-cache.json
 mcp-needs-auth-cache.json
 .claude/worktrees/
 
+# Hook runtime logs
+*.log
+
 # Duplicate settings
 settings.local.json
 

@@ -9,23 +9,57 @@
 
 STDIN_DATA=$(cat)
 
-eval "$(echo "$STDIN_DATA" | python -c "
+# python3 우선 파싱 + grep fallback (Windows 환경 JSON 이스케이프 호환)
+PARSED=$(echo "$STDIN_DATA" | python3 -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
-    sid = data.get('session_id', 'default')
-    cwd = data.get('cwd', '.')
+    sid = data.get('session_id', '')
+    cwd = data.get('cwd', '')
+    if not sid:
+        sys.exit(1)
+    safe_cwd = cwd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
     print(f'SESSION_ID=\"{sid}\"')
-    print(f'CWD=\"{cwd}\"')
-except:
-    print('SESSION_ID=\"default\"')
-    print('CWD=\".\"')
-" 2>/dev/null)"
+    print(f'CWD=\"{safe_cwd}\"')
+except Exception:
+    sys.exit(1)
+" 2>/dev/null)
+if [ -n "$PARSED" ]; then
+  eval "$PARSED"
+else
+  SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+  CWD=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+  # JSON이스케이프된 \\를 실제 \로 복원 (Windows 경로)
+  CWD=$(echo "$CWD" | sed 's/\\\\/\\/g')
+  SESSION_ID=${SESSION_ID:-default}
+  CWD=${CWD:-.}
+fi
 
 TODAY=$(date +%Y%m%d)
 TODAY_DOT=$(date +%Y.%m.%d)
 BLOCKED=false
 WARNINGS=""
+
+# CWD가 프로젝트 서브디렉토리일 수 있음 (Bash cd 영속성으로 인함) → 상위 5단계까지 docs/tasks 보유한 조상을 프로젝트 루트로 간주
+find_project_root() {
+  local dir="$1"
+  local i
+  for i in 1 2 3 4 5; do
+    if [ -d "$dir/docs/tasks" ]; then
+      echo "$dir"
+      return 0
+    fi
+    local parent
+    parent=$(dirname "$dir")
+    [ "$parent" = "$dir" ] && break
+    dir="$parent"
+  done
+  return 1
+}
+PROJECT_ROOT=$(find_project_root "$CWD")
+if [ -n "$PROJECT_ROOT" ]; then
+  CWD="$PROJECT_ROOT"
+fi
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
@@ -105,7 +139,10 @@ if [ "$BLOCKED" = true ]; then
 fi
 
 # 세션 종료 시 플래그 정리
-echo "0" > "$GATE_FILE" 2>/dev/null
+# NOTE: Stop hook은 "매 assistant 응답 종료"마다 호출됨 (실제 세션 종료 이벤트 아님).
+#       gate 리셋을 여기서 하면 승인 누적이 무효화되어 매 턴 재승인이 필요해짐.
+#       gate는 SessionStart(gate-init.sh)에서만 초기화하고, Stop에서는 건드리지 않는다.
+# echo "0" > "$GATE_FILE" 2>/dev/null   # ← 제거: 매턴 리셋 방지
 rm -f "$EDIT_FLAG" 2>/dev/null
 rm -f "$NONCODE_FLAG" 2>/dev/null
 rm -f "/tmp/claude_test_run_${SESSION_ID}" 2>/dev/null
