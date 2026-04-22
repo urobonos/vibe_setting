@@ -74,6 +74,9 @@ docs/references/hongcafe-*.db
 docs/references/hongcafe-*.db.bak.*
 docs/output/signup-flow-analysis/
 
+# Backup files (rollback safety copies)
+*.bak
+
 # OS files
 .DS_Store
 Thumbs.db
