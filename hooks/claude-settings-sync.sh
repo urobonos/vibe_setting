@@ -16,7 +16,7 @@ if echo "$FILE" | grep -qiE '\.claude/(CLAUDE\.md|skills/)'; then
   cd "$HOME/.claude" || exit 0
   git add CLAUDE.md skills/ .gitignore 2>/dev/null
   if ! git diff --cached --quiet 2>/dev/null; then
-    git commit -m "auto: update $(basename "$FILE")" 2>/dev/null
+    git commit -m "chore: auto-sync $(basename "$FILE")" 2>/dev/null
     git push origin vibe_setting 2>/dev/null
   fi
 fi
