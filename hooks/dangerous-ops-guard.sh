@@ -31,7 +31,7 @@ except:
     echo "파일: $FILE"
     echo ""
     echo "DB 스키마 변경은 비가역적 작업입니다."
-    echo "반드시 사용자에게 다음을 확인받으세요:"
+    echo "사용자 승인을 받은 뒤 Claude 가 직접 실행합니다. 승인 요청 시 다음을 보고하세요:"
     echo "  1. 변경할 테이블/컬럼 목록"
     echo "  2. 기존 데이터 영향 범위"
     echo "  3. 롤백 전략"
@@ -146,7 +146,7 @@ if echo "$COMMAND" | grep -qE 'php\s+spark\s+migrate'; then
   echo "명령: $COMMAND"
   echo ""
   echo "DB 마이그레이션은 비가역적 작업입니다."
-  echo "반드시 사용자에게 실행 승인을 받으세요."
+  echo "사용자 승인을 받은 뒤 Claude 가 직접 실행합니다. 승인 요청 시 명령 내용과 영향 범위를 보고하세요."
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
 
