@@ -31,24 +31,28 @@ fi
 
 BASENAME=$(basename "$FILE")
 LOWER_BASENAME=$(echo "$BASENAME" | tr '[:upper:]' '[:lower:]')
+LOWER_FILE=$(echo "$FILE" | tr '[:upper:]' '[:lower:]' | tr '\\' '/' | sed 's|//*|/|g')
+
+# 프로젝트별 예외 경로는 프로젝트 로컬 .claude/hooks/ 에서 처리한다.
+# 글로벌 훅은 공통 정책만 유지 (프로젝트 특정 bypass 하드코딩 금지).
 
 # 1. 프론트엔드 파일 차단 — Read만 허용, Edit/Write 차단
-#    백엔드(CI4) API 변경만 수행 가능. 프론트엔드 코드는 읽기 전용 참조만 허용.
+#    이 정책이 부적절한 프로젝트는 프로젝트 로컬 hook에서 선처리하여 면제한다.
 case "$LOWER_BASENAME" in
   *.tsx|*.jsx)
-    echo "[BLOCKED] 프론트엔드 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
+    echo "[BLOCKED] 프론트엔드 파일 수정 차단: $BASENAME — 글로벌 정책상 프론트엔드 파일은 Read 전용입니다." >&2
     exit 2 ;;
   *.ts)
-    echo "[BLOCKED] TypeScript 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
+    echo "[BLOCKED] TypeScript 파일 수정 차단: $BASENAME — 글로벌 정책상 TypeScript 파일은 Read 전용입니다." >&2
     exit 2 ;;
   *.js)
-    echo "[BLOCKED] JavaScript 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
+    echo "[BLOCKED] JavaScript 파일 수정 차단: $BASENAME — 글로벌 정책상 JavaScript 파일은 Read 전용입니다." >&2
     exit 2 ;;
   *.css|*.scss)
-    echo "[BLOCKED] 스타일 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
+    echo "[BLOCKED] 스타일 파일 수정 차단: $BASENAME — 글로벌 정책상 스타일 파일은 Read 전용입니다." >&2
     exit 2 ;;
   next.config.*|tailwind.config.*|postcss.config.*|middleware.ts)
-    echo "[BLOCKED] 프론트엔드 설정 파일 수정 차단: $BASENAME — 백엔드(CI4) API 변경만 가능합니다." >&2
+    echo "[BLOCKED] 프론트엔드 설정 파일 수정 차단: $BASENAME — 글로벌 정책상 Read 전용입니다." >&2
     exit 2 ;;
   package.json|yarn.lock|pnpm-lock.yaml)
     echo "[BLOCKED] 프론트엔드 패키지 파일 수정 차단: $BASENAME — npm/yarn/pnpm 명령으로 관리하세요." >&2

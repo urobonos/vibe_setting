@@ -12,7 +12,6 @@ triggers:
   - "리서치 해줘", "분석 해줘", "코드 분석", "영향 범위 조사"
   - 3-Team 워크플로우의 Team 1(Analyze), Team 2(Plan), Team 3(Execute) 완료 시 자동 적용
   - "/task-docs specs", "SDP 작성", "SRS 작성", "SDD 작성", "IDD 작성", "STP 작성", "STD 작성"
-mandatory: false
 version: 3.0.0
 user-invocable: true
 depends_on: []
@@ -23,7 +22,7 @@ min_claude_md_version: "4.0"
 # Task Docs Skill
 
 작업 문서 3종(analyze, plan, result)과 일일 요약(summary)을 `docs/tasks/YYYYMMDD/` 디렉토리에 표준 템플릿으로 생성·관리한다.
-보고용 산출물은 `docs/output/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 4종(SDP, SRS, SDD, IDD)은 `docs/specs/` 디렉토리에 생성·관리한다.
+보고용 산출물은 `docs/output/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `docs/specs/` 디렉토리에 생성·관리한다.
 
 ## 공통 규칙
 
@@ -32,7 +31,7 @@ min_claude_md_version: "4.0"
 3. `{작업명}`은 작업 내용을 간결하게 표현하는 kebab-case 이름으로 한다 (예: `pay-refactor`, `callee-migration`).
 4. `YYYYMMDD`는 작업 시작일 기준이다 (예: `20260324`).
 5. 사용자에게 보고하는 동시에 파일에도 동일 내용을 기록한다. 채팅으로만 보고하고 파일 생성을 누락하는 것은 지침 위반이다.
-6. **팀 간 산출물 체이닝 필수:** Team 2는 반드시 `analyze.md`를 Read한 뒤 기반으로 plan을 작성한다. Team 3는 반드시 `plan.md`를 Read한 뒤 기반으로 실행한다. 이전 팀 산출물 파일이 없으면 해당 팀에 진입할 수 없다.
+6. **팀 간 산출물 체이닝:** 다단계 작업에서 Team 2는 `analyze.md`를 Read한 뒤 기반으로 plan을 작성하고, Team 3는 `plan.md`를 Read한 뒤 기반으로 실행한다. 단, 분석 단독/소규모 작업은 단일 문서(예: `analyze.md`만, 또는 `result.md`만)로 완결할 수 있다. 작업 규모에 맞는 단계만 작성한다.
 7. **체크리스트 최대 생성 원칙:** 모든 문서(analyze, plan, result)에 검증 가능한 체크리스트(`- [ ]`)를 최대한 생성한다. 분석 항목, 작업 단계, 검증 조건, 보안 점검, 테스트 케이스 등 체크박스로 표현 가능한 항목은 전부 체크리스트로 작성한다. 서술형 나열보다 체크리스트를 우선한다.
 8. **이전 문서 체크리스트 소거 의무:** 이전 팀 산출물을 참조하여 실행하는 팀은, 해당 문서의 체크리스트를 검증 후 체크 표시(`- [x]`)하고 판단 근거를 기록한다. 구체적으로:
    - **Team 2 (Plan):** `analyze.md`의 체크리스트를 읽고, plan 수립 시 반영 여부를 `analyze.md`에 직접 체크한다. (`- [x] 항목 — plan에 반영` 또는 `- [x] 항목 — 해당 없음 (사유)`)
@@ -478,7 +477,7 @@ Team 2 (Plan)의 산출물. analyze.md 기반으로 실행 계획, Blueprint, �
 Team 3 (Execute) 완료 후 결과를 기록한다.
 
 ### 규칙
-- Team 3 완료 시 반드시 생성한다. 결과 파일 미생성은 지침 위반이다.
+- 코드 변경을 동반한 Team 3 완료 시 생성한다. 분석/조사만 수행한 작업은 생략 가능하다.
 - Self-Critique 체크리스트 4항목을 모두 평가한다.
 - 테스트 실행 결과를 포함한다.
 - 잔여 이슈는 등급과 미해소 사유를 명시한다.

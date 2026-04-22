@@ -1,6 +1,9 @@
 #!/bin/bash
-# Stop Hook: Notion 동기화 미완료 시 세션 종료 차단
-# notion-sync-reminder.sh에서 설정한 플래그 기반 검증
+# Stop Hook: Notion 동기화 검증 (요청 기반, 2026-04-22~)
+#
+# 정책: 사용자가 명시적으로 Notion 동기화를 요청한 경우에만 REQUEST_FLAG가 세팅된다.
+# 자동 세팅되던 SYNC_FLAG는 doc-quality.sh에서 제거됨.
+# REQUEST_FLAG가 없으면 항상 통과.
 
 STDIN_DATA=$(cat)
 
@@ -13,36 +16,33 @@ except:
     print('default')
 " 2>/dev/null)
 
-SYNC_FLAG="/tmp/claude_notion_sync_${SESSION_ID}"
+REQUEST_FLAG="/tmp/claude_notion_request_${SESSION_ID}"
+DONE_FLAG="/tmp/claude_notion_done_${SESSION_ID}"
 
-# 동기화 플래그 없으면 통과 (수정 없었음)
-if [ ! -f "$SYNC_FLAG" ]; then
+# 사용자 명시 요청이 없으면 통과
+if [ ! -f "$REQUEST_FLAG" ]; then
   exit 0
 fi
 
-# 동기화 완료 마커 확인
-DONE_FLAG="/tmp/claude_notion_done_${SESSION_ID}"
+# 요청된 동기화 완료 마커 있으면 통과
 if [ -f "$DONE_FLAG" ]; then
   exit 0
 fi
 
-# 미완료 항목 수집
-PENDING=$(sort -u "$SYNC_FLAG" 2>/dev/null)
+# 사용자 요청 Notion 동기화가 미완료인 경우에만 차단
+PENDING=$(sort -u "$REQUEST_FLAG" 2>/dev/null)
 if [ -n "$PENDING" ]; then
   echo "" >&2
-  echo "━━━ Notion Sync 미완료 — 종료 차단 ━━━" >&2
-  echo "[BLOCKED] 이번 세션에서 지침/스킬 파일을 수정했지만 Notion 동기화가 완료되지 않았습니다." >&2
+  echo "━━━ Notion Sync 요청 미완료 — 종료 차단 ━━━" >&2
+  echo "[BLOCKED] 사용자가 요청한 Notion 동기화가 완료되지 않았습니다." >&2
   echo "" >&2
   echo "$PENDING" | while read -r item; do
-    case "$item" in
-      global_claude_md) echo "  - 글로벌 CLAUDE.md → Notion 글로벌 지침 페이지 갱신 필요" >&2 ;;
-      project_claude_md) echo "  - 프로젝트 CLAUDE.md → Notion \"홍카페_글로벌_백엔드\" 갱신 필요" >&2 ;;
-      skill_md) ;; # 클로드코드_문서 페이지 제거됨 — skip
-    esac
+    echo "  - $item" >&2
   done
   echo "" >&2
-  echo "Notion 동기화 완료 후 다시 종료하세요." >&2
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+  echo "동기화 완료 후 /tmp/claude_notion_done_${SESSION_ID} 마커 파일을 생성하거나" >&2
+  echo "/tmp/claude_notion_request_${SESSION_ID} 를 삭제하세요." >&2
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
   exit 2
 fi
 

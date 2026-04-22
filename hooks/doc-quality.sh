@@ -53,9 +53,9 @@ if echo "$FILE_PATH_UNIX" | grep -qiE '(docs/tasks/|docs/output/).*\.md$'; then
       MIN_COUNT=20; DOC_TYPE="plan"
     elif echo "$BASENAME" | grep -qiE '[-_]?result\.md$'; then
       MIN_COUNT=20; DOC_TYPE="result"
-    elif echo "$BASENAME" | grep -qiE '[-_]?(srs|sdd|idd|sdp)\.md$'; then
+    elif echo "$BASENAME" | grep -qiE '[-_]?(srs|sdd|idd|sdp|stp|std)\.md$'; then
       MIN_COUNT=8
-      DOC_TYPE="specs ($(echo "$BASENAME" | grep -oiE '(srs|sdd|idd|sdp)' | tr '[:lower:]' '[:upper:]'))"
+      DOC_TYPE="specs ($(echo "$BASENAME" | grep -oiE '(srs|sdd|idd|sdp|stp|std)' | tr '[:lower:]' '[:upper:]'))"
     fi
 
     if [ "$MIN_COUNT" -gt 0 ] && [ "$TOTAL" -lt "$MIN_COUNT" ]; then
@@ -97,29 +97,16 @@ if [[ "$FILE_PATH" == *.php ]] && echo "$FILE_PATH" | grep -qE 'app/Modules/[A-Z
   fi
 fi
 
-# ===== 3. Notion 동기화 알림 (flag) =====
+# ===== 3. Notion 동기화 알림 (요청 기반, 2026-04-22~) =====
+# 정책: 사용자 명시 요청 시에만 Notion 연동. CLAUDE.md 수정 시 자동 플래그 세팅 제거.
+# 사용자가 "노션에 반영"/"Notion 동기화" 등 명시 요청 시, 별도 경로에서 플래그를 세팅한다.
 if [[ "$LOWER_BASENAME" == "claude.md" ]]; then
-  SYNC_FLAG="/tmp/claude_notion_sync_${SESSION_ID}"
-
-  if echo "$FILE_PATH" | grep -qE '\.claude/CLAUDE\.md|Users.*\.claude.*CLAUDE'; then
-    echo "global_claude_md" >> "$SYNC_FLAG"
-  else
-    echo "project_claude_md" >> "$SYNC_FLAG"
-  fi
-
   echo ""
-  echo "━━━ Notion Sync Required ━━━"
-  echo "[SYNC] CLAUDE.md가 수정되었습니다. 반드시 다음을 수행하세요:"
-  if echo "$FILE_PATH" | grep -qE '\.claude/CLAUDE\.md|Users.*\.claude.*CLAUDE'; then
-    echo "  → Notion 글로벌 지침 페이지 갱신"
-  else
-    echo "  → Notion \"홍카페_글로벌_백엔드\" (프로젝트 지침) 갱신"
-  fi
-  echo "  → docs/output/instructions-and-skills/ 요약 문서 갱신"
-  echo "  절차: notion-fetch → 갱신 → replace_content 전체 교체"
-  echo ""
-  echo "  이 작업을 수행하지 않으면 세션 종료가 차단됩니다."
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "━━━ CLAUDE.md Modified ━━━"
+  echo "[INFO] CLAUDE.md가 수정되었습니다."
+  echo "  Notion 동기화는 사용자가 명시적으로 요청할 때만 수행합니다 (요청 기반 정책)."
+  echo "  자동 동기화는 비활성화되어 있습니다."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
 
 exit 0

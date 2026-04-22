@@ -124,18 +124,12 @@ except:
       # → 이전 작업 잔재(analyze만 있고 plan 없는 폴더)로 인한 오탐 차단
       RECENT_SUBDIR=$(find "$TASK_DIR" -mindepth 1 -maxdepth 1 -type d -mmin -30 2>/dev/null | head -1)
       if [ -n "$RECENT_SUBDIR" ]; then
-        # 최근 수정 서브디렉토리 = 현재 진행 작업 → analyze.md + plan.md 체이닝 검증
-        ANALYZE_FOUND=$(find "$RECENT_SUBDIR" -name "*analyze.md" -type f 2>/dev/null | head -1)
-        if [ -z "$ANALYZE_FOUND" ]; then
-          log "BLOCK analyze.md missing subdir=$RECENT_SUBDIR"
-          echo "[TASK-DOCS GATE] analyze.md 미생성 — gate 1→2 차단. $RECENT_SUBDIR/analyze.md를 먼저 생성하세요." >&2
-          exit 2
-        fi
-
-        PLAN_FOUND=$(find "$RECENT_SUBDIR" -name "*plan.md" -type f 2>/dev/null | head -1)
-        if [ -z "$PLAN_FOUND" ]; then
-          log "BLOCK plan.md missing subdir=$RECENT_SUBDIR"
-          echo "[TASK-DOCS GATE] plan.md 미생성 — gate 1→2 차단. analyze.md→plan.md 순서를 준수하세요." >&2
+        # CLAUDE.md §4 산출물 유연성: analyze / plan / result 중 1종 이상 있으면 통과.
+        # 분석 단독 세션은 analyze.md 하나로, 작은 구현 세션은 result.md 하나로 완결 가능.
+        STAGE_DOC=$(find "$RECENT_SUBDIR" \( -name "*analyze.md" -o -name "*plan.md" -o -name "*result.md" \) -type f 2>/dev/null | head -1)
+        if [ -z "$STAGE_DOC" ]; then
+          log "BLOCK stage doc missing subdir=$RECENT_SUBDIR"
+          echo "[TASK-DOCS GATE] 단계 문서 미생성 — gate 1→2 차단. $RECENT_SUBDIR/ 에 analyze.md / plan.md / result.md 중 최소 1종을 생성하세요." >&2
           exit 2
         fi
       fi

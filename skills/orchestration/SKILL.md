@@ -8,7 +8,6 @@ triggers:
   - 에이전트 spawn 시 페르소나/Checklist 참조
   - "바이브코딩", "바이브 코딩", "vibe coding"
   - "에이전트 설정", "Effort 할당", "작업 등급"
-mandatory: true
 version: 2.0.0
 user-invocable: true
 depends_on: []

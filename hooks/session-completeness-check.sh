@@ -4,8 +4,10 @@
 #
 # 검증 항목:
 #   1. Edit/Write 이력 있는 세션 → history.md + YYYYMMDD/summary.md 기록 필수
-#   2. gate>=2(실행 단계) → analyze.md 존재 필수
-#   3. gate>=2 + analyze.md 있으면 → result.md 존재 필수
+#   2. gate>=2(실행 단계) → 작업 폴더에 최소 1개의 단계 문서(analyze/plan/result 등) 존재 필수
+#
+# 정책 (v2.0): analyze.md + result.md 쌍 강제 제거.
+#   작업 성격에 따라 필요한 단계 문서 하나만 있어도 통과한다.
 
 STDIN_DATA=$(cat)
 
@@ -100,30 +102,17 @@ if [ -f "$EDIT_FLAG" ] && [ "$IS_CLAUDE_REPO" = false ] && [ "$IS_NONCODE_ONLY" 
   fi
 fi
 
-# --- 2. analyze.md 존재 여부 (gate>=2 + 프로젝트 레포 + 코드 수정 세션만) ---
+# --- 2. 단계 문서 존재 여부 (gate>=2 + 프로젝트 레포 + 코드 수정 세션만) ---
+# CLAUDE.md §4 산출물 유연성: analyze / plan / result 중 1종 이상이면 통과.
 if [ "$CURRENT" -ge 2 ] && [ "$IS_CLAUDE_REPO" = false ] && [ "$IS_NONCODE_ONLY" = false ]; then
   TASK_DIR="$CWD/docs/tasks/$TODAY"
-  if [ ! -d "$TASK_DIR" ] || [ -z "$(find "$TASK_DIR" -name '*analyze*' -type f 2>/dev/null | head -1)" ]; then
-    WARNINGS="${WARNINGS}\n[BLOCKED] docs/tasks/$TODAY/ 에 analyze 파일이 없습니다."
-    BLOCKED=true
-  fi
-fi
-
-# --- 3. result.md 누락 여부 (gate>=2 + 프로젝트 레포 + 코드 수정 세션만) ---
-if [ "$CURRENT" -ge 2 ] && [ "$IS_CLAUDE_REPO" = false ] && [ "$IS_NONCODE_ONLY" = false ]; then
-  TASK_DIR="$CWD/docs/tasks/$TODAY"
+  STAGE_DOC=""
   if [ -d "$TASK_DIR" ]; then
-    for dir in "$TASK_DIR"/*/; do
-      if [ -d "$dir" ]; then
-        HAS_ANALYZE=$(find "$dir" -name "*analyze.md" -type f 2>/dev/null | head -1)
-        HAS_RESULT=$(find "$dir" -name "*result.md" -type f 2>/dev/null | head -1)
-        if [ -n "$HAS_ANALYZE" ] && [ -z "$HAS_RESULT" ]; then
-          DIRNAME=$(basename "$dir")
-          WARNINGS="${WARNINGS}\n[BLOCKED] docs/tasks/$TODAY/$DIRNAME/ — analyze.md는 있지만 result.md가 없습니다."
-          BLOCKED=true
-        fi
-      fi
-    done
+    STAGE_DOC=$(find "$TASK_DIR" \( -name '*analyze*' -o -name '*plan*' -o -name '*result*' \) -type f 2>/dev/null | head -1)
+  fi
+  if [ -z "$STAGE_DOC" ]; then
+    WARNINGS="${WARNINGS}\n[BLOCKED] docs/tasks/$TODAY/ 에 단계 문서(analyze/plan/result 중 1종 이상)가 없습니다."
+    BLOCKED=true
   fi
 fi
 

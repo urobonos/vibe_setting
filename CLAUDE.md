@@ -5,8 +5,8 @@
 - **글로벌 스킬:** `~/.claude/skills/{skill-name}/SKILL.md`
 - **프로젝트 로컬 스킬:** `./.claude/skills/{skill-name}/SKILL.md`
 - 스킬 파일을 생성하거나 수정할 때, **반드시 대상 경로(글로벌 vs 프로젝트 로컬)를 사용자에게 확인** 후 작업한다. 확인 없이 경로를 임의 결정하는 것은 지침 위반이다.
-- **Notion 문서 동기화:** 글로벌 지침(`~/.claude/CLAUDE.md`) 또는 프로젝트 지침(`CLAUDE.md`)을 수정할 때, Notion에도 변경 내용을 반영한다. 지침 수정 완료 후 Notion 업데이트를 누락하는 것은 지침 위반이다.
-- **Notion 수정 절차:** (1) `notion-fetch`로 현재 내용 다운로드 → (2) 로컬 지침과 대조하여 갱신 내용 작성 → (3) `replace_content`로 전체 덮어쓰기. 부분 패치(`update_content`)보다 전체 교체를 기본으로 한다.
+- **Notion 연동(요청 기반):** Notion 연동은 `notion_cli` 스킬(curl + Notion REST API, Bearer Token 기반)을 **단일 진입점**으로 사용한다. MCP 기반 `notion-fetch` / `replace_content` / `update_content` / `mcp__notion*` 도구는 제거됨. 연동 실행은 **사용자가 명시적으로 요청할 때만** 수행한다. 글로벌/프로젝트 CLAUDE.md 또는 스킬 문서를 수정했더라도 자동으로 Notion에 반영하지 않는다. 사용자가 "노션에 반영", "Notion 동기화", "notion 업데이트" 등 명시 요청한 경우에만 실행한다. 사용자 요청 없이 `notion_cli`를 선제 실행하는 것은 지침 위반이다.
+- **Notion 수정 절차(요청 시):** `notion_cli` 스킬 절차를 따른다. (1) 대상 페이지/블록 조회(GET) → (2) 로컬 지침과 대조해 갱신 내용 작성 → (3) 블록 전체 교체(기존 자식 블록 삭제 후 재작성)를 기본으로 한다. 부분 패치(PATCH)보다 전체 교체를 우선한다.
 
 ---
 
@@ -16,7 +16,7 @@
 
 1. 프로젝트 루트 구조 파악 + 현재 브랜치/커밋 확인
 2. `docs/tasks/history.md` 로드 (작업 이력 요약)
-3. `.claude/skills/` 스킬 목록 확인, 작업 유형에 맞는 스킬 로드
+3. `.claude/skills/` 전 스킬은 SessionStart 훅(`hooks/skill-preload.sh`)이 자동으로 전량 preload — Claude는 주입된 스킬 중 `triggers`에 부합하는 스킬만 활성 호출한다. (`audit-config`는 preload 제외되며 `/audit-config` 명시 호출 시에만 로드)
 
 → 완료 후 반드시 **"Context Loaded."** 보고
 
@@ -53,3 +53,7 @@
 - **Persistence (필수):** 모든 작업 완료 시 `docs/tasks/history.md`에 `YYYY.MM.DD` 항목으로 처리 내역을 기록하고, `docs/tasks/YYYYMMDD/summary.md`에 일일 작업 요약을 기록한다. 누락은 지침 위반.
 - **타당성 검토 (Feasibility Review, 필수):** 모든 분석(analyze), 사전 계획(preplan), 설계(SDD/SRS/SDP/IDD) 산출물에 **"타당성 검토"** 섹션을 포함한다. 근거 확보는 `docset-ref` 스킬의 검색 절차를 따른다 (Docset SQLite 검색 → 마크다운 캐시 → WebFetch fallback). 근거 없는 주장·권고는 지침 위반이다.
 - **변경 영향 기록 (Change Impact Log, 필수):** analyze/preplan 결과를 반영할 때, **변경되는 사항**, **개선점**, **왜 해야 하는지(수행 이유)**를 산출물에 필수 기록한다. 변경 사항만 나열하고 이유를 생략하는 것은 지침 위반이다.
+- **산출물 유연성 (Flexible Deliverables):** 작업 성격에 따라 `analyze / plan / result` 중 필요한 단계만 작성한다. 분석 단독 세션은 `analyze.md` 하나로, 작은 구현 세션은 `result.md` 하나로 완결할 수 있다. 3종 쌍(analyze+plan+result)은 구현 규모가 큰 다단계 작업에만 요구된다.
+- **Default Accept (제안 기본 수락):** 사용자는 Claude 가 코드 작업 중 제시하는 제안사항을 **기본적으로 수락**한다. 리팩토링·명명 개선·누락 처리·방어 코드 등 개선 제안은 별도 승인 대기 없이 반영해 작업을 진행한다. 단 §3 Checkpoint 발동 조건(비가역적 작업 / 광범위한 영향 범위 / 요구사항 상충 / 외부 시스템 연동 / 권한 외 파일 접근)은 본 항목에 **우선 적용**되며, 해당 조건은 여전히 사용자 승인 대기가 필수다.
+- **Before/After 대조 보고 (필수):** 작업 완료 후 **최초 실행안**(사용자가 처음 지시한 최소 요구 사항)과 **제안에서 변경된 안**(Claude 가 추가/수정한 부분)을 대조해 보여준다. 파일/함수 단위 diff 또는 표 형태로 사용자가 한눈에 비교할 수 있어야 한다. 제안 반영 내역을 숨긴 채 최종안만 보고하는 것은 지침 위반이다.
+- **롤백 가능 상태 유지 (필수):** 제안사항이 반영된 코드는 **롤백 가능한 상태**로 유지한다. 실천 방법: (1) 최초안과 제안안을 별도 커밋으로 분리 (`최초안 commit` → `제안 반영 commit`), 또는 (2) 제안 반영분을 명시적 diff/patch 로 제공하여 복원 경로를 보장. 단일 커밋에 최초안+제안을 섞어 넣어 분리 롤백이 불가능한 상태로 만들면 지침 위반이다.

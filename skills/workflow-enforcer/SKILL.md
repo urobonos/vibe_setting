@@ -1,12 +1,11 @@
 ---
 name: workflow-enforcer
 description: >
-  CLAUDE.md에 정의된 3-Team 워크플로우 승인 규칙을 체크리스트로 강제하는 게이트.
+  orchestration 스킬의 3-Team 워크플로우 승인 규칙과 CLAUDE.md §3 Checkpoint / §4 Guardrails를 체크리스트로 강제하는 게이트.
   모든 작업 시작 시 자동 적용되며, 사용자 승인 없이 다음 팀으로 진입하는 것을 방지한다.
 triggers:
-  - 모든 작업 요청 시 자동 적용 (CLAUDE.md §4 3-Team Workflow와 연동)
+  - 모든 작업 요청 시 자동 적용 (orchestration 스킬 §4 3-Team Workflow와 연동)
   - "워크플로우 체크", "workflow check"
-mandatory: true
 version: 2.0.0
 user-invocable: true
 depends_on: []

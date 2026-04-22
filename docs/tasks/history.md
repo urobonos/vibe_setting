@@ -1,5 +1,33 @@
 # Work History
 
+## 2026.04.22
+
+### 지침·스킬·훅 미스매치 교정 — #9 Notion SSOT `notion_cli` 단일화
+
+- MCP(`notion-fetch` / `replace_content` / `update_content` / `mcp__notion*`) 전면 제거 완료 상태를 반영해 `CLAUDE.md` §File Paths의 Notion 연동 문구를 `notion_cli` 스킬 단일 진입점 기준으로 재작성.
+- 수정 절차도 MCP 함수 호출 시퀀스("notion-fetch → replace_content") 표기 대신 REST API 절차(조회 → 갱신 → 블록 전체 교체)로 변경.
+- 결과: 지침·스킬·실제 사용 도구 3자가 `notion_cli` 하나로 정합.
+
+### 지침·스킬·훅 미스매치 교정 — #8 mandatory dead-field 제거
+
+- `skills/orchestration/SKILL.md`, `skills/workflow-enforcer/SKILL.md`, `skills/task-docs/SKILL.md` 프론트매터에서 `mandatory:` 라인 삭제.
+- 근거: 필드를 참조하는 훅/코드 없음. `triggers:` 항목("모든 작업 수신 시 자동 참조" 등)이 이미 의도 표현. 전 스킬 `^mandatory:` grep 결과 0건 확인.
+- 동작 변화 없음 (dead-field 제거).
+
+### 지침·스킬·훅 미스매치 교정 — 추가 2건 (#4, #7)
+
+- **#4 task-docs 자가 모순 제거:** `skills/task-docs/SKILL.md` L26 "소프트웨어 개발 산출물 4종(SDP, SRS, SDD, IDD)" → "6종(SDP, SRS, SDD, IDD, STP, STD)"로 교정. 파일 내 다른 위치(L7, L66, L99, L599)의 "6종" 표기와 정합.
+- **#7 CLAUDE.md §1 스킬 로드 문구를 실제 동작에 일치:** `CLAUDE.md` §1 "작업 유형에 맞는 스킬 로드" → "`hooks/skill-preload.sh`가 전 스킬 자동 preload, triggers 매칭 시 활성 호출"로 수정. `audit-config` preload 제외 정책 명시. settings.json statusMessage "스킬 전량 로드 중..."과 일치.
+
+### 지침·스킬·훅 미스매치 교정 — 5개 항목 일괄 반영
+
+- **#2 산출물 유연성 강제력 충돌 해소:** `hooks/gate-approve.sh` gate 1→2 진입 시 `analyze.md` + `plan.md` 동시 강제 → `analyze/plan/result` 중 1종 이상으로 완화. `hooks/session-completeness-check.sh` gate≥2 `*analyze*` 강제 → 동일 기준으로 완화. CLAUDE.md §4 "분석 단독/result 단독 가능" 명시와 일치.
+- **#3 task-docs v3.0.0 ↔ doc-quality 훅 동기화:** `hooks/doc-quality.sh` specs 체크리스트 검증 정규식에 `stp|std` 추가 (기존 `srs|sdd|idd|sdp` → `srs|sdd|idd|sdp|stp|std`). 04.20에 추가된 STP(IEEE 29119-3)/STD(IEEE 829) 문서도 체크리스트 최소 8개 강제 대상 포함.
+- **#1 workflow-enforcer 참조 경로 교정:** description/triggers에 적힌 "CLAUDE.md §4 3-Team Workflow" → "orchestration 스킬 §4 3-Team Workflow"로 수정. CLAUDE.md §4는 Guardrails & Quality이며 3-Team 본문은 orchestration 스킬에만 존재하므로 참조 끊김 해소.
+- **#5 글로벌 훅 프로젝트 특화 제거:** `hooks/sensitive-file-guard.sh`의 `hongcafe_global_backend/tools/` TOOLS_BYPASS 하드코딩 블록 삭제, 차단 메시지를 "백엔드(CI4) API 변경만 가능합니다" → "글로벌 정책상 … Read 전용입니다"로 일반화. 프로젝트별 예외는 프로젝트 로컬 `.claude/hooks/`에서 처리하도록 경계 분리.
+- **#6 §4 Guardrails 필수 섹션 훅 강제 추가:** `hooks/doc-template-guard.sh` 검증 대상에 `docs/specs/` 추가 + 파일 유형별 분기 추가. analyze/plan → `## 타당성 검토` + `## 변경 영향`, result → `## Before/After` + `## 롤백`, specs → `## 타당성 검토` 누락 시 additionalContext 주입.
+- 검증: 5개 수정 hook `bash -n` 전부 OK. 기존 `.bak` 파일은 유지(롤백 대비).
+
 ## 2026.04.21
 
 ### gate-approve hook 오탐 수정 — 이전 작업 잔재로 인한 plan.md BLOCK 해결
