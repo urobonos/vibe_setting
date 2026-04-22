@@ -26,6 +26,11 @@ AWS 서비스 연동을 위한 스킬. Lambda(Python)를 중심으로 SQS/SNS �
 
 > **[Checkpoint 필수]** Lambda 함수를 새로 생성할 때, Python 런타임 버전을 반드시 사용자에게 확인받는다. 사용자에게 확인 후 버전을 지정한다.
 
+> **[실행 주체]** AWS CLI / SSM / S3 / Lambda 등 모든 `aws` 명령은 Claude 가 Bash 도구로 **직접 실행**한다. 사용자에게 `! aws ...` 형태로 떠넘기거나 "실행해 주세요" 텍스트로 응답하는 것은 지침 위반이다.
+> - **조회 계열 (즉시 실행):** `aws * describe-*`, `list-*`, `get-command-invocation`, `get-parameter`, `s3 ls`, `logs filter-log-events` 등. 승인 대기 없이 Claude 가 바로 실행한다.
+> - **변경/원격 실행 계열 (승인 후 직접 실행):** `aws ssm send-command` (프로덕션 원격 명령), `aws s3 rm`/`cp`, `aws lambda update-*`, `aws iam put-*` 등. 명령 내용·영향 범위·롤백 방법을 먼저 보고한 뒤, 사용자 승인 확인 즉시 Claude 가 도구로 호출한다.
+> - **Hook 경고 해석:** `dangerous-ops-guard.sh` 가 `aws ssm send-command` 감지 시 stdout 에 Checkpoint 경고를 주입하지만 `exit 0` 이므로 실행 자체는 차단되지 않는다. 경고 = "승인 후 직접 실행" 신호이지 "실행 금지" 신호가 아니다.
+
 ---
 
 ## 1. Lambda (Python)
