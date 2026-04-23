@@ -86,15 +86,31 @@ if [ -f "$EDIT_FLAG" ] && [ "$IS_NONCODE_ONLY" = false ]; then
 fi
 
 # --- 2. 단계 문서 존재 여부 (gate>=2 + 코드 수정 세션만) ---
-# CLAUDE.md §4 산출물 유연성: analyze / plan / result 중 1종 이상이면 통과.
+# CLAUDE.md §File Paths 규칙:
+#   tasks/   → 코드 작업 프롬프트 (analyze/plan/result 단계 문서)
+#   output/  → 분석·문서 생성 프롬프트 ({제목}/*.md 산출물)
+# 둘 중 하나라도 오늘자 산출물이 존재하면 통과 (경로 이중화 허용).
 if [ "$CURRENT" -ge 2 ] && [ "$IS_NONCODE_ONLY" = false ]; then
   TASK_DIR="$TASKS_DIR/$TODAY"
+  OUTPUT_DIR=$(product_output_dir "$CWD")
+  TODAY_ISO=$(date +%Y-%m-%d)
   STAGE_DOC=""
+  OUTPUT_DOC=""
+
+  # tasks/ 단계 문서 확인 (코드 작업 세션)
   if [ -d "$TASK_DIR" ]; then
     STAGE_DOC=$(find "$TASK_DIR" \( -name '*analyze*' -o -name '*plan*' -o -name '*result*' \) -type f 2>/dev/null | head -1)
   fi
-  if [ -z "$STAGE_DOC" ]; then
-    WARNINGS="${WARNINGS}\n[BLOCKED] ~/.claude/docs/${PRODUCT}/tasks/$TODAY/ 에 단계 문서(analyze/plan/result 중 1종 이상)가 없습니다."
+
+  # output/ 오늘 생성·수정된 .md 확인 (분석·문서 세션)
+  if [ -d "$OUTPUT_DIR" ]; then
+    OUTPUT_DOC=$(find "$OUTPUT_DIR" -name '*.md' -type f -newermt "$TODAY_ISO" 2>/dev/null | head -1)
+  fi
+
+  if [ -z "$STAGE_DOC" ] && [ -z "$OUTPUT_DOC" ]; then
+    WARNINGS="${WARNINGS}\n[BLOCKED] 오늘자 산출물이 없습니다. 아래 중 1종 이상 필요:"
+    WARNINGS="${WARNINGS}\n  - (코드 작업) ~/.claude/docs/${PRODUCT}/tasks/$TODAY/{작업명}/{analyze|plan|result}.md"
+    WARNINGS="${WARNINGS}\n  - (분석·문서) ~/.claude/docs/${PRODUCT}/output/{제목}/*.md"
     BLOCKED=true
   fi
 fi
