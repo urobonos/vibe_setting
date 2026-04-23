@@ -76,10 +76,15 @@ min_claude_md_version: "4.0"
 ### Cookie 보안 (7-3)
 | 속성 | 값 | 비고 |
 |------|-----|------|
-| `SameSite` | `Strict` | 크로스 사이트 요청 시 쿠키 미전송 |
-| `HttpOnly` | `true` | JavaScript 접근 차단 |
-| `Secure` | `true` | HTTPS에서만 전송 |
-| `prefix` | `hc_` | 홍카페 프로젝트 접두어 |
+| `SameSite` | `Lax` | Same-Origin 아키텍처에서 Strict 불필요. 외부 링크 유입 UX 보장 + CSRF 보조 방어 (Defense in Depth). `SameSite=None` **사용 금지** (크로스사이트 허용으로 CSRF 취약) |
+| `HttpOnly` | `true` | JavaScript 접근 차단 (XSS 방어, `document.cookie` 접근 불가) |
+| `Secure` | `true` | HTTPS에서만 전송. 개발 환경은 `ENVIRONMENT` 분기로 false 허용 |
+| `prefix` | 프로젝트 지정 prefix | 쿠키명 충돌 방지. 구체 값은 프로젝트 `CLAUDE.md` 참조 |
+
+**금지 사항**:
+- JWT/세션 토큰의 `localStorage` 저장 — XSS 시 탈취
+- 로그인 응답 body 에 토큰 노출 — HttpOnly 쿠키로만 전달
+- `SameSite=None` — 크로스사이트 허용으로 CSRF 취약
 
 ### 암호화 규격 (7-6)
 - **알고리즘**: AES-256-CBC
@@ -88,11 +93,16 @@ min_claude_md_version: "4.0"
 
 ### CSRF + JWT 인증 정책 (7-4)
 
-- **JWT 저장**: HttpOnly 쿠키 전용 (7-1)
+- **JWT 저장**: HttpOnly 쿠키 전용 (7-1). `Authorization: Bearer` 헤더 수동 주입 금지, 응답 body 토큰 노출 금지
 - **CSRF 필수**: HttpOnly 쿠키는 브라우저가 자동 첨부하므로 CSRF 방어 필수
-- **CSRF 방식**: CI4 CSRF 필터 적용 (Session-Based 권장, Cookie-Based는 Same-site 공격 방어 불가)
-- **토큰 갱신**: Refresh Token은 별도 HttpOnly 쿠키, Access Token은 짧은 만료(15분 권장)
-- **SameSite=Strict**: CSRF 보조 수단으로 병행 (단독 방어 불가 — OWASP)
+- **CSRF 방식**: **Signed Double Submit Cookie (HMAC-SHA256)** — stateless JWT 아키텍처에 적합
+  - **CI4 내장 CSRF 필터 사용 금지** — 세션 기반 토큰이 stateless JWT 아키텍처와 불일치. 별도 `CsrfTokenFilter` 커스텀 구현 사용
+  - 검증 흐름: 쿠키 ↔ 헤더 `hash_equals()` 동일성 비교 → HMAC 서명 검증 → TTL 만료 검증
+  - 적용 대상: 상태 변경 요청(POST/PUT/DELETE). GET/HEAD/OPTIONS 생략
+  - 면제: API Key 인증 요청(서버-서버 통신), 외부 webhook 수신 EP
+- **토큰 갱신**: Refresh Token 별도 HttpOnly 쿠키, Access Token 짧은 만료(15분 권장). **Token Rotation + Reuse Detection** 필수 — 사용 완료된 `jti` 재제출 시 `family` 전체 무효화
+- **SameSite=Lax**: CSRF 보조 수단으로 병행 — Defense in Depth. Same-Origin 전제에서 Strict 불필요 (§7-3)
+- **세부 규격**(쿠키명, TTL, Payload 스키마, 면제 EP 경로)은 프로젝트 `CLAUDE.md` 를 SSOT 로 따른다 — 감사 스킬에는 값을 하드코딩하지 않는다
 
 ### SecureHeaders 필터 (7-9)
 - Phase 1 즉시 적용 헤더:
@@ -106,6 +116,28 @@ min_claude_md_version: "4.0"
 | `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
 
 - CI4 `app/Filters/SecureHeadersFilter.php`로 구현, 글로벌 필터 등록
+- `forceGlobalSecureRequests = true` (프로덕션 HTTPS 강제) 병행 설정
+
+### 외부 노출 API 보안 Phase 2 (7-10)
+
+Phase 1(SecureHeaders, `forceGlobalSecureRequests`)에 추가로 적용하는 심화 방어. 도입 시점은 트래픽 지표·보안 감사 결과에 따라 결정한다.
+
+| 항목 | 방식 | 도입 기준 |
+|------|------|---------|
+| **Nginx `limit_req`** | 로그인/결제 등 민감 EP rate limiting. burst + nodelay 옵션으로 정상 트래픽 허용 | 자동화 공격 징후, brute force 시도 감지 시 |
+| **WAF (ModSecurity / AWS WAF)** | OWASP CRS(Core Rule Set) 기반 SQLi/XSS/Path Traversal 차단 | 트래픽 증가 또는 외부 보안 감사 권고 시 |
+| **DDoS 차단** | AWS Shield Standard + CloudFront, 임계치 기반 자동 차단 | 외부 노출 EP 전체 상시 |
+| **Bot 탐지** | 이상 패턴(User-Agent, 요청 빈도, 행동) 기반 차단 | 스크래핑/크레덴셜 스터핑 징후 시 |
+
+**도입 절차**:
+1. stg 환경 임계치 튜닝 (실사용 트래픽 95% 퍼센타일 + 여유분)
+2. `limit_req_zone` / WAF 룰셋 dry-run (log only) 모드 관찰
+3. False positive 확인 후 enforce 모드 전환
+4. 차단 로그 모니터링 대시보드 필수 (CloudWatch Alarm 또는 Grafana)
+
+**주의**:
+- WAF 룰 변경은 트래픽 영향 큼 — Checkpoint 발동 필수
+- rate limit 값은 프로젝트별 상이 — 서비스 성격(공용 API vs 인증 EP)에 맞춰 분리 설정
 
 ---
 
