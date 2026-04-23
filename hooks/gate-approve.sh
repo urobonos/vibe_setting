@@ -117,7 +117,14 @@ except:
       CWD_FB=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
       [ -n "$CWD_FB" ] && CWD="$CWD_FB"
     fi
-    TASK_DIR="$CWD/docs/tasks/$TODAY"
+    # --- 글로벌 경로 해석 ---
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/lib/product-resolver.sh" 2>/dev/null && {
+      TASK_DIR="$(product_tasks_dir "$CWD")/$TODAY"
+    } || {
+      TASK_DIR="$CWD/docs/tasks/$TODAY"
+    }
 
     if [ -d "$TASK_DIR" ]; then
       # A. 최근 30분 이내 수정된 서브디렉토리만 검사 대상

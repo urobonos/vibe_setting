@@ -42,76 +42,59 @@ TODAY_DOT=$(date +%Y.%m.%d)
 BLOCKED=false
 WARNINGS=""
 
-# CWD가 프로젝트 서브디렉토리일 수 있음 (Bash cd 영속성으로 인함) → 상위 5단계까지 docs/tasks 보유한 조상을 프로젝트 루트로 간주
-find_project_root() {
-  local dir="$1"
-  local i
-  for i in 1 2 3 4 5; do
-    if [ -d "$dir/docs/tasks" ]; then
-      echo "$dir"
-      return 0
-    fi
-    local parent
-    parent=$(dirname "$dir")
-    [ "$parent" = "$dir" ] && break
-    dir="$parent"
-  done
-  return 1
+# --- product 및 글로벌 경로 해석 ---
+# CWD → product (basename $CWD, `.claude`→`claude-harness`)
+# 모든 산출물은 ~/.claude/docs/{product}/tasks/ 하위에 생성된다.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/lib/product-resolver.sh" 2>/dev/null || {
+  echo "[session-completeness-check] product-resolver.sh 로드 실패" >&2
+  exit 0
 }
-PROJECT_ROOT=$(find_project_root "$CWD")
-if [ -n "$PROJECT_ROOT" ]; then
-  CWD="$PROJECT_ROOT"
-fi
+PRODUCT=$(resolve_product "$CWD")
+TASKS_DIR=$(product_tasks_dir "$CWD")
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
 EDIT_FLAG="/tmp/claude_edit_flag_${SESSION_ID}"
 NONCODE_FLAG="/tmp/claude_noncode_flag_${SESSION_ID}"
 
-# --- .claude 레포 면제 (설정 레포는 task-docs 불필요) ---
-IS_CLAUDE_REPO=false
-if echo "$CWD" | grep -qE '[\\/]\.claude([\\/].*)?$'; then
-  IS_CLAUDE_REPO=true
-fi
-
 # --- 비코드 전용 세션 면제 ---
-# 코드 수정 없이 비코드만 수정한 세션 → docs/tasks 강제 면제
+# 코드 수정 없이 비코드만 수정한 세션 → tasks 기록 강제 면제
 IS_NONCODE_ONLY=false
 if [ ! -f "$EDIT_FLAG" ] && [ -f "$NONCODE_FLAG" ]; then
   IS_NONCODE_ONLY=true
 fi
 
-# --- 1. 일일 기록 여부 (코드 Edit/Write 이력 + docs/tasks 디렉토리 있는 프로젝트만) ---
-if [ -f "$EDIT_FLAG" ] && [ "$IS_CLAUDE_REPO" = false ] && [ "$IS_NONCODE_ONLY" = false ]; then
-  TASKS_DIR="$CWD/docs/tasks"
-  if [ -d "$TASKS_DIR" ]; then
-    HISTORY_FILE="$TASKS_DIR/history.md"
-    DAILY_FILE="$TASKS_DIR/${TODAY}/summary.md"
+# --- 1. 일일 기록 여부 (코드 Edit/Write 이력 있는 세션만) ---
+if [ -f "$EDIT_FLAG" ] && [ "$IS_NONCODE_ONLY" = false ]; then
+  mkdir -p "$TASKS_DIR" 2>/dev/null
+  HISTORY_FILE="$TASKS_DIR/history.md"
+  DAILY_FILE="$TASKS_DIR/${TODAY}/summary.md"
 
-    # history.md 오늘 날짜 항목 검사
-    if [ ! -f "$HISTORY_FILE" ] || ! grep -q "$TODAY_DOT" "$HISTORY_FILE" 2>/dev/null; then
-      WARNINGS="${WARNINGS}\n[BLOCKED] docs/tasks/history.md에 오늘($TODAY_DOT) 항목이 없습니다."
-      BLOCKED=true
-    fi
+  # history.md 오늘 날짜 항목 검사
+  if [ ! -f "$HISTORY_FILE" ] || ! grep -q "$TODAY_DOT" "$HISTORY_FILE" 2>/dev/null; then
+    WARNINGS="${WARNINGS}\n[BLOCKED] ~/.claude/docs/${PRODUCT}/tasks/history.md 에 오늘($TODAY_DOT) 항목이 없습니다."
+    BLOCKED=true
+  fi
 
-    # YYYYMMDD/summary.md 존재 검사
-    if [ ! -f "$DAILY_FILE" ]; then
-      WARNINGS="${WARNINGS}\n[BLOCKED] docs/tasks/${TODAY}/summary.md 파일이 없습니다."
-      BLOCKED=true
-    fi
+  # YYYYMMDD/summary.md 존재 검사
+  if [ ! -f "$DAILY_FILE" ]; then
+    WARNINGS="${WARNINGS}\n[BLOCKED] ~/.claude/docs/${PRODUCT}/tasks/${TODAY}/summary.md 파일이 없습니다."
+    BLOCKED=true
   fi
 fi
 
-# --- 2. 단계 문서 존재 여부 (gate>=2 + 프로젝트 레포 + 코드 수정 세션만) ---
+# --- 2. 단계 문서 존재 여부 (gate>=2 + 코드 수정 세션만) ---
 # CLAUDE.md §4 산출물 유연성: analyze / plan / result 중 1종 이상이면 통과.
-if [ "$CURRENT" -ge 2 ] && [ "$IS_CLAUDE_REPO" = false ] && [ "$IS_NONCODE_ONLY" = false ]; then
-  TASK_DIR="$CWD/docs/tasks/$TODAY"
+if [ "$CURRENT" -ge 2 ] && [ "$IS_NONCODE_ONLY" = false ]; then
+  TASK_DIR="$TASKS_DIR/$TODAY"
   STAGE_DOC=""
   if [ -d "$TASK_DIR" ]; then
     STAGE_DOC=$(find "$TASK_DIR" \( -name '*analyze*' -o -name '*plan*' -o -name '*result*' \) -type f 2>/dev/null | head -1)
   fi
   if [ -z "$STAGE_DOC" ]; then
-    WARNINGS="${WARNINGS}\n[BLOCKED] docs/tasks/$TODAY/ 에 단계 문서(analyze/plan/result 중 1종 이상)가 없습니다."
+    WARNINGS="${WARNINGS}\n[BLOCKED] ~/.claude/docs/${PRODUCT}/tasks/$TODAY/ 에 단계 문서(analyze/plan/result 중 1종 이상)가 없습니다."
     BLOCKED=true
   fi
 fi
@@ -122,7 +105,7 @@ if [ "$BLOCKED" = true ]; then
   echo "━━━ Session Completeness: 산출물 누락 — 종료 차단 ━━━" >&2
   echo -e "$WARNINGS" >&2
   echo "" >&2
-  echo "일일 기록 누락 시: docs/tasks/history.md에 오늘 날짜 항목 + docs/tasks/${TODAY}/summary.md 파일 생성 필요" >&2
+  echo "일일 기록 누락 시: ~/.claude/docs/${PRODUCT}/tasks/history.md 에 오늘 날짜 항목 + ~/.claude/docs/${PRODUCT}/tasks/${TODAY}/summary.md 파일 생성 필요" >&2
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
   exit 2
 fi

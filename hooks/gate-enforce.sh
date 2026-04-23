@@ -81,7 +81,8 @@ except:
 " 2>/dev/null)
 
   # docs/specs/ — IEEE 산출물 경로 (게이트 면제)
-  if echo "$FILE_PATH" | grep -qE '(^|/)docs/specs/'; then
+  # 글로벌 `~/.claude/docs/{product}/specs/` 포함, 과거 프로젝트 로컬 `docs/specs/` 도 호환.
+  if echo "$FILE_PATH" | grep -qE '(^|/)docs/([^/]+/)?specs/'; then
     exit 0
   fi
 
@@ -125,8 +126,9 @@ except:
   fi
 
   # --- docs/tasks/ 경로 패턴 검증 ---
-  if echo "$FILE_PATH" | grep -qE 'docs/tasks/'; then
-    REL_PATH=$(echo "$FILE_PATH" | sed 's|.*/docs/tasks/||')
+  # 글로벌: `~/.claude/docs/{product}/tasks/...`, 과거 프로젝트 로컬: `docs/tasks/...`
+  if echo "$FILE_PATH" | grep -qE 'docs/([^/]+/)?tasks/'; then
+    REL_PATH=$(echo "$FILE_PATH" | sed -E 's|.*docs/([^/]+/)?tasks/||')
     # history.md (전체 이력 인덱스) 허용
     if echo "$REL_PATH" | grep -qE '^history\.md$'; then
       : # 통과
@@ -137,7 +139,7 @@ except:
     elif echo "$REL_PATH" | grep -qE '^[0-9]{8}/[^/]+/[^/]+\.md$'; then
       : # 통과
     else
-      echo "[GATE BLOCKED] docs/tasks/ 경로 규칙 위반 — 허용 패턴: history.md | YYYYMMDD/summary.md | YYYYMMDD/{작업명}/{단계}.md (현재: docs/tasks/$REL_PATH)" >&2
+      echo "[GATE BLOCKED] tasks/ 경로 규칙 위반 — 허용 패턴: history.md | YYYYMMDD/summary.md | YYYYMMDD/{작업명}/{단계}.md (현재: tasks/$REL_PATH)" >&2
       exit 2
     fi
   fi

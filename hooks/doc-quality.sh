@@ -38,7 +38,7 @@ BASENAME=$(basename "$FILE_PATH_UNIX")
 LOWER_BASENAME=$(echo "$BASENAME" | tr '[:upper:]' '[:lower:]')
 
 # ===== 1. 문서 체크리스트 검증 (exit 2) =====
-if echo "$FILE_PATH_UNIX" | grep -qiE '(docs/tasks/|docs/output/).*\.md$'; then
+if echo "$FILE_PATH_UNIX" | grep -qiE 'docs/([^/]+/)?(tasks|output)/.*\.md$'; then
   if [ -f "$FILE_PATH_UNIX" ]; then
     UNCHECKED=$(grep -c '\- \[ \]' "$FILE_PATH_UNIX" 2>/dev/null || echo "0")
     CHECKED=$(grep -c '\- \[x\]' "$FILE_PATH_UNIX" 2>/dev/null || echo "0")

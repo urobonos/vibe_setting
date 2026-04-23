@@ -28,14 +28,14 @@ esac
 
 # 제외 대상: memory, templates, skills, api-docs yaml 관련
 case "$file_path" in
-    */memory/*|*/templates/*|*/skills/*|*/.claude/*)
+    */memory/*|*/templates/*|*/skills/*|*/.claude/hooks/*|*/.claude/commands/*|*/.claude/settings*.json|*/.claude/CLAUDE.md|*/.claude/keybindings.json)
         exit 0
         ;;
 esac
 
-# docs/ 또는 docs 관련 경로의 문서만 검증
+# docs/ 또는 docs 관련 경로의 문서만 검증 (글로벌 ~/.claude/docs/{product}/ 및 구 프로젝트 로컬 호환)
 case "$file_path" in
-    */docs/tasks/*|*/docs/output/*|*/docs/specs/*)
+    */docs/tasks/*|*/docs/output/*|*/docs/specs/*|*/docs/*/tasks/*|*/docs/*/output/*|*/docs/*/specs/*)
         ;; # 검증 대상
     *)
         exit 0 # 그 외는 스킵
@@ -81,7 +81,7 @@ esac
 
 # specs 문서(SDP/SRS/SDD/IDD/STP/STD)는 타당성 검토 필수
 case "$file_path" in
-    */docs/specs/*)
+    */docs/specs/*|*/docs/*/specs/*)
         grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
             || missing+=("## 타당성 검토 (§4 필수)")
         ;;
