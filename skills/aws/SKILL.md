@@ -628,6 +628,29 @@ Lambda가 Aurora에 접근하려면 **VPC 내에 배치**해야 한다.
 | **EC2** | IAM 인스턴스 프로파일 + Secrets Manager | 액세스 키 `.env` 파일 저장 |
 | **Aurora** | Secrets Manager 자동 로테이션 권장 | 비밀번호 코드/환경변수 직접 기입 |
 
+### 다국가 배포 환경 분리
+
+다국가 서비스는 국가별 `.env` + `deploy.sh` 로 배포를 분리한다. 코드는 동일하게 유지하고 환경변수만 국가별로 주입.
+
+```
+deploy/
+├── us/
+│   ├── .env
+│   └── deploy.sh
+├── kr/
+│   ├── .env
+│   └── deploy.sh
+└── jp/
+    ├── .env
+    └── deploy.sh
+```
+
+**규칙**:
+- 국가별 `.env` 로 DB 접속, API 키, 외부 서비스 엔드포인트, Aurora/RDS Proxy 엔드포인트 분리
+- 배포 스크립트(`deploy.sh`) 도 국가별 분리 — 리전, 인스턴스 ID, CloudFront 배포 차이
+- CI/CD 파이프라인에서 `COUNTRY` 환경변수로 대상 국가 지정
+- 상세는 `global-context` §8 "배포 환경 분리" 참조
+
 ### 주석 규칙
 
 Lambda Python 코드에도 `php8.x+ci4.x-skill` §6과 동일한 주석 규칙을 적용한다:
@@ -690,6 +713,38 @@ class TestHandler:
 - SNS → SQS → Lambda 파이프라인이 기본 패턴
 - FIFO 큐 사용 시 `MessageGroupId`로 순서 보장 범위 지정
 - DLQ(Dead Letter Queue) 필수 설정 — 3회 재시도 후 DLQ 이동
+
+### Outbox Pattern (Pub 단계 신뢰성 보장)
+
+크로스 도메인 이벤트 발행 시 **DB 트랜잭션과 메시지 발행을 원자적으로 묶기 위해** Outbox 테이블을 경유한다. 직접 `sns.publish()` 호출은 네트워크 실패/재시도 시 중복 발행 또는 유실 위험.
+
+| 단계 | 동작 |
+|------|------|
+| 1. Write | 비즈니스 트랜잭션 내에서 Outbox 테이블(`*_pub_log` 등)에 이벤트 row INSERT + 비즈니스 데이터 COMMIT |
+| 2. Poll | Lambda/Cron 이 주기적으로 Outbox 에서 `status='pending'` row 조회 |
+| 3. Publish | SNS/SQS 에 publish. 성공 시 `status='published'` UPDATE |
+| 4. Retry | 실패 시 `retry_count++` 후 재시도. 최대 재시도 초과 시 `status='failed'` + DLQ 알림 |
+
+Outbox 테이블 최소 스키마:
+
+```sql
+CREATE TABLE {project}_pub_log (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    topic VARCHAR(100) NOT NULL,
+    payload JSON NOT NULL,
+    status ENUM('pending','published','failed') NOT NULL DEFAULT 'pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at DATETIME NULL,
+    INDEX idx_status_created (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**규칙**:
+- 비즈니스 데이터 INSERT/UPDATE 와 Outbox INSERT 는 **같은 DB 트랜잭션**
+- 폴러 Lambda 는 단일 인스턴스 보장 (`ReservedConcurrentExecutions=1`) 또는 낙관적 잠금(`UPDATE ... WHERE status='pending' AND id=?`)으로 중복 publish 방지
+- SQS 메시지 ID 또는 `topic + payload_hash` 로 **소비자 측 멱등성** 병행 보장
+- 구체 테이블명·토픽명 규약은 프로젝트 `CLAUDE.md` 참조
 
 ## 11. S3 / CloudFront 스토리지 정책
 
