@@ -165,6 +165,50 @@ CREATE TABLE tb_example (
 ALTER TABLE tb_legacy CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
+### 10. 암호화 함수 사용 시 세션 설정
+
+MySQL `AES_ENCRYPT()` / `AES_DECRYPT()` 함수를 사용할 때는 세션 변수 `block_encryption_mode`를 **프로젝트 보안 정책에 맞춰 명시적으로 설정**한다. 기본값(MySQL 8.x: `aes-128-ecb`)에 의존하지 않는다 — ECB 모드는 동일 평문에 동일 암호문을 생성하여 패턴 노출 위험.
+
+```sql
+-- 프로젝트 보안 정책이 AES-256-CBC 인 경우
+SET SESSION block_encryption_mode = 'aes-256-cbc';
+
+-- 이후 암호화/복호화 호출 (named binding 필수)
+INSERT INTO tb_sensitive (payload_enc)
+VALUES (AES_ENCRYPT(:plaintext:, :key:, :iv:));
+```
+
+- **IV (Initialization Vector)** 필수. NULL IV 허용 금지
+- 키/IV는 `.env` 또는 Secrets Manager 에서 주입. 하드코딩 금지
+- 알고리즘 선택(CBC/GCM/ECB 등)은 프로젝트 `security-audit` 정책을 따른다
+- 연결 풀링 환경(RDS Proxy 등)에서는 `SET SESSION` 이 다음 세션에 이어지지 않을 수 있으므로 암호화 쿼리마다 세션 변수를 재설정하거나 `init_connect` 에 등록
+
+### 11. 연결 시 타임존 강제 (UTC 고정)
+
+다국가 서비스에서는 DB 연결 세션에서 타임존을 UTC로 강제하여 서버 로컬 타임존에 의한 `NOW()`, `CURRENT_TIMESTAMP`, DATETIME 컬럼 해석 불일치를 방지한다.
+
+```sql
+-- 연결 직후 강제 (모든 애플리케이션 연결에 적용)
+SET time_zone = '+00:00';
+```
+
+**설정 위치**:
+- CI4: `app/Config/Database.php` 의 각 커넥션 설정에 초기 쿼리로 등록
+- MySQL 서버: `my.cnf` → `default_time_zone = '+00:00'`
+- RDS Parameter Group: `time_zone = UTC`
+- Aurora MySQL: Parameter Group 에서 클러스터 레벨 설정 (가장 안전)
+
+**검증**:
+
+```sql
+SELECT @@session.time_zone, @@global.time_zone, NOW(), UTC_TIMESTAMP();
+-- @@session.time_zone 이 '+00:00' 또는 'UTC' 이고, NOW() === UTC_TIMESTAMP() 여야 한다
+```
+
+**주의**:
+- 서버 `system_time_zone` 과 세션 `time_zone` 은 별개. 반드시 세션 레벨까지 UTC 고정 확인
+- 상세는 `global-context` §6 "DB 타임존" 참조
+
 ---
 
 ## CI4 쿼리빌더 사용 시 적용 규칙
@@ -181,6 +225,32 @@ CI4 쿼리빌더를 사용할 때도 위 원칙을 동일하게 적용한다.
 | Window Functions | `RANK() OVER (...)`, `ROW_NUMBER() OVER (...)` |
 | `JSON_TABLE()` | `JSON_TABLE(col, '$.path' COLUMNS(...))` |
 | `LATERAL JOIN` | `JOIN LATERAL (SELECT ...)` |
+
+#### Raw 쿼리 사용 시 named binding 필수
+
+QB 미지원 구문을 `$db->query()` 로 작성할 때는 **반드시 named binding (`:name:`)** 을 사용한다. 문자열 결합/보간은 SQL Injection 위험으로 금지.
+
+```php
+// 금지: 문자열 결합/보간
+$sql = "WITH ranked AS (SELECT * FROM tb_settlement WHERE status = '{$status}')";
+$this->db->query($sql);
+
+$sql = "SELECT * FROM tb_settlement WHERE id = " . $id;
+$this->db->query($sql);
+
+// 허용: named binding
+$sql = 'WITH ranked AS (
+            SELECT *, RANK() OVER (PARTITION BY counselor_id ORDER BY created_at DESC) AS rn
+            FROM tb_settlement
+            WHERE status = :status:
+        )
+        SELECT * FROM ranked WHERE rn = 1';
+$this->db->query($sql, ['status' => $status]);
+```
+
+- named binding 은 Repository 레이어에서만 허용
+- 바인딩 키는 `camelCase` 권장 (`:counselorId:`, `:startDate:`)
+- 배열 바인딩 (`IN (...)`) 도 named binding 으로 처리 — 문자열 join 금지
 
 ```php
 // 올바른 CI4 쿼리빌더 패턴
