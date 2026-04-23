@@ -167,6 +167,34 @@ deploy/
 
 ---
 
+## 9. Ubiquitous Language (도메인 용어 통일)
+
+다국가 서비스에서 **코드·DB·API·문서·기획서가 동일 도메인 용어를 사용**하도록 통일한다. 서로 다른 표현이 혼재하면 번역/i18n/검색 정확도가 하락한다.
+
+### 원칙
+
+- **전체 단어 사용** — 축약어 금지 (`str`, `idx`, `pwd`, `usr` 등)
+- **영문 단일 표기** — 코드상 용어는 영문만. 번역은 i18n 파일에서 처리
+- **도메인 주도 명명** — 기술 용어(`processRow`)보다 비즈니스 용어(`confirmOrder`) 우선
+- **일관성** — 같은 개념에 하나의 이름. `user`/`member`/`account` 를 문맥에 따라 섞지 않는다
+
+### snake_case ↔ camelCase 변환
+
+| 계층 | 표기 | 예시 |
+|------|------|------|
+| DB 컬럼 | `snake_case` | `counselor_id`, `created_at` |
+| PHP 변수/메서드 | `camelCase` | `$counselorId`, `findById()` |
+| API 응답 키 | `camelCase` | `counselorId`, `createdAt` |
+| i18n 키 | `namespace.camelCase` | `order.confirmButton` |
+
+Entity 의 `toApiResponse()` 에서 수동 변환 — 자동 변환 라이브러리 사용 금지.
+
+### 프로젝트별 용어 매핑
+
+프로젝트 고유 도메인 용어(레거시 약어 → 신규 표준 매핑 등)는 프로젝트 `CLAUDE.md` 의 "Ubiquitous Language" 섹션을 SSOT 로 따른다. 글로벌 스킬에는 하드코딩하지 않는다.
+
+---
+
 ## 자가 검증 체크리스트
 
 - [ ] 국가코드는 ISO 3166-1 alpha-2를 사용하는가
