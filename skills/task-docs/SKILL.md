@@ -1,10 +1,11 @@
 ---
 name: task-docs
 description: >
-  작업 문서 생명주기(분석→계획→결과)를 docs/tasks/YYYYMMDD/{작업명}/ 디렉토리에 표준 템플릿으로 생성한다.
-  일일 작업 요약을 docs/tasks/YYYYMMDD/summary.md에, 전체 이력을 docs/tasks/history.md에 기록한다.
+  작업 문서 생명주기(분석→계획→결과)를 ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/ 디렉토리에 표준 템플릿으로 생성한다.
+  일일 작업 요약을 ~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md에, 전체 이력을 ~/.claude/docs/{product}/tasks/history.md에 기록한다.
   {작업명}-analyze.md, {작업명}-plan.md, {작업명}-result.md 3종 문서를 작업별 서브디렉토리에서 관리한다.
-  보고용 산출물은 docs/output/{제목}/{파일명}.md에, 소프트웨어 개발 산출물(SDP/SRS/SDD/IDD/STP/STD)은 docs/specs/에 생성·관리한다.
+  보고용 산출물은 ~/.claude/docs/{product}/output/{제목}/{파일명}.md에, 소프트웨어 개발 산출물(SDP/SRS/SDD/IDD/STP/STD)은 ~/.claude/docs/{product}/specs/에 생성·관리한다.
+  {product}는 basename $CWD (.claude→claude-harness 예외). 규칙은 글로벌 CLAUDE.md §File Paths 참조.
 triggers:
   - "/plan"
   - "/research"
@@ -12,7 +13,7 @@ triggers:
   - "리서치 해줘", "분석 해줘", "코드 분석", "영향 범위 조사"
   - 3-Team 워크플로우의 Team 1(Analyze), Team 2(Plan), Team 3(Execute) 완료 시 자동 적용
   - "/task-docs specs", "SDP 작성", "SRS 작성", "SDD 작성", "IDD 작성", "STP 작성", "STD 작성"
-version: 3.0.0
+version: 4.0.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -21,13 +22,36 @@ min_claude_md_version: "4.0"
 
 # Task Docs Skill
 
-작업 문서 3종(analyze, plan, result)과 일일 요약(summary)을 `docs/tasks/YYYYMMDD/` 디렉토리에 표준 템플릿으로 생성·관리한다.
-보고용 산출물은 `docs/output/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `docs/specs/` 디렉토리에 생성·관리한다.
+작업 문서 3종(analyze, plan, result)과 일일 요약(summary)을 `~/.claude/docs/{product}/tasks/YYYYMMDD/` 디렉토리에 표준 템플릿으로 생성·관리한다.
+보고용 산출물은 `~/.claude/docs/{product}/output/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `~/.claude/docs/{product}/specs/` 디렉토리에 생성·관리한다.
+
+**`{product}` 결정 규칙:** `basename $CWD`. 단 `.claude` 는 `claude-harness` 로 치환. 구현은 `hooks/lib/product-resolver.sh`. 예:
+- `C:/Works/hongcafe_global_backend` → `hongcafe_global_backend`
+- `C:/Works/infra` → `infra`
+- `C:/Users/PV/.claude` → `claude-harness`
+
+## 경로 선택 규칙 (`tasks/` vs `output/`)
+
+프롬프트 성격에 따라 산출물 경로를 구분한다. 혼용 금지.
+
+| 구분 | `tasks/` | `output/` |
+|---|---|---|
+| **트리거 프롬프트** | 코드 작성·수정·리팩토링·디버깅·기능 추가·설정 변경 등 **코드/설정에 변경을 일으키는 요청** | 분석·조사·비교·리포트·문서 정리 등 **코드 변경 없이 결과물만 산출하는 요청** |
+| **예시 프롬프트** | "회원가입 API 만들어줘", "버그 고쳐줘", "이 메서드 리팩토링해줘", "훅 추가해줘" | "이번주 진행내용 리포트", "아키텍처 패턴 비교해줘", "SNS 플로우 문서로 정리해줘", "분석해줘" |
+| **산출물 구조** | `YYYYMMDD/{작업명}/analyze.md + plan.md + result.md` | `{제목}/{파일명}.md` (주제별 폴더, 하위 파일 여러 개 가능) |
+| **Workflow** | 3-Team Workflow (Analyze → Plan → Execute) 적용 | 3-Team 비적용, 단일/다중 문서로 완결 |
+| **Gate 요구** | ≥ 2 (실행 계획 승인 필요) | ≥ 1 (분석 방향 승인) |
+| **history.md 기록** | 필수 | 선택 (규모가 크거나 의사결정 영향이 있으면 기록) |
+| **summary.md 기록** | 일일 요약에 필수 포함 | 보고용 산출물은 요약 대상 아님 |
+
+**판단 지침:** "이 프롬프트가 코드/설정을 바꾸게 하는가?" → 예 = `tasks/`, 아니오 = `output/`. 분석 후 바로 구현으로 이어지는 혼합형은 `tasks/` 로 통합해 analyze.md 에 분석을 녹이고 result.md 에 구현 결과를 기록한다. 별도 `output/` 폴더를 만들지 않는다.
+
+**specs/** 는 IEEE 공식 산출물(SRS/SDD/IDD/SDP/STP/STD) 전용 경로로, `tasks/` · `output/` 과 별개다.
 
 ## 공통 규칙
 
 1. **날짜별·작업별 누적 보관한다** — 기존 파일을 덮어쓰지 않는다. 새 작업마다 새 서브디렉토리를 생성한다.
-2. **보고용 문서 산출물:** 사용자 요청 보고서는 `docs/output/{제목}/{파일명}.md` 형식으로 생성. `docs/tasks/`와 혼용하지 않는다.
+2. **보고용 문서 산출물:** 사용자 요청 보고서는 `~/.claude/docs/{product}/output/{제목}/{파일명}.md` 형식으로 생성. `~/.claude/docs/{product}/tasks/`와 혼용하지 않는다.
 3. `{작업명}`은 작업 내용을 간결하게 표현하는 kebab-case 이름으로 한다 (예: `pay-refactor`, `callee-migration`).
 4. `YYYYMMDD`는 작업 시작일 기준이다 (예: `20260324`).
 5. 사용자에게 보고하는 동시에 파일에도 동일 내용을 기록한다. 채팅으로만 보고하고 파일 생성을 누락하는 것은 지침 위반이다.
@@ -82,21 +106,31 @@ min_claude_md_version: "4.0"
 
 ## 파일 경로
 
-```
-docs/tasks/
-├── history.md                    ← 전체 이력 인덱스 (YYYY.MM.DD 항목)
-├── YYYYMMDD/
-│   ├── summary.md                ← 일일 작업 요약
-│   ├── {작업명}/
-│   │   ├── {작업명}-analyze.md   ← Team 1 (Analyze) 분석 결과
-│   │   ├── {작업명}-plan.md      ← Team 2 (Plan) 실행 계획 + Blueprint
-│   │   └── {작업명}-result.md    ← Team 3 (Execute) 완료 결과
+모든 산출물은 **글로벌 루트** `~/.claude/docs/{product}/` 하위에 생성한다. 프로젝트 레포 내부에는 생성하지 않는다.
 
-docs/output/
-├── {제목}/                       ← 보고용 산출물 (kebab-case 주제별 폴더)
-│   └── {파일명}.md
-├── specs/                        ← 소프트웨어 개발 산출물 (SDP/SRS/SDD/IDD/STP/STD)
-│   └── {모듈}-{문서타입}.md
+```
+~/.claude/docs/{product}/
+├── tasks/
+│   ├── history.md                    ← 전체 이력 인덱스 (YYYY.MM.DD 항목)
+│   └── YYYYMMDD/
+│       ├── summary.md                ← 일일 작업 요약
+│       └── {작업명}/
+│           ├── {작업명}-analyze.md   ← Team 1 (Analyze) 분석 결과
+│           ├── {작업명}-plan.md      ← Team 2 (Plan) 실행 계획 + Blueprint
+│           └── {작업명}-result.md    ← Team 3 (Execute) 완료 결과
+├── output/
+│   └── {제목}/                       ← 보고용 산출물 (kebab-case 주제별 폴더)
+│       └── {파일명}.md
+└── specs/                            ← 소프트웨어 개발 산출물 (SDP/SRS/SDD/IDD/STP/STD)
+    └── {모듈}-{문서타입}.md
+```
+
+`{product}` 변환은 `hooks/lib/product-resolver.sh` 를 참조한다. bash 에서:
+```bash
+source ~/.claude/hooks/lib/product-resolver.sh
+PRODUCT=$(resolve_product "$PWD")
+DOCS=$(product_docs_root "$PWD")      # ~/.claude/docs/$PRODUCT
+TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 ```
 
 ---
@@ -593,10 +627,10 @@ Team 3 (Execute) 완료 후 결과를 기록한다.
 
 ---
 
-# Part 5. 소프트웨어 개발 산출물 — IEEE 표준 기반 (docs/specs/)
+# Part 5. 소프트웨어 개발 산출물 — IEEE 표준 기반 (~/.claude/docs/{product}/specs/)
 
-소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)을 `docs/specs/` 디렉토리에 플랫하게 관리한다.
-보고용 산출물은 `docs/output/{제목}/{파일명}.md` 형식으로 주제별 폴더에 저장한다.
+소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)을 `~/.claude/docs/{product}/specs/` 디렉토리에 플랫하게 관리한다.
+보고용 산출물은 `~/.claude/docs/{product}/output/{제목}/{파일명}.md` 형식으로 주제별 폴더에 저장한다.
 
 ### 적용 표준
 
@@ -611,7 +645,7 @@ Team 3 (Execute) 완료 후 결과를 기록한다.
 
 ## 공통 규칙
 
-1. **단일 디렉토리:** 모든 산출물은 `docs/specs/`에 저장한다. 문서 타입별 하위 폴더를 만들지 않는다.
+1. **단일 디렉토리:** 모든 산출물은 `~/.claude/docs/{product}/specs/`에 저장한다. 문서 타입별 하위 폴더를 만들지 않는다.
 2. **파일 네이밍:** `{모듈 또는 주제}-{문서타입}.md` (kebab-case)
    - 예: `auth-srs.md`, `commerce-idd.md`, `project-sdp.md`, `project-stp.md`, `auth-std.md`
 3. **Glob 패턴으로 타입별 조회 가능:** `specs/*-srs.md`, `specs/*-sdd.md` 등
@@ -625,7 +659,7 @@ Team 3 (Execute) 완료 후 결과를 기록한다.
 
 ### 파일 경로
 ```
-docs/specs/project-sdp.md
+~/.claude/docs/{product}/specs/project-sdp.md
 ```
 
 ### 템플릿
@@ -700,7 +734,7 @@ docs/specs/project-sdp.md
 
 ### 파일 경로
 ```
-docs/specs/{모듈}-srs.md
+~/.claude/docs/{product}/specs/{모듈}-srs.md
 ```
 
 ### 템플릿
@@ -833,7 +867,7 @@ docs/specs/{모듈}-srs.md
 
 ### 파일 경로
 ```
-docs/specs/{모듈}-sdd.md
+~/.claude/docs/{product}/specs/{모듈}-sdd.md
 ```
 
 ### 템플릿
@@ -1021,7 +1055,7 @@ Client → Controller → 검증 실패 → 400/403/409
 
 ### 파일 경로
 ```
-docs/specs/{모듈}-idd.md
+~/.claude/docs/{product}/specs/{모듈}-idd.md
 ```
 
 ### 템플릿
@@ -1194,7 +1228,7 @@ public function method(Type $param): ReturnType;
 
 ### 파일 경로
 ```
-docs/specs/project-stp.md
+~/.claude/docs/{product}/specs/project-stp.md
 ```
 
 ### 필수 섹션
@@ -1264,7 +1298,7 @@ docs/specs/project-stp.md
 
 ### 파일 경로
 ```
-docs/specs/{모듈}-std.md
+~/.claude/docs/{product}/specs/{모듈}-std.md
 ```
 
 ### 필수 섹션

@@ -1,0 +1,314 @@
+openapi: 3.0.3
+info:
+  title: HongCafe Global - Auth API
+  description: |
+    인증/인가 API (로그인, 로그아웃, 토큰갱신, 회원가입, 본인인증)
+
+    **필수 헤더**: 개발 환경에서 모든 요청에 `X-Forwarded-Proto: https` 헤더 필요
+  version: 1.0.0
+
+servers:
+  - url: http://dev.gl.hongcafe.com
+    description: Development
+
+tags:
+  - name: Auth
+    description: 인증 (로그인/로그아웃/토큰갱신/회원가입)
+  - name: Verification
+    description: 본인인증 (SMS/이메일)
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: 로그인
+      description: 이메일+비밀번호로 로그인. 성공 시 HttpOnly 쿠키(hc_access, hc_refresh) 발급.
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ac_id, ac_password]
+              properties:
+                ac_id:
+                  type: string
+                  format: email
+                  example: user@example.com
+                ac_password:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: 로그인 성공
+          headers:
+            Set-Cookie:
+              description: hc_access + hc_refresh HttpOnly 쿠키 발급
+              schema:
+                type: string
+          content:
+            application/json:
+              example:
+                data:
+                  ac_nick: 홍길동
+                  ac_home_set: call
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: 비활성 계정 (정지/탈퇴)
+          content:
+            application/json:
+              example:
+                error:
+                  code: FORBIDDEN
+                  message: 비활성 계정입니다.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      description: JWT 쿠키 무효화 (Max-Age=0)
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: 로그아웃 성공
+          content:
+            application/json:
+              schema:
+                type: object
+              example: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Access Token 갱신
+      description: Refresh Token 쿠키로 새 Access Token 발급.
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      responses:
+        "200":
+          description: 갱신 성공
+          headers:
+            Set-Cookie:
+              description: 새 hc_access 쿠키 발급
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+              example: {}
+        "401":
+          description: Refresh Token 없음 또는 만료
+          content:
+            application/json:
+              example:
+                error:
+                  code: UNAUTHORIZED
+                  message: Refresh token이 만료되었습니다.
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: 회원가입
+      description: 신규 회원 등록. SNS 가입 시 ac_sns_id, sns_type 전달.
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ac_id, ac_nick, ac_password, ac_password_re, cr_phone]
+              properties:
+                ac_id:
+                  type: string
+                  format: email
+                ac_nick:
+                  type: string
+                  minLength: 2
+                  maxLength: 12
+                ac_password:
+                  type: string
+                  minLength: 6
+                  maxLength: 16
+                ac_password_re:
+                  type: string
+                cr_phone:
+                  type: string
+                  example: "08012345678"
+                ac_country:
+                  type: string
+                  example: JP
+                ac_sns_id:
+                  type: string
+                sns_type:
+                  type: string
+                  enum: [google, kakao, naver, facebook, apple, line]
+      responses:
+        "201":
+          description: 가입 성공
+          content:
+            application/json:
+              schema:
+                type: object
+              example: {}
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "403":
+          description: 강제 탈퇴 계정
+          content:
+            application/json:
+              example:
+                error:
+                  code: FORBIDDEN
+                  message: 강제 탈퇴된 계정입니다.
+        "409":
+          description: 이미 존재하는 계정
+          content:
+            application/json:
+              example:
+                error:
+                  code: CONFLICT
+                  message: 이미 존재하는 계정입니다.
+
+  /api/verify/sms:
+    post:
+      tags: [Verification]
+      summary: SMS 인증번호 발송
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ac_phone_no, ac_country]
+              properties:
+                ac_phone_no:
+                  type: string
+                  example: "08012345678"
+                ac_country:
+                  type: string
+                  example: JP
+                purpose:
+                  type: string
+                  enum: [register, findid, findpw, phoneno]
+                  default: register
+                ac_id:
+                  type: string
+      responses:
+        "200":
+          description: 발송 성공
+          content:
+            application/json:
+              example:
+                data:
+                  message: 인증번호가 발송되었습니다.
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          description: 일일 인증 횟수 초과
+
+  /api/verify/email:
+    post:
+      tags: [Verification]
+      summary: 이메일 인증번호 발송
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ac_id]
+              properties:
+                ac_id:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: 발송 성공
+          content:
+            application/json:
+              schema:
+                type: object
+              example: {}
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+
+components:
+  parameters:
+    XForwardedProto:
+      name: X-Forwarded-Proto
+      in: header
+      required: true
+      description: 개발 환경 필수. 프로덕션에서는 ALB/CloudFront가 자동 추가.
+      schema:
+        type: string
+        default: https
+
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: hc_access
+      description: JWT Access Token (HttpOnly 쿠키)
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    Unauthorized:
+      description: 인증 실패 (401)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: 인증이 필요합니다.
+
+    NotFound:
+      description: 리소스 없음 (404)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: NOT_FOUND
+              message: 회원 정보를 찾을 수 없습니다.
+
+    ValidationFailed:
+      description: 입력 검증 실패 (400)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: VALIDATION_FAILED
+              message: 필수 항목이 누락되었습니다.

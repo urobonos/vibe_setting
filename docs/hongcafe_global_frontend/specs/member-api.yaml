@@ -1,0 +1,1027 @@
+openapi: 3.0.3
+info:
+  title: HongCafe Global - Member API
+  description: |
+    회원 관리 API (가입, 로그인, 인증, 비밀번호, 닉네임, 알람 등)
+
+    ## 인증
+    - JWT HttpOnly 쿠키 (`hc_access`) 기반 인증
+    - 공개 EP: AuthFilter EXCLUDED_PATHS에 등록된 엔드포인트
+    - 인증 우선순위: JWT(hc_access 쿠키 전용) → API Key(`X-Api-Key`)
+
+    ## CSRF
+    - POST/PUT/DELETE 요청 시 `X-CSRF-TOKEN` 헤더 필수 (인증 필요 EP만)
+    - Signed Double Submit Cookie (HMAC-SHA256)
+
+    ## 비프로덕션 고정 인증번호
+    | 용도 | 코드 |
+    |------|------|
+    | 회원가입 SMS | `111111` |
+    | 아이디/비밀번호 찾기, 번호 변경 | `222222` |
+    | 이메일 인증 | `333333` |
+
+    ## Profile API 분리 (2026-04-17)
+    프로필/마이페이지 관련 기능은 별도 명세(`profile-api.yaml` v1.1.0)로 분리되었다.
+    다음 EP는 `profile-api.yaml`이 canonical이며 member-api EP는 deprecated 상태로 유지된다.
+
+    | member-api EP (deprecated) | profile-api.yaml EP (canonical) | 변경 사항 |
+    |---------------------------|---------------------------------|-----------|
+    | `POST /api/members/change-passwd` | `PUT /api/profile/password` | 필드명 `acPassword` → `currentPassword` |
+    | `POST /api/members/change-nick` | `PUT /api/profile` | body: `{acNick}` (화이트리스트) |
+    | `POST /api/members/setting-alarm` | `PUT /api/profile` | body: `{acSmsCf\|acEmailCf\|acNotiCf: "Y"\|"N"}` — 역전 매핑 해소 |
+    | `POST /api/members/update-home-set` | `PUT /api/profile` | body: `{acHomeSet}` |
+    | `DELETE /api/members/delete-user` | `DELETE /api/profile` | 쿠키 만료 동작 동일 |
+
+    ### Profile API 전용 신규 EP (member-api에 없음)
+    - `GET /api/profile` — 전체 프로필 조회 (14필드)
+    - `GET /api/profile/coin` — 코인 잔액 요약 (remainCoin/remainFreeCoin/remainPayCoin + 누적 통계)
+    - `GET /api/profile/history` — 상담/코인/결제 내역 통합 조회 (type 파라미터)
+    - `POST /api/profile/link-sns` / `POST /api/profile/unlink-sns` — SNS 연동 관리
+
+    ### 유지 (Profile API에 없는 member-api EP)
+    전화번호 변경(`verify-phone`/`update-phone`), 이메일 인증(`send-mail-cert`/`confirm-mail-cert`),
+    가입 전 유효성(`check-id`/`check-nick`), 로그인/가입/찾기 플로우 일체는 member-api에 유지된다.
+  version: 1.2.0
+
+servers:
+  - url: https://prd.gl.hongcafe.com
+    description: Production
+  - url: https://stg.gl.hongcafe.com
+    description: Staging
+  - url: https://dev.gl.hongcafe.com
+    description: Development
+
+tags:
+  - name: Validation
+    description: 가입 전 유효성 검사 (이메일, 닉네임)
+  - name: Certification
+    description: SMS/이메일 인증
+  - name: Registration
+    description: 회원가입
+  - name: Authentication
+    description: 로그인
+  - name: Recovery
+    description: 아이디/비밀번호 찾기
+  - name: Password
+    description: 비밀번호 변경/재설정
+  - name: Settings
+    description: 알람, 홈 설정
+  - name: Phone
+    description: 전화번호 변경
+  - name: Nickname
+    description: 닉네임 변경
+  - name: Account
+    description: 계정 관리 (탈퇴, 앱 버전)
+
+paths:
+  /api/members/check-id:
+    post:
+      tags: [Validation]
+      summary: 이메일 ID 중복 확인
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acId]
+              properties:
+                acId:
+                  type: string
+                  format: email
+                  description: 이메일 형식 계정 ID
+            example:
+              acId: "test_mo28mgt9_sl4d@example.com"
+      responses:
+        "200":
+          description: 사용 가능
+          content:
+            application/json:
+              example: []
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/members/check-login-id:
+    post:
+      tags: [Validation]
+      summary: 이메일 형식 유효성 검사
+      description: 이메일 형식만 검사 (중복 확인 없음)
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acId]
+              properties:
+                acId:
+                  type: string
+                  format: email
+            example:
+              acId: "user@example.com"
+      responses:
+        "200":
+          description: 유효한 이메일 형식
+          content:
+            application/json:
+              example: []
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/members/check-nick:
+    post:
+      tags: [Validation]
+      summary: 닉네임 유효성+중복 확인
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acNick]
+              properties:
+                # ── 필수 ──
+                acNick:
+                  type: string
+                  minLength: 2
+                  maxLength: 12
+                  description: "닉네임 (2~12자, 일본어/영숫자/대시 허용)"
+                # ── 옵션 ──
+                acId:
+                  type: string
+                  description: 본인 제외 중복 검사 시 사용 (옵션)
+            example:
+              acNick: "tstmgt9sl4"
+      responses:
+        "200":
+          description: 사용 가능
+          content:
+            application/json:
+              example: []
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/members/send-global-cert:
+    post:
+      tags: [Certification]
+      summary: SMS 인증번호 발송
+      description: "비프로덕션: SMS 미발송, 인증번호 111111 고정 저장"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acCountry, acPhoneNo]
+              properties:
+                acCountry:
+                  type: string
+                  description: "국가 코드 (US, JP, KR)"
+                acPhoneNo:
+                  type: string
+                  description: "휴대폰 번호 (숫자만, 기본 자릿수+2)"
+            example:
+              acCountry: "JP"
+              acPhoneNo: "0807012345678"
+      responses:
+        "204":
+          description: 발송 성공 (본문 없음)
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/confirm-global-cert:
+    post:
+      tags: [Certification]
+      summary: SMS 인증번호 검증
+      description: "DB tb_interphone_auth 직접 매칭 (5분 TTL). 비프로덕션 인증번호: 111111"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acCountry, acPhoneNo, acCertNum]
+              properties:
+                acCountry:
+                  type: string
+                acPhoneNo:
+                  type: string
+                acCertNum:
+                  type: string
+                  description: "인증번호 (비프로덕션: 111111)"
+            example:
+              acCountry: "JP"
+              acPhoneNo: "0807012345678"
+              acCertNum: "111111"
+      responses:
+        "200":
+          description: 인증 성공
+          content:
+            application/json:
+              example:
+                data:
+                  msg: "Verification successful"
+                  crPhone: "0807012345678"
+                  crName: ""
+                  crIdCert: "Y"
+                  crPhoneCert: "Y"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/members/join-user:
+    post:
+      tags: [Registration]
+      summary: 회원가입
+      description: "국가코드 미전달 시 기본값 US. 성공 시 hdata, hc_access, hc_refresh, hc_csrf 쿠키 발급"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acId, acNick, crPhone, agreeService, agreePrivacy, agreeAge]
+              properties:
+                # ── 필수 ──
+                acId:
+                  type: string
+                  format: email
+                  description: 이메일
+                acNick:
+                  type: string
+                  minLength: 2
+                  maxLength: 12
+                  description: 닉네임
+                crPhone:
+                  type: string
+                  description: 인증 완료된 전화번호
+                acPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+                  description: "비밀번호 (SNS 가입 시 불필요)"
+                acPasswordRe:
+                  type: string
+                  description: 비밀번호 확인
+                agreeService:
+                  type: integer
+                  enum: [0, 1]
+                  description: "서비스 약관 동의 (1=동의)"
+                agreePrivacy:
+                  type: integer
+                  enum: [0, 1]
+                  description: "개인정보 처리 동의 (1=동의)"
+                agreeAge:
+                  type: integer
+                  enum: [0, 1]
+                  description: "연령 확인 동의 (1=동의)"
+                # ── 옵션 ──
+                acCountry:
+                  type: string
+                  description: "국가 코드 (기본값: US)"
+                  default: "US"
+                birthYear:
+                  type: string
+                  description: "생년 (4자리)"
+                  example: "1992"
+                birthMonth:
+                  type: string
+                  description: "생월 (2자리, 01~12)"
+                  example: "08"
+                birthDay:
+                  type: string
+                  description: "생일 (2자리, 01~31)"
+                  example: "14"
+                acRegPath:
+                  type: string
+                  description: "가입 경로"
+                  default: "hongcafe"
+                acSnsId:
+                  type: string
+                  description: "SNS 계정 ID (SNS 가입 시)"
+                snsType:
+                  type: string
+                  enum: [google, kakao, naver, facebook, apple, line]
+                  description: SNS 유형
+            example:
+              acId: "test_mo28mgt9_sl4d@example.com"
+              acNick: "tstmgt9sl4"
+              crPhone: "0807012345678"
+              acPassword: "TestPass1234!@"
+              acPasswordRe: "TestPass1234!@"
+              acCountry: "JP"
+              birthYear: "1992"
+              birthMonth: "08"
+              birthDay: "14"
+              agreeService: 1
+              agreePrivacy: 1
+              agreeAge: 1
+              acRegPath: "hongcafe"
+      responses:
+        "200":
+          description: 가입 성공
+          content:
+            application/json:
+              example:
+                data:
+                  existFlag: 0
+          headers:
+            Set-Cookie:
+              description: "hdata, hc_access(15분), hc_refresh(7일), hc_csrf(2시간) 쿠키 발급"
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/login-user:
+    post:
+      tags: [Authentication]
+      summary: 로그인
+      description: "CWE-204 방어 적용. 성공 시 hdata, hc_access, hc_refresh, hc_csrf 쿠키 발급"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acId, acPassword]
+              properties:
+                # ── 필수 ──
+                acId:
+                  type: string
+                  format: email
+                acPassword:
+                  type: string
+                # ── 옵션 ──
+                saveId:
+                  type: string
+                  description: "'y' 전달 시 쿠키 30일 유지 (기본 7일)"
+            example:
+              acId: "test_mo28mgt9_sl4d@example.com"
+              acPassword: "TestPass1234!@"
+      responses:
+        "200":
+          description: 로그인 성공
+          content:
+            application/json:
+              example:
+                data:
+                  acHomeSet: "hongcafe"
+          headers:
+            Set-Cookie:
+              description: "hdata, hc_access(15분), hc_refresh(7일), hc_csrf(2시간) 쿠키 발급"
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/members/find-id-cert:
+    post:
+      tags: [Recovery]
+      summary: 아이디 찾기 인증번호 발송
+      description: "KR=카카오 알림톡, 해외=SMS. 비프로덕션: 인증번호 222222 고정"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acCountry, crPhone]
+              properties:
+                acCountry:
+                  type: string
+                  description: "국가 코드 (US, JP, KR)"
+                crPhone:
+                  type: string
+                  description: 등록된 전화번호
+            example:
+              acCountry: "US"
+              crPhone: "1523456789012"
+      responses:
+        "204":
+          description: 발송 성공
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/confirm-id-cert:
+    post:
+      tags: [Recovery]
+      summary: 아이디 찾기 인증번호 확인
+      description: 마스킹된 ID 반환
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acCountry, crPhone, acCertNum]
+              properties:
+                acCountry:
+                  type: string
+                crPhone:
+                  type: string
+                acCertNum:
+                  type: string
+                  description: "인증번호 (비프로덕션: 222222)"
+            example:
+              acCountry: "US"
+              crPhone: "1523456789012"
+              acCertNum: "222222"
+      responses:
+        "200":
+          description: 확인 성공
+          content:
+            application/json:
+              example:
+                data:
+                  acRegPath: "hongcafe"
+                  acId: "te**@example.com"
+                  msg: "..."
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/members/find-password-cert:
+    post:
+      tags: [Recovery]
+      summary: 임시 비밀번호 발급
+      description: "KR=알림톡, 해외=이메일. 임시 비밀번호가 발송됨"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acCountry, crPhone, acId]
+              properties:
+                acCountry:
+                  type: string
+                crPhone:
+                  type: string
+                acId:
+                  type: string
+                  format: email
+            example:
+              acCountry: "JP"
+              crPhone: "0807012345678"
+              acId: "test@example.com"
+      responses:
+        "204":
+          description: 발송 성공
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/change-passwd:
+    post:
+      tags: [Password]
+      summary: "[DEPRECATED → profile-api.yaml PUT /api/profile/password] 비밀번호 변경 (현재 비밀번호 검증)"
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acPassword, newPassword, newPasswordRe]
+              properties:
+                acPassword:
+                  type: string
+                  description: 현재 비밀번호
+                newPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+                  description: 새 비밀번호
+                newPasswordRe:
+                  type: string
+                  description: 새 비밀번호 확인
+            example:
+              acPassword: "TestPass1234!@"
+              newPassword: "NewPass5678!@"
+              newPasswordRe: "NewPass5678!@"
+      responses:
+        "200":
+          description: 변경 성공
+          content:
+            application/json:
+              example: []
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/reset-password:
+    post:
+      tags: [Password]
+      summary: 비밀번호 재설정
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acId, newPassword, newPasswordRe]
+              properties:
+                acId:
+                  type: string
+                  format: email
+                newPassword:
+                  type: string
+                  minLength: 8
+                  maxLength: 128
+                newPasswordRe:
+                  type: string
+            example:
+              acId: "test@example.com"
+              newPassword: "NewPass5678!@"
+              newPasswordRe: "NewPass5678!@"
+      responses:
+        "200":
+          description: 재설정 성공
+          content:
+            application/json:
+              example: []
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/setting-alarm:
+    post:
+      tags: [Settings]
+      summary: "[DEPRECATED → profile-api.yaml PUT /api/profile] 알람 설정 변경"
+      description: "'true' 전달 시 'N', 그 외 'Y' 설정"
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, value]
+              properties:
+                type:
+                  type: string
+                  enum: [sms, email, noti]
+                  description: 알람 유형
+                value:
+                  type: string
+                  description: "'true' → OFF, 그 외 → ON"
+            example:
+              type: "sms"
+              value: "false"
+      responses:
+        "200":
+          description: 설정 성공
+          content:
+            application/json:
+              example:
+                data:
+                  type: "sms"
+                  value: "Y"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/verify-phone:
+    post:
+      tags: [Phone]
+      summary: 번호 변경 인증 발송
+      description: "중복번호/횟수 제한 체크 포함. 비프로덕션: 인증번호 222222 고정"
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acCountry, newPhone]
+              properties:
+                acCountry:
+                  type: string
+                  description: "국가 코드 (US, JP, KR)"
+                newPhone:
+                  type: string
+                  description: 변경할 전화번호 (숫자만)
+            example:
+              acCountry: "KR"
+              newPhone: "0103306884989"
+      responses:
+        "204":
+          description: 발송 성공
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/update-phone:
+    post:
+      tags: [Phone]
+      summary: 전화번호 변경 실행
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acCountry, newPhone, acCertNum]
+              properties:
+                acCountry:
+                  type: string
+                newPhone:
+                  type: string
+                acCertNum:
+                  type: string
+                  description: "인증번호 (비프로덕션: 222222)"
+            example:
+              acCountry: "KR"
+              newPhone: "0103306884989"
+              acCertNum: "222222"
+      responses:
+        "204":
+          description: 변경 성공
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/change-nick:
+    post:
+      tags: [Nickname]
+      summary: "[DEPRECATED → profile-api.yaml PUT /api/profile] 닉네임 변경"
+      description: 마지막 변경 후 7일 경과 필요
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acNick]
+              properties:
+                # ── 필수 ──
+                acNick:
+                  type: string
+                  minLength: 2
+                  maxLength: 12
+                  description: 새 닉네임
+                # ── 옵션 ──
+                acId:
+                  type: string
+                  description: 본인 제외 중복 검사 시 사용 (옵션)
+            example:
+              acNick: "newnick2026"
+      responses:
+        "200":
+          description: 변경 성공
+          content:
+            application/json:
+              example: []
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/delete-user:
+    delete:
+      tags: [Account]
+      summary: "[DEPRECATED → profile-api.yaml DELETE /api/profile] 회원 탈퇴"
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
+      responses:
+        "200":
+          description: 탈퇴 성공
+          content:
+            application/json:
+              example: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/get-app-version:
+    post:
+      tags: [Account]
+      summary: 앱 버전 조회
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              example:
+                data:
+                  appVersion: "1.0.0"
+                  devicerole: "caller"
+
+  /api/members/update-home-set:
+    post:
+      tags: [Settings]
+      summary: "[DEPRECATED → profile-api.yaml PUT /api/profile] 홈 화면 설정 변경"
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+        - $ref: "#/components/parameters/XCsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newHome]
+              properties:
+                newHome:
+                  type: string
+                  description: "홈 화면 설정 값 (hongcafe, call 등)"
+            example:
+              newHome: "hongcafe"
+      responses:
+        "200":
+          description: 설정 성공
+          content:
+            application/json:
+              example:
+                data:
+                  newHomeUrl: "https://..."
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/send-mail-cert:
+    post:
+      tags: [Certification]
+      summary: 이메일 인증번호 발송
+      description: "비프로덕션: 메일 미발송, 인증번호 333333 고정 저장"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acId]
+              properties:
+                acId:
+                  type: string
+                  format: email
+                  description: 이메일 주소 (미등록 이메일만 허용)
+            example:
+              acId: "test_mo28mgt9_sl4d@example.com"
+      responses:
+        "204":
+          description: 발송 성공
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/members/confirm-mail-cert:
+    post:
+      tags: [Certification]
+      summary: 이메일 인증번호 확인
+      description: "TTL 3분. 비프로덕션 인증번호: 333333"
+      parameters:
+        - $ref: "#/components/parameters/XForwardedProto"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acId, mailCertNo]
+              properties:
+                acId:
+                  type: string
+                  format: email
+                mailCertNo:
+                  type: string
+                  description: "인증번호 (비프로덕션: 333333)"
+            example:
+              acId: "test_mo28mgt9_sl4d@example.com"
+              mailCertNo: "333333"
+      responses:
+        "200":
+          description: 인증 성공
+          content:
+            application/json:
+              example:
+                data:
+                  msg: "인증이 완료되었습니다."
+                  certMailAddress: "test_mo28mgt9_sl4d@example.com"
+                  crMailCert: "Y"
+        "400":
+          $ref: "#/components/responses/ValidationFailed"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: hc_access
+      description: JWT Access Token (HttpOnly, Secure, SameSite=Lax, 15분 TTL)
+    refreshCookieAuth:
+      type: apiKey
+      in: cookie
+      name: hc_refresh
+      description: Refresh Token (HttpOnly, Secure, single-use, 7일 TTL)
+
+  parameters:
+    XCsrfToken:
+      name: X-CSRF-TOKEN
+      in: header
+      required: true
+      schema:
+        type: string
+      description: "CSRF 토큰 (hc_csrf 쿠키 값). 인증 필요 EP의 POST/PUT/DELETE 필수"
+
+    XForwardedProto:
+      name: X-Forwarded-Proto
+      in: header
+      required: true
+      schema:
+        type: string
+        default: https
+      description: 모든 환경 필수. 프로덕션에서는 ALB가 자동 추가
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: "INVALID_INPUT, NOT_FOUND, UNAUTHORIZED, FORBIDDEN, CONFLICT, INTERNAL"
+            message:
+              type: string
+
+  responses:
+    ValidationFailed:
+      description: 입력 검증 실패 (400)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "INVALID_INPUT"
+              message: "acId 필드는 필수입니다."
+
+    Unauthorized:
+      description: 인증 실패 (401)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "UNAUTHORIZED"
+              message: "로그인이 필요합니다."
+
+    Forbidden:
+      description: 접근 거부 (403)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "FORBIDDEN"
+              message: "접근이 거부되었습니다."
+
+    NotFound:
+      description: 리소스 없음 (404)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "NOT_FOUND"
+              message: "등록된 계정이 없습니다."
+
+    Conflict:
+      description: 리소스 충돌 (409)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "CONFLICT"
+              message: "이미 사용 중인 번호입니다."
+
+    InternalError:
+      description: 서버 내부 오류 (500)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              code: "INTERNAL"
+              message: "서버 내부 오류가 발생했습니다."

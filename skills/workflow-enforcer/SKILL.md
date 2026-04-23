@@ -27,7 +27,7 @@ Team 1(Analyze) 단계에서 Read-only 도구(Read, Grep, Glob)는 분석 목적
 
 작업 규모 판정 전에 먼저 **작업 유형**을 판별한다. 비코드 작업은 Gate-1만으로 실행 가능.
 
-| 유형 | 대상 경로 | Gate 요구 | docs/tasks 산출물 |
+| 유형 | 대상 경로 | Gate 요구 | ~/.claude/docs/{product}/tasks 산출물 |
 |------|----------|----------|-------------------|
 | **비코드** | `docs/`, `.claude/`, `.agent-logs/`, `CLAUDE.md`, `scripts/pipeline/`, `memory/` | Gate >= 1 | 면제 |
 | **코드** | `app/`, `components/`, `store/`, `hooks/`, `lib/`, `public/`, `messages/` 등 | Gate >= 2 | 필수 |
@@ -37,7 +37,7 @@ Team 1(Analyze) 단계에서 Read-only 도구(Read, Grep, Glob)는 분석 목적
 **비코드 작업 워크플로우:**
 1. 분석 방향 제시 → 사용자 승인 (Gate 0→1)
 2. 비코드 파일 수정 실행 (Gate >= 1에서 즉시 가능)
-3. Gate-2 불필요, docs/tasks/ 산출물 불필요
+3. Gate-2 불필요, ~/.claude/docs/{product}/tasks/ 산출물 불필요
 
 ### 작업 규모 분류 (Task Sizing) — 코드 작업 전용
 

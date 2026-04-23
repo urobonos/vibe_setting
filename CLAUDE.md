@@ -5,6 +5,26 @@
 - **글로벌 스킬:** `~/.claude/skills/{skill-name}/SKILL.md`
 - **프로젝트 로컬 스킬:** `./.claude/skills/{skill-name}/SKILL.md`
 - 스킬 파일을 생성하거나 수정할 때, **반드시 대상 경로(글로벌 vs 프로젝트 로컬)를 사용자에게 확인** 후 작업한다. 확인 없이 경로를 임의 결정하는 것은 지침 위반이다.
+- **작업 산출물 경로 (글로벌 통합):** 모든 작업 산출물(`tasks`, `output`, `specs`)은 **글로벌 루트 `~/.claude/docs/{product}/`** 아래에 생성·관리한다. 프로젝트 레포 내부 `docs/tasks|output|specs/`에는 더 이상 생성하지 않는다.
+  - `{product}` 결정 규칙: `basename $CWD` (예: `hongcafe_global_backend`, `infra`). 단 `.claude` → `claude-harness` 로 치환. 구현은 `hooks/lib/product-resolver.sh`.
+  - 전체 구조:
+    ```
+    ~/.claude/docs/
+    ├── references/                       (글로벌 공용 docset·KB)
+    └── {product}/
+        ├── tasks/
+        │   ├── history.md
+        │   └── YYYYMMDD/
+        │       ├── summary.md
+        │       └── {작업명}/{analyze|plan|result}.md
+        ├── output/{제목}/{파일명}.md       (분석·문서 생성 산출물)
+        └── specs/{모듈}-{srs|sdd|idd|sdp|stp|std}.md  (IEEE 산출물)
+    ```
+- **`tasks/` vs `output/` 용도 구분 (필수):** 경로를 혼용하지 않는다. 혼용은 지침 위반.
+  - **`tasks/` → 개발 작업 프롬프트 전용.** 코드 작성·수정·리팩토링·디버깅·기능 추가·설정 변경 등 **코드/설정에 변경이 발생하는 프롬프트**를 받았을 때 사용한다. 3-Team Workflow 의 `analyze.md` / `plan.md` / `result.md` 가 여기로 들어간다. Gate ≥ 2 강제 대상.
+  - **`output/` → 분석·문서 생성 프롬프트 전용.** "분석해줘", "조사해줘", "비교해줘", "리포트 만들어줘", "문서로 정리해줘" 등 **코드 변경 없이 결과물만 산출하는 프롬프트**를 받았을 때 사용한다. 주제별 폴더(`{제목}/`) 하위에 kebab-case 파일명으로 단일/다중 문서를 배치한다. 3-Team Workflow 비적용, Gate ≥ 1 만으로 충분.
+  - 판단 애매한 경우: "**이 프롬프트가 코드를 바꾸게 하는가?**" → 예 = `tasks/`, 아니오 = `output/`. 혼합된 경우(분석 후 바로 구현)는 `tasks/` 로 통합.
+  - `specs/` 는 IEEE 공식 산출물(SRS/SDD/IDD/SDP/STP/STD) 전용. `tasks/` · `output/` 과 별개 경로.
 - **Notion 연동(요청 기반):** Notion 연동은 `notion_cli` 스킬(curl + Notion REST API, Bearer Token 기반)을 **단일 진입점**으로 사용한다. MCP 기반 `notion-fetch` / `replace_content` / `update_content` / `mcp__notion*` 도구는 제거됨. 연동 실행은 **사용자가 명시적으로 요청할 때만** 수행한다. 글로벌/프로젝트 CLAUDE.md 또는 스킬 문서를 수정했더라도 자동으로 Notion에 반영하지 않는다. 사용자가 "노션에 반영", "Notion 동기화", "notion 업데이트" 등 명시 요청한 경우에만 실행한다. 사용자 요청 없이 `notion_cli`를 선제 실행하는 것은 지침 위반이다.
 - **Notion 수정 절차(요청 시):** `notion_cli` 스킬 절차를 따른다. (1) 대상 페이지/블록 조회(GET) → (2) 로컬 지침과 대조해 갱신 내용 작성 → (3) 블록 전체 교체(기존 자식 블록 삭제 후 재작성)를 기본으로 한다. 부분 패치(PATCH)보다 전체 교체를 우선한다.
 
@@ -15,7 +35,7 @@
 작업 세션 시작 시 다음을 자동으로 수행한다.
 
 1. 프로젝트 루트 구조 파악 + 현재 브랜치/커밋 확인
-2. `docs/tasks/history.md` 로드 (작업 이력 요약)
+2. `~/.claude/docs/{product}/tasks/history.md` 로드 (작업 이력 요약). `{product}` = `basename $CWD` (단 `.claude` → `claude-harness`).
 3. `.claude/skills/` 전 스킬은 SessionStart 훅(`hooks/skill-preload.sh`)이 자동으로 전량 preload — Claude는 주입된 스킬 중 `triggers`에 부합하는 스킬만 활성 호출한다. (`audit-config`는 preload 제외되며 `/audit-config` 명시 호출 시에만 로드)
 
 → 완료 후 반드시 **"Context Loaded."** 보고
@@ -50,7 +70,7 @@
 - **Proactive Correction:** 오타(철자)만 즉시 수정 가능. 문법·컨벤션·로직 수정은 Team 1 분석 후 승인 필요.
 - **Readability:** 주석 없이 읽히는 명시적 코드. 전체 단어(fullName, index 등) 사용.
 - **Validation ("No Test, No Merge"):** 모든 수정은 유닛 테스트 또는 실행 로그 증빙 동반.
-- **Persistence (필수):** 모든 작업 완료 시 `docs/tasks/history.md`에 `YYYY.MM.DD` 항목으로 처리 내역을 기록하고, `docs/tasks/YYYYMMDD/summary.md`에 일일 작업 요약을 기록한다. 누락은 지침 위반.
+- **Persistence (필수):** 모든 작업 완료 시 `~/.claude/docs/{product}/tasks/history.md`에 `YYYY.MM.DD` 항목으로 처리 내역을 기록하고, `~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md`에 일일 작업 요약을 기록한다. 누락은 지침 위반. `{product}` 변환은 §File Paths 규칙을 따른다.
 - **타당성 검토 (Feasibility Review, 필수):** 모든 분석(analyze), 사전 계획(preplan), 설계(SDD/SRS/SDP/IDD) 산출물에 **"타당성 검토"** 섹션을 포함한다. 근거 확보는 `docset-ref` 스킬의 검색 절차를 따른다 (Docset SQLite 검색 → 마크다운 캐시 → WebFetch fallback). 근거 없는 주장·권고는 지침 위반이다.
 - **변경 영향 기록 (Change Impact Log, 필수):** analyze/preplan 결과를 반영할 때, **변경되는 사항**, **개선점**, **왜 해야 하는지(수행 이유)**를 산출물에 필수 기록한다. 변경 사항만 나열하고 이유를 생략하는 것은 지침 위반이다.
 - **산출물 유연성 (Flexible Deliverables):** 작업 성격에 따라 `analyze / plan / result` 중 필요한 단계만 작성한다. 분석 단독 세션은 `analyze.md` 하나로, 작은 구현 세션은 `result.md` 하나로 완결할 수 있다. 3종 쌍(analyze+plan+result)은 구현 규모가 큰 다단계 작업에만 요구된다.
