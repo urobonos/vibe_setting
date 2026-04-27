@@ -402,9 +402,9 @@ def execute_with_failover(query, params=None, is_write=False):
                 raise
 ```
 
-### mysql8-skill 연동
+### mysql8 연동
 
-Lambda에서 Aurora 쿼리 작성 시에도 `mysql8-skill`의 규칙을 동일하게 적용한다:
+Lambda에서 Aurora 쿼리 작성 시에도 `mysql8`의 규칙을 동일하게 적용한다:
 - 표준 ANSI SQL 우선
 - `SELECT *` 금지, 필요 컬럼만 명시
 - N+1 방지
@@ -653,7 +653,7 @@ deploy/
 
 ### 주석 규칙
 
-Lambda Python 코드에도 `php8.x+ci4.x-skill` §5(주석 규칙)와 동일한 규칙을 적용한다:
+Lambda Python 코드에도 `php8` §5(주석 규칙)와 동일한 규칙을 적용한다:
 - 모든 함수에 docstring 필수 (`@param`, `@return` 포함)
 - 복잡한 로직에 단계별 설명 주석
 - 추상화 시 사유 주석

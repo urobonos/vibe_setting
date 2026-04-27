@@ -171,7 +171,7 @@ curl -s -X POST "$BASE/pages" \
   }'
 ```
 
-#### 페이지 내용 덮어쓰기 (replace_content)
+#### 페이지 내용 덮어쓰기 (블록 전체 교체)
 ```bash
 # 1단계: 기존 블록 삭제
 curl -s "$BASE/blocks/{page_id}/children?page_size=100" \
