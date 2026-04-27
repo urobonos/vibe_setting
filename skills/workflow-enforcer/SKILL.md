@@ -77,6 +77,26 @@ S등급 작업은 다음 두 가지 경로 중 하나를 선택한다:
 
 **모든 등급 공통:** Gate-3 (Checkpoint), Gate-6 (Feedback Loop), Gate-7 (Result) 항상 적용.
 
+### Gate 0→2 묶음 승인 Fast-Track (M/L 코드 작업 입력 절감)
+
+`gate-approve.sh` (UserPromptSubmit hook) 가 묶음 승인 키워드를 매칭하면 Gate 0 또는 1 에서 곧장 Gate 2 로 점프한다. analyze.md 와 plan.md 를 한 응답에 묶어 보고한 뒤 사용자가 한 번에 승인하는 패턴을 지원하기 위함이다.
+
+**매칭 키워드 (정규식):**
+
+| 언어 | 패턴 |
+|------|------|
+| 한국어 | `분석.{0,3}계획`, `계획.{0,3}분석`, `둘.?다`, `한.?번에`, `한꺼번에`, `묶어서`, `통째`, `모두.{0,3}(진행\|승인\|ok\|확인)`, `전체.{0,3}(진행\|승인\|ok\|확인)` |
+| 영어 | `(all\|both)\s+(ok\|okay\|yes\|approve\|go\|proceed\|lgtm)` |
+
+**예시:** "분석/계획 진행", "둘다 ok", "한번에 승인", "묶어서 진행", "all ok", "both approve"
+
+**적용 조건:**
+- Claude 는 analyze + plan 을 동일 응답에 함께 보고해야 fast-track 입력이 의미를 가진다. plan 미보고 상태에서 사용자가 "한번에 진행"을 입력해도 hook 은 Gate 2 로 올리지만, **task-docs 단계 문서 검증** (analyze.md / plan.md / result.md 중 1종 이상 존재) 을 통과하지 못하면 Edit/Write 가 차단된다.
+- §3 Checkpoint 5조건은 본 fast-track 으로 우회되지 않는다 (`dangerous-ops-guard` 별도 hook).
+- Gate-V1, Gate-3, Gate-6, Gate-7 는 동일하게 적용된다 (fast-track 은 Gate-1·Gate-2 통합 효과만 제공).
+
+**보안:** Gate 0→2 점프 시에도 task-docs 검증 조건은 동일 (`gate-approve.sh` 의 `[ "$CURRENT" -lt 2 ] && [ "$NEW_LEVEL" -eq 2 ]`). 단계 문서 누락 시 차단되어 산출물 우회는 불가능하다.
+
 ### 산출물 유연성 (Flexible Deliverables) 예외
 
 CLAUDE.md §4 Guardrails "Flexible Deliverables" 와 정합. **작업 성격이 단일 단계로 완결 가능한 경우** Gate 적용을 생략할 수 있다. 단, Gate-3/6/7 은 항상 유지한다.

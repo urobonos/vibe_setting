@@ -95,14 +95,32 @@ if echo "$PROMPT" | grep -qE '^[0-9]+$'; then
   APPROVED=true
 fi
 
+# 묶음 승인 키워드 (gate 0→2 fast-track)
+# 분석/계획을 한 응답에 묶어 보고한 뒤 한 번에 승인하는 패턴 지원.
+# - 한국어: "분석+계획 ok", "분석/계획 진행", "둘다 ok", "한번에 진행", "묶어서 ok", "통째로", "모두/전체 진행"
+# - 영어:   "all ok", "both ok", "approve all"
+BUNDLED_APPROVED=false
+if echo "$LOWER_PROMPT" | grep -qE '(분석.{0,3}계획|계획.{0,3}분석|둘.?다|한.?번에|한꺼번에|묶어서|통째|모두.{0,3}(진행|승인|ok|확인)|전체.{0,3}(진행|승인|ok|확인))'; then
+  APPROVED=true
+  BUNDLED_APPROVED=true
+fi
+if echo "$LOWER_PROMPT" | grep -qE '(^|\s)(all|both)\s+(ok|okay|yes|approve|go|proceed|lgtm)'; then
+  APPROVED=true
+  BUNDLED_APPROVED=true
+fi
+
 if [ "$APPROVED" = true ]; then
   CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
-  NEW_LEVEL=$((CURRENT + 1))
-  log "APPROVE sid=$SESSION_ID prompt_len=${#PROMPT} current=$CURRENT new=$NEW_LEVEL"
+  if [ "$BUNDLED_APPROVED" = true ]; then
+    NEW_LEVEL=2
+  else
+    NEW_LEVEL=$((CURRENT + 1))
+  fi
+  log "APPROVE sid=$SESSION_ID prompt_len=${#PROMPT} current=$CURRENT new=$NEW_LEVEL bundled=$BUNDLED_APPROVED"
 
   # --- task-docs 체이닝 검증 ---
-  # gate 1→2 진입 시: analyze.md 존재 필수
-  if [ "$CURRENT" -eq 1 ] && [ "$NEW_LEVEL" -eq 2 ]; then
+  # gate → 2 진입 시(1→2 단일승인 또는 0→2 묶음승인): 단계 문서 1종 이상 필수
+  if [ "$CURRENT" -lt 2 ] && [ "$NEW_LEVEL" -eq 2 ]; then
     TODAY=$(date +%Y%m%d)
     CWD=$(echo "$STDIN_DATA" | python3 -c "
 import json, sys
