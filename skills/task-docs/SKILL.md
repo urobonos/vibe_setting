@@ -48,6 +48,62 @@ min_claude_md_version: "4.0"
 
 **specs/** 는 IEEE 공식 산출물(SRS/SDD/IDD/SDP/STP/STD) 전용 경로로, `tasks/` · `output/` 과 별개다.
 
+## 산출물 네이밍 규칙 (파일명 규칙)
+
+산출물 파일명은 **탐색 가능성(searchability)** + **의미 자체완결성(self-describing)** 을 확보하도록 명명한다. 제네릭 단독 이름은 금지한다.
+
+### `output/{topic-slug}/` 하위 파일명 규칙
+
+**형식:** `{topic-slug}-{type}.md` (kebab-case)
+
+- `{topic-slug}`: 주제를 명확히 나타내는 kebab-case 식별자. 부모 폴더명과 **정확히 일치하거나 확장**(prefix 포함) 한다. 주제에 서비스명·도메인·작업 대상이 포함되면 함께 기입한다.
+- `{type}`: 문서 유형 접미사. 허용 값 (확장 가능):
+  - `analysis` — 분석 문서
+  - `report` — 리포트·현황 보고
+  - `recommendation` / `final-recommendation` — 권고안
+  - `comparison` — 비교·대조
+  - `guide` / `deployment-guide` — 가이드·운영 절차
+  - `proposal` — 제안서
+  - `reflection` / `checklist` — 회고·체크리스트
+  - `summary` — 요약 (주제별 폴더 안에서만 허용)
+
+### 금지 패턴 (generic 단독 이름)
+
+다음 이름은 파일명만으로는 주제 식별이 불가능하므로 차단한다:
+
+- `analysis.md`, `analyze.md`
+- `result.md`, `report.md`, `recommendation.md`
+- `comparison.md`, `guide.md`, `proposal.md`, `summary.md`
+- `doc.md`, `notes.md`, `readme.md` (output 하위 기준)
+
+> 예외: `tasks/YYYYMMDD/{작업명}/` 하위의 `analyze.md` / `plan.md` / `result.md` 는 3-Team 워크플로우 고정 패턴이므로 본 규칙의 영향을 받지 않는다. `tasks/YYYYMMDD/summary.md`, `tasks/history.md` 도 동일하게 예외.
+
+### 올바른 예시
+
+```
+output/global-domain-architecture/hongcafe-global-domain-cross-region-sso-analysis.md
+output/architecture-nextjs-ci4-bff/architecture-nextjs-ci4-bff-analysis.md
+output/global-architecture-analysis/hongcafe-global-architecture-final-recommendation.md
+output/global-architecture-analysis/hongcafe-global-multiregion-routing-report.md
+output/nginx-geoip2-jp-kr-redirect/nginx-geoip2-jp-kr-redirect-analysis.md
+output/nginx-geoip2-jp-kr-redirect/nginx-geoip2-jp-kr-redirect-deployment-guide.md
+```
+
+### 다중 파일이 한 주제 폴더에 있을 때
+
+한 주제에 여러 산출물이 생길 수 있다(분석 + 권고 + 가이드 등). 같은 `{topic-slug}` prefix 를 공유하되 `{type}` 만 달리 한다.
+
+```
+output/hongcafe-sso-migration/
+├── hongcafe-sso-migration-analysis.md
+├── hongcafe-sso-migration-recommendation.md
+└── hongcafe-sso-migration-deployment-guide.md
+```
+
+### 검증
+
+`~/.claude/hooks/output-naming-check.sh` 가 PreToolUse:Write|Edit 에서 이 규칙을 강제한다. 위반 시 exit 2 로 차단한다.
+
 ## 공통 규칙
 
 1. **날짜별·작업별 누적 보관한다** — 기존 파일을 덮어쓰지 않는다. 새 작업마다 새 서브디렉토리를 생성한다.
@@ -115,9 +171,9 @@ min_claude_md_version: "4.0"
 │   └── YYYYMMDD/
 │       ├── summary.md                ← 일일 작업 요약
 │       └── {작업명}/
-│           ├── {작업명}-analyze.md   ← Team 1 (Analyze) 분석 결과
-│           ├── {작업명}-plan.md      ← Team 2 (Plan) 실행 계획 + Blueprint
-│           └── {작업명}-result.md    ← Team 3 (Execute) 완료 결과
+│           ├── analyze.md             ← Team 1 (Analyze) 분석 결과
+│           ├── plan.md                ← Team 2 (Plan) 실행 계획 + Blueprint
+│           └── result.md              ← Team 3 (Execute) 완료 결과
 ├── output/
 │   └── {제목}/                       ← 보고용 산출물 (kebab-case 주제별 폴더)
 │       └── {파일명}.md
@@ -135,7 +191,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 ---
 
-## 1. Analyze ({작업명}/{작업명}-analyze.md)
+## 1. Analyze ({작업명}/analyze.md)
 
 Team 1 (Analyze)의 산출물. 코드 분석, 영향 범위 조사, 다각적 관점 분석 결과를 기록한다.
 

@@ -653,7 +653,7 @@ deploy/
 
 ### 주석 규칙
 
-Lambda Python 코드에도 `php8.x+ci4.x-skill` §6과 동일한 주석 규칙을 적용한다:
+Lambda Python 코드에도 `php8.x+ci4.x-skill` §5(주석 규칙)와 동일한 규칙을 적용한다:
 - 모든 함수에 docstring 필수 (`@param`, `@return` 포함)
 - 복잡한 로직에 단계별 설명 주석
 - 추상화 시 사유 주석

@@ -23,7 +23,9 @@ min_claude_md_version: "4.0"
 >
 > **허용 트리거:** 사용자가 "노션에 반영", "Notion 동기화", "notion 업데이트", "노션 페이지 조회", "노션 검색" 등 명시적으로 요청한 경우.
 >
-> **금지:** 사용자 요청 없이 Notion API 호출(curl `api.notion.com`, `mcp__notion*`) 선제 실행. 지침 수정에 대한 자동 동기화.
+> **금지:** 사용자 요청 없이 Notion API 호출(curl `api.notion.com`) 선제 실행. 지침 수정에 대한 자동 동기화.
+>
+> **MCP 도구 폐기:** `mcp__notion*` / `notion-fetch` / `replace_content` / `update_content` 계열 MCP 도구는 글로벌 CLAUDE.md §File Paths 에서 제거됨. 본 스킬(curl + Bearer Token)이 단일 진입점이다.
 >
 > **애매한 경우:** Checkpoint로 사용자 승인을 먼저 받는다. 승인 없는 Notion 쓰기는 지침 위반.
 

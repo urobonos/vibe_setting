@@ -6,7 +6,7 @@ description: >
   레이어: Controller → Service → Repository → Model + Entity/VO.
   모듈 간 직접 클래스 참조 금지(Interface 통신만), service() DI 강제,
   CI 4.7 Service Discovery 활용. QB 우선, raw query는 Repository에서만 named binding.
-  신규 모듈은 부분 구현 절대 금지 — 8가지 산출물이 항상 함께 생성되어야 한다.
+  신규 모듈은 부분 구현 절대 금지 — 9가지 산출물이 항상 함께 생성되어야 한다.
 triggers:
   - "API 만들어줘", "엔드포인트 추가", "CRUD 만들어줘"
   - "CI4 컨트롤러 만들어줘", "PHP 모델 만들어줘", "서비스 만들어줘"
@@ -149,12 +149,12 @@ public $psr4 = [
 ```
 
 각 모듈 네임스페이스 형태:
-- `App\App\Modules\Order\Controllers`
-- `App\App\Modules\Order\Services`
-- `App\App\Modules\Order\Repositories`
-- `App\App\Modules\Order\Models`
-- `App\App\Modules\Order\Entities`
-- `App\App\Modules\Order\ValueObjects`
+- `App\Modules\Order\Controllers`
+- `App\Modules\Order\Services`
+- `App\Modules\Order\Repositories`
+- `App\Modules\Order\Models`
+- `App\Modules\Order\Entities`
+- `App\Modules\Order\ValueObjects`
 - `App\Modules\Order\Interfaces`
 - `App\Modules\Order\Exceptions`
 
@@ -174,13 +174,13 @@ public $psr4 = [
 **금지:**
 ```php
 // ✗ 다른 모듈의 구체 클래스를 직접 참조
-use App\App\Modules\Payment\Services\PaymentService;
+use App\Modules\Payment\Services\PaymentService;
 ```
 
 **허용:**
 ```php
 // ✓ 다른 모듈의 Interface를 참조
-use App\App\Modules\Payment\Interfaces\PaymentServiceInterface;
+use App\Modules\Payment\Interfaces\PaymentServiceInterface;
 ```
 
 ### 모듈 공개 API
@@ -205,14 +205,14 @@ CI 4.7.0+에서는 모듈별 `Config/Services.php`가 **자동 발견**된다.
 ### 모듈별 DI 등록 (`Modules/{BC}/Config/Services.php`)
 
 ```php
-namespace App\App\Modules\Order\Config;
+namespace App\Modules\Order\Config;
 
 use CodeIgniter\Config\BaseService;
-use App\App\Modules\Order\Interfaces\OrderServiceInterface;
-use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
-use App\App\Modules\Order\Services\OrderService;
-use App\App\Modules\Order\Repositories\OrderRepository;
-use App\App\Modules\Order\Models\OrderModel;
+use App\Modules\Order\Interfaces\OrderServiceInterface;
+use App\Modules\Order\Interfaces\OrderRepositoryInterface;
+use App\Modules\Order\Services\OrderService;
+use App\Modules\Order\Repositories\OrderRepository;
+use App\Modules\Order\Models\OrderModel;
 
 class Services extends BaseService
 {
@@ -372,7 +372,7 @@ namespace App\Modules\Commerce\Services;
 |------|-----------|-----------|
 | **클래스** | 필수 | 클래스명 + 역할 설명 (여러 줄 허용) |
 | **public/protected 메서드** | 필수 | 목적 한 줄 + `@param` + `@return` + `@throws` |
-| **private 메서드** | 권장 | 목적 한 줄 + `@param` + `@return` |
+| **private 메서드** | 필수 | 목적 한 줄 + `@param` + `@return` |
 | **Interface** | 필수 | 추상화 사유 + 메서드별 `@param`/`@return` |
 | **복잡한 비즈니스 로직** | 필수 | 단계별 인라인 설명 |
 | **raw query** | 필수 | QB로 불가능한 사유 명시 |
@@ -440,10 +440,10 @@ $formatted = $now->format('Y-m-d H:i:s');
 **`service()` 함수로 Service를 주입받는다** — `new` 금지
 
 ```php
-namespace App\App\Modules\Order\Controllers;
+namespace App\Modules\Order\Controllers;
 
 use CodeIgniter\RESTful\ResourceController;
-use App\App\Modules\Order\Interfaces\OrderServiceInterface;
+use App\Modules\Order\Interfaces\OrderServiceInterface;
 use Exception;
 
 class OrderController extends ResourceController
@@ -568,10 +568,10 @@ class OrderController extends ResourceController
 **다른 모듈 참조 시 Interface 타입만 사용**
 
 ```php
-namespace App\App\Modules\Order\Services;
+namespace App\Modules\Order\Services;
 
-use App\App\Modules\Order\Interfaces\OrderServiceInterface;
-use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
+use App\Modules\Order\Interfaces\OrderServiceInterface;
+use App\Modules\Order\Interfaces\OrderRepositoryInterface;
 use Exception;
 
 class OrderService implements OrderServiceInterface
@@ -660,7 +660,7 @@ class OrderService implements OrderServiceInterface
 
 **다른 모듈 Service가 필요한 경우** — Interface로 주입:
 ```php
-use App\App\Modules\Payment\Interfaces\PaymentServiceInterface;
+use App\Modules\Payment\Interfaces\PaymentServiceInterface;
 
 class OrderService implements OrderServiceInterface
 {
@@ -691,10 +691,10 @@ if (!$db->transStatus()) {
 **Service와 Controller는 Repository 없이 DB에 접근할 수 없다.**
 
 ```php
-namespace App\App\Modules\Order\Repositories;
+namespace App\Modules\Order\Repositories;
 
-use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
-use App\App\Modules\Order\Models\OrderModel;
+use App\Modules\Order\Interfaces\OrderRepositoryInterface;
+use App\Modules\Order\Models\OrderModel;
 
 class OrderRepository implements OrderRepositoryInterface
 {
@@ -841,7 +841,7 @@ $db->query("SELECT * FROM orders WHERE id = ?", [$id]);
 **Model은 Repository에서만 사용한다** — Service/Controller에서 직접 참조 금지
 
 ```php
-namespace App\App\Modules\Order\Models;
+namespace App\Modules\Order\Models;
 
 use CodeIgniter\Model;
 
@@ -871,7 +871,7 @@ class OrderModel extends Model
 
 ```php
 // Modules/Order/Interfaces/OrderServiceInterface.php
-namespace App\App\Modules\Order\Interfaces;
+namespace App\Modules\Order\Interfaces;
 
 /**
  * [추상화 사유] 모듈 경계 통신을 위한 공개 Interface.
@@ -889,7 +889,7 @@ interface OrderServiceInterface
 
 ```php
 // Modules/Order/Interfaces/OrderRepositoryInterface.php
-namespace App\App\Modules\Order\Interfaces;
+namespace App\Modules\Order\Interfaces;
 
 interface OrderRepositoryInterface
 {
@@ -909,9 +909,9 @@ interface OrderRepositoryInterface
 **외부 의존성 금지** — DB, HTTP, Framework 클래스를 import하지 않는다
 
 ```php
-namespace App\App\Modules\Order\Entities;
+namespace App\Modules\Order\Entities;
 
-use App\App\Modules\Order\ValueObjects\Money;
+use App\Modules\Order\ValueObjects\Money;
 use InvalidArgumentException;
 
 /**
@@ -965,7 +965,7 @@ class Order
 **외부 의존성 금지** — 순수 PHP만 사용
 
 ```php
-namespace App\App\Modules\Shared\ValueObjects;
+namespace App\Modules\Shared\ValueObjects;
 
 use InvalidArgumentException;
 
@@ -1069,8 +1069,8 @@ tests/
 ```php
 namespace Tests\Unit\Modules\Order;
 
-use App\App\Modules\Order\Services\OrderService;
-use App\App\Modules\Order\Interfaces\OrderRepositoryInterface;
+use App\Modules\Order\Services\OrderService;
+use App\Modules\Order\Interfaces\OrderRepositoryInterface;
 use CodeIgniter\Test\CIUnitTestCase;
 
 class OrderServiceTest extends CIUnitTestCase

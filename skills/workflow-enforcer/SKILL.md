@@ -77,6 +77,18 @@ S등급 작업은 다음 두 가지 경로 중 하나를 선택한다:
 
 **모든 등급 공통:** Gate-3 (Checkpoint), Gate-6 (Feedback Loop), Gate-7 (Result) 항상 적용.
 
+### 산출물 유연성 (Flexible Deliverables) 예외
+
+CLAUDE.md §4 Guardrails "Flexible Deliverables" 와 정합. **작업 성격이 단일 단계로 완결 가능한 경우** Gate 적용을 생략할 수 있다. 단, Gate-3/6/7 은 항상 유지한다.
+
+| 작업 성격 | 작성 산출물 | 적용 Gate |
+|----------|-----------|----------|
+| **분석 단독** (구현 없는 조사·리포트) | `analyze.md` 만 | Gate-1 만 |
+| **소규모 단발 구현** (S 경량 경로) | `result.md` 만 | Gate-1 (Gate-2 통합) |
+| **표준 다단계** (M/L) | analyze + plan + result 3종 | Gate-1 + Gate-2 |
+
+판단 기준: "이 작업이 별도 plan 단계 없이 분석 또는 구현 한 번으로 끝나는가?" 예 = 단일 산출물 + Gate 축약, 아니오 = 표준 3종 + Gate-1/2 둘 다.
+
 ---
 
 ## 2. 작업 수신 시 필수 체크리스트
