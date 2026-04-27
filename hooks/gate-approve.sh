@@ -2,7 +2,7 @@
 # UserPromptSubmit Hook: 사용자 승인 감지 → Gate 레벨 증가
 # Phase 3 Harness — 승인 키워드가 포함된 짧은 메시지 감지
 #
-# 승인 키워드: 진행, 승인, 확인, ok, yes, go, ㄱ, ㄱㄱ, 해, 해봐, 네, 넵, 좋아, lgtm, y, ㅇ, ㅇㅇ
+# 승인 키워드: 진행, 승인, 확인, 오케이, ok, yes, go, ㄱ, ㄱㄱ, 해, 해봐, 네, 넵, 좋아, lgtm, y, ㅇ, ㅇㅇ
 # 조건: 메시지 길이 50자 이하 + 승인 키워드 포함
 
 STDIN_DATA=$(cat)
@@ -60,7 +60,7 @@ PROMPT_LEN=${#PROMPT}
 if [ "$PROMPT_LEN" -gt 50 ]; then
   LOWER_CHECK=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
   HAS_APPROVAL=false
-  if echo "$LOWER_CHECK" | grep -qE '(진행|승인|확인|해봐|해줘|좋아|좋습니다|넵|네|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|고고)'; then
+  if echo "$LOWER_CHECK" | grep -qE '(진행|승인|확인|오케이|오키|해봐|해줘|좋아|좋습니다|넵|네|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|고고)'; then
     HAS_APPROVAL=true
   fi
   if echo "$LOWER_CHECK" | grep -qE '(^|\s)(ok|okay|yes|y|go|proceed|approve|lgtm|sure)(\s|$)'; then
@@ -81,7 +81,7 @@ LOWER_PROMPT=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
 APPROVED=false
 
 # 한국어 승인
-if echo "$LOWER_PROMPT" | grep -qE '(진행|승인|확인|해봐|해줘|좋아|좋습니다|넵|네|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|고고)'; then
+if echo "$LOWER_PROMPT" | grep -qE '(진행|승인|확인|오케이|오키|해봐|해줘|좋아|좋습니다|넵|네|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|고고)'; then
   APPROVED=true
 fi
 
