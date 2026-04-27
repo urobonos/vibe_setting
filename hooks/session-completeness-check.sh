@@ -109,8 +109,8 @@ if [ "$CURRENT" -ge 2 ] && [ "$IS_NONCODE_ONLY" = false ]; then
 
   if [ -z "$STAGE_DOC" ] && [ -z "$OUTPUT_DOC" ]; then
     WARNINGS="${WARNINGS}\n[BLOCKED] 오늘자 산출물이 없습니다. 아래 중 1종 이상 필요:"
-    WARNINGS="${WARNINGS}\n  - (코드 작업) ~/.claude/docs/${PRODUCT}/tasks/$TODAY/{작업명}/{analyze|plan|result}.md"
-    WARNINGS="${WARNINGS}\n  - (분석·문서) ~/.claude/docs/${PRODUCT}/output/{제목}/*.md"
+    WARNINGS="${WARNINGS}\n  - (코드 작업) ~/.claude/docs/${PRODUCT}/tasks/$TODAY/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md"
+    WARNINGS="${WARNINGS}\n  - (분석·문서) ~/.claude/docs/${PRODUCT}/output/{제목}/{yyyy-mm-dd}-{제목}-{type}.md"
     BLOCKED=true
   fi
 fi

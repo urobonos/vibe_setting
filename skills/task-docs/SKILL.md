@@ -3,7 +3,7 @@ name: task-docs
 description: >
   작업 문서 생명주기(분석→계획→결과)를 ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/ 디렉토리에 표준 템플릿으로 생성한다.
   일일 작업 요약을 ~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md에, 전체 이력을 ~/.claude/docs/{product}/tasks/history.md에 기록한다.
-  {작업명}-analyze.md, {작업명}-plan.md, {작업명}-result.md 3종 문서를 작업별 서브디렉토리에서 관리한다.
+  모든 문서 파일은 `{yyyy-mm-dd}-{작업명}-` prefix 를 필수로 가진다 (예: 2026-04-27-pay-refactor-analyze.md). 단계 문서는 analyze, plan, result 3종.
   보고용 산출물은 ~/.claude/docs/{product}/output/{제목}/{파일명}.md에, 소프트웨어 개발 산출물(SDP/SRS/SDD/IDD/STP/STD)은 ~/.claude/docs/{product}/specs/에 생성·관리한다.
   {product}는 basename $CWD (.claude→claude-harness 예외). 규칙은 글로벌 CLAUDE.md §File Paths 참조.
 triggers:
@@ -38,7 +38,7 @@ min_claude_md_version: "4.0"
 |---|---|---|
 | **트리거 프롬프트** | 코드 작성·수정·리팩토링·디버깅·기능 추가·설정 변경 등 **코드/설정에 변경을 일으키는 요청** | 분석·조사·비교·리포트·문서 정리 등 **코드 변경 없이 결과물만 산출하는 요청** |
 | **예시 프롬프트** | "회원가입 API 만들어줘", "버그 고쳐줘", "이 메서드 리팩토링해줘", "훅 추가해줘" | "이번주 진행내용 리포트", "아키텍처 패턴 비교해줘", "SNS 플로우 문서로 정리해줘", "분석해줘" |
-| **산출물 구조** | `YYYYMMDD/{작업명}/analyze.md + plan.md + result.md` | `{제목}/{파일명}.md` (주제별 폴더, 하위 파일 여러 개 가능) |
+| **산출물 구조** | `YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze\|plan\|result}.md` | `{제목}/{yyyy-mm-dd}-{제목}-{type}.md` (주제별 폴더, 하위 파일 여러 개 가능) |
 | **Workflow** | 3-Team Workflow (Analyze → Plan → Execute) 적용 | 3-Team 비적용, 단일/다중 문서로 완결 |
 | **Gate 요구** | ≥ 2 (실행 계획 승인 필요) | ≥ 1 (분석 방향 승인) |
 | **history.md 기록** | 필수 | 선택 (규모가 크거나 의사결정 영향이 있으면 기록) |
@@ -50,11 +50,38 @@ min_claude_md_version: "4.0"
 
 ## 산출물 네이밍 규칙 (파일명 규칙)
 
-산출물 파일명은 **탐색 가능성(searchability)** + **의미 자체완결성(self-describing)** 을 확보하도록 명명한다. 제네릭 단독 이름은 금지한다.
+산출물 파일명은 **탐색 가능성(searchability)** + **시간성(chronology)** + **의미 자체완결성(self-describing)** 을 확보하도록 명명한다. 모든 문서는 **`{yyyy-mm-dd}-` 날짜 prefix 를 필수로** 가진다. 제네릭 단독 이름은 금지한다.
+
+### 공통 필수 prefix
+
+**모든 문서 파일은 다음 prefix 를 가진다:**
+
+- `tasks/` 하위: `{yyyy-mm-dd}-{작업명}-{type}.md`
+- `output/` 하위: `{yyyy-mm-dd}-{topic-slug}-{type}.md`
+
+`{yyyy-mm-dd}` 는 작업 시작일(파일 최초 생성일) ISO-8601 표기 (예: `2026-04-27`). 파일을 같은 날 다시 수정하더라도 prefix 는 유지한다.
+
+### `tasks/YYYYMMDD/{작업명}/` 하위 파일명 규칙
+
+**형식:** `{yyyy-mm-dd}-{작업명}-{type}.md`
+
+- `{type}`: 단계 식별자. 고정 값:
+  - `analyze` — Team 1 (Analyze) 분석 결과
+  - `plan` — Team 2 (Plan) 실행 계획
+  - `result` — Team 3 (Execute) 완료 결과
+
+**예시:**
+```
+tasks/20260427/pay-refactor/2026-04-27-pay-refactor-analyze.md
+tasks/20260427/pay-refactor/2026-04-27-pay-refactor-plan.md
+tasks/20260427/pay-refactor/2026-04-27-pay-refactor-result.md
+```
+
+> 예외: `tasks/YYYYMMDD/summary.md` (일일 요약) 와 `tasks/history.md` (전체 이력 인덱스) 는 단일 고정 파일이므로 prefix 가 붙지 않는다.
 
 ### `output/{topic-slug}/` 하위 파일명 규칙
 
-**형식:** `{topic-slug}-{type}.md` (kebab-case)
+**형식:** `{yyyy-mm-dd}-{topic-slug}-{type}.md` (kebab-case)
 
 - `{topic-slug}`: 주제를 명확히 나타내는 kebab-case 식별자. 부모 폴더명과 **정확히 일치하거나 확장**(prefix 포함) 한다. 주제에 서비스명·도메인·작업 대상이 포함되면 함께 기입한다.
 - `{type}`: 문서 유형 접미사. 허용 값 (확장 가능):
@@ -67,49 +94,45 @@ min_claude_md_version: "4.0"
   - `reflection` / `checklist` — 회고·체크리스트
   - `summary` — 요약 (주제별 폴더 안에서만 허용)
 
-### 금지 패턴 (generic 단독 이름)
+### 금지 패턴
 
-다음 이름은 파일명만으로는 주제 식별이 불가능하므로 차단한다:
+다음 이름은 시간성·주제 식별이 불가능하므로 차단한다:
 
-- `analysis.md`, `analyze.md`
-- `result.md`, `report.md`, `recommendation.md`
-- `comparison.md`, `guide.md`, `proposal.md`, `summary.md`
-- `doc.md`, `notes.md`, `readme.md` (output 하위 기준)
+- 날짜 prefix 누락: `analysis.md`, `report.md`, `pay-refactor-analyze.md` 등 (날짜가 앞에 없는 모든 파일)
+- 제네릭 단독 이름: `analysis.md`, `analyze.md`, `result.md`, `report.md`, `recommendation.md`, `comparison.md`, `guide.md`, `proposal.md`, `summary.md`, `doc.md`, `notes.md`, `readme.md`
 
-> 예외: `tasks/YYYYMMDD/{작업명}/` 하위의 `analyze.md` / `plan.md` / `result.md` 는 3-Team 워크플로우 고정 패턴이므로 본 규칙의 영향을 받지 않는다. `tasks/YYYYMMDD/summary.md`, `tasks/history.md` 도 동일하게 예외.
-
-### 올바른 예시
+### 올바른 예시 (output/)
 
 ```
-output/global-domain-architecture/hongcafe-global-domain-cross-region-sso-analysis.md
-output/architecture-nextjs-ci4-bff/architecture-nextjs-ci4-bff-analysis.md
-output/global-architecture-analysis/hongcafe-global-architecture-final-recommendation.md
-output/global-architecture-analysis/hongcafe-global-multiregion-routing-report.md
-output/nginx-geoip2-jp-kr-redirect/nginx-geoip2-jp-kr-redirect-analysis.md
-output/nginx-geoip2-jp-kr-redirect/nginx-geoip2-jp-kr-redirect-deployment-guide.md
+output/global-domain-architecture/2026-04-20-hongcafe-global-domain-cross-region-sso-analysis.md
+output/architecture-nextjs-ci4-bff/2026-04-21-architecture-nextjs-ci4-bff-analysis.md
+output/global-architecture-analysis/2026-04-22-hongcafe-global-architecture-final-recommendation.md
+output/global-architecture-analysis/2026-04-22-hongcafe-global-multiregion-routing-report.md
+output/nginx-geoip2-jp-kr-redirect/2026-04-23-nginx-geoip2-jp-kr-redirect-analysis.md
+output/nginx-geoip2-jp-kr-redirect/2026-04-23-nginx-geoip2-jp-kr-redirect-deployment-guide.md
 ```
 
 ### 다중 파일이 한 주제 폴더에 있을 때
 
-한 주제에 여러 산출물이 생길 수 있다(분석 + 권고 + 가이드 등). 같은 `{topic-slug}` prefix 를 공유하되 `{type}` 만 달리 한다.
+한 주제에 여러 산출물이 생길 수 있다(분석 + 권고 + 가이드 등). 각 파일은 자체 생성일 prefix 를 가지며 같은 `{topic-slug}` 를 공유한다.
 
 ```
 output/hongcafe-sso-migration/
-├── hongcafe-sso-migration-analysis.md
-├── hongcafe-sso-migration-recommendation.md
-└── hongcafe-sso-migration-deployment-guide.md
+├── 2026-04-15-hongcafe-sso-migration-analysis.md
+├── 2026-04-17-hongcafe-sso-migration-recommendation.md
+└── 2026-04-22-hongcafe-sso-migration-deployment-guide.md
 ```
 
 ### 검증
 
-`~/.claude/hooks/output-naming-check.sh` 가 PreToolUse:Write|Edit 에서 이 규칙을 강제한다. 위반 시 exit 2 로 차단한다.
+`~/.claude/hooks/output-naming-check.sh` 가 PreToolUse:Write|Edit 에서 이 규칙을 강제한다 (date prefix 누락 + 제네릭 이름 차단). 위반 시 exit 2 로 차단한다.
 
 ## 공통 규칙
 
 1. **날짜별·작업별 누적 보관한다** — 기존 파일을 덮어쓰지 않는다. 새 작업마다 새 서브디렉토리를 생성한다.
-2. **보고용 문서 산출물:** 사용자 요청 보고서는 `~/.claude/docs/{product}/output/{제목}/{파일명}.md` 형식으로 생성. `~/.claude/docs/{product}/tasks/`와 혼용하지 않는다.
+2. **보고용 문서 산출물:** 사용자 요청 보고서는 `~/.claude/docs/{product}/output/{제목}/{yyyy-mm-dd}-{제목}-{type}.md` 형식으로 생성. `~/.claude/docs/{product}/tasks/`와 혼용하지 않는다.
 3. `{작업명}`은 작업 내용을 간결하게 표현하는 kebab-case 이름으로 한다 (예: `pay-refactor`, `callee-migration`).
-4. `YYYYMMDD`는 작업 시작일 기준이다 (예: `20260324`).
+4. `YYYYMMDD`는 폴더명용 작업 시작일(예: `20260324`), `{yyyy-mm-dd}`는 파일명 prefix 용 ISO-8601 표기(예: `2026-03-24`). 두 형식이 같은 날짜를 가리키도록 일치시킨다.
 5. 사용자에게 보고하는 동시에 파일에도 동일 내용을 기록한다. 채팅으로만 보고하고 파일 생성을 누락하는 것은 지침 위반이다.
 6. **팀 간 산출물 체이닝:** 다단계 작업에서 Team 2는 `analyze.md`를 Read한 뒤 기반으로 plan을 작성하고, Team 3는 `plan.md`를 Read한 뒤 기반으로 실행한다. 단, 분석 단독/소규모 작업은 단일 문서(예: `analyze.md`만, 또는 `result.md`만)로 완결할 수 있다. 작업 규모에 맞는 단계만 작성한다.
 7. **체크리스트 최대 생성 원칙:** 모든 문서(analyze, plan, result)에 검증 가능한 체크리스트(`- [ ]`)를 최대한 생성한다. 분석 항목, 작업 단계, 검증 조건, 보안 점검, 테스트 케이스 등 체크박스로 표현 가능한 항목은 전부 체크리스트로 작성한다. 서술형 나열보다 체크리스트를 우선한다.
@@ -171,12 +194,12 @@ output/hongcafe-sso-migration/
 │   └── YYYYMMDD/
 │       ├── summary.md                ← 일일 작업 요약
 │       └── {작업명}/
-│           ├── analyze.md             ← Team 1 (Analyze) 분석 결과
-│           ├── plan.md                ← Team 2 (Plan) 실행 계획 + Blueprint
-│           └── result.md              ← Team 3 (Execute) 완료 결과
+│           ├── {yyyy-mm-dd}-{작업명}-analyze.md   ← Team 1 (Analyze) 분석 결과
+│           ├── {yyyy-mm-dd}-{작업명}-plan.md      ← Team 2 (Plan) 실행 계획 + Blueprint
+│           └── {yyyy-mm-dd}-{작업명}-result.md    ← Team 3 (Execute) 완료 결과
 ├── output/
-│   └── {제목}/                       ← 보고용 산출물 (kebab-case 주제별 폴더)
-│       └── {파일명}.md
+│   └── {제목}/                                    ← 보고용 산출물 (kebab-case 주제별 폴더)
+│       └── {yyyy-mm-dd}-{제목}-{type}.md          ← 날짜 prefix 필수
 └── specs/                            ← 소프트웨어 개발 산출물 (SDP/SRS/SDD/IDD/STP/STD)
     └── {모듈}-{문서타입}.md
 ```
@@ -191,7 +214,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 ---
 
-## 1. Analyze ({작업명}/analyze.md)
+## 1. Analyze ({작업명}/{yyyy-mm-dd}-{작업명}-analyze.md)
 
 Team 1 (Analyze)의 산출물. 코드 분석, 영향 범위 조사, 다각적 관점 분석 결과를 기록한다.
 
@@ -426,7 +449,7 @@ Team 1 (Analyze)의 산출물. 코드 분석, 영향 범위 조사, 다각적 �
 
 ---
 
-## 2. Plan ({작업명}/{작업명}-plan.md)
+## 2. Plan ({작업명}/{yyyy-mm-dd}-{작업명}-plan.md)
 
 Team 2 (Plan)의 산출물. analyze.md 기반으로 실행 계획, Blueprint, 작업 분해를 기록한다.
 
@@ -562,7 +585,7 @@ Team 2 (Plan)의 산출물. analyze.md 기반으로 실행 계획, Blueprint, �
 
 ---
 
-## 3. Result ({작업명}/{작업명}-result.md)
+## 3. Result ({작업명}/{yyyy-mm-dd}-{작업명}-result.md)
 
 Team 3 (Execute) 완료 후 결과를 기록한다.
 
