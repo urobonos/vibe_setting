@@ -38,9 +38,10 @@ tasks/
 *.token
 *.config
 
-# Large assets (docsets + sqlite index)
-docs/references/*.docset/
-docs/references/*.sqlite
+# Docs 산출물 루트 — 로컬 전용 (tasks/output/specs/references 전체)
+docs/
+
+# Large assets
 skills.zip
 
 # Cache / temp
@@ -70,9 +71,6 @@ scripts/extract_*.sh
 scripts/insert_samples.py
 scripts/build_schema_db.py
 scripts/count_rows.sh
-docs/references/hongcafe-*.db
-docs/references/hongcafe-*.db.bak.*
-docs/output/signup-flow-analysis/
 
 # Backup files (rollback safety copies)
 *.bak
