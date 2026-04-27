@@ -62,7 +62,8 @@
       "Bash(rmdir /c/Users/PV/.claude/docs/work-history)",
       "Bash(cd *)",
       "Bash(cp __TRACKED_VAR__/user_profile.md __TRACKED_VAR__/user_profile.md)",
-      "Bash(rm __TRACKED_VAR__/user_profile.md)"
+      "Bash(rm __TRACKED_VAR__/user_profile.md)",
+      "PowerShell($path = \"C:\\\\Users\\\\PV\\\\.claude\\\\docs\\\\기획안\\\\홍카페_글로벌_통합버전\\(프론트_일본\\)화면설계서\\(v0.0.1\\)_260120_김희나.pdf\"; $bytes = [System.IO.File]::ReadAllBytes\\($path\\); $text = [System.Text.Encoding]::ASCII.GetString\\($bytes\\); $count1 = \\([regex]::Matches\\($text, \"/Count\\\\s+\\\\d+\"\\)\\).Count; $matches1 = [regex]::Matches\\($text, \"/Count\\\\s+\\(\\\\d+\\)\"\\); foreach\\($m in $matches1\\){ Write-Output $m.Value })"
     ]
   }
 }
