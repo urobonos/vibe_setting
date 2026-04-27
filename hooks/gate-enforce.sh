@@ -86,6 +86,14 @@ except:
     exit 0
   fi
 
+  # docs/output/ — 분석·문서 산출물 경로 (게이트 면제, Gate-0 직행)
+  # CLAUDE.md §File Paths: output/ = 분석·리서치 전용 경로, 코드 변경 없음.
+  # "분석해줘", "리포트 만들어줘" 같은 요청에서 Gate-1 승인 절차 없이 즉시 작성 허용.
+  # 글로벌 `~/.claude/docs/{product}/output/` 포함, 과거 프로젝트 로컬 `docs/output/` 도 호환.
+  if echo "$FILE_PATH" | grep -qE '(^|/)docs/([^/]+/)?output/'; then
+    exit 0
+  fi
+
   # 비코드 경로 판별
   IS_NON_CODE=false
 

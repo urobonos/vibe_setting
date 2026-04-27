@@ -81,12 +81,12 @@ LOWER_PROMPT=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
 APPROVED=false
 
 # 한국어 승인
-if echo "$LOWER_PROMPT" | grep -qE '(진행|승인|확인|오케이|오키|해봐|해줘|좋아|좋습니다|넵|네|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|고고)'; then
+if echo "$LOWER_PROMPT" | grep -qE '(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응|응응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|^콜$|^콜\s)'; then
   APPROVED=true
 fi
 
 # 영어 승인
-if echo "$LOWER_PROMPT" | grep -qE '^(ok|okay|yes|y|go|proceed|approve|lgtm|sure|do it|ship it)'; then
+if echo "$LOWER_PROMPT" | grep -qE "^(ok|okay|yes|y|go|proceed|approve|lgtm|sure|do it|ship it|let.?s go|lets go|make it so|go ahead|sounds good)"; then
   APPROVED=true
 fi
 
