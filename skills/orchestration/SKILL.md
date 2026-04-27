@@ -298,7 +298,7 @@ Orchestrator → Analyst Lead spawn (Max/opus)
 **M등급:** Lead + 전원 (7명, Ops 제외)
 **L등급:** Lead + 전원 (8명, Ops 포함)
 
-**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/analyze.md`
+**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-analyze.md`
 
 **필수 포함 섹션:**
 - **타당성 검토 (Feasibility Review):** 모든 분석 권고에 앤트로픽 공식 문서, 프레임워크/라이브러리 공식 문서, 공신력 있는 기술 채널(RFC, IEEE, OWASP 등)을 근거로 제시한다. 근거 없는 주장·권고는 지침 위반.
@@ -328,7 +328,7 @@ Orchestrator → Analyst Lead spawn (Max/opus, Context_Path: analyze.md 경로)
 **S등급:** Lead + Architect + Worker (3명)
 **M/L등급:** Lead + Architect + Worker + Security (4명)
 
-**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/plan.md`
+**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-plan.md`
 
 **필수 포함 섹션:**
 - **타당성 검토 (Feasibility Review):** 모든 설계·계획에 공식 문서 기반 근거를 제시한다. 근거 없는 설계 결정은 지침 위반.
@@ -393,7 +393,7 @@ Orchestrator:
 | **M** | Lead + Worker 2 + Reviewer + Tester |
 | **L** | Lead + Worker 3 + Reviewer + Tester + Security + Performance + Ops |
 
-**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/result.md`
+**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-result.md`
 
 ### Feedback Loop 규칙
 - **Critical/High 1건+:** Worker 수정 → 재검증 (최대 3회). 3회 초과 → 사용자 에스컬레이션.
