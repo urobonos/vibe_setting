@@ -59,9 +59,11 @@ case "$LOWER_BASENAME" in
     exit 2 ;;
 esac
 
-# 2. 환경변수 파일 차단
-if [[ "$LOWER_BASENAME" == ".env" || "$LOWER_BASENAME" == .env.* ]]; then
-  echo "[BLOCKED] 환경변수 파일 수정 차단: $BASENAME — 수동으로 편집하세요." >&2
+# 2. 환경변수 파일 차단 (.env 와 환경별 변형만 차단, .env.example/.env.sample 은 허용)
+# CLAUDE.md §4 e2e 검증 — "새 env 변수 참조 시 .env.example 추가" 룰을 hook 이 막지 않도록.
+if [[ "$LOWER_BASENAME" == ".env" || "$LOWER_BASENAME" == .env.* ]] \
+   && [[ "$LOWER_BASENAME" != ".env.example" && "$LOWER_BASENAME" != ".env.sample" ]]; then
+  echo "[BLOCKED] 환경변수 파일 수정 차단: $BASENAME — 수동으로 편집하세요. (.env.example/.env.sample 은 허용)" >&2
   exit 2
 fi
 

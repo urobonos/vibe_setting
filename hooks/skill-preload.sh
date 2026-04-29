@@ -10,7 +10,9 @@ for skill_dir in "$SKILLS_DIR"/*/; do
     [[ -f "$skill_file" ]] || continue
     name=$(basename "$skill_dir")
     [[ "$name" == "audit-config" ]] && continue
-    content=$(cat "$skill_file")
+    # UTF-8 BOM 제거 — sub-agent 가 SKILL.md 재작성 시 BOM 추가하면
+    # frontmatter 파싱 깨져 description 이 `---` 으로 표시되는 회귀 방지
+    content=$(sed $'1s/^\xef\xbb\xbf//' "$skill_file")
     output="${output}
 --- SKILL: ${name} ---
 ${content}

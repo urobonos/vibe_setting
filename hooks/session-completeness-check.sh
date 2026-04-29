@@ -131,7 +131,11 @@ fi
 #       gate 리셋을 여기서 하면 승인 누적이 무효화되어 매 턴 재승인이 필요해짐.
 #       gate는 SessionStart(gate-init.sh)에서만 초기화하고, Stop에서는 건드리지 않는다.
 # echo "0" > "$GATE_FILE" 2>/dev/null   # ← 제거: 매턴 리셋 방지
-rm -f "$EDIT_FLAG" 2>/dev/null
+#
+# EDIT_FLAG 도 매 턴 정리하면 다음 hook 인 pre-idle-selfcheck.sh 가 §2 면제 분기에 걸려
+# 자가점검을 미발화시키는 결함이 발생함. SELFCHECK_DONE 플래그가 selfcheck 의 1회 제한을
+# 자체 보장하므로 EDIT_FLAG 는 정리하지 않아도 무해 (SESSION_ID 별 파일 분리).
+# rm -f "$EDIT_FLAG" 2>/dev/null   # ← 제거: selfcheck 미발화 결함 방지
 rm -f "$NONCODE_FLAG" 2>/dev/null
 rm -f "/tmp/claude_test_run_${SESSION_ID}" 2>/dev/null
 
