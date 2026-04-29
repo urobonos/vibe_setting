@@ -118,9 +118,11 @@ if echo "$COMMAND" | grep -qE '^\s*chown\s'; then
   exit 2
 fi
 
-# 6. Co-Authored-By 차단
-if echo "$LOWER_CMD" | grep -qE 'co-authored-by'; then
-  echo "[BLOCKED] Co-Authored-By 차단 — 커밋 메시지에 Co-Authored-By 라인을 포함하지 마세요." >&2
+# 6. Co-Authored-By trailer 차단 (라인 시작 + 콜론 형식만 매칭, 본문 단어 언급은 허용)
+# CLAUDE.md §4 "공동 작성자 trailer 라인 금지" SSOT 룰. trailer 형식(예: "Co-Authored-By: Claude...")만 차단.
+# 본문에 "Co-Authored-By 단일화" 같이 설명용 단어 사용은 통과 (이전 차단 false positive 회피).
+if echo "$LOWER_CMD" | grep -qE '^[[:space:]]*co-authored-by:'; then
+  echo "[BLOCKED] Co-Authored-By trailer 차단 — 커밋 메시지 끝의 Co-Authored-By: 형식 trailer 라인은 사용하지 마세요. (본문 내 단어 언급은 허용)" >&2
   exit 2
 fi
 

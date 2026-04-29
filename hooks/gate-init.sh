@@ -8,16 +8,9 @@
 #   1 = GATE1    — 분석 승인됨, 계획 단계
 #   2 = GATE2    — 계획 승인됨, Edit/Write 허용
 
-STDIN_DATA=$(cat)
-
-SESSION_ID=$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('session_id', 'default'))
-except:
-    print('default')
-" 2>/dev/null)
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
+hook_parse_session_id
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 

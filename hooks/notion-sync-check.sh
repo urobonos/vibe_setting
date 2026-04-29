@@ -6,16 +6,9 @@
 # 자동 세팅되던 SYNC_FLAG는 doc-quality.sh에서 제거됨.
 # REQUEST_FLAG가 없으면 항상 통과.
 
-STDIN_DATA=$(cat)
-
-SESSION_ID=$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('session_id', 'default'))
-except:
-    print('default')
-" 2>/dev/null)
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
+hook_parse_session_id
 
 REQUEST_FLAG="/tmp/claude_notion_request_${SESSION_ID}"
 DONE_FLAG="/tmp/claude_notion_done_${SESSION_ID}"

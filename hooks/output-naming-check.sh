@@ -17,23 +17,11 @@
 #   - tasks/history.md (전체 이력 인덱스)
 #   - specs/ 경로 (IEEE 공식 산출물 — 별도 규칙)
 
-STDIN_DATA=$(cat)
-
-# file_path 추출 (python3 우선, 실패 시 grep/sed fallback)
-FILE_PATH=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    fp = data.get('tool_input', {}).get('file_path', '')
-    print(fp.replace(chr(92), '/'))
-except Exception:
-    print('')
-" 2>/dev/null)
-
-if [ -z "$FILE_PATH" ]; then
-  # fallback
-  FILE_PATH=$(echo "$STDIN_DATA" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"file_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' | tr '\\' '/')
-fi
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
+hook_parse_file_path
+# Windows backslash → forward slash 정규화 (기존 동작 보존)
+FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
 
 # 검증 대상 경로 판정 (output/ 또는 tasks/)
 if echo "$FILE_PATH" | grep -qE '/docs/[^/]+/output/'; then

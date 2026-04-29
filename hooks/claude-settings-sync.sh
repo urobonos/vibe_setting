@@ -2,13 +2,10 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PostToolUse Hook: .claude/ 설정 파일 변경 시 git 자동 커밋+푸시
 
-STDIN_DATA=$(cat)
-FILE=$(echo "$STDIN_DATA" | grep -o '"file_path" *: *"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/')
-
-# file_path가 없으면 filePath 시도 (tool_response 구조)
-if [ -z "$FILE" ]; then
-  FILE=$(echo "$STDIN_DATA" | grep -o '"filePath" *: *"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/')
-fi
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
+hook_parse_file_path
+FILE="$FILE_PATH"
 
 if [ -z "$FILE" ]; then exit 0; fi
 

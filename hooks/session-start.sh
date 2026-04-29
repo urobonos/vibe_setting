@@ -4,10 +4,11 @@
 # python3 없이 grep/sed로 session_id를 추출하여 반복 호출 시 오버헤드 최소화
 
 SNAPSHOT_DIR="$HOME/.claude/monitoring/snapshots"
-STDIN_DATA=$(cat)
 
-# session_id 경량 추출 (python3 대신 grep+sed)
-SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id" *: *"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/')
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
+# session_id 누락 시 동작 보존 — default fallback 적용 전에 빈 값이면 exit 0
+SESSION_ID=$(hook_parse_field "session_id")
 if [ -z "$SESSION_ID" ]; then exit 0; fi
 
 SNAPSHOT_FILE="$SNAPSHOT_DIR/${SESSION_ID}.json"
