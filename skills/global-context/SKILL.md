@@ -1,12 +1,18 @@
 ---
 name: global-context
 description: >
-  글로벌 다국가 서비스 컨텍스트 스킬. 국가코드 전달, Country Resolver,
-  국가별 Config, Feature Flag, i18n, 타임존, 배포 환경 분리 규칙 정의.
+  HongCafe Global 프로젝트 전용 — 다국가 서비스 컨텍스트 스킬.
+  국가코드 전달, Country Resolver, 국가별 Config, Feature Flag,
+  i18n, 타임존, 배포 환경 분리 규칙. 다른 프로젝트(infra, frontend 외부 등)
+  에서는 본 스킬을 호출하지 않는다.
 triggers:
-  - "국가", "country", "i18n", "다국어", "타임존", "timezone"
+  - "국가" + (hongcafe / global / backend) 컨텍스트
+  - "country", "i18n", "다국어", "타임존", "timezone"
+    (hongcafe_global_* 레포 또는 ~/.claude 작업 컨텍스트일 때)
+  - "Country Resolver", "ISO 3166", "JWT claim country"
+  - "currency", "locale" (HongCafe Global 컨텍스트 동반 시)
   - "Feature Flag", "피처플래그"
-  - "배포 환경", "deploy"
+  - "배포 환경", "deploy" (HongCafe Global 한정)
   - app/Config/Countries/ 하위 파일 생성/수정 시
   - Language/ 하위 파일 생성/수정 시
 version: 1.0.0
@@ -19,6 +25,8 @@ min_claude_md_version: "4.0"
 # 글로벌 다국가 서비스 컨텍스트
 
 HongCafe Global 프로젝트의 다국가 서비스 운영에 필요한 국가 컨텍스트, 국제화, 타임존, Feature Flag, 배포 환경 분리 규칙.
+
+> **[프로젝트 한정]** 본 스킬은 HongCafe Global(`hongcafe_global_backend` / `hongcafe_global_frontend`) 프로젝트 전용. 다른 프로젝트(`infra` 외부 등) 에서 트리거 매칭 시 활성화하지 않는다. 본문에 등장하는 `app/Config/Countries/`, `Services::country()`, `tb_feature_flags`, Aurora MySQL 등은 모두 HongCafe Global 코드 패턴이다.
 
 ---
 
