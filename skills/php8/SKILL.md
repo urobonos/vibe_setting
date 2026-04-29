@@ -600,7 +600,7 @@ foreach ($moduleRoutes as $routeFile) {
 
 ## Filter 패턴 + 인증/인가 구현
 
-요청 처리 파이프라인은 다음 Filter 체인을 순차 적용한다. **정책/알고리즘/TTL 등 규격은 `security-audit` §7-1 ~ §7-10 을 SSOT** 로 따르고, **쿠키명·면제 EP 등 프로젝트 고유값은 프로젝트 `CLAUDE.md`** 를 참조한다. 본 섹션은 **코드 구현 패턴**만 다룬다.
+요청 처리 파이프라인은 다음 Filter 체인을 순차 적용한다. **정책/알고리즘/TTL 등 규격은 `security-audit` §7-2(CORS 정책)/§7-3(Cookie 보안)/§7-4(CSRF + JWT 인증 정책, JWT 저장 7-1 포함)/§7-6(암호화 규격)/§7-9(SecureHeaders 필터)/§7-10(외부 노출 API 보안 Phase 2) 를 SSOT** 로 따르고, **쿠키명·면제 EP 등 프로젝트 고유값은 프로젝트 `CLAUDE.md`** 를 참조한다. 본 섹션은 **코드 구현 패턴**만 다룬다.
 
 ### Filter 체인 순서 (고정)
 
@@ -827,7 +827,7 @@ $routes->group('api/callees', ['filter' => 'role:callee'], static function ($rou
 
 ### 참조
 
-- 정책·알고리즘·TTL 규격: `security-audit` §7-1 ~ §7-10
+- 정책·알고리즘·TTL 규격: `security-audit` §7-2(CORS 정책)/§7-3(Cookie 보안)/§7-4(CSRF + JWT 인증 정책, JWT 저장 7-1 포함)/§7-6(암호화 규격)/§7-9(SecureHeaders 필터)/§7-10(외부 노출 API 보안 Phase 2)
 - 쿠키명·면제 EP 경로 등 프로젝트 고유값: 프로젝트 `CLAUDE.md`
 - 국가 컨텍스트 Filter: `global-context` §2 Country Resolver
 

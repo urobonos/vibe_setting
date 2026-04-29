@@ -1,9 +1,25 @@
 ---
-
 name: skill-creator
+description: >
+  스킬 생성·개선·평가 메타-스킬. 새 스킬을 처음부터 만들거나, 기존 스킬을 수정·최적화하거나,
+  eval 평가로 성능을 측정한다. description 트리거 정확도 최적화도 지원.
 
-description: Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.
-
+  Create new skills, modify and improve existing skills, and measure skill performance.
+  Use when users want to create a skill from scratch, edit, or optimize an existing skill,
+  run evals to test a skill, benchmark skill performance with variance analysis,
+  or optimize a skill's description for better triggering accuracy.
+triggers:
+  - "스킬 만들기", "스킬 만들어줘", "스킬 생성"
+  - "스킬 수정", "스킬 개선", "스킬 업데이트"
+  - "스킬 평가", "skill eval", "스킬 테스트"
+  - "트리거 최적화", "description 최적화", "skill description"
+  - "스킬 패키징", "skill package", ".skill 파일"
+  - "/skill-creator"
+version: 1.0.0
+user-invocable: true
+depends_on: []
+conflicts_with: []
+min_claude_md_version: "4.0"
 ---
 
 
@@ -79,6 +95,14 @@ So please pay attention to context cues to understand how to phrase your communi
 
 
 It's OK to briefly explain terms if you're in doubt, and feel free to clarify terms with a short definition if you're unsure if the user will get it.
+
+
+
+**한국어 사용자 응답 (필수):** 한국어로 발화한 사용자에게 응답할 때는 본 스킬 본문의 영어 표현을 의역하여 한국어 존댓말("~합니다", "~하겠습니다" 등) 로 전달합니다. 명사형/평서형 종결어미("~함", "~임") 는 반말로 인식되므로 금지합니다. 글로벌 CLAUDE.md "응답 톤 (필수 / 존댓말)" 룰을 적용합니다.
+
+
+
+**Default Accept 룰 정합:** 본 스킬은 Anthropic 영어 템플릿 기반이라 "ALWAYS" / "NEVER" 같은 강제 어휘를 일부 사용하지만, 사용자 환경(글로벌 CLAUDE.md §4) 의 Default Accept 룰이 우선 적용됩니다. 즉 Claude 가 스킬 작업 중 제시하는 제안사항(리팩토링·명명·누락 처리 등) 은 사용자 별도 승인 대기 없이 반영하여 진행합니다. 단 §3 Checkpoint 5조건(비가역적 / 광범위 / 트레이드오프 / 외부 시스템 / 권한 외 접근) 은 Default Accept 에 우선 적용되어 사용자 승인 대기가 필요합니다.
 
 
 

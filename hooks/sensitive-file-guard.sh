@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PreToolUse Hook: 보호 대상 파일 Edit/Write 물리적 차단
 # Phase 1 Harness — exit 2로 도구 호출 자체를 차단
 #
