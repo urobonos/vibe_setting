@@ -93,7 +93,7 @@ except:
   if echo "$CLAUDE_FILE_PATH" | grep -qE '/\.claude/(CLAUDE\.md|MEMORY\.md|settings[^/]*\.json|keybindings\.json)$'; then
     exit 0
   fi
-  if echo "$CLAUDE_FILE_PATH" | grep -qE '/\.claude/(skills|hooks|commands|docs|agents|agent-memory|lib|memory)/'; then
+  if echo "$CLAUDE_FILE_PATH" | grep -qE '/\.claude/(skills|hooks|commands|docs|agents|agent-memory|lib|memory|bin)/'; then
     exit 0
   fi
 
