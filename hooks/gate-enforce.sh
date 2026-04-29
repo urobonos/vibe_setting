@@ -96,6 +96,10 @@ except:
   if echo "$CLAUDE_FILE_PATH" | grep -qE '/\.claude/(skills|hooks|commands|docs|agents|agent-memory|lib|memory|bin)/'; then
     exit 0
   fi
+  # auto-memory 경로 (~/.claude/projects/{session}/memory/) 면제
+  if echo "$CLAUDE_FILE_PATH" | grep -qE '/\.claude/projects/[^/]+/memory/'; then
+    exit 0
+  fi
 
   # 화이트리스트 미매칭 → 정규 gate 검증으로 fall-through
 fi
