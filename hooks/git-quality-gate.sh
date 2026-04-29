@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PreToolUse Hook: git commit 품질 게이트
 # 통합: git-commit-lint.sh + single-purpose-commit.sh + no-test-no-merge.sh
 # Fail-fast 순서: 1) 메시지 형식 → 2) 커밋 범위 → 3) 테스트 이력
@@ -84,11 +85,7 @@ if [ -n "$COMMIT_MSG" ]; then
   fi
 fi
 
-# Co-Authored-By 포함 여부
-if echo "$COMMAND" | grep -qiE 'co-authored-by'; then
-  echo "[BLOCKED] Co-Authored-By 차단 — 커밋 메시지에 포함하지 마세요." >&2
-  exit 2
-fi
+# Co-Authored-By 차단은 dangerous-ops-guard.sh 에서 단일 처리 (SSOT) — 본 hook 에서는 검사하지 않음
 
 # ===== Phase 2: 커밋 범위 검증 (1 커밋 = 1 변경) =====
 

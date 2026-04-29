@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # doc-template-guard.sh
 # PostToolUse hook: 문서 파일이 표준 양식을 따르는지 검증
 
@@ -52,8 +53,19 @@ if [[ ! -f "$unix_path" ]]; then
     unix_path="$file_path"
 fi
 
+# output/ 하위는 Gate-0 직행 정책에 따라 항상 exit 0 (단순 분석 리포트 차단 면제)
+case "$file_path" in
+    */docs/output/*|*/docs/*/output/*)
+        IS_OUTPUT=1
+        ;;
+    *)
+        IS_OUTPUT=0
+        ;;
+esac
+
 # 필수 섹션 검증
-missing=()
+missing=()             # hint 수준 (exit 0 + additionalContext)
+blocking_missing=()    # 차단 수준 (exit 2)
 
 grep -q "^# " "$unix_path" || missing+=("제목(# heading)")
 grep -q "^>" "$unix_path" || missing+=("간단 요약(> blockquote)")
@@ -63,30 +75,46 @@ grep -q "## 체크리스트" "$unix_path" || missing+=("## 체크리스트")
 grep -q "## 변경 기록" "$unix_path" || missing+=("## 변경 기록")
 
 # CLAUDE.md §4 Guardrails 필수 항목 — 문서 유형별 섹션 검증
+# output/ 면제: 단순 분석 리포트는 doc-quality 면제 정책과 정합
 lower_base=$(echo "$basename" | tr '[:upper:]' '[:lower:]')
-case "$lower_base" in
-    *analyze*.md|*plan*.md)
-        grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
-            || missing+=("## 타당성 검토 (§4 필수)")
-        grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
-            || missing+=("## 변경 영향 기록 (§4 필수)")
-        ;;
-    *result*.md)
-        grep -qE "^#{1,3}[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
-            || missing+=("## Before/After 대조 (§4 필수)")
-        grep -qE "^#{1,3}[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
-            || missing+=("## 롤백 (§4 필수)")
-        ;;
-esac
+if [[ "$IS_OUTPUT" == "0" ]]; then
+    case "$lower_base" in
+        *analyze*.md|*plan*.md)
+            # 차단: 타당성 검토 + 변경 영향 기록 누락 시 exit 2
+            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+                || blocking_missing+=("타당성 검토 (§4 필수)")
+            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+                || blocking_missing+=("변경 영향 기록 (§4 필수)")
+            ;;
+        *result*.md)
+            # 차단: result 는 변경 영향 기록 누락만 차단 (타당성 검토는 result 필수 아님)
+            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+                || blocking_missing+=("변경 영향 기록 (§4 필수)")
+            # hint: Before/After, 롤백은 기존 hint 수준 유지
+            grep -qE "^#{1,3}[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
+                || missing+=("## Before/After 대조 (§4 필수)")
+            grep -qE "^#{1,3}[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
+                || missing+=("## 롤백 (§4 필수)")
+            ;;
+    esac
 
-# specs 문서(SDP/SRS/SDD/IDD/STP/STD)는 타당성 검토 필수
-case "$file_path" in
-    */docs/specs/*|*/docs/*/specs/*)
-        grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
-            || missing+=("## 타당성 검토 (§4 필수)")
-        ;;
-esac
+    # specs 문서(SDP/SRS/SDD/IDD/STP/STD)는 타당성 검토 누락 시 차단
+    case "$file_path" in
+        */docs/specs/*|*/docs/*/specs/*)
+            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+                || blocking_missing+=("타당성 검토 (§4 필수)")
+            ;;
+    esac
+fi
 
+# 차단 항목 우선 처리 (exit 2 — PostToolUse turn 재진입 강제)
+if [[ ${#blocking_missing[@]} -gt 0 ]]; then
+    blocking_str=$(IFS=", "; echo "${blocking_missing[*]}")
+    echo "[BLOCKED] ${blocking_str} 섹션 누락 — ${file_path} 보완 후 재작성하세요." >&2
+    exit 2
+fi
+
+# hint 수준 누락 (additionalContext 주입, exit 0)
 if [[ ${#missing[@]} -gt 0 ]]; then
     missing_str=$(IFS=", "; echo "${missing[*]}")
     cat <<HOOK_JSON

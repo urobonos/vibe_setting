@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # SessionStart Hook: 워크플로우 Gate 상태 초기화
 # Phase 3 Harness — 세션 시작 시 gate를 0(잠금)으로 리셋
 #

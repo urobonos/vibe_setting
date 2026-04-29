@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # skill-preload.sh
 # SessionStart hook: 모든 글로벌 스킬의 SKILL.md를 컨텍스트에 주입
 

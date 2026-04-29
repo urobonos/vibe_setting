@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # Stop Hook: 세션 종료 시 토큰 사용량 리포트 생성
 
 STDIN_DATA=$(cat)

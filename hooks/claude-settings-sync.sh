@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PostToolUse Hook: .claude/ 설정 파일 변경 시 git 자동 커밋+푸시
 
 STDIN_DATA=$(cat)

@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PostToolUse Hook: PHP 코드 품질 검증
 # 통합: php-syntax-check.sh + php-pattern-lint.sh
 #

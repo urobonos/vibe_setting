@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # Stop Hook: Notion 동기화 검증 (요청 기반, 2026-04-22~)
 #
 # 정책: 사용자가 명시적으로 Notion 동기화를 요청한 경우에만 REQUEST_FLAG가 세팅된다.

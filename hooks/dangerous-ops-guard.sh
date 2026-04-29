@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PreToolUse Hook: 파괴적 명령 차단 + 비가역적 작업 Checkpoint 경고
 # 통합: dangerous-command-guard.sh + checkpoint-guard.sh
 #

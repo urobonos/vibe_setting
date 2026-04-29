@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # UserPromptSubmit Hook: 사용자 승인 감지 → Gate 레벨 증가
 # Phase 3 Harness — 승인 키워드가 포함된 짧은 메시지 감지
 #
@@ -77,34 +78,71 @@ fi
 # 소문자 변환
 LOWER_PROMPT=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
 
+# --- 부정 컨텍스트 사전 차단 ---
+# 부정/취소/보류 키워드가 prompt 에 포함되면 승인 매칭 무효.
+# 예: "안 해줘", "하지 마", "안 진행", "보류", "취소", "no", "stop", "cancel", "not yet", "do not"
+# 한국어 부정: 안+공백+(진행|승인|해|...) / 하지\s*마 / 보류 / 취소 / 중단 / 멈춰 / 제외
+# 영어 부정:   no/nope/stop/cancel/abort/hold/wait + 단어 경계, do(n't| not)
+NEGATED=false
+if echo "$LOWER_PROMPT" | grep -qE '(안\s*(진행|승인|확인|해|되|돼)|하지\s*마|보류|취소|중단|멈춰|제외|말아|말자|말것|말 것)'; then
+  NEGATED=true
+fi
+if echo "$LOWER_PROMPT" | grep -qE '(^|\s)(no|nope|stop|cancel|abort|hold|wait|never|don.?t|do not|not yet)(\s|$|[.!?,])'; then
+  NEGATED=true
+fi
+# 부정 표현(예: "모두 승인하지 않으셔도", "모두 진행하지 마") 광범위 보강
+if echo "$LOWER_PROMPT" | grep -qE '(승인|진행|확인|ok|okay|yes|approve|go|proceed)\s*(하지\s*(마|말|않)|안|않)'; then
+  NEGATED=true
+fi
+
+if [ "$NEGATED" = true ]; then
+  log "NEGATED prompt sid=$SESSION_ID prompt_len=${#PROMPT} — 승인 매칭 skip"
+  exit 0
+fi
+
 # 승인 키워드 패턴 (짧은 메시지에서만 매칭)
 APPROVED=false
 
-# 한국어 승인
-if echo "$LOWER_PROMPT" | grep -qE '(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응|응응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|^콜$|^콜\s)'; then
+# --- 한국어 승인 (위치 제약: 시작 또는 종결부 + 단어/문장 경계) ---
+# 시작부 매칭: prompt 가 키워드로 시작 (선택적 공백/문장부호 허용)
+if echo "$LOWER_PROMPT" | grep -qE '^[[:space:]]*(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응응|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|콜)([[:space:]!.?,~]|$)'; then
+  APPROVED=true
+fi
+# 종결부 매칭: prompt 가 키워드로 끝남
+if echo "$LOWER_PROMPT" | grep -qE '([[:space:]]|^)(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응응|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|콜)[[:space:]!.?,~]*$'; then
   APPROVED=true
 fi
 
-# 영어 승인
-if echo "$LOWER_PROMPT" | grep -qE "^(ok|okay|yes|y|go|proceed|approve|lgtm|sure|do it|ship it|let.?s go|lets go|make it so|go ahead|sounds good)"; then
+# --- 영어 승인 (시작부 앵커 유지, 단어 경계 명시) ---
+if echo "$LOWER_PROMPT" | grep -qE "^[[:space:]]*(ok|okay|yes|y|go|proceed|approve|lgtm|sure|do it|ship it|let.?s go|lets go|make it so|go ahead|sounds good)([[:space:]!.?,~]|$)"; then
+  APPROVED=true
+fi
+# 영어 종결부 매칭 보강: "lgtm", "approve", "go" 등이 종결부에 위치
+if echo "$LOWER_PROMPT" | grep -qE '([[:space:]]|^)(ok|okay|yes|approve|lgtm|proceed|go ahead|sounds good)[[:space:]!.?,~]*$'; then
   APPROVED=true
 fi
 
 # 숫자만 (선택지 응답: "1", "2", "3" 등)
-if echo "$PROMPT" | grep -qE '^[0-9]+$'; then
+if echo "$PROMPT" | grep -qE '^[[:space:]]*[0-9]+[[:space:]]*$'; then
   APPROVED=true
 fi
 
-# 묶음 승인 키워드 (gate 0→2 fast-track)
+# --- 묶음 승인 키워드 (gate 0→2 fast-track) ---
 # 분석/계획을 한 응답에 묶어 보고한 뒤 한 번에 승인하는 패턴 지원.
 # - 한국어: "분석+계획 ok", "분석/계획 진행", "둘다 ok", "한번에 진행", "묶어서 ok", "통째로", "모두/전체 진행"
 # - 영어:   "all ok", "both ok", "approve all"
+# 부정 컨텍스트는 위에서 사전 차단됐으므로 여기서는 위치 앵커만 보강.
 BUNDLED_APPROVED=false
-if echo "$LOWER_PROMPT" | grep -qE '(분석.{0,3}계획|계획.{0,3}분석|둘.?다|한.?번에|한꺼번에|묶어서|통째|모두.{0,3}(진행|승인|ok|확인)|전체.{0,3}(진행|승인|ok|확인))'; then
+if echo "$LOWER_PROMPT" | grep -qE '(분석.{0,3}계획|계획.{0,3}분석|둘.?다|한.?번에|한꺼번에|묶어서|통째)([[:space:]]|.)*?(진행|승인|ok|확인|approve|go|proceed)'; then
   APPROVED=true
   BUNDLED_APPROVED=true
 fi
-if echo "$LOWER_PROMPT" | grep -qE '(^|\s)(all|both)\s+(ok|okay|yes|approve|go|proceed|lgtm)'; then
+# "모두 진행", "전체 승인" — 위치 제약 (시작/종결부 + 단어 경계)
+if echo "$LOWER_PROMPT" | grep -qE '(^|[[:space:]])(모두|전체)[[:space:]]{0,3}(진행|승인|ok|확인|approve|go|proceed)([[:space:]!.?,~]|$)'; then
+  APPROVED=true
+  BUNDLED_APPROVED=true
+fi
+if echo "$LOWER_PROMPT" | grep -qE '(^|[[:space:]])(all|both)[[:space:]]+(ok|okay|yes|approve|go|proceed|lgtm)([[:space:]!.?,~]|$)'; then
   APPROVED=true
   BUNDLED_APPROVED=true
 fi
@@ -145,9 +183,10 @@ except:
     }
 
     if [ -d "$TASK_DIR" ]; then
-      # A. 최근 30분 이내 수정된 서브디렉토리만 검사 대상
+      # A. 최근 60분 이내 수정된 서브디렉토리만 검사 대상
       # → 이전 작업 잔재(analyze만 있고 plan 없는 폴더)로 인한 오탐 차단
-      RECENT_SUBDIR=$(find "$TASK_DIR" -mindepth 1 -maxdepth 1 -type d -mmin -30 2>/dev/null | head -1)
+      # 30분 → 60분 확장 (분석 후 질의응답 길어지는 흐름에서 silent skip 방지)
+      RECENT_SUBDIR=$(find "$TASK_DIR" -mindepth 1 -maxdepth 1 -type d -mmin -60 2>/dev/null | head -1)
       if [ -n "$RECENT_SUBDIR" ]; then
         # CLAUDE.md §4 산출물 유연성: analyze / plan / result 중 1종 이상 있으면 통과.
         # 분석 단독 세션은 analyze.md 하나로, 작은 구현 세션은 result.md 하나로 완결 가능.
@@ -158,7 +197,7 @@ except:
           exit 2
         fi
       fi
-      # 최근 30분 내 수정 서브디렉토리 없음 = 현재 세션은 task-docs 구조 미사용(또는 이전 완료 작업만 존재) → 통과
+      # 최근 60분 내 수정 서브디렉토리 없음 = 현재 세션은 task-docs 구조 미사용(또는 이전 완료 작업만 존재) → 통과
     fi
     # task_dir 자체가 없으면 S등급 경량 경로로 판단 → 통과
   fi

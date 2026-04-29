@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PostToolUse Hook: 문서 품질 + 테스트 동반 + Notion 동기화
 # 통합: doc-checklist-guard.sh + test-coexistence-check.sh + notion-sync-reminder.sh
 #

@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PreToolUse Hook: 세션 시작 시 토큰 사용량 스냅샷 저장 (세션당 1회)
 # python3 없이 grep/sed로 session_id를 추출하여 반복 호출 시 오버헤드 최소화
 

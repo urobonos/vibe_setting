@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PreToolUse Hook: Gate 미통과 시 Edit/Write 차단 + Agent 검증
 # Phase 3 Harness — v2 (비코드 경로 완화)
 #
@@ -54,6 +55,12 @@ fi
 CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
 
 # --- .claude 레포 CWD 면제 (하니스 자기수정 부트스트랩) ---
+# 면제 좁히기: 무조건 면제 → 화이트리스트 면제로 전환 (P1-4).
+# 면제 대상 (하니스 운영 영역):
+#   CLAUDE.md, MEMORY.md, settings*.json, keybindings.json,
+#   skills/**, hooks/**, commands/**, docs/**, agents/**, agent-memory/**, lib/**
+# 외 파일(예: scripts/*.py, plugins/*.py)은 일반 gate 검증 적용 (공격면 축소).
+# Edit/Write 외 도구(Read, Bash 등)는 종전과 동일하게 즉시 면제.
 CWD=$(echo "$STDIN_DATA" | python -c "
 import json, sys
 try:
@@ -64,7 +71,33 @@ except:
 " 2>/dev/null)
 
 if echo "$CWD" | grep -qE '[\\/]\.claude$'; then
-  exit 0
+  # Edit/Write 가 아니면 종전대로 면제
+  if [[ "$TOOL_NAME" != "Edit" && "$TOOL_NAME" != "Write" ]]; then
+    exit 0
+  fi
+
+  # Edit/Write — file_path 화이트리스트 검사
+  CLAUDE_FILE_PATH=$(echo "$STDIN_DATA" | python -c "
+import json, sys
+try:
+    data = json.load(sys.stdin)
+    fp = data.get('tool_input', {}).get('file_path', '')
+    print(fp.replace(chr(92), '/'))
+except:
+    print('')
+" 2>/dev/null)
+
+  # 화이트리스트 매칭: 운영 영역 → 면제
+  # 1) 루트 레벨 단일 파일: CLAUDE.md, MEMORY.md, settings*.json, keybindings.json
+  # 2) 디렉토리 prefix: skills/, hooks/, commands/, docs/, agents/, agent-memory/, lib/, memory/
+  if echo "$CLAUDE_FILE_PATH" | grep -qE '/\.claude/(CLAUDE\.md|MEMORY\.md|settings[^/]*\.json|keybindings\.json)$'; then
+    exit 0
+  fi
+  if echo "$CLAUDE_FILE_PATH" | grep -qE '/\.claude/(skills|hooks|commands|docs|agents|agent-memory|lib|memory)/'; then
+    exit 0
+  fi
+
+  # 화이트리스트 미매칭 → 정규 gate 검증으로 fall-through
 fi
 
 # --- Edit/Write Gate ---

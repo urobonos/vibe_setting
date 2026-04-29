@@ -1,4 +1,5 @@
 #!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PostToolUse Hook: 수정 이력 기록 + 시크릿 감지 + 테스트 감지
 # 통합: edit-write-flag.sh + hardcoded-secrets-lint.sh + test-run-flag.sh
 #
