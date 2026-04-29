@@ -62,10 +62,12 @@ echo "다음을 자가 검증하고, 미충족 시 보완 후 응답 종료하�
 echo "" >&2
 echo "1. [원 요구사항] 사용자 최초 요청을 빠짐없이 처리했는가?" >&2
 echo "2. [Checkpoint] §3 승인 대기 항목이 남아있지 않은가?" >&2
-echo "3. [Before/After] 제안 반영 세션이라면 최초안 vs 제안안 대조 보고를 포함했는가?" >&2
+echo "3. [Before/After] 제안 반영 세션이라면 최초안 vs 제안안 대조 보고(표/diff)를 응답에 포함했는가? 제안 0건이라면 \"제안 추가: 없음\" 명시 필요." >&2
 echo "4. [TodoWrite] in_progress/pending 항목이 남아있지 않은가?" >&2
 echo "5. [Team 3] M/L급 작업이면 Reviewer/Tester 검증이 끝났는가?" >&2
 echo "6. [산출물] history.md + YYYYMMDD/summary.md 기록했는가?" >&2
+echo "7. [Direct Execution] 사용자에게 \"! 명령 실행해 주세요\"·\"다음을 실행해 주세요\" 형태로 명령을 떠넘기는 응답을 했는가? 했다면 Claude 가 직접 Bash 도구로 실행해야 한다 (CLAUDE.md §4 Direct Execution)." >&2
+echo "8. [Audit Auto-fix] /audit-config 등 진단 명령 직후 사용자 명시 수정 요청 없이 fix 에 진입했는가? 진단 직후 fix 는 지침 위반 (CLAUDE.md §4 audit 결과 자동 수정 금지)." >&2
 echo "" >&2
 echo "모두 충족 → \"자가점검 완료: 모두 충족\" 한 줄로 종료." >&2
 echo "미충족 → 즉시 보완 작업 수행." >&2
