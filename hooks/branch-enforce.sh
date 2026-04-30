@@ -1,0 +1,78 @@
+#!/bin/bash
+[ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+# PreToolUse:Edit|Write|Bash Hook — Trunk-Based + Short-lived Feature Branch 강제
+#
+# 정책 (사용자 결정 2026-04-30):
+#   - 분기명 규칙: feature/{source-branch}_{작업명}
+#   - Protected 브랜치 = production / staging / develop / main / master (정확 매칭)
+#   - Protected 위에서 코드/설정/문서 변경 시 차단 + feature 분기 생성 유도
+#   - 면제 영역: ~/.claude/docs/{product}/  (산출물) + projects/.../memory/  (메모리)
+#   - Bash 도구: git commit / merge / rebase / push 만 차단 (checkout/branch/status 등 통과)
+#
+# 산출물 SSOT: ~/.claude/docs/claude-harness/output/branch-workflow/2026-04-30-branch-workflow-design.md
+
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_init
+hook_read_stdin
+
+# 현재 브랜치 — git repo 가 아니면 통과
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+[ -z "$BRANCH" ] && exit 0
+
+# Protected 브랜치 정확 매칭
+case "$BRANCH" in
+  production|staging|develop|main|master) ;;
+  *) exit 0 ;;
+esac
+
+# tool_name 추출 (Edit / Write / Bash 분기)
+TOOL_NAME=""
+if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+  hook_python
+  TOOL_NAME=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
+import json, sys
+try:
+    print(json.load(sys.stdin).get('tool_name', ''))
+except Exception:
+    print('')
+" 2>/dev/null)
+fi
+
+# Bash 도구 — 변경계 git 명령만 차단
+if [ "$TOOL_NAME" = "Bash" ]; then
+  hook_parse_command
+  case "$COMMAND" in
+    *"git commit"*|*"git merge"*|*"git rebase"*|*"git push"*)
+      ;;
+    *)
+      exit 0
+      ;;
+  esac
+  echo "[BRANCH-GUARD] 차단: protected 브랜치 '$BRANCH' 에서 변경계 git 명령" >&2
+  echo "              명령: $COMMAND" >&2
+  echo "              조치: feature/${BRANCH}_{작업명} 분기 생성 후 재실행" >&2
+  echo "              예시: git checkout -b feature/${BRANCH}_my-work" >&2
+  exit 2
+fi
+
+# Edit / Write 도구 — 면제 영역 검사 후 차단
+if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ] || [ "$TOOL_NAME" = "MultiEdit" ]; then
+  hook_parse_file_path
+  FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
+
+  # 면제 영역
+  case "$FILE_PATH" in
+    */.claude/docs/*)        exit 0 ;;
+    */projects/*/memory/*)   exit 0 ;;
+    */.claude/.skill-creator-active.lock) exit 0 ;;
+  esac
+
+  echo "[BRANCH-GUARD] 차단: protected 브랜치 '$BRANCH' 직접 수정" >&2
+  echo "              파일: $FILE_PATH" >&2
+  echo "              조치: feature/${BRANCH}_{작업명} 분기 생성 후 재시도" >&2
+  echo "              예시: git checkout -b feature/${BRANCH}_my-work" >&2
+  echo "              면제: ~/.claude/docs/ (산출물) / projects/.../memory/ (메모리)" >&2
+  exit 2
+fi
+
+exit 0
