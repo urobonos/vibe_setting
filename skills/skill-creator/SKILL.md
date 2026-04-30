@@ -26,6 +26,28 @@ min_claude_md_version: "4.0"
 
 A skill for creating new skills and iteratively improving them.
 
+---
+
+## ⚠️ 진입 시 필수 — Skill Edit Lock (글로벌 강제 룰)
+
+본 스킬은 글로벌 CLAUDE.md "스킬 생성·수정·최적화 강제" 룰의 단일 진입점입니다. `.claude/skills/` 하위 모든 파일 수정은 `skill-edit-guard.sh` PreToolUse hook 이 차단하며, 본 스킬을 **명시적으로 호출**한 경우에만 락 파일로 우회 통과시킵니다.
+
+**진입 직후 (Edit/Write 호출 전) 반드시 실행:**
+
+```bash
+touch ~/.claude/.skill-creator-active.lock
+```
+
+**작업 완전히 끝낸 직후 (반드시) 실행:**
+
+```bash
+rm ~/.claude/.skill-creator-active.lock
+```
+
+**Why:** 락 없이는 SKILL.md 자체도 수정 불가 — 사용자가 의도하지 않은 즉흥 스킬 편집을 hook 레벨에서 원천 차단하는 게 본 룰의 목적입니다. 세션 종료 시 `gate-init.sh` (SessionStart) 가 잔여 락을 자동 정리하므로 다음 세션에 영향 없음.
+
+---
+
 At a high level, the process of creating a skill goes like this:
 
 - Decide what you want the skill to do and roughly how it should do it

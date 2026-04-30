@@ -17,4 +17,7 @@ GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 # 세션 시작 시 gate 리셋
 echo "0" > "$GATE_FILE"
 
+# skill-creator 락 파일 잔여 정리 (이전 세션에서 미삭제 가능성 차단)
+rm -f "$HOME/.claude/.skill-creator-active.lock" 2>/dev/null
+
 exit 0
