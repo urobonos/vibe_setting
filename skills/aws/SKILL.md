@@ -25,11 +25,13 @@ min_claude_md_version: "4.0"
 AWS 서비스 연동을 위한 스킬. Lambda(Python) 를 중심으로 SQS/SNS 트리거, Aurora MySQL 연결, EC2, RDS Proxy, IAM/보안 그룹 설정을 다룬다.
 
 > **[Checkpoint 필수]** Lambda 함수를 새로 생성할 때, Python 런타임 버전을 반드시 사용자에게 확인받는다. 사용자에게 확인 후 버전을 지정한다.
+> **Why:** 런타임 버전은 라이브러리 호환성·EOL 일정·콜드 스타트 성능에 직결되며 배포 후 변경 시 의존성 재테스트 비용이 발생 — 신규 생성 시점에 사용자 환경 표준과 맞춰야 재배포 사고를 방지.
 
 > **[실행 주체]** AWS CLI / SSM / S3 / Lambda 등 모든 `aws` 명령은 Claude 가 Bash 도구로 **직접 실행**한다. 사용자에게 `! aws ...` 형태로 떠넘기거나 "실행해 주세요" 텍스트로 응답하는 것은 지침 위반이다.
 > - **조회 계열 (즉시 실행):** `aws * describe-*`, `list-*`, `get-command-invocation`, `get-parameter`, `s3 ls`, `logs filter-log-events` 등. 승인 대기 없이 Claude 가 바로 실행한다.
 > - **변경/원격 실행 계열 (승인 후 직접 실행):** `aws ssm send-command` (프로덕션 원격 명령), `aws s3 rm`/`cp`, `aws lambda update-*`, `aws iam put-*` 등. 명령 내용·영향 범위·롤백 방법을 먼저 보고한 뒤, 사용자 승인 확인 즉시 Claude 가 도구로 호출한다.
 > - **Hook 경고 해석:** `dangerous-ops-guard.sh` 가 `aws ssm send-command` 감지 시 stdout 에 Checkpoint 경고를 주입하지만 `exit 0` 이므로 실행 자체는 차단되지 않는다. 경고 = "승인 후 직접 실행" 신호이지 "실행 금지" 신호가 아니다.
+> **Why:** AWS 변경 명령은 사용자가 텍스트로 받아 수동 실행하면 컨텍스트 단절·오타·세션 ENV 차이로 잘못된 리전/계정에 적용될 위험 — Claude 가 도구로 실행하면 명령·결과·로그가 한 turn 에 묶여 감사 가능. 반대로 변경 계열은 무승인 자동 실행 시 비가역(s3 rm·lambda update) — 두 단 분리가 안전·실행성 양립의 SSOT.
 
 ---
 
@@ -90,10 +92,12 @@ deploy/
 
 ### 2.3. 주석 규칙
 
-Lambda Python 코드에도 `php8` 코딩 표준 (`references/coding-standards.md`) 과 동일한 규칙을 적용한다:
+Lambda Python 코드에도 `php8` 코딩 표준 (`~/.claude/skills/php8/references/coding-standards.md`) 과 동일한 규칙을 적용한다:
 - 모든 함수에 docstring 필수 (`@param`, `@return` 포함)
 - 복잡한 로직에 단계별 설명 주석
 - 추상화 시 사유 주석
+
+> **Why:** Lambda 핸들러는 SQS/SNS/HTTP 등 트리거별 이벤트 스키마가 모호 — docstring 없이 배포되면 retry/timeout 디버깅 시 호출자(트리거 종류·payload 키)를 코드만 보고 역추적해야 한다. 표준 적용 시 ops 인계·인시던트 응답 시간이 단축.
 
 ### 2.4. 테스트
 
@@ -157,6 +161,9 @@ AWS 관련 코드 생성·수정 시, **실제 파일에 기록하기 전에** �
 ## 4. 자가 검증 체크리스트
 
 AWS 관련 코드 작성/수정 시 반드시 확인:
+
+> **Why:** AWS 코드 결함 중 IAM 권한 과다·SG 0.0.0.0/0·DLQ 누락·하드코딩 시크릿은 사후 발견 시 비용·보안 리스크가 큼. 체크리스트는 review 단계가 아닌 작성 시점에 강제해 PR 단계 재작업을 줄이는 SSOT.
+
 - [ ] Lambda 핸들러와 비즈니스 로직이 분리되어 있는가
 - [ ] 환경변수로 설정값을 관리하고 있는가 (하드코딩 없음)
 - [ ] SQS 트리거 시 `batchItemFailures` 부분 실패 처리가 구현되어 있는가
@@ -180,11 +187,15 @@ AWS 관련 코드 작성/수정 시 반드시 확인:
 | 용도 | EC2 SSH 접속용 (현재 키 불일치로 사용 불가) |
 | 접속 방식 | **SSM Session Manager** 경유 필수 |
 
+> **Why:** 현재 PEM 키 불일치로 SSH 접근 불가 + 22 포트 외부 노출 시 brute-force 위험. SSM 은 IAM 인증 + 세션 로그가 CloudTrail 에 자동 기록되어 감사 가능 — 운영 표준은 SSM 단일 경로.
+
 ## 참고: .env 비밀번호 관리 가이드
 
 | 환경 | 방식 | 비고 |
 |------|------|------|
 | **개발 (로컬)** | `.env` 파일에 평문 저장 허용 | `.gitignore` 로 커밋 차단 필수 |
 | **프로덕션 (EC2)** | `/works/<PROJECT>/config/.env` symlink | 릴리즈별 `.env` symlink 참조, 서버 내 파일 직접 관리 |
+
+> **Why:** `.env` 가 git 에 한 번이라도 커밋되면 history rewrite 비용 + 키 회전 + 침해 사후 조사가 동시에 발생. `.gitignore` 강제 + pre-commit 검사가 git 레벨 1차 방어선.
 
 > 프로덕션 DB 비밀번호가 `.env` 평문 저장인 점은 현재 운영 방식. 향후 AWS Secrets Manager 전환 권장.
