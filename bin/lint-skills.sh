@@ -9,6 +9,7 @@
 #   L4. references/ 매핑: 본문 참조 references/{file}.md 가 실제 존재
 #   L5. Why: 라인 짝지움 — 강제 어휘 빈도 vs Why: 라인 빈도 (목표 30% 이상)
 #   L6. depends_on 의 모든 스킬 실재 (글로벌 스킬 폴더 기준)
+#   L7. conflicts_with 의 모든 스킬 실재 + 자기 참조 경고
 #
 # 사용법:
 #   bash ~/.claude/bin/lint-skills.sh                    # 글로벌 모든 스킬 검증
@@ -149,6 +150,34 @@ lint_skill() {
   if [ "${#missing_deps[@]}" -gt 0 ]; then
     issues+=("L6-FAIL: depends_on 미존재 스킬: ${missing_deps[*]}")
     status="FAIL"
+  fi
+
+  # L7 — conflicts_with 실존 검증 + 자기 참조 경고
+  local cwiths
+  cwiths=$(grep -E '^conflicts_with:' "$skill_md" | sed 's/^conflicts_with:[[:space:]]*//; s/[][]//g' | tr ',' '\n' | tr -d ' ')
+  local missing_cwiths=()
+  local self_ref=0
+  if [ -n "$cwiths" ]; then
+    while IFS= read -r cw; do
+      if [ -z "$cw" ]; then
+        continue
+      fi
+      if [ "$cw" = "$skill_name" ]; then
+        self_ref=1
+        continue
+      fi
+      if ! echo "$ALL_SKILLS" | grep -qx "$cw"; then
+        missing_cwiths+=("$cw")
+      fi
+    done <<< "$cwiths"
+  fi
+  if [ "${#missing_cwiths[@]}" -gt 0 ]; then
+    issues+=("L7-FAIL: conflicts_with 미존재 스킬: ${missing_cwiths[*]}")
+    status="FAIL"
+  fi
+  if [ "$self_ref" = "1" ]; then
+    issues+=("L7-WARN: conflicts_with 자기 참조 — 의도 명시 권고")
+    [ "$status" = "PASS" ] && status="WARN"
   fi
 
   case "$status" in
