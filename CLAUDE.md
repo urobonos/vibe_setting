@@ -25,6 +25,12 @@
   - **`output/` → 분석·문서 생성 프롬프트 전용.** "분석해줘", "조사해줘", "비교해줘", "리포트 만들어줘", "문서로 정리해줘" 등 **코드 변경 없이 결과물만 산출하는 프롬프트**를 받았을 때 사용한다. 주제별 폴더(`{제목}/`) 하위에 `{yyyy-mm-dd}-{제목}-{type}.md` 형식(kebab-case + 날짜 prefix 필수) 으로 단일/다중 문서를 배치한다. 3-Team Workflow 비적용, Gate ≥ 1 만으로 충분.
   - 판단 애매한 경우: "**이 프롬프트가 코드를 바꾸게 하는가?**" → 예 = `tasks/`, 아니오 = `output/`. 혼합된 경우(분석 후 바로 구현)는 `tasks/` 로 통합.
   - `specs/` 는 IEEE 공식 산출물(SRS/SDD/IDD/SDP/STP/STD) 전용. `tasks/` · `output/` 과 별개 경로.
+  - `api-docs/` 는 API 명세 문서(엔드포인트·페이로드·응답 스키마) 전용. `tasks/` · `output/` · `specs/` 와 별개 경로.
+- **IEEE specs / api-docs 3-way 자동 미러링 (필수):** `~/.claude/docs/{product}/specs/` 또는 `~/.claude/docs/{product}/api-docs/` 하위 파일을 Edit/Write 하면 `mirror-docs.sh` PostToolUse hook 이 자동으로 다음 2곳에 동기화한다.
+  - **be 프로젝트:** `C:\Works\hongcafe_global_backend\docs\specs\` (IEEE) / `C:\Works\hongcafe_global_backend\api-docs\` (API)
+  - **글로벌 docs 프로젝트:** `C:\Works\hongcafe_global_docs\be\specs\` (IEEE) / `C:\Works\hongcafe_global_docs\be\api-docs\` (API)
+  - 미러링 정책: 자동 cp + 실패 시 3회 재시도(200ms 간격) + 대상 루트 미존재 시 SKIP. 실패 stderr 로그만 출력하고 작업은 차단하지 않는다 (PostToolUse 정책).
+  - **Why:** 3군데 산출물 정합성 유지를 hook 레벨에서 강제. 수동 cp 누락으로 인한 동기화 깨짐을 원천 차단. 사용자 결정 (2026-04-30) — `mirror-docs.sh` 가 SSOT.
 - **Notion 연동 (요청 기반):** `notion_cli` 스킬을 단일 진입점으로 사용. 사용자가 "노션에 반영"·"Notion 동기화" 등 명시 요청할 때만 실행 (지침 수정에 대한 자동 반영 금지). MCP 도구 폐기·인증·블록 교체 절차 등 세부는 스킬 SSOT. 사용자 요청 없이 선제 실행은 지침 위반.
 
 ---
@@ -82,6 +88,7 @@
 - **Hook 차단 자가 복구 (필수):** hook(특히 `gate-approve.sh`, `task-docs` 관련)이 "파일 미생성 — 차단" 유형 메시지를 던지면, 사용자에게 "생성해주세요"라고 되묻지 말고 Claude 가 직접 그 파일을 작성해서 gate 를 통과시킨다. 단 (a) 이미 사용자 승인을 받은 진행 맥락일 것, (b) 차단 메시지에 명시된 파일 경로·역할 정확히 따를 것 — 두 조건 충족 시에만 자가 작성. 미승인 작업의 강제 진입은 금지. 자가 작성 후 "hook 이 지적한 누락분을 채웠음"만 짧게 보고하고 다시 승인 키워드 대기.
 - **Hook 우회 목적 임의 파일 생성 금지 (필수):** hook 차단을 회피하려고 임의로 파일을 생성·커밋하지 않는다. 위 "Hook 차단 자가 복구" 룰의 정당한 누락분 보완(승인된 작업의 누락 산출물 작성)과 다르며, 무관한 파일을 만들거나 hook 경로 위장 목적의 더미 파일을 생성하는 모든 행위가 위반이다. 차단이 정당하지 않다고 판단되면 사용자에게 보고하고 지시를 기다린다.
 - **audit 결과 자동 수정 금지 (필수):** `/audit-config` 등 진단 명령의 N 판정에 대해 Claude 가 자동으로 "개선 제안"·"수정 계획"을 덧붙이지 않는다. audit 는 현황 진단 도구이지 무조건 고쳐야 하는 task 가 아니다. 사용자가 특정 항목에 대해 명시적으로 수정을 요청할 때만 개선안을 제시하고, 수정 시에도 단건 패치가 아닌 영향 범위 전체를 고려한 접근을 제안한다. 잘 돌아가는 구조를 점수 올리려고 건드리면 정합성 악순환이 생긴다.
+- **스킬 생성·수정·최적화 — skill-creator 강제 진입점 (필수):** `.claude/skills/{skill}/` 하위 모든 파일(SKILL.md / scripts/ / references/ / agents/ / assets/ / evals/ 등) 생성·수정·최적화는 **반드시 `skill-creator` 스킬을 경유**해야 한다. `skill-edit-guard.sh` PreToolUse hook 이 .claude/skills/ 하위 Edit/Write 시도를 exit 2 로 차단하고, skill-creator 진입 시 모델이 직접 생성한 락 파일(`~/.claude/.skill-creator-active.lock`) 존재 시에만 우회 통과시킨다. **진입 절차:** (1) `/skill-creator` 또는 "스킬 만들기/수정/개선/최적화" 트리거로 호출 → (2) 진입 직후 `touch ~/.claude/.skill-creator-active.lock` 실행 → (3) Edit/Write 작업 → (4) 작업 완전 종료 시 `rm ~/.claude/.skill-creator-active.lock`. **Why:** 즉흥 스킬 편집을 hook 레벨에서 원천 차단해 description·triggers·평가 절차 누락을 방지. `skill-creator` SKILL.md §"Skill Edit Lock" 이 SSOT (사용자 결정 2026-04-30). 세션 종료 시 `gate-init.sh` 가 잔여 락 자동 정리.
 - **로컬 수정 사전 승인 + 서버 우선 검증 (필수):** 프로덕션·공유 환경 영향 코드(특히 운영 중 API·배포 대상 파일)는 로컬 수정 전에 (1) 서버에서 원인 파악 + 테스트 우선, (2) 수정 필요 사항을 목록으로 정리해 사용자에게 제시, (3) 사용자 승인 후에만 로컬 소스 수정. 서버 로그로 원인 파악했다고 즉시 로컬 수정·커밋·푸시·머지 진행하는 것은 지침 위반이다.
 - **e2e 검증 (필수):** 코드 수정 완료 판단은 유닛 테스트 통과 + 환경/스키마/실 엔드포인트 검증. 5점 체크(env / 함수·클래스 정의 / DB 스키마 / 프로덕션 curl / mock 검증) 세부는 `php8` 스킬 §"e2e 검증" SSOT.
 - **답변 깊이 (Anticipatory Depth, 필수):** 답변 작성 전에 "이걸 들으면 사용자가 뭘 더 궁금해할까"를 먼저 생각하고, 한 단계 더 깊이 응답하여 후속 질문 빈틈을 줄인다. 핵심 후속 의문만 선제적으로 커버하되, 불필요하게 길어지는 것은 피한다. 피상적이거나 당연한 후속 질문을 유발하는 답변은 시간 낭비다.
