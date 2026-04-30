@@ -34,6 +34,7 @@ min_claude_md_version: "4.0"
 | **Medium** | `sonnet` | 단순 탐색·경량 작업 |
 
 - Agent spawn 시 `Effort`/`Model` 필수 명시. 생략은 지침 위반.
+- **Why:** Effort/Model 미명시 시 시스템 기본값으로 폴백되어 작업 난이도와 무관한 모델이 배정되며, 비용·정확성·응답 시간이 모두 통제 불능 상태가 된다.
 - Explore 에이전트는 `subagent_type: "Explore"` 사용, 시스템 기본값.
 - **현재 기준 모델 (2026-04 기준):** `opus` = Opus 4.7 (1M context, knowledge cutoff 2026-01), `sonnet` = Sonnet 4.6, `haiku` = Haiku 4.5. 모델군이 교체되면 본 항목을 갱신한다.
 
@@ -50,6 +51,8 @@ min_claude_md_version: "4.0"
 # Part 2. Agent Personas (9-Core + 3-Consultants)
 
 각 에이전트는 결과 반환 전 자체 Completion Checklist 충족 필수. 미충족 시 자체 수정 2회 → `[Checklist Gap]` 명시 반환.
+
+**Why:** Checklist는 cold context에서 spawn된 멤버가 해당 페르소나의 책임 범위를 빠짐없이 검증하는 유일한 수단이며, 누락 시 Lead가 "어디까지 검증되었는지" 알 수 없어 후행 팀이 빈틈을 안고 진행한다.
 
 ## 2.1. Core Agents
 
@@ -182,6 +185,8 @@ Team Lead로 spawn되는 에이전트의 prompt에 주입:
 - 반환 후 즉시 terminate.
 ```
 
+**Why:** Lead가 멤버 페르소나를 직접 대행하면 단일 컨텍스트에서 역할 간 결론이 상호 오염되어 다각적 검증이 무력화되며, Agent 도구 spawn만이 cold context와 페르소나 분리를 보장한다.
+
 ### Lead 멤버 spawn 규칙 (2-Depth 강제)
 
 | 규칙 | 설명 |
@@ -191,6 +196,8 @@ Team Lead로 spawn되는 에이전트의 prompt에 주입:
 | **페르소나 주입** | 각 멤버 spawn prompt에 Part 2의 해당 페르소나 + Checklist를 포함한다. |
 | **결과 종합** | 모든 멤버 반환 후 Lead가 종합. 멤버의 raw 결과를 요약하여 Orchestrator에 전달한다. |
 | **Effort/Model 할당** | Lead가 각 멤버의 Effort/Model을 Part 1 기준에 따라 결정한다. |
+
+**Why:** Lead가 멤버 결과를 raw 그대로 패스하면 Orchestrator가 다시 종합해야 해 2-depth 위계가 무너지고, 종합 책임이 분산되어 후행 팀이 어떤 결론을 신뢰해야 할지 판단할 수 없게 된다.
 
 ### Lead Completion Checklist (추가)
 > - [ ] 모든 멤버를 **Agent 도구로 독립 spawn** 완료 (직접 수행 아님)
@@ -235,6 +242,7 @@ Team Lead로 spawn되는 에이전트의 prompt에 주입:
 **제약:**
 - `Context_Inline` 선택 시 Orchestrator는 **선택 이유를 prompt 내 주석으로 명시**한다. 이유 미기록은 지침 위반.
 - `Context_Path` + `Context_Inline` **동시 사용 금지** (에이전트 혼선 방지). 하나만 선택.
+- **Why:** 동일 산출물이 경로와 원문 두 채널로 동시 전달되면 에이전트가 어느 쪽을 정본으로 삼아야 할지 판단할 수 없어 분석 결과가 두 버전으로 갈라지고 종합 단계에서 결론 편향이 발생한다.
 - 5개 이상의 원문을 동시에 주입해야 하는 경우, 주입 대신 선행 단계에서 요약본을 생성해 전달한다.
 
 ## 3.2. Output Protocol (Orchestrator → 사용자)
@@ -346,6 +354,8 @@ Orchestrator → Analyst Lead spawn (Max/opus, Context_Path: analyze.md 경로)
 ### Worktree Isolation 규칙
 
 Team 3의 Worker Lead는 반드시 `isolation: "worktree"`로 spawn한다. worktree 격리 환경에서 수정한다.
+
+**Why:** worktree 없이 원본 브랜치에서 직접 수정하면 사용자 승인 전에 코드가 이미 변경되어 거부 시 롤백 비용이 커지고, 테스트 실패·중간 산출물이 작업 트리를 오염시켜 재현성과 안전한 머지 경로가 모두 사라진다.
 
 | 단계 | 동작 |
 |------|------|

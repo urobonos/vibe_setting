@@ -122,6 +122,7 @@ app/Language/
 - `lang('Messages.welcome')` 형태로 호출
 - 로케일은 Country Resolver가 결정한 국가 Config의 `locale` 값으로 자동 설정
 - API 응답 메시지(에러/성공)는 반드시 i18n 키 사용, 하드코딩 금지
+**Why:** 다국가 서비스에서 메시지를 코드에 하드코딩하면 신규 국가 추가 시 전체 코드를 뒤져 번역해야 하고, 한 언어 사용자에게 다른 언어 문자열이 노출되는 사고가 발생한다.
 
 ---
 
@@ -150,6 +151,7 @@ app/Language/
 
 - 모든 날짜/시간 처리는 **`\DateTimeImmutable`** 전용
 - mutable `DateTime` 사용 금지 — 의도치 않은 상태 변경 방지
+**Why:** 다국가 타임존 변환 중 mutable `DateTime` 객체가 다른 함수에서 `setTimezone()` 으로 원본까지 바뀌면, UTC 저장값이 로컬 타임존으로 오염되어 DB 에 잘못된 시각이 기록되는 사고가 발생한다.
 - 타임존 변환: `$dt->setTimezone(new \DateTimeZone($userTz))`
 
 ---

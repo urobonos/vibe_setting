@@ -71,6 +71,7 @@ min_claude_md_version: "4.0"
 ### CORS 정책 (7-2)
 - Same-Origin 아키텍처(Nginx 리버스 프록시)이므로 **CORS 헤더 불필요**
 - `Access-Control-Allow-Origin: *` 설정 금지
+**Why:** 와일드카드 허용 시 임의 외부 사이트 JS 가 인증 쿠키 동반 fetch 로 사용자 자원에 접근해 CSRF·데이터 유출이 발생한다.
 - 크로스 오리진 요청이 필요한 경우 Checkpoint 발동
 
 ### Cookie 보안 (7-3)
@@ -82,6 +83,7 @@ min_claude_md_version: "4.0"
 | `prefix` | 프로젝트 지정 prefix | 쿠키명 충돌 방지. 구체 값은 프로젝트 `CLAUDE.md` 참조 |
 
 **금지 사항**:
+**Why:** 토큰을 JS 접근 가능한 위치(localStorage, response body, SameSite=None 쿠키)에 두면 XSS 1건·악성 광고 1건·CSRF 1건만으로 세션 전체가 탈취되어 인증 우회·계정 탈취가 즉시 발생한다.
 - JWT/세션 토큰의 `localStorage` 저장 — XSS 시 탈취
 - 로그인 응답 body 에 토큰 노출 — HttpOnly 쿠키로만 전달
 - `SameSite=None` — 크로스사이트 허용으로 CSRF 취약
@@ -89,18 +91,22 @@ min_claude_md_version: "4.0"
 ### 암호화 규격 (7-6)
 - **알고리즘**: AES-256-CBC
 - **IV(Initialization Vector)**: 매 암호화마다 랜덤 IV 생성 필수
+**Why:** 동일 IV 재사용 시 같은 평문이 같은 암호문을 만들어 패턴 분석으로 키·평문 추론이 가능해진다 (CBC 모드 IV 재사용 = chosen-plaintext 공격 노출).
 - CI4 Encryption 라이브러리 사용 시 `Config\Encryption`에 키/드라이버 명시
 
 ### CSRF + JWT 인증 정책 (7-4)
 
 - **JWT 저장**: HttpOnly 쿠키 전용 (7-1). `Authorization: Bearer` 헤더 수동 주입 금지, 응답 body 토큰 노출 금지
 - **CSRF 필수**: HttpOnly 쿠키는 브라우저가 자동 첨부하므로 CSRF 방어 필수
+**Why:** HttpOnly 는 JS 탈취만 막을 뿐 cross-site form submit·image tag 요청에는 쿠키가 자동 첨부되어 사용자 권한으로 임의 상태 변경 요청이 발사된다.
 - **CSRF 방식**: **Signed Double Submit Cookie (HMAC-SHA256)** — stateless JWT 아키텍처에 적합
   - **CI4 내장 CSRF 필터 사용 금지** — 세션 기반 토큰이 stateless JWT 아키텍처와 불일치. 별도 `CsrfTokenFilter` 커스텀 구현 사용
+**Why:** 세션 storage 가 없는 stateless JWT 환경에서 세션 기반 토큰을 검증하면 토큰이 항상 누락·미스매치되어 정상 요청이 통째로 거부되거나, 검증을 건너뛰는 우회 코드가 들어와 CSRF 방어가 무력화된다.
   - 검증 흐름: 쿠키 ↔ 헤더 `hash_equals()` 동일성 비교 → HMAC 서명 검증 → TTL 만료 검증
   - 적용 대상: 상태 변경 요청(POST/PUT/DELETE). GET/HEAD/OPTIONS 생략
   - 면제: API Key 인증 요청(서버-서버 통신), 외부 webhook 수신 EP
 - **토큰 갱신**: Refresh Token 별도 HttpOnly 쿠키, Access Token 짧은 만료(15분 권장). **Token Rotation + Reuse Detection** 필수 — 사용 완료된 `jti` 재제출 시 `family` 전체 무효화
+**Why:** rotation 없이 long-lived refresh token 단일 사용 시 1회 탈취만으로 공격자가 무기한 access token 발급이 가능하며, reuse detection 없으면 정상 사용자·공격자 동시 갱신을 구분 못 해 탈취 사실 자체를 감지할 수 없다.
 - **SameSite=Lax**: CSRF 보조 수단으로 병행 — Defense in Depth. Same-Origin 전제에서 Strict 불필요 (§7-3)
 - **세부 규격**(쿠키명, TTL, Payload 스키마, 면제 EP 경로)은 프로젝트 `CLAUDE.md` 를 SSOT 로 따른다 — 감사 스킬에는 값을 하드코딩하지 않는다
 

@@ -17,6 +17,7 @@ min_claude_md_version: "4.0"
 
 모든 작업 요청 수신 시, 실행 전에 아래 체크리스트를 완료하고 사용자에게 제시해야 한다.
 **체크리스트 미제시 상태에서 변경/실행 도구(Edit, Write, Bash, Agent)를 사용하는 것은 지침 위반이다.**
+**Why:** 체크리스트는 Gate-1(분석 보고) 통과의 객관 증거이며, 미제시 상태의 변경 도구 사용은 사용자 승인 없는 무단 진입과 동일해 롤백 추적이 불가능해진다.
 Team 1(Analyze) 단계에서 Read-only 도구(Read, Grep, Glob)는 분석 목적으로 허용된다.
 
 ---
@@ -76,6 +77,7 @@ S등급 작업은 다음 두 가지 경로 중 하나를 선택한다:
 | Gate-7 | `orchestration` 스킬 §4.3 | Team 3 완료 → result.md 보고 후 사용자 확인 | 사용자 확인 |
 
 **모든 등급 공통:** Gate-3 (Checkpoint), Gate-6 (Feedback Loop), Gate-7 (Result) 항상 적용.
+**Why:** 이 3개 Gate 는 비가역 작업·잔여 결함·결과 검증의 마지막 안전망이라 작업 규모와 무관하게 생략하면 사용자가 결과 적합성을 확인할 기회 자체가 사라진다.
 
 ### Gate 0→2 묶음 승인 Fast-Track (M/L 코드 작업 입력 절감)
 
@@ -93,6 +95,7 @@ S등급 작업은 다음 두 가지 경로 중 하나를 선택한다:
 **적용 조건:**
 - Claude 는 analyze + plan 을 동일 응답에 함께 보고해야 fast-track 입력이 의미를 가진다. plan 미보고 상태에서 사용자가 "한번에 진행"을 입력해도 hook 은 Gate 2 로 올리지만, **task-docs 단계 문서 검증** (analyze.md / plan.md / result.md 중 1종 이상 존재) 을 통과하지 못하면 Edit/Write 가 차단된다.
 - §3 Checkpoint 5조건은 본 fast-track 으로 우회되지 않는다 (`dangerous-ops-guard` 별도 hook).
+  **Why:** Fast-Track 은 절차 단축용이지 비가역 작업 승인 권한까지 포괄하지 않으며, 단일 키워드로 Checkpoint 까지 통과시키면 사용자가 위험 작업 인지 없이 실행돼 복구 불가능한 변경이 발생한다.
 - Gate-V1, Gate-3, Gate-6, Gate-7 는 동일하게 적용된다 (fast-track 은 Gate-1·Gate-2 통합 효과만 제공).
 
 **보안:** Gate 0→2 점프 시에도 task-docs 검증 조건은 동일 (`gate-approve.sh` 의 `[ "$CURRENT" -lt 2 ] && [ "$NEW_LEVEL" -eq 2 ]`). 단계 문서 누락 시 차단되어 산출물 우회는 불가능하다.
@@ -154,6 +157,7 @@ CLAUDE.md §4 Guardrails "Flexible Deliverables" 와 정합. **작업 성격이 
 | 1 | {항목} | {근거} | {출처} |
 
 > 적용 영역에서는 공식 문서(앤트로픽, 프레임워크, RFC, IEEE, OWASP 등) 근거 필수. 근거 없는 권고는 지침 위반.
+> **Why:** 아키텍처·라이브러리·보안 결정은 retrofitting 비용이 크고 복구가 어려워, 공식 근거 없이 "통상적" 추정으로 진행하면 사용자가 사후에 결정 적합성을 검증할 수 없게 된다.
 
 ### 5. 변경 영향 기록 (Change Impact Log)
 | # | 변경 사항 | 개선점 | 수행 이유 (Why) |

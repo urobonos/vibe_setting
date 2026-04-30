@@ -26,8 +26,10 @@ min_claude_md_version: "4.0"
 API 엔드포인트 **추가** 또는 **오류** 발생 시, **프론트엔드 / 백엔드 / 인프라** 3개 레포(폴더)를 동시에 검토해 영향 범위를 매핑하거나 원인을 진단한다.
 
 > **[용도 한정]** 본 스킬은 *풀스택 영향이 의심되는 API 작업* 전용. 단일 레포 작업에는 호출되지 않는다.
+> **Why:** 단일 레포 질문에 3-멤버 병렬 spawn 을 띄우면 cold context 비용·토큰만 낭비되고 결론은 단일 멤버 답변과 동일해져 오케스트레이션 가치가 0 이 됨.
 
 > **[실행 주체]** Lead = Claude 본체. 멤버 3명은 Agent 도구로 병렬 spawn (cold context). 모든 멤버는 `model: opus` 고정 (orchestration §1.1).
+> **Why:** Lead context 와 멤버 context 가 섞이면 Lead 의 사전 가설이 멤버 결론에 오염되어 독립 검증 효과가 사라지고, model 이 mixed 면 멤버별 추론 깊이가 달라져 가설 우선순위 비교가 무의미해짐.
 
 ---
 
@@ -244,6 +246,7 @@ endpoint: "{METHOD} {PATH}"
 ## 6. 멤버 spawn prompt 템플릿
 
 Lead 는 다음 템플릿을 채워 3개 멤버를 동시 spawn 한다. 모든 멤버는 **read-only 분석** (Edit/Write 사용 금지, Bash 는 INF 멤버의 `aws *describe*/list*/get*` 만).
+**Why:** 멤버가 코드를 직접 수정하면 Lead 종합 단계 전에 변경이 발생해 충돌·누락 탐지가 불가능해지고, 3명이 동시에 같은 파일을 건드려 race condition·롤백 불능 상태가 발생함.
 
 ### 6.1. FE 멤버 prompt
 
@@ -347,6 +350,7 @@ Lead 는 다음 템플릿을 채워 3개 멤버를 동시 spawn 한다. 모든 �
 
 제약:
 - 변경계 명령 (aws lambda update-*, ssm send-command 등) 절대 실행 금지 — 권고만
+  **Why:** INF 멤버는 cold context 라 사용자 승인 없이 prod Lambda env·SSM 을 바꾸면 즉시 운영 장애로 번지고 롤백 경로도 멤버 컨텍스트 종료와 함께 소실됨.
 - Edit / Write 금지
 - 조회계 명령 실행 결과는 핵심만 발췌 (raw output 그대로 붙이지 말 것)
 
@@ -375,6 +379,7 @@ Lead 는 다음 템플릿을 채워 3개 멤버를 동시 spawn 한다. 모든 �
 - **레포 경로 변경:** SKILL.md frontmatter `triggers` 가 아닌 본 §3 표를 단일 출처(SSOT)로 사용. 경로 이전 시 본 표만 갱신
 - **멤버 spawn 실패 (529/Overloaded):** orchestration §빠른 실행 정책 적용 — 30초~1분 자동 재시도, 실패 지속 시 Lead 가 직접 처리로 전환 (본 스킬은 *오케스트레이션 도움 도구* 이지 강제 분리가 아님)
 - **CLAUDE.md §3 Checkpoint 5조건 우선:** 본 스킬의 자동 호출도 Checkpoint 5조건 (비가역, 광범위 영향, 트레이드오프, 외부 시스템, 권한 외 접근) 발동 시 사용자 승인 우선
+  **Why:** api-team 자동 트리거가 Checkpoint 를 우회하면 사용자 의사 확인 없이 prod 영향 분석·AWS 조회·3-멤버 spawn 이 자동 진행되어 글로벌 헌법(User Sovereignty) 이 무력화됨.
 
 ---
 

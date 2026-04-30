@@ -7,6 +7,7 @@ description: >
   모듈 간 직접 클래스 참조 금지(Interface 통신만), service() DI 강제,
   CI 4.7 Service Discovery 활용. QB 우선, raw query는 Repository에서만 named binding.
   신규 모듈은 부분 구현 절대 금지 — 9가지 산출물이 항상 함께 생성되어야 한다.
+  **Why:** 부분 구현 모듈은 Interface·DI·Routes·테스트 중 하나라도 누락 시 다른 모듈에서 참조 불가능해 통합 시점에 폭발적 재작업 비용이 발생한다.
 triggers:
   - "API 만들어줘", "엔드포인트 추가", "CRUD 만들어줘"
   - "CI4 컨트롤러 만들어줘", "PHP 모델 만들어줘", "서비스 만들어줘"
@@ -138,6 +139,7 @@ app/
 ### 네임스페이스 매핑
 
 `app/Config/Autoload.php`의 `$psr4`에 **BC별 개별 등록**한다 (CI4 auto-discovery 필수):
+**Why:** PSR-4 매핑이 누락된 모듈은 CI4 auto-discovery 가 클래스를 찾지 못해 런타임에 `Class not found` 에러로 라우트 자체가 죽는다.
 
 ```php
 public $psr4 = [
@@ -266,6 +268,7 @@ class Services extends BaseService
 
 - **Composer 버전**: 2.x
 - **버전 고정 정책**: exact 또는 caret(`^`) 사용. `composer.lock` 파일 반드시 커밋
+  **Why:** lock 미커밋 시 배포 환경마다 의존성 마이너 버전이 달라져 "내 로컬에선 되는데" 류 재현 불가 버그가 양산된다.
 - **PSR-4 Autoload**: `App\` 단일 루트 매핑으로 `app/` 하위 전체 자동 해석
 
 ## 미적용 DDD 요소
@@ -289,7 +292,9 @@ class Services extends BaseService
 - **PSR-4**: 네임스페이스 = 디렉토리 구조. `Modules\{BC}\{Layer}`
 - **PSR-12**: 인덴트 **4칸 스페이스**, 여는 중괄호 같은 줄(메서드/클래스는 다음 줄)
 - **Strict Types**: 모든 PHP 파일에 `declare(strict_types=1);` 선언 필수
+  **Why:** strict_types 미선언 시 PHP 가 `"5"` → `5` 같은 암묵적 캐스팅을 허용해 ID 비교·금액 계산에서 silent 데이터 오염이 발생한다.
 - **mixed 반환 타입 금지**: 함수/메서드 반환 타입에 `mixed` 사용 금지. 구체적 타입(`string`, `int`, `array`, `?Type` 등)을 명시
+  **Why:** mixed 반환은 호출처에서 모든 타입 분기를 떠안게 되어 정적 분석·IDE 자동완성·Phpstan 검증을 모두 무력화한다.
 
 ```php
 <?php
@@ -336,10 +341,12 @@ namespace App\Modules\Commerce\Services;
 | 유틸리티/헬퍼 성격 | 날짜 포맷터, 문자열 처리 |
 
 추상화 시 인터페이스 상단에 **추상화 사유 주석 필수**.
+**Why:** 사유 주석 없는 Interface 는 시간이 지나면 "왜 추상화했는지" 망각되어 무분별한 메서드 추가로 ISP 원칙이 깨진다.
 
 ### 3. 보안 검증 필수
 
 모든 코드는 `security-audit` 스킬의 보안 규칙을 준수. SQL Injection, XSS, CSRF, Mass Assignment 등.
+**Why:** 단일 SQLi/XSS 취약점도 다국가 서비스에서는 GDPR·개인정보 유출 사고로 이어져 서비스 중단 + 법적 제재 + 신뢰 손실이 동시에 발생한다.
 
 ### 4. 사이드 이펙트 방지
 
@@ -389,6 +396,7 @@ namespace App\Modules\Commerce\Services;
 ### 6. 날짜/시간 처리
 
 - `date()`, `time()` **사용 금지**. `DateTimeImmutable` 필수.
+  **Why:** `date()`/`time()` 은 서버 default timezone 에 묶여 다국가 서비스에서 KR/JP/US 시간대가 뒤섞이고, mutable 객체는 의도치 않은 시점 변경으로 도메인 로직이 오염된다.
 - 타임스탬프 필요 시 `(new DateTimeImmutable())->getTimestamp()` 사용
 - DB/서버 타임존: UTC 통일
 
@@ -410,6 +418,7 @@ $formatted = $now->format('Y-m-d H:i:s');
 ### New 모드 산출물
 
 새 API 엔드포인트나 기능 요청 시 아래 **9가지를 반드시 동시에 생성**한다:
+**Why:** 9가지 산출물은 New 모드 모듈이 동작·테스트·문서화·다른 모듈 참조까지 즉시 가능한 최소 완결 세트라, 하나라도 빠지면 후속 작업자가 누락분 탐지·재작성에 시간을 허비한다.
 
 1. **Controller** (`Modules/{BC}/Controllers/`)
 2. **Service + Interface** (`Modules/{BC}/Services/`, `Modules/{BC}/Interfaces/`)
@@ -575,6 +584,7 @@ class OrderApiTest extends CIUnitTestCase
 | Member | `/member/profile` | 회원 프로필 |
 
 - **API 버전 prefix 금지**: URL에 `/v1/`, `/v2/` 등 버전 prefix 사용 금지 (폐기 확정)
+  **Why:** URL 버전 분기는 라우트·컨트롤러·문서가 N배로 늘어나며 폐기 시 클라이언트 마이그레이션 비용이 누적된다 — 헤더/필드 기반 협상으로 단일 URL 운영.
 - **module**: BC명의 kebab-case (비즈니스 도메인 표현)
 - **resource**: 복수형 snake_case 또는 단수형 (리소스 성격에 따라)
 - BC 디렉토리명과 URL module명은 다를 수 있다 (예: `Call` BC → `/phone-consult/`)
@@ -684,6 +694,7 @@ class CsrfTokenFilter implements FilterInterface
 **규칙**:
 - HMAC 서명 생성·검증은 `CsrfTokenService` 에 위임 — Filter 는 오케스트레이션만
 - 쿠키 ↔ 헤더 비교에는 **반드시 `hash_equals()`** — 타이밍 공격 방어
+  **Why:** `===`/`==` 는 첫 불일치 바이트에서 즉시 반환해 응답 시간 차이로 토큰을 추정할 수 있는 사이드채널이 노출되며, `hash_equals()` 는 상수 시간 비교로 이를 차단한다.
 - API Key 인증 요청(서버-서버)은 CSRF 면제
 - 면제 EP 경로는 `AuthFilter::EXCLUDED_PATHS` 와 별도 목록 관리 — `CsrfTokenFilter::EXCLUDED_PATHS` 권장
 
@@ -749,6 +760,7 @@ class AuthFilter implements FilterInterface
 3. Session (레거시 호환 — 신규 EP 사용 금지)
 
 **금지**: `Authorization: Bearer` 헤더 폴백 — XSS 시 토큰 탈취 위험
+**Why:** Bearer 헤더는 JS 에서 읽고 쓸 수 있어 XSS 1건만 발생해도 전체 사용자 세션이 탈취되며, HttpOnly 쿠키는 JS 접근이 원천 차단된다.
 
 ### RoleFilter (RBAC Layer 1)
 
@@ -824,6 +836,7 @@ $routes->group('api/callees', ['filter' => 'role:callee'], static function ($rou
 
 - 기본값은 `app/Config/Cookie.php` 에 등록. 호출처에서 속성을 개별 전달하지 않도록 래퍼 유틸리티 사용 권장
 - `samesite=None` **사용 금지** — 크로스사이트 허용으로 CSRF 취약
+  **Why:** `samesite=None` 은 임의 외부 도메인이 사용자 쿠키를 동반한 요청을 보낼 수 있게 해 CSRF 토큰이 탈취된 단일 시점에 전체 계정 변조가 가능해진다.
 
 ### 참조
 
