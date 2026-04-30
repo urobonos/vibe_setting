@@ -99,9 +99,9 @@ lint_skill() {
     [ "$status" = "PASS" ] && status="WARN"
   fi
 
-  # L4
+  # L4 — 자기 스킬 폴더 내 references 만 매칭. 절대경로(~/.claude/docs/references/...) 제외.
   local refs_in_body
-  refs_in_body=$(grep -oE 'references/[a-z0-9_-]+\.md' "$skill_md" 2>/dev/null | sort -u)
+  refs_in_body=$(grep -oE '(^|[^/~.])references/[a-z0-9_-]+\.md' "$skill_md" 2>/dev/null | sed -E 's/^[^a-zA-Z]//' | sort -u)
   local missing_refs=()
   if [ -n "$refs_in_body" ]; then
     while IFS= read -r ref; do

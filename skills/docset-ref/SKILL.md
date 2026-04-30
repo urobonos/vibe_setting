@@ -170,8 +170,8 @@ print(text[:3000])
 |-----------|-----------|
 | Docset | `[PHP.docset] password_hash (func)` |
 | Docset 문서 | `[CodeIgniter.docset] Controller Filters (Guide)` |
-| 캐시 .md | `~/.claude/docs/references/owasp-top10.md` |
-| 보안 KB | `~/.claude/docs/references/security/owasp-api-security-top10.md` |
+| 캐시 .md | `~/.claude/docs/references/{name}.md` (예: `owasp-top10.md` — 실제 캐시는 필요 시 생성) |
+| 보안 KB | `~/.claude/docs/references/security/{name}.md` (예: `owasp-api-security-top10.md`) |
 | WebFetch | 원본 URL |
 
 ---
