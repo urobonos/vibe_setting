@@ -86,9 +86,9 @@ BREAKING CHANGE: 기존 session 기반 인증이 제거됨
 
 1. `git push`를 현재 브랜치에서 **즉시 실행**한다
 2. push 실패 시 에러를 보여주고 수정 방안을 제안한다
-3. `--force` 또는 `--force-with-lease`는 사용자가 명시적으로 요청한 경우에만 사용한다
+3. **[High]** `--force` 또는 `--force-with-lease`는 사용자가 명시적으로 요청한 경우에만 사용한다
 4. **실행 주체:** 모든 `git` 명령은 Claude 가 Bash 도구로 **직접 실행**한다. 사용자에게 `! git push` 또는 `! git commit ...` 형태로 떠넘기는 것은 지침 위반이다. 로컬/조회(`status`, `log`, `diff`, `add`, `commit`, `branch`, `checkout`)는 승인 대기 없이 즉시 실행. `push`, `--force`, main/master force push 등 공유 상태 변경은 승인 요청 후 **승인 확인 즉시 Claude 가 직접 호출**한다. 승인 후 실행하지 않고 텍스트만 출력하는 것은 지침 위반이다.
-5. `main`/`master` 브랜치에 force push 요청 시 **경고 후 사용자 확인**을 받는다
+5. **[Critical]** `main`/`master` 브랜치에 force push 요청 시 **경고 후 사용자 확인**을 받는다 (히스토리 손상·공유 상태 비가역 변경)
 
 ---
 

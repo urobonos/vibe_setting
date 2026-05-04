@@ -121,7 +121,7 @@ Mono-repo + **Modular Monolith** 아키텍처. 레거시 코드는 마이그레�
 
 ## 핵심 규칙
 
-### New 모드 산출물 (9가지 동시 생성, 부분 구현 절대 금지)
+### New 모드 산출물 (9가지 동시 생성, 부분 구현 절대 금지) **[High]**
 
 새 API 엔드포인트나 기능 요청 시 아래 **9가지를 반드시 동시에 생성**한다:
 **Why:** 9가지 산출물은 New 모드 모듈이 동작·테스트·문서화·다른 모듈 참조까지 즉시 가능한 최소 완결 세트라, 하나라도 빠지면 후속 작업자가 누락분 탐지·재작성에 시간을 허비한다.
@@ -204,7 +204,7 @@ Controller에서 1차 검증, Model 검증은 2차 안전망:
 
 ---
 
-## Filter 패턴 + 인증/인가 구현
+## Filter 패턴 + 인증/인가 구현 **[Critical]**
 
 > **상세:** Filter 체인 6단계 + CsrfTokenFilter / AuthFilter / RoleFilter 풀 코드 + JWT 발급 패턴 + Cookie 발급 규격은 `references/auth-filters.md` 참조.
 

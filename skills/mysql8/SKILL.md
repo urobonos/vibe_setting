@@ -131,7 +131,7 @@ JOIN orders ON orders.user_id = sub.id
 GROUP BY sub.name;
 ```
 
-### 7. 인덱스 추가/수정 — 사용자 승인 필수
+### 7. 인덱스 추가/수정 — 사용자 승인 필수 **[High]**
 
 - 인덱스 추가, 수정, 삭제가 필요하다고 판단되면 **제안만 하고 사용자 승인 후 적용한다**.
 **Why:** 인덱스는 읽기 성능을 높이는 대신 INSERT/UPDATE/DELETE 마다 B-tree 재정렬 비용을 누적시키며, 대용량 테이블에서 무단 추가는 쓰기 응답시간을 수배로 늘리고 디스크를 폭증시킨다.
@@ -172,7 +172,7 @@ CREATE TABLE tb_example (
 ALTER TABLE tb_legacy CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 10. 암호화 함수 사용 시 세션 설정
+### 10. 암호화 함수 사용 시 세션 설정 **[Critical]**
 
 MySQL `AES_ENCRYPT()` / `AES_DECRYPT()` 함수를 사용할 때는 세션 변수 `block_encryption_mode`를 **프로젝트 보안 정책에 맞춰 명시적으로 설정**한다. 기본값(MySQL 8.x: `aes-128-ecb`)에 의존하지 않는다 — ECB 모드는 동일 평문에 동일 암호문을 생성하여 패턴 노출 위험.
 
