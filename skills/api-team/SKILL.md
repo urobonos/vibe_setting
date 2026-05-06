@@ -7,16 +7,31 @@ description: >
   Lead = Claude 본체, 멤버 3명은 cold context 로 병렬 Agent spawn (Opus 4.7 고정).
   인프라 멤버는 폴더 read + AWS CLI 실시간 조회 (조회계 즉시, 변경계 사용자 승인).
 triggers:
-  - "API 추가" + ("영향" / "반영" / "체크" / "확인" / "점검")
-  - "엔드포인트 추가" + ("영향" / "반영")
-  - "라우트 추가" + ("영향" / "반영")
-  - "엔드포인트" + ("오류" / "에러" / "500" / "안 됨" / "안됨" / "timeout" / "디버그")
-  - "API" + ("오류" / "에러" / "500" / "디버그")
-  - "풀스택 영향" / "FE BE 인프라" / "프엔 백 인프라"
-  - 슬래시 커맨드: "/api-team"
+  - "API 추가 영향"
+  - "API 추가 반영"
+  - "API 추가 체크"
+  - "API 추가 확인"
+  - "API 추가 점검"
+  - "엔드포인트 추가 영향"
+  - "엔드포인트 추가 반영"
+  - "라우트 추가 영향"
+  - "라우트 추가 반영"
+  - "엔드포인트 오류"
+  - "엔드포인트 에러"
+  - "엔드포인트 500"
+  - "엔드포인트 timeout"
+  - "엔드포인트 디버그"
+  - "API 오류"
+  - "API 에러"
+  - "API 500"
+  - "API 디버그"
+  - "풀스택 영향"
+  - "FE BE 인프라"
+  - "프엔 백 인프라"
+  - "/api-team"
 version: 1.0.0
 user-invocable: true
-depends_on: [orchestration, php8, mysql8, aws, security-audit, global-context, task-docs]
+depends_on: [orchestration, php8, mysql8, aws, security-audit, task-docs]
 conflicts_with: []
 min_claude_md_version: "4.0"
 ---

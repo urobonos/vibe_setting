@@ -7,8 +7,16 @@ description: >
   코드 작성/수정/리뷰 시 보안 취약점을 감지하고 보고한다.
   보안 이슈 발견 시 즉시 Checkpoint를 발동하여 사용자에게 보고한다.
 triggers:
-  - 파일 수정/생성 시 자동
-  - "보안 감사", "보안 점검", "security audit", "취약점 점검"
+  - "보안 감사"
+  - "보안 점검"
+  - "security audit"
+  - "취약점 점검"
+  - "OWASP"
+  - "CWE"
+  - "보안 리뷰"
+  - "secure coding"
+  - "보안 검토"
+  - "/security-audit"
 severity_levels:
   Critical: 즉시 Checkpoint 발동, 사용자 보고 후 수정
   High: result.md [Security] 항목에 보고

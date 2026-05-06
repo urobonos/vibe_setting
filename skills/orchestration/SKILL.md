@@ -4,10 +4,17 @@ description: >
   3-Team Orchestration (Analyze→Plan→Execute) 통합 스킬. 9-Core + 3-Consultants 페르소나,
   Effort/Model/Task Sizing, Communication Protocol, Team 상세 구조, Vibe Coding Group을 정의한다.
 triggers:
-  - 모든 작업 수신 시 자동 참조
-  - 에이전트 spawn 시 페르소나/Checklist 참조
-  - "바이브코딩", "바이브 코딩", "vibe coding"
-  - "에이전트 설정", "Effort 할당", "작업 등급"
+  - "바이브코딩"
+  - "바이브 코딩"
+  - "vibe coding"
+  - "에이전트 설정"
+  - "Effort 할당"
+  - "작업 등급"
+  - "3-Team"
+  - "Analyze→Plan→Execute"
+  - "오케스트레이션"
+  - "orchestration"
+  - "/orchestration"
 version: 2.0.0
 user-invocable: true
 depends_on: []
@@ -18,6 +25,65 @@ min_claude_md_version: "4.0"
 # Orchestration Skill
 
 3-Team 순차 실행 (Analyze → Plan → Execute) 구조의 멀티 에이전트 오케스트레이션.
+
+---
+
+# Part 0. Agent-First Default (필수)
+
+본 스킬은 **모든 작업의 default 진입점**이다. Lead = Claude 본체, 멤버는 Agent 도구로 cold context spawn. 위임 default 원칙은 CLAUDE.md §4 "에이전트 우선 위임" 과 정합한다.
+
+## 0.1. 자동 위임 트리거 (위임 default)
+
+| 작업 유형 | 진입 모드 | Effort/Model | 사유 |
+|-----------|-----------|--------------|------|
+| 코드베이스 탐색 (3쿼리+) | `Explore` agent | 시스템 기본 | 메인 컨텍스트 오염 방지 |
+| 다파일 영향 분석 | Team 1 (Analyze) | Lead+멤버 페르소나별 | 다각적 검증 |
+| 다단계 구현 (M/L 등급) | 3-Team 전체 (Analyze→Plan→Execute) | Part 1 표 준수 | Worktree 격리 |
+| 설계 결정 (아키텍처·스키마·API) | `Plan` agent + Architect 페르소나 | Max/opus | 근거 기반 판단 |
+| 단일 도메인 깊은 조사 | `general-purpose` agent | High/opus | 답변 1회 분리 |
+| API 추가·엔드포인트 디버깅 | `api-team` 스킬 (FE/BE/인프라 3-멤버) | api-team SSOT | 풀스택 병렬 |
+| 의견 갈림·트레이드오프 | `debate` 스킬 | debate SSOT | 다관점 비교 |
+| 보안 검토·OWASP 매핑 | `security-audit` 스킬 | security-audit SSOT | 전문 도메인 분리 |
+| 스킬 생성·수정·최적화 | `skill-creator` 스킬 | skill-creator SSOT | 강제 진입점 (CLAUDE.md §4) |
+
+## 0.2. 직접 작업 허용 (위임 제외)
+
+다음 3가지에 한해 Claude 본체가 직접 처리한다. 직접 작업 결정 시 **한 줄로 사유 보고** (trivial / 단발 조회 / cost).
+
+- **단일 파일 trivial 수정** — 오타 수정·1~3줄 패치·명백한 typo·import 한 줄 추가
+- **단발성 조회 1회** — 단일 `git status` / `git log -n 1` / 단일 grep / 단일 cat
+- **위임 비용 > 작업 비용 명백** — 답변 1문장으로 끝나는 사실 확인 질문, 메모리 단순 조회
+
+## 0.3. 판정 기준
+
+> **"이 작업이 cold context 로 분리해서 검증할 가치가 있나?"**
+>
+> - 예 → 위임 (Agent spawn)
+> - 아니오 → 직접 (사유 보고)
+
+**판단 애매한 경우 default = 위임.** 사용자가 매번 "에이전트 써" 라고 지시해야 하는 상황은 지침 위반이다.
+
+## 0.4. Lead 책임 (위임 시에도 유지)
+
+- Agent 호출은 Lead = Claude 본체 책임. Agent 결과만 raw 패스 금지.
+- Lead 가 멤버 결과를 종합하여 사용자에게 통합 보고한다.
+- §3 Checkpoint 우선 적용 — Checkpoint 발동 변경은 위임 여부와 무관하게 사용자 승인 필수.
+
+**Why:** 메인 컨텍스트 오염 방지 + 다각적 검증(Reviewer/Security/Performance 페르소나) + 병렬 처리로 응답 시간 단축. 위임 default 가 깨지면 단일 컨텍스트에 모든 검증이 집중되어 페르소나 상호 오염·검증 누락·응답 지연이 동시 발생한다.
+
+## 0.5. Concise Reporting (필수)
+
+Lead 가 사용자에게 보고할 때 **결론 + 표/diff 위주**로 압축한다. 사족·진행 서술·중복 요약 제거.
+
+| 항목 | 기본 양식 | 예외 |
+|------|----------|------|
+| 보고 시작 | 결론 1~2줄 | — |
+| 본문 | 표 1개 또는 diff/패치 | — |
+| 마무리 | 잔여 액션 1줄 | — |
+| 면제 영역 | "Before/After 대조" / "타당성 검토" / "변경 영향 기록" / `tasks/` 산출물 | 양식 강제 — 그대로 유지하되 진행 서술만 제거 |
+| 상세 풀이 | 사용자 명시 질문 시에만 | "더 자세히", "왜 그래", "근거는" |
+
+**Why:** 멤버 결과를 통합한 Lead 보고가 길어지면 사용자가 핵심을 골라내야 하는 비용이 발생하고, "보고 행위 자체 = 작업 완료 신호" 로 변질된다. 본 룰은 CLAUDE.md §4 "응답 간결" 의 멀티 에이전트 보고 영역 매핑이며 SSOT 는 CLAUDE.md.
 
 ---
 

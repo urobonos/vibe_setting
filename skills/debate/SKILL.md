@@ -4,10 +4,19 @@ description: >
   Multi-Agent Subagent Debate Protocol. 질문 유형 시 4그룹 12 서브에이전트 토론을 수행한다.
   토론만 수행하며, 코드 구현·커밋은 별도 3-Team 워크플로우로 처리한다.
 triggers:
-  - "~는 어떻게?", "~가 뭐야?", "~차이가 뭐야?"
-  - "~할까?", "~어떨까?", "어떤 게 나아?"
-  - "~괜찮아?", "~방식이 맞아?", "~패턴 써도 돼?"
-  - "A vs B", "~중에 뭐가?"
+  - "어떻게 할까"
+  - "어떤 방향이 좋을까"
+  - "어떤 게 나아"
+  - "차이가 뭐야"
+  - "괜찮아"
+  - "방식이 맞아"
+  - "패턴 써도 돼"
+  - "A vs B"
+  - " vs "
+  - "트레이드오프"
+  - "tradeoff"
+  - "의견 갈림"
+  - "/debate"
 version: 2.1.0
 user-invocable: true
 depends_on: [orchestration]

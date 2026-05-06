@@ -17,7 +17,7 @@ triggers:
   - 슬래시 커맨드: "/debug-skill"
 version: 1.0.0
 user-invocable: true
-depends_on: [php8, aws, mysql8, security-audit, global-context]
+depends_on: [php8, aws, mysql8, security-audit]
 conflicts_with: []
 min_claude_md_version: "4.0"
 ---

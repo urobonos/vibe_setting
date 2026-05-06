@@ -6,15 +6,20 @@ description: >
   i18n, 타임존, 배포 환경 분리 규칙. 다른 프로젝트(infra, frontend 외부 등)
   에서는 본 스킬을 호출하지 않는다.
 triggers:
-  - "국가" + (hongcafe / global / backend) 컨텍스트
-  - "country", "i18n", "다국어", "타임존", "timezone"
-    (hongcafe_global_* 레포 또는 ~/.claude 작업 컨텍스트일 때)
-  - "Country Resolver", "ISO 3166", "JWT claim country"
-  - "currency", "locale" (HongCafe Global 컨텍스트 동반 시)
-  - "Feature Flag", "피처플래그"
-  - "배포 환경", "deploy" (HongCafe Global 한정)
-  - app/Config/Countries/ 하위 파일 생성/수정 시
-  - Language/ 하위 파일 생성/수정 시
+  - "Country Resolver"
+  - "ISO 3166"
+  - "JWT claim country"
+  - "i18n"
+  - "다국어"
+  - "타임존"
+  - "timezone"
+  - "Feature Flag"
+  - "피처플래그"
+  - "hongcafe_global"
+  - "hongcafe global"
+  - "app/Config/Countries"
+  - "Services::country"
+  - "tb_feature_flags"
 version: 1.0.0
 user-invocable: false
 depends_on: [php8]

@@ -10,6 +10,13 @@ triggers:
   - "pipeline"
   - "PR 생성"
   - "PR 목록"
+  - "빌드 상태"
+  - "빌드 확인"
+  - "branch 목록"
+  - "브랜치 목록"
+  - "commit 조회"
+  - "diff 조회"
+  - "/bitbucket"
 version: 1.0.0
 user-invocable: true
 depends_on: []

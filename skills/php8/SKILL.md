@@ -9,10 +9,18 @@ description: >
   신규 모듈은 부분 구현 절대 금지 — 9가지 산출물이 항상 함께 생성되어야 한다.
   **Why:** 부분 구현 모듈은 Interface·DI·Routes·테스트 중 하나라도 누락 시 다른 모듈에서 참조 불가능해 통합 시점에 폭발적 재작업 비용이 발생한다.
 triggers:
-  - "API 만들어줘", "엔드포인트 추가", "CRUD 만들어줘"
-  - "CI4 컨트롤러 만들어줘", "PHP 모델 만들어줘", "서비스 만들어줘"
-  - app/Modules/ 하위 PHP 파일 생성/수정 시
-  - app/Libraries/, app/Controllers/Api/, app/Models/ 하위 PHP 파일 수정 시 (Legacy 모드)
+  - "API 만들어줘"
+  - "엔드포인트 추가"
+  - "CRUD 만들어줘"
+  - "CI4 컨트롤러 만들어줘"
+  - "PHP 모델 만들어줘"
+  - "서비스 만들어줘"
+  - "app/Modules"
+  - "app/Libraries"
+  - "app/Controllers/Api"
+  - "app/Models"
+  - "Modular Monolith"
+  - "/php8"
 version: 3.1.0
 user-invocable: true
 depends_on: [mysql8, security-audit]

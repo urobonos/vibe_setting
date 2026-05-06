@@ -4,7 +4,12 @@ description: >
   커밋 메시지 포맷 정의 + 현재 브랜치에서 git push를 즉시 실행하는 스킬.
   커밋 포맷의 SSOT. Conventional Commits v1.0.0 표준 `type(scope): 제목` 형식을 정의한다.
 triggers:
-  - "push", "푸시해", "git push"
+  - "git push"
+  - "푸시해"
+  - "푸시 진행"
+  - "원격 push"
+  - "remote push"
+  - "/git-push"
 version: 2.0.0
 user-invocable: true
 depends_on: []

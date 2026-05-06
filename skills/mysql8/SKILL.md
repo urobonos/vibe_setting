@@ -6,10 +6,18 @@ description: >
   인덱스 추가/수정은 반드시 사용자 승인 후 적용. 쿼리 힌트 사용 금지.
   타 DB 이관 가능성을 항상 고려하여 MySQL 전용 구문 사용 시 ANSI 대안을 병기한다.
 triggers:
-  - "쿼리 작성", "쿼리 최적화", "SQL 작성"
-  - "스키마 설계", "테이블 설계", "마이그레이션 작성"
-  - "인덱스 추가", "인덱스 설계", "실행계획 분석"
-  - MySQL/DB 관련 코드 작성/수정, 마이그레이션 파일(app/Database/Migrations/) 작업 시
+  - "쿼리 작성"
+  - "쿼리 최적화"
+  - "SQL 작성"
+  - "스키마 설계"
+  - "테이블 설계"
+  - "마이그레이션 작성"
+  - "인덱스 추가"
+  - "인덱스 설계"
+  - "실행계획 분석"
+  - "EXPLAIN"
+  - "app/Database/Migrations"
+  - "/mysql8"
 version: 1.0.0
 user-invocable: true
 depends_on: []

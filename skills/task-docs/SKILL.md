@@ -9,10 +9,21 @@ description: >
 triggers:
   - "/plan"
   - "/research"
-  - "플랜 작성", "계획 세워줘"
-  - "리서치 해줘", "분석 해줘", "코드 분석", "영향 범위 조사"
-  - 3-Team 워크플로우의 Team 1(Analyze), Team 2(Plan), Team 3(Execute) 완료 시 자동 적용
-  - "/task-docs specs", "SDP 작성", "SRS 작성", "SDD 작성", "IDD 작성", "STP 작성", "STD 작성"
+  - "/task-docs"
+  - "/task-docs specs"
+  - "플랜 작성"
+  - "계획 세워줘"
+  - "리서치 해줘"
+  - "분석 문서 작성"
+  - "코드 분석 문서"
+  - "영향 범위 조사 문서"
+  - "task-docs"
+  - "SDP 작성"
+  - "SRS 작성"
+  - "SDD 작성"
+  - "IDD 작성"
+  - "STP 작성"
+  - "STD 작성"
 version: 4.0.0
 user-invocable: true
 depends_on: []
