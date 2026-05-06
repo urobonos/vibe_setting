@@ -191,9 +191,12 @@ except:
 fi
 
 # --- Agent Validation ---
-if [[ "$TOOL_NAME" == "Agent" ]]; then
-  # Explore, Plan, claude-code-guide, statusline-setup → model 검증 제외
-  if [[ "$SUBAGENT_TYPE" != "Explore" && "$SUBAGENT_TYPE" != "Plan" && "$SUBAGENT_TYPE" != "claude-code-guide" && "$SUBAGENT_TYPE" != "statusline-setup" ]]; then
+# 시스템 tool name 다양성 대응: Agent / Task / SubagentSpawn 모두 매칭
+# (audit §1.1 #3 권고: matcher 가 Agent 인데 실제 tool_name 이 Task/SubagentSpawn 으로
+# 들어오면 model 검증 우회. 화이트리스트 확장으로 우회 차단.)
+if [[ "$TOOL_NAME" == "Agent" || "$TOOL_NAME" == "Task" || "$TOOL_NAME" == "SubagentSpawn" ]]; then
+  # Explore, Plan, claude-code-guide, statusline-setup, general-purpose → model 검증 제외
+  if [[ "$SUBAGENT_TYPE" != "Explore" && "$SUBAGENT_TYPE" != "Plan" && "$SUBAGENT_TYPE" != "claude-code-guide" && "$SUBAGENT_TYPE" != "statusline-setup" && "$SUBAGENT_TYPE" != "general-purpose" ]]; then
     if [ -z "$MODEL" ]; then
       echo "[GATE BLOCKED] Agent spawn 차단 — model 파라미터(opus/sonnet/haiku)를 반드시 지정하세요. (orchestration 스킬 §1.1 Effort 할당)" >&2
       exit 2
