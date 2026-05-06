@@ -117,14 +117,21 @@ if [ "$CURRENT" -ge 2 ] && [ "$IS_NONCODE_ONLY" = false ]; then
 fi
 
 # 차단 또는 통과
+# 정책: exit 0 (stderr 경고만, 차단 없음)
+# Why: Stop hook 매 턴 호출 + exit 2 차단 시 사용자 응답 대기 진입 자체 불가능
+# (단일 응답 종료마다 차단되어 무한 reroll). stderr 안내로 Claude 자가 복구
+# (CLAUDE.md §4 "Hook 차단 자가 복구" 룰) 신뢰. 산출물 누락은 1회 알림으로 충분.
 if [ "$BLOCKED" = true ]; then
-  echo "" >&2
-  echo "━━━ Session Completeness: 산출물 누락 — 종료 차단 ━━━" >&2
-  echo -e "$WARNINGS" >&2
-  echo "" >&2
-  echo "일일 기록 누락 시: ~/.claude/docs/${PRODUCT}/tasks/history.md 에 오늘 날짜 항목 + ~/.claude/docs/${PRODUCT}/tasks/${TODAY}/summary.md 파일 생성 필요" >&2
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-  exit 2
+  WARN_FLAG="/tmp/claude_completeness_warned_${SESSION_ID}"
+  if [ ! -f "$WARN_FLAG" ]; then
+    touch "$WARN_FLAG"
+    echo "" >&2
+    echo "━━━ Session Completeness: 산출물 누락 알림 ━━━" >&2
+    echo -e "$WARNINGS" >&2
+    echo "" >&2
+    echo "일일 기록 누락 시: ~/.claude/docs/${PRODUCT}/tasks/history.md 에 오늘 날짜 항목 + ~/.claude/docs/${PRODUCT}/tasks/${TODAY}/summary.md 파일 생성 권장" >&2
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+  fi
 fi
 
 # 세션 종료 시 플래그 정리

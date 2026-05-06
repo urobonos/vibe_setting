@@ -9,16 +9,12 @@ FILE="$FILE_PATH"
 
 if [ -z "$FILE" ]; then exit 0; fi
 
-# .claude/CLAUDE.md 또는 .claude/skills/ 변경 시에만 동기화
+# .claude/CLAUDE.md 또는 .claude/skills/ 변경 시 — stderr 안내만 출력 (자동 commit 제거)
+# 정책 (2026-05-06): 자동 git commit 제거. 매 Edit 마다 의도하지 않은 다중 commit 누적 +
+# 사용자 staging 흐름 가로채 + branch-enforce.sh protected 브랜치 차단과 충돌 위험.
+# Claude 는 Direct Execution 룰 (CLAUDE.md §4) 에 따라 사용자 승인 시 직접 git commit 실행.
 if echo "$FILE" | grep -qiE '\.claude/(CLAUDE\.md|skills/)'; then
-  cd "$HOME/.claude" || exit 0
-  git add CLAUDE.md skills/ .gitignore 2>/dev/null
-  if ! git diff --cached --quiet 2>/dev/null; then
-    # 자동 commit 만 수행. push 는 비활성 — CLAUDE.md §3(공유 상태 변경 사용자 승인) +
-    # Direct Execution(승인 후 Claude 가 직접 실행) 룰. 사용자가 push 명시 요청 시
-    # Claude 가 직접 `git push` 실행. hook 자동 push 금지.
-    git commit -m "chore: auto-sync $(basename "$FILE")"
-  fi
+  echo "[claude-settings-sync] $(basename "$FILE") 변경 감지 — 사용자 승인 후 git commit 필요." >&2
 fi
 
 exit 0
