@@ -89,7 +89,7 @@
 ## 4. Guardrails & Quality
 
 > **카테고리 인덱스 (룰 빠른 찾기):**
-> - **§4.1 코드 품질·산출물:** Proactive Correction / Readability / Validation / Persistence / 타당성 검토 / 변경 영향 기록 / 산출물 유연성 / Before-After 대조 / 롤백 가능 상태 / Co-Authored-By 금지
+> - **§4.1 코드 품질·산출물:** Proactive Correction / Readability / Validation / Persistence / 타당성 검토 / 변경 영향 기록 / 산출물 유연성 / Before-After 대조 / 롤백 가능 상태 / 세션 내 commit 수정 (reset+재커밋) / Co-Authored-By 금지
 > - **§4.2 실행·위임·자동화:** 에이전트 우선 위임 / 실행 책임 / Hook 차단 자가 복구 / Hook 우회 금지 / audit 자동 수정 금지 / Auto mode 룰 우선순위
 > - **§4.3 게이트·워크플로우:** 묶음 승인 Fast-Track / output 경로 Gate-0 / 브랜치 워크플로우 / 스킬 생성·수정 진입점 / 로컬 수정 사전 승인 / e2e 검증
 > - **§4.4 응답 형식:** 응답 톤 / 응답 간결 / 답변 깊이 (Anticipatory Depth)
@@ -107,6 +107,7 @@
 - **`output/` 경로 Gate-0 직행:** `~/.claude/docs/{product}/output/` 하위 분석·리서치 산출물은 `gate-enforce.sh` 면제 경로로 분류되어 Gate-0 에서도 즉시 Edit/Write 허용된다. 코드 변경 없는 순수 분석/조사/리포트 요청("분석해줘", "리포트 만들어줘", "비교해줘") 에서 Gate-1 승인 절차 없이 작업 시작 가능. `tasks/` 와 `specs/` 는 종전 게이트 적용 유지.
 - **Before/After 대조 보고 (필수 / 무조건 진행):** 작업 완료 후 **최초 실행안**(사용자가 처음 지시한 최소 요구 사항)과 **제안에서 변경된 안**(Claude 가 추가/수정한 부분)을 대조해 **예외 없이** 보여준다. 파일/함수 단위 diff 또는 표 형태로 사용자가 한눈에 비교할 수 있어야 한다. "변경 사항이 사용자 지시와 동일함"·"제안 추가 없음"·"단순 작업"을 이유로 보고를 생략할 수 없으며, 제안 추가가 0건이라면 **"제안 추가: 없음 — 사용자 지시 그대로 반영"** 을 명시해 보고한다. 제안 반영 내역을 숨긴 채 최종안만 보고하는 것은 지침 위반이다.
 - **롤백 가능 상태 유지 (필수):** 제안사항이 반영된 코드는 **롤백 가능한 상태**로 유지한다. 실천 방법: (1) 최초안과 제안안을 별도 커밋으로 분리 (`최초안 commit` → `제안 반영 commit`), 또는 (2) 제안 반영분을 명시적 diff/patch 로 제공하여 복원 경로를 보장. 단일 커밋에 최초안+제안을 섞어 넣어 분리 롤백이 불가능한 상태로 만들면 지침 위반이다.
+- **세션 내 commit 수정 정책 (필수):** 본 세션이 만든 commit 에 수정사항 발생 시 **`git revert` (역 commit 추가) 사용 금지**. 대신 **`git reset --soft HEAD~N`** 으로 해당 commit 들을 초기화한 뒤 수정사항 반영 + 새 commit 생성한다. **push 적용 흐름:** (1) push 전 상태면 reset → 수정 → 새 commit → push. (2) 이미 push 된 commit 이면 사용자 명시 승인 후 `git push --force-with-lease` (force push). **Why:** revert 는 history 에 역 commit 이 누적돼 PR 리뷰 노이즈가 커지고, 동일 변경에 원본+revert 2개가 박혀 추적성이 깨진다. reset+재커밋은 단일 깨끗한 history 유지 + 의미 단위 commit 분할 보존. **제약:** 다른 사람이 base 로 사용 중인 공동 작업 브랜치 (production / staging / develop / main / master) 는 reset 금지 — `git revert` 유지. 본 룰은 단일 작업자 단기 feature 브랜치 (§4.3 "브랜치 워크플로우" 정합) 한정 적용.
 - **Co-Authored-By 라인 금지 (필수):** git commit 메시지에 `Co-Authored-By: Claude ...` 라인 포함 금지 (jypark 단독 author 정책). `dangerous-ops-guard.sh` hook 이 SSOT 로 강제 차단.
 - **Hook 차단 자가 복구 (필수):** hook(특히 `gate-approve.sh`, `task-docs` 관련)이 "파일 미생성 — 차단" 유형 메시지를 던지면, 사용자에게 "생성해주세요"라고 되묻지 말고 Claude 가 직접 그 파일을 작성해서 gate 를 통과시킨다. 단 (a) 이미 사용자 승인을 받은 진행 맥락일 것, (b) 차단 메시지에 명시된 파일 경로·역할 정확히 따를 것 — 두 조건 충족 시에만 자가 작성. 미승인 작업의 강제 진입은 금지. 자가 작성 후 "hook 이 지적한 누락분을 채웠음"만 짧게 보고하고 다시 승인 키워드 대기.
 - **Hook 우회 목적 임의 파일 생성 금지 (필수):** hook 차단을 회피하려고 임의로 파일을 생성·커밋하지 않는다. 위 "Hook 차단 자가 복구" 룰의 정당한 누락분 보완(승인된 작업의 누락 산출물 작성)과 다르며, 무관한 파일을 만들거나 hook 경로 위장 목적의 더미 파일을 생성하는 모든 행위가 위반이다. 차단이 정당하지 않다고 판단되면 사용자에게 보고하고 지시를 기다린다.
