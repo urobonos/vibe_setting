@@ -17,6 +17,9 @@ GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 # 세션 시작 시 gate 리셋
 echo "0" > "$GATE_FILE"
 
+# stale gate 파일 정리 (7일 이상 미수정 — 활성 세션 파일은 mtime 갱신되어 보존)
+find /tmp -maxdepth 1 -name 'claude_gate_*' -mtime +7 -delete 2>/dev/null
+
 # skill-creator 락 파일 잔여 정리 (이전 세션에서 미삭제 가능성 차단)
 rm -f "$HOME/.claude/.skill-creator-active.lock" 2>/dev/null
 
