@@ -139,6 +139,16 @@ if [ "$HAS_TEST_FRAMEWORK" = false ]; then
   exit 0
 fi
 
+# docs/config-only commit 면제 — markdown / 설정 파일 / 텍스트만 staged 시 통과
+# (audit 권고: docs-only commit, hotfix, hook 수정 등 false positive 빈발 차단)
+if [ -n "$STAGED_FILES" ]; then
+  NON_DOCS=$(echo "$STAGED_FILES" | grep -vE '\.(md|markdown|txt|rst|json|ya?ml|toml|ini|conf)$|^docs/|^README|^CHANGELOG|^LICENSE' | head -1)
+  if [ -z "$NON_DOCS" ]; then
+    echo "[git-quality-gate] docs/config-only commit — 테스트 면제." >&2
+    exit 0
+  fi
+fi
+
 echo "[NO TEST, NO MERGE] git commit 차단 — 이번 세션에서 테스트를 실행한 이력이 없습니다." >&2
 echo "  phpunit, composer test, npm test 등을 먼저 실행하세요." >&2
 echo "  테스트 불필요한 변경이라면 사용자에게 확인 후 진행하세요." >&2

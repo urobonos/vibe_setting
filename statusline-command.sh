@@ -23,7 +23,23 @@ five_hour=${five_hour:-}
 ctx=${ctx:-}
 total_tokens=${total_tokens:-}
 
-git_branch=$(git -C "$cwd" --no-optional-locks branch --show-current 2>/dev/null)
+# 5초 TTL 캐시 — Windows + Git Bash 환경에서 매 토큰마다 git fork 비용 누적 방지
+git_branch=""
+if [ -n "$cwd" ]; then
+  cache_key=$(echo "$cwd" | md5sum 2>/dev/null | cut -c1-8)
+  cache_file="/tmp/claude_statusline_branch_${cache_key}"
+  cache_age=999
+  if [ -f "$cache_file" ]; then
+    cache_mtime=$(stat -c %Y "$cache_file" 2>/dev/null || echo 0)
+    cache_age=$(( $(date +%s) - cache_mtime ))
+  fi
+  if [ "$cache_age" -lt 5 ] && [ -f "$cache_file" ]; then
+    git_branch=$(cat "$cache_file" 2>/dev/null)
+  else
+    git_branch=$(git -C "$cwd" --no-optional-locks branch --show-current 2>/dev/null)
+    echo "$git_branch" > "$cache_file" 2>/dev/null
+  fi
+fi
 [ -n "$git_branch" ] && git_branch=" ($git_branch)"
 
 yellow='\033[33m'
