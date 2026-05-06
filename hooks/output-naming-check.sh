@@ -65,11 +65,28 @@ fi
 if [ "$KIND" = "output" ]; then
   REL_FROM_OUTPUT=$(echo "$FILE_PATH" | sed -E 's|.*/docs/[^/]+/output/||')
   DEPTH=$(echo "$REL_FROM_OUTPUT" | awk -F/ '{print NF}')
-  if [ "$DEPTH" -lt 2 ]; then
-    echo "[OUTPUT-NAMING] output/{topic-slug}/ 하위에 파일을 배치하세요. 현재: output/$REL_FROM_OUTPUT" >&2
+  if [ "$DEPTH" -lt 3 ]; then
+    echo "[OUTPUT-NAMING] output/{category}/{topic-slug}/ 하위에 파일을 배치하세요. 현재: output/$REL_FROM_OUTPUT" >&2
+    echo "  카테고리: audit | verification | research | analysis | report | guide | archive" >&2
     exit 2
   fi
-  TOPIC_SLUG=$(echo "$REL_FROM_OUTPUT" | awk -F/ '{print $1}')
+  CATEGORY=$(echo "$REL_FROM_OUTPUT" | awk -F/ '{print $1}')
+  case "$CATEGORY" in
+    audit|verification|research|analysis|report|guide|archive) ;;
+    *)
+      echo "[OUTPUT-NAMING] 알 수 없는 카테고리: '$CATEGORY' — audit | verification | research | analysis | report | guide | archive 중 하나를 사용하세요." >&2
+      exit 2
+      ;;
+  esac
+  TOPIC_SLUG=$(echo "$REL_FROM_OUTPUT" | awk -F/ '{print $2}')
+  # 폴더명 -YYYYMMDD suffix 차단 (날짜는 YYYY-MM-DD- prefix 형식만 허용)
+  if echo "$TOPIC_SLUG" | grep -qE -- '-[0-9]{8}$'; then
+    SUGGEST_DATE=$(echo "$TOPIC_SLUG" | sed -E 's/.*-([0-9]{4})([0-9]{2})([0-9]{2})$/\1-\2-\3/')
+    SUGGEST_BASE=$(echo "$TOPIC_SLUG" | sed -E 's/-[0-9]{8}$//')
+    echo "[OUTPUT-NAMING] 폴더명 suffix 형식 '-YYYYMMDD' 금지: '$TOPIC_SLUG'. ISO-8601 prefix 'YYYY-MM-DD-' 형식만 허용." >&2
+    echo "  예시: $SUGGEST_DATE-$SUGGEST_BASE" >&2
+    exit 2
+  fi
   CONTEXT_SLUG="$TOPIC_SLUG"
 fi
 

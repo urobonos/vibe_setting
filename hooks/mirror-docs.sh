@@ -1,10 +1,8 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-# PostToolUse:Edit|Write Hook — IEEE specs / api-docs 3-way 미러링
+# PostToolUse:Edit|Write Hook — api-docs 3-way 미러링
 #
 # 대상:
-#   ~/.claude/docs/{product}/specs/**     → C:/Works/hongcafe_global_backend/docs/specs/**
-#                                          + C:/Works/hongcafe_global_docs/be/specs/**
 #   ~/.claude/docs/{product}/api-docs/**  → C:/Works/hongcafe_global_backend/api-docs/**
 #                                          + C:/Works/hongcafe_global_docs/be/api-docs/**
 #
@@ -12,7 +10,7 @@
 #   - 자동 cp (3회 재시도, 200ms 간격)
 #   - 실패 시 stderr 보고 + exit 0 (PostToolUse 차단 회피)
 #   - 미러링 루트 디렉토리(be/docs 프로젝트) 미존재 시 SKIP
-#   - 사용자 결정 (2026-04-30): 1=PostToolUse, 2=실패시 재시도, 3=자동 미러링, 4=specs/api-docs 전부
+#   - specs/ 미러링은 2026-05-04 사용자 결정으로 제거 (글로벌 specs/ SSOT 단일화)
 
 source "$(dirname "$0")/lib/hook-input.sh"
 hook_init
@@ -21,20 +19,19 @@ hook_parse_file_path
 
 FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
 
-# specs/ 또는 api-docs/ 하위가 아니면 통과
-echo "$FILE_PATH" | grep -qiE '/\.claude/docs/[^/]+/(specs|api-docs)/' || exit 0
+# api-docs/ 하위가 아니면 통과
+echo "$FILE_PATH" | grep -qiE '/\.claude/docs/[^/]+/api-docs/' || exit 0
 
 [ -f "$FILE_PATH" ] || exit 0
 
-# 카테고리 + 상대경로 추출 (bash parameter expansion — sed 메타문자 회피)
-# FILE_PATH 예: C:/Users/PV/.claude/docs/hongcafe_global_backend/specs/auth-srs.md
-AFTER_DOCS="${FILE_PATH#*/.claude/docs/}"        # hongcafe_global_backend/specs/auth-srs.md
+# 상대경로 추출 (bash parameter expansion)
+AFTER_DOCS="${FILE_PATH#*/.claude/docs/}"        # hongcafe_global_backend/api-docs/auth/login.md
 PRODUCT="${AFTER_DOCS%%/*}"                       # hongcafe_global_backend
-AFTER_PRODUCT="${AFTER_DOCS#*/}"                  # specs/auth-srs.md
-CATEGORY="${AFTER_PRODUCT%%/*}"                   # specs
-REL_PATH="${AFTER_PRODUCT#*/}"                    # auth-srs.md
+AFTER_PRODUCT="${AFTER_DOCS#*/}"                  # api-docs/auth/login.md
+CATEGORY="${AFTER_PRODUCT%%/*}"                   # api-docs
+REL_PATH="${AFTER_PRODUCT#*/}"                    # auth/login.md
 
-if [ "$CATEGORY" != "specs" ] && [ "$CATEGORY" != "api-docs" ]; then
+if [ "$CATEGORY" != "api-docs" ]; then
   exit 0
 fi
 
@@ -46,19 +43,8 @@ fi
 BE_BASE="C:/Works/hongcafe_global_backend"
 DOCS_BASE="C:/Works/hongcafe_global_docs"
 
-case "$CATEGORY" in
-  specs)
-    BE_DEST="$BE_BASE/docs/specs/$REL_PATH"
-    DOCS_DEST="$DOCS_BASE/be/specs/$REL_PATH"
-    ;;
-  api-docs)
-    BE_DEST="$BE_BASE/api-docs/$REL_PATH"
-    DOCS_DEST="$DOCS_BASE/be/api-docs/$REL_PATH"
-    ;;
-  *)
-    exit 0
-    ;;
-esac
+BE_DEST="$BE_BASE/api-docs/$REL_PATH"
+DOCS_DEST="$DOCS_BASE/be/api-docs/$REL_PATH"
 
 mirror_one() {
   local src="$1"

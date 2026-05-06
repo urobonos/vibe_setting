@@ -31,7 +31,30 @@ tasks/20260427/pay-refactor/2026-04-27-pay-refactor-result.md
 
 > 예외: `tasks/YYYYMMDD/summary.md` (일일 요약) 와 `tasks/history.md` (전체 이력 인덱스) 는 단일 고정 파일이므로 prefix 가 붙지 않는다.
 
-## `output/{topic-slug}/` 하위 파일명 규칙
+## `output/{category}/{topic-slug}/` 하위 폴더·파일명 규칙
+
+### 카테고리 (필수, 2026-05-04)
+
+`output/` 직하위는 7 카테고리 중 하나. 평면 `output/{topic-slug}/` 직접 배치 금지.
+
+| 카테고리 | 정의 |
+|---|---|
+| `audit/` | 자가 점검·정합성 검사·지침 준수 검사 |
+| `verification/` | 실제 동작 검증·환경 간 비교 |
+| `research/` | 외부 조사·비교·권고안 |
+| `analysis/` | 도메인·영향·아키텍처 분석 |
+| `report/` | 정기·일회성 리포트 (`daily-report` / `weekly-work-report` 등 ongoing 폴더 허용) |
+| `guide/` | 가이드·권장 설정 문서 |
+| `archive/` | 보관·임시·과거 스냅샷 |
+
+### 폴더명 (`{topic-slug}/`)
+
+- 권장 형식: `{yyyy-mm-dd}-{topic-slug}/` (kebab-case + 작업 시작일 ISO-8601 prefix)
+- 허용 예외: ongoing/누적형 폴더 (`daily-report`, `weekly-work-report`) 는 prefix 생략 가능
+- **금지: suffix `-YYYYMMDD` 형식** (예: `ieee-review-20260429`). 날짜는 항상 `YYYY-MM-DD-` prefix 형식만 사용.
+- **Why:** suffix 형식은 `ls` 시간순 정렬 깨짐 + 동일 주제 다중 산출물 매핑 어려움. ISO-8601 prefix 통일로 정렬·grep·hook 검증 일관성 확보.
+
+### 파일명
 
 **형식:** `{yyyy-mm-dd}-{topic-slug}-{type}.md` (kebab-case)
 
@@ -56,12 +79,13 @@ tasks/20260427/pay-refactor/2026-04-27-pay-refactor-result.md
 ## 올바른 예시 (output/)
 
 ```
-output/global-domain-architecture/2026-04-20-hongcafe-global-domain-cross-region-sso-analysis.md
-output/architecture-nextjs-ci4-bff/2026-04-21-architecture-nextjs-ci4-bff-analysis.md
-output/global-architecture-analysis/2026-04-22-hongcafe-global-architecture-final-recommendation.md
-output/global-architecture-analysis/2026-04-22-hongcafe-global-multiregion-routing-report.md
-output/nginx-geoip2-jp-kr-redirect/2026-04-23-nginx-geoip2-jp-kr-redirect-analysis.md
-output/nginx-geoip2-jp-kr-redirect/2026-04-23-nginx-geoip2-jp-kr-redirect-deployment-guide.md
+output/analysis/2026-04-20-global-domain-architecture/2026-04-20-hongcafe-global-domain-cross-region-sso-analysis.md
+output/analysis/2026-04-21-architecture-nextjs-ci4-bff/2026-04-21-architecture-nextjs-ci4-bff-analysis.md
+output/analysis/2026-04-22-global-architecture-analysis/2026-04-22-hongcafe-global-architecture-final-recommendation.md
+output/analysis/2026-04-22-global-architecture-analysis/2026-04-22-hongcafe-global-multiregion-routing-report.md
+output/guide/2026-04-23-nginx-geoip2-jp-kr-redirect/2026-04-23-nginx-geoip2-jp-kr-redirect-analysis.md
+output/guide/2026-04-23-nginx-geoip2-jp-kr-redirect/2026-04-23-nginx-geoip2-jp-kr-redirect-deployment-guide.md
+output/report/daily-report/2026-04-30-daily-report-summary.md   ← ongoing 폴더 (prefix 생략 허용)
 ```
 
 ## 다중 파일이 한 주제 폴더에 있을 때
