@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+AURORA_HOST="prod-aurora-hongcafe-usa.cluster-ro-c47e2m0qmf7h.us-east-1.rds.amazonaws.com"
+P=$(grep "database.default.password" /works/hongcafe-global/dev/config/.env | head -1 | cut -d= -f2 | tr -d " ")
+
+printf "[client]\nuser=athena\npassword=%s\nssl-mode=REQUIRED\n" "$P" > /tmp/.my.cnf
+chmod 600 /tmp/.my.cnf
+
+MYCMD="mysql --defaults-file=/tmp/.my.cnf -h $AURORA_HOST athena -N -B"
+
+OUT="/tmp/schema_dump.tsv"
+> $OUT
+
+echo "=== TABLES ===" >> $OUT
+$MYCMD -e "SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='athena' ORDER BY TABLE_NAME" >> $OUT
+
+echo "=== COLUMNS ===" >> $OUT
+$MYCMD -e "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_COMMENT, COLUMN_TYPE, IS_NULLABLE, IFNULL(COLUMN_DEFAULT,'NULL'), COLUMN_KEY, EXTRA FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='athena' ORDER BY TABLE_NAME, ORDINAL_POSITION" >> $OUT
+
+echo "=== INDEXES ===" >> $OUT
+$MYCMD -e "SELECT TABLE_NAME, INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS IDX_COLUMNS, CASE WHEN NON_UNIQUE=0 THEN 'UNIQUE' ELSE 'INDEX' END AS INDEX_TYPE FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA='athena' GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE ORDER BY TABLE_NAME, INDEX_NAME" >> $OUT
+
+echo "=== RELATIONS ===" >> $OUT
+$MYCMD -e "SELECT TABLE_NAME, COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='athena' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY TABLE_NAME" >> $OUT
+
+echo "=== DONE ===" >> $OUT
+
+rm -f /tmp/.my.cnf
+
+wc -l $OUT
+base64 $OUT
