@@ -38,42 +38,10 @@ FILE_PATH_UNIX=$(echo "$FILE_PATH" | sed 's|\\|/|g')
 BASENAME=$(basename "$FILE_PATH_UNIX")
 LOWER_BASENAME=$(echo "$BASENAME" | tr '[:upper:]' '[:lower:]')
 
-# ===== 1. 문서 체크리스트 검증 (exit 2) =====
-if echo "$FILE_PATH_UNIX" | grep -qiE 'docs/([^/]+/)?(tasks|output)/.*\.md$'; then
-  if [ -f "$FILE_PATH_UNIX" ]; then
-    UNCHECKED=$(grep -c '\- \[ \]' "$FILE_PATH_UNIX" 2>/dev/null || echo "0")
-    CHECKED=$(grep -c '\- \[x\]' "$FILE_PATH_UNIX" 2>/dev/null || echo "0")
-    TOTAL=$((UNCHECKED + CHECKED))
-
-    MIN_COUNT=0
-    DOC_TYPE=""
-
-    if echo "$BASENAME" | grep -qiE '[-_]?analyze\.md$'; then
-      MIN_COUNT=30; DOC_TYPE="analyze"
-    elif echo "$BASENAME" | grep -qiE '[-_]?plan\.md$'; then
-      MIN_COUNT=20; DOC_TYPE="plan"
-    elif echo "$BASENAME" | grep -qiE '[-_]?result\.md$'; then
-      MIN_COUNT=20; DOC_TYPE="result"
-    elif echo "$BASENAME" | grep -qiE '[-_]?(srs|sdd|idd|sdp|stp|std)\.md$'; then
-      MIN_COUNT=8
-      DOC_TYPE="specs ($(echo "$BASENAME" | grep -oiE '(srs|sdd|idd|sdp|stp|std)' | tr '[:lower:]' '[:upper:]'))"
-    fi
-
-    if [ "$MIN_COUNT" -gt 0 ] && [ "$TOTAL" -lt "$MIN_COUNT" ]; then
-      echo "" >&2
-      echo "━━━ Doc Checklist Guard: 체크리스트 부족 — 수정 차단 ━━━" >&2
-      echo "[BLOCKED] $DOC_TYPE 문서의 체크리스트가 부족합니다." >&2
-      echo "  파일: $BASENAME" >&2
-      echo "  현재: ${TOTAL}개 (미체크: ${UNCHECKED}, 완료: ${CHECKED})" >&2
-      echo "  최소: ${MIN_COUNT}개" >&2
-      echo "  부족: $((MIN_COUNT - TOTAL))개" >&2
-      echo "" >&2
-      echo "task-docs 스킬의 체크리스트 템플릿을 참조하여 누락 항목을 추가하세요." >&2
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
-      exit 2
-    fi
-  fi
-fi
+# ===== 1. 문서 체크리스트 검증 — checklist-count-check.sh 로 위임 (SSOT 일원화) =====
+# 정합성 정책: 동일 검증을 doc-quality(exit 2) + checklist-count-check(exit 0) 두 hook 이 중복 수행해
+# checklist-count-check 의 stderr 경고가 doc-quality 차단으로 무력화되던 비대칭 해소.
+# 체크리스트 개수 검증은 checklist-count-check.sh SSOT (PostToolUse Edit|Write 매처 동일).
 
 # ===== 2. 테스트 동반 확인 (warning) =====
 if [[ "$FILE_PATH" == *.php ]] && echo "$FILE_PATH" | grep -qE 'app/Modules/[A-Za-z]+/Services/[A-Za-z]+\.php'; then

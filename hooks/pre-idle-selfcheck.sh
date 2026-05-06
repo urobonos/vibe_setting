@@ -73,4 +73,8 @@ echo "모두 충족 → \"자가점검 완료: 모두 충족\" 한 줄로 종료
 echo "미충족 → 즉시 보완 작업 수행." >&2
 echo "━━━━━━━━━━━━━━━━━━━━━━━" >&2
 
-exit 2
+# 정책 (2026-05-06): exit 0 (정보성 stderr 알림만, 차단 없음)
+# Why: Stop hook 매 응답 종료마다 호출 + exit 2 차단 시 reroll 강제로 토큰·응답 시간 폭증.
+# SELFCHECK_DONE 가드(세션당 1회) 가 발동 빈도 제어 + stderr 알림으로 자가복구 신뢰.
+# 진짜 산출물 차단 필요는 session-completeness-check.sh 분담.
+exit 0

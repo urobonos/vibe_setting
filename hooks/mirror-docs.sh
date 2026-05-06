@@ -62,7 +62,8 @@ mirror_one() {
 
   for attempt in 1 2 3; do
     mkdir -p "$target_dir" 2>/dev/null
-    if cp -f "$src" "$dest" 2>/dev/null; then
+    # 2초 timeout — 네트워크 드라이브 hang 방지 (timeout coreutils Git Bash 포함)
+    if timeout 2 cp -f "$src" "$dest" 2>/dev/null; then
       if [ "$attempt" -gt 1 ]; then
         echo "[MIRROR] OK ($attempt/3) $label: $dest" >&2
       fi
