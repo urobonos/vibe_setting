@@ -90,11 +90,12 @@
 ## 4. Guardrails & Quality
 
 > **카테고리 인덱스 (룰 빠른 찾기):**
-> - **§4.1 코드 품질·산출물:** Proactive Correction / Readability / Validation / Persistence / 타당성 검토 / 변경 영향 기록 / 산출물 유연성 / Before-After 대조 / 롤백 가능 상태 / 세션 내 commit 수정 (reset+재커밋) / Co-Authored-By 금지
+> - **§4.1 코드 품질·산출물:** 장기 관점 분석·계획·실행 / Proactive Correction / Readability / Validation / Persistence / 타당성 검토 / 변경 영향 기록 / 산출물 유연성 / Before-After 대조 / 롤백 가능 상태 / 세션 내 commit 수정 (reset+재커밋) / Co-Authored-By 금지
 > - **§4.2 실행·위임·자동화:** 에이전트 우선 위임 / 실행 책임 / Hook 차단 자가 복구 / Hook 우회 금지 / audit 자동 수정 금지 / Auto mode 룰 우선순위
 > - **§4.3 게이트·워크플로우:** 묶음 승인 Fast-Track / output 경로 Gate-0 / 브랜치 워크플로우 / 스킬 생성·수정 진입점 / 로컬 수정 사전 승인 / e2e 검증
 > - **§4.4 응답 형식:** 응답 톤 / 응답 간결 / 답변 깊이 (Anticipatory Depth)
 
+- **장기 관점 분석·계획·실행 (Long-term Perspective, 필수):** 사용자 작업 요청 처리 시 default = 장기 관점. **분석:** 증상만 보지 않고 근본 원인 + 동일 패턴 재발 가능성 + 인접 모듈·SSOT(룰/템플릿/hook) 영향 범위 함께 진단. **계획:** 단기 패치 + 재발 방지 수단(hook/템플릿/강제 룰) + SSOT 일관성 회복 + 마이그레이션 비용 함께 산정. **실행:** 임시 우회·hardcode·주석 처리 금지. 변경은 SSOT(룰·템플릿·hook) 갱신과 함께 일괄 반영. **Why:** 단기 fix 누적은 SSOT 분기·산출물 정합성 붕괴를 초래하고, 동일 문제가 형태만 바꿔 재발하는 구조적 빚을 만든다 (본 세션 발견 사례: 산출물 작성자 필드 "Claude" 박힘 30건+, api-docs 41파일 미러링 누락 — 단기 처리 누적 결과). **How to apply:** S(단발) 작업 = "장기 영향" 1줄 보고. M·L = `analyze.md` / `plan.md` 에 **"장기 영향 / 재발 방지 / SSOT 일관성"** 3섹션 필수. 강제 수단: (1) 본 룰 텍스트, (2) `task-docs` 스킬 analyze/plan 템플릿 3섹션, (3) `workflow-enforcer` Gate 검증 — 3섹션 누락 시 차단. **§3 Checkpoint 우선 적용** — Checkpoint 발동 변경은 본 룰과 무관하게 사용자 승인 필수.
 - **Proactive Correction:** 오타(철자)만 즉시 수정 가능. 문법·컨벤션·로직 수정은 Team 1 분석 후 승인 필요.
 - **Readability:** 주석 없이 읽히는 명시적 코드. 전체 단어(fullName, index 등) 사용.
 - **Validation ("No Test, No Merge"):** 모든 수정은 유닛 테스트 또는 실행 로그 증빙 동반.
