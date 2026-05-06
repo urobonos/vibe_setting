@@ -33,6 +33,8 @@ min_claude_md_version: "4.0"
 
 # Task Docs Skill
 
+> **호출 방식:** 슬래시 — `/plan` (계획 문서) / `/research` (리서치 문서) / `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `리서치 해줘`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"3-Team Workflow 연동" 절차를 동일하게 따른다.
+
 작업 문서 3종(analyze, plan, result)과 일일 요약(summary)을 `~/.claude/docs/{product}/tasks/YYYYMMDD/` 디렉토리에 표준 템플릿으로 생성·관리한다.
 보고용 산출물은 `~/.claude/docs/{product}/output/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `~/.claude/docs/{product}/specs/` 디렉토리에 생성·관리한다.
 

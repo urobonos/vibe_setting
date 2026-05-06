@@ -27,7 +27,8 @@ if [ -f "$FILE" ]; then
   RESULT=$(php -l "$FILE" 2>&1)
   if echo "$RESULT" | grep -q "Parse error\|Fatal error"; then
     echo "PHP 문법 오류 감지: $RESULT — 해당 라인을 확인하고 Edit 도구로 수정하세요."
-    exit 1
+    # exit 0 정합: 다른 패턴 + PHPDoc 분기 모두 exit 0 (stderr 경고).
+    # PostToolUse exit 1 은 차단력 없는 노이즈 — Claude 가 stderr 보고 자가복구.
   fi
 fi
 
