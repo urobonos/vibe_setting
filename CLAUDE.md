@@ -88,6 +88,12 @@
 
 ## 4. Guardrails & Quality
 
+> **카테고리 인덱스 (룰 빠른 찾기):**
+> - **§4.1 코드 품질·산출물:** Proactive Correction / Readability / Validation / Persistence / 타당성 검토 / 변경 영향 기록 / 산출물 유연성 / Before-After 대조 / 롤백 가능 상태 / Co-Authored-By 금지
+> - **§4.2 실행·위임·자동화:** 에이전트 우선 위임 / 실행 책임 / Hook 차단 자가 복구 / Hook 우회 금지 / audit 자동 수정 금지 / Auto mode 룰 우선순위
+> - **§4.3 게이트·워크플로우:** 묶음 승인 Fast-Track / output 경로 Gate-0 / 브랜치 워크플로우 / 스킬 생성·수정 진입점 / 로컬 수정 사전 승인 / e2e 검증
+> - **§4.4 응답 형식:** 응답 톤 / 응답 간결 / 답변 깊이 (Anticipatory Depth)
+
 - **Proactive Correction:** 오타(철자)만 즉시 수정 가능. 문법·컨벤션·로직 수정은 Team 1 분석 후 승인 필요.
 - **Readability:** 주석 없이 읽히는 명시적 코드. 전체 단어(fullName, index 등) 사용.
 - **Validation ("No Test, No Merge"):** 모든 수정은 유닛 테스트 또는 실행 로그 증빙 동반.
