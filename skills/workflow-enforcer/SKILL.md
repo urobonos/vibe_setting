@@ -173,6 +173,19 @@ CLAUDE.md §4 Guardrails "Flexible Deliverables" 와 정합. **작업 성격이 
 
 > 이유 생략은 지침 위반.
 
+### 6. 장기 관점 검증 (Long-term Perspective) — **CLAUDE.md §4.1 강제**
+
+> 본 룰은 분석/계획 산출물(`analyze.md` / `plan.md`) 의 **"장기 영향 / 재발 방지 / SSOT 일관성"** 3섹션 작성 여부를 검증한다. 누락 시 Gate-1 / Gate-2 차단.
+
+| 항목 | 작성 여부 | 핵심 내용 (1~2줄) |
+|------|---------|-------------------|
+| 장기 영향 (Long-term Impact) | O/X | {3~12개월 누적·전이·재발 시나리오} |
+| 재발 방지 (Regression Prevention) | O/X | {hook/lint/test 등 차단 수단 + 차단 강도} |
+| SSOT 일관성 (SSOT Consistency) | O/X | {본 작업과 어긋나는 룰/템플릿/hook 갱신 항목} |
+
+> **S(단발) 작업** = 각 항목 1줄 + `"해당 없음 (사유)"` 허용. **M·L** = 실질 시나리오 1건+ 필수.
+> **Why:** 단기 fix 누적은 SSOT 분기·산출물 정합성 붕괴 + 동일 문제 재발의 구조적 빚을 만든다 (CLAUDE.md §4.1 SSOT).
+
 ### [Status] `Analyze Complete` — 사용자 승인 대기
 ```
 
