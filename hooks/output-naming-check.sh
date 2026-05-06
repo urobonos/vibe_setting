@@ -70,6 +70,18 @@ if [ "$KIND" = "output" ]; then
     echo "  카테고리: audit | verification | research | analysis | report | guide | archive" >&2
     exit 2
   fi
+  # DEPTH > 3 = sub-document (단일 산출물의 분할 chapter, 예: {topic-slug}/sections/01-intro.md)
+  # 카테고리/topic-slug 정합성만 검증하고 파일명·폴더명 prefix 강제는 면제
+  if [ "$DEPTH" -gt 3 ]; then
+    CATEGORY=$(echo "$REL_FROM_OUTPUT" | awk -F/ '{print $1}')
+    case "$CATEGORY" in
+      audit|verification|research|analysis|report|guide|archive) exit 0 ;;
+      *)
+        echo "[OUTPUT-NAMING] 알 수 없는 카테고리: '$CATEGORY' — audit | verification | research | analysis | report | guide | archive 중 하나를 사용하세요." >&2
+        exit 2
+        ;;
+    esac
+  fi
   CATEGORY=$(echo "$REL_FROM_OUTPUT" | awk -F/ '{print $1}')
   case "$CATEGORY" in
     audit|verification|research|analysis|report|guide|archive) ;;
@@ -87,6 +99,21 @@ if [ "$KIND" = "output" ]; then
     echo "  예시: $SUGGEST_DATE-$SUGGEST_BASE" >&2
     exit 2
   fi
+  # 폴더명 YYYY-MM-DD- prefix 강제 (단발성 작업 필수, ongoing 폴더만 화이트리스트 면제)
+  # ongoing 화이트리스트: daily-report / weekly-work-report / monthly-report — 동일 주제로 다회 산출물 누적되는 폴더만
+  case "$TOPIC_SLUG" in
+    daily-report|weekly-work-report|monthly-report) ;;
+    *)
+      if ! echo "$TOPIC_SLUG" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
+        SUGGEST_FOLDER="${TODAY_ISO_FOR_FOLDER:-$(date +%Y-%m-%d)}-${TOPIC_SLUG}"
+        echo "[OUTPUT-NAMING] 폴더명 날짜 prefix 누락 차단: '$TOPIC_SLUG' — '{yyyy-mm-dd}-{topic-slug}/' 형식 필수." >&2
+        echo "  예시: $SUGGEST_FOLDER" >&2
+        echo "  ongoing 면제: daily-report / weekly-work-report / monthly-report (동일 주제 다회 누적 폴더)" >&2
+        echo "  참고: ~/.claude/CLAUDE.md §File Paths '폴더·파일명 날짜 표기'" >&2
+        exit 2
+      fi
+      ;;
+  esac
   CONTEXT_SLUG="$TOPIC_SLUG"
 fi
 

@@ -30,11 +30,12 @@
     - `guide/` — 가이드·권장 설정 문서 (예: branch-workflow, nginx-geoip2-jp-kr-redirect)
     - `archive/` — 보관·임시·과거 스냅샷 (예: _temp, raw-sql-worktree-archive-*)
     - **분류 모호 시:** "이 산출물이 무엇을 한 결과물인가?" → 점검 (audit) / 검증 (verification) / 외부 조사 (research) / 분석 (analysis) 순으로 판단.
-  - **폴더·파일명 날짜 표기 (필수, 2026-05-04):** suffix `-YYYYMMDD` 형식 금지. 날짜는 항상 ISO-8601 `YYYY-MM-DD-` **prefix** 로만 표기.
+  - **폴더·파일명 날짜 표기 (필수, 2026-05-04 / 2026-05-06 폴더 prefix 강제 승격):** suffix `-YYYYMMDD` 형식 금지. 날짜는 항상 ISO-8601 `YYYY-MM-DD-` **prefix** 로만 표기.
     - 파일명: `{yyyy-mm-dd}-{topic-slug}-{type}.md` (필수, output-naming-check.sh 강제)
-    - 폴더명: `{yyyy-mm-dd}-{topic-slug}/` (권장, 단발성 작업) 또는 `{topic-slug}/` (ongoing/누적형 — daily-report·weekly-work-report 등)
-    - 금지 예: `ieee-review-20260429/`, `cross-verification-20260430.md` — 모두 prefix 형태로 변환
-    - **Why:** suffix 형식은 `ls` 시간순 정렬 깨짐 + 동일 주제 다중 산출물 매핑 어려움. ISO-8601 prefix 통일로 정렬·grep·hook 검증 일관성 확보.
+    - 폴더명: `{yyyy-mm-dd}-{topic-slug}/` (**필수, 단발성 작업** — output-naming-check.sh 강제) 또는 `{topic-slug}/` (**ongoing/누적형 면제** — `daily-report` / `weekly-work-report` / `monthly-report` 등 동일 주제로 다회 산출물이 누적되는 폴더만 화이트리스트 적용)
+    - 금지 예: `ieee-review-20260429/` (suffix), `automation-blockers/` (단발성인데 prefix 누락), `cross-verification-20260430.md` (suffix) — 모두 prefix 형태로 변환
+    - 면제 판정: "동일 폴더에 여러 날짜의 산출물이 시간 순으로 누적되는가?" → 예 = ongoing 면제, 아니오 = 단발성 (prefix 필수). 1회성 audit/analysis/research/verification/guide 는 모두 단발성.
+    - **Why:** suffix 형식은 `ls` 시간순 정렬 깨짐 + 동일 주제 다중 산출물 매핑 어려움. ISO-8601 prefix 통일로 정렬·grep·hook 검증 일관성 확보. 폴더 prefix "권장" 표현이 실무에서 누락 방치로 이어져 2026-05-06 사용자 결정으로 "필수" 승격.
 - **`tasks/` vs `output/` 용도 구분 (필수):** 경로를 혼용하지 않는다. 혼용은 지침 위반.
   - **`tasks/` → 개발 작업 프롬프트 전용.** 코드 작성·수정·리팩토링·디버깅·기능 추가·설정 변경 등 **코드/설정에 변경이 발생하는 프롬프트**를 받았을 때 사용한다. 3-Team Workflow 의 `{yyyy-mm-dd}-{작업명}-analyze.md` / `{yyyy-mm-dd}-{작업명}-plan.md` / `{yyyy-mm-dd}-{작업명}-result.md` 가 여기로 들어간다. Gate ≥ 2 강제 대상.
   - **`output/` → 분석·문서 생성 프롬프트 전용.** "분석해줘", "조사해줘", "비교해줘", "리포트 만들어줘", "문서로 정리해줘" 등 **코드 변경 없이 결과물만 산출하는 프롬프트**를 받았을 때 사용한다. 주제별 폴더(`{제목}/`) 하위에 `{yyyy-mm-dd}-{제목}-{type}.md` 형식(kebab-case + 날짜 prefix 필수) 으로 단일/다중 문서를 배치한다. 3-Team Workflow 비적용, Gate ≥ 1 만으로 충분.
