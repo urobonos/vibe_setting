@@ -44,6 +44,9 @@ docs/
 # Large assets
 skills.zip
 
+# Skill 평가 임시 산출물 (skill-creator improve 사이클 결과 — 스킬 소스 아님)
+skills/api-spec-audit-workspace/
+
 # Cache / temp
 stats-cache.json
 mcp-needs-auth-cache.json
