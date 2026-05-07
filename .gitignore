@@ -77,6 +77,7 @@ scripts/count_rows.sh
 
 # Backup files (rollback safety copies)
 *.bak
+docs-backup-*.zip
 
 # OS files
 .DS_Store
