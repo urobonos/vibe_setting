@@ -48,6 +48,7 @@
   - 미러링 정책: 자동 cp + 실패 시 3회 재시도(200ms 간격) + 대상 루트 미존재 시 SKIP. 실패 stderr 로그만 출력하고 작업은 차단하지 않는다 (PostToolUse 정책).
   - **Why:** API 명세 3군데 정합성 유지를 hook 레벨에서 강제. 수동 cp 누락으로 인한 동기화 깨짐을 원천 차단. 사용자 결정 (2026-04-30) — `mirror-docs.sh` 가 SSOT.
   - **specs/ 미러링은 제거됨 (2026-05-04 사용자 결정):** 글로벌 `~/.claude/docs/{product}/specs/` 가 SSOT. 프로젝트 미러본 사용 중단.
+- **외부 프로젝트 CLAUDE.md 미러링 (2026-05-07):** `~/.claude/mirrors/{product}/CLAUDE.md` 가 외부 프로젝트(현재: `hongcafe_global_backend`)의 `CLAUDE.md` **양방향** 자동 미러본이다. `mirror-claude-md.sh` PostToolUse hook 이 양쪽 Edit/Write 시 반대편을 자동 cp 한다. 단일 작성자 전제 last-write-wins. 글로벌 미러본은 `.gitignore` 로 추적 제외 (SSOT 는 외부 프로젝트 git). 수동 진입점 = `mirror-be-claude` 스킬 (`/mirror-be-claude` — `verify` / `sync-from-be` / `sync-from-global` 3 모드, 후자는 §3 Checkpoint 발동). **Why:** 외부 프로젝트 지침을 글로벌 세션에서 cd 없이 즉시 read 가능 + 수동 cp 누락·외부 IDE 편집·git checkout 회피 경로 안전망 확보. **다른 프로젝트 확장:** `~/.claude/mirrors/{product}/` 패턴 동일 적용 — 별도 hook/skill 작성 또는 본 hook 다중 프로젝트 지원으로 일반화 (skill-creator 경유). SSOT: `hooks/mirror-claude-md.sh` (자동) + `skills/mirror-be-claude/SKILL.md` (수동).
 - **Notion 연동 (요청 기반):** `notion_cli` 스킬을 단일 진입점으로 사용. 사용자가 "노션에 반영"·"Notion 동기화" 등 명시 요청할 때만 실행 (지침 수정에 대한 자동 반영 금지). MCP 도구 폐기·인증·블록 교체 절차 등 세부는 스킬 SSOT. 사용자 요청 없이 선제 실행은 지침 위반.
 
 ---
