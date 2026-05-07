@@ -79,18 +79,68 @@ grep -q "## 변경 기록" "$unix_path" || missing+=("## 변경 기록")
 lower_base=$(echo "$basename" | tr '[:upper:]' '[:lower:]')
 if [[ "$IS_OUTPUT" == "0" ]]; then
     case "$lower_base" in
-        *analyze*.md|*plan*.md)
-            # 차단: 타당성 검토 + 변경 영향 기록 누락 시 exit 2
+        *analyze*.md)
+            # 차단: 타당성 검토 + 변경 영향 기록 + 분석 관점별 요약 + Critical/High/Medium/Low 4분류 + 우선순위 권고 + 장기영향 + 재발방지 + SSOT 일관성
+            # references/analyze-template.md SSOT (2026-05-07 강화 — 사용자 지시 "훅으로 템플릿 출력 할때 강제")
             grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
                 || blocking_missing+=("타당성 검토 (§4 필수)")
             grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
                 || blocking_missing+=("변경 영향 기록 (§4 필수)")
+            grep -qE "^#{1,3}[[:space:]]+.*(분석 관점별|관점별 요약|Perspective Summary)" "$unix_path" \
+                || blocking_missing+=("분석 관점별 요약 (analyze 템플릿 §관점별 요약)")
+            grep -qE "^#{1,3}[[:space:]]+.*Critical[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("Critical 이슈 분류 (analyze 템플릿 §1)")
+            grep -qE "^#{1,3}[[:space:]]+.*High[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("High 이슈 분류 (analyze 템플릿 §2)")
+            grep -qE "^#{1,3}[[:space:]]+.*Medium[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("Medium 이슈 분류 (analyze 템플릿 §3)")
+            grep -qE "^#{1,3}[[:space:]]+.*Low[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("Low 이슈 분류 (analyze 템플릿 §4)")
+            grep -qE "^#{1,3}[[:space:]]+.*우선순위[[:space:]]*권고" "$unix_path" \
+                || blocking_missing+=("우선순위 권고 (analyze 템플릿 §9)")
+            grep -qE "^#{1,3}[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
+                || blocking_missing+=("장기 영향 (CLAUDE.md §4.1 강제)")
+            grep -qE "^#{1,3}[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
+                || blocking_missing+=("재발 방지 (CLAUDE.md §4.1 강제)")
+            grep -qE "^#{1,3}[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
+                || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제)")
             ;;
-        *result*.md)
-            # 차단: result 는 변경 영향 기록 누락만 차단 (타당성 검토는 result 필수 아님)
+        *plan*.md)
+            # 차단: 타당성 검토 + 변경 영향 기록 + 작업 등급 + Blueprint + WBS + 장기영향 + 재발방지 + SSOT 일관성 + Status
+            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+                || blocking_missing+=("타당성 검토 (§4 필수)")
             grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
                 || blocking_missing+=("변경 영향 기록 (§4 필수)")
-            # hint: Before/After, 롤백은 기존 hint 수준 유지
+            grep -qE "(^#{1,3}[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::])" "$unix_path" \
+                || blocking_missing+=("작업 등급 S/M/L (plan 템플릿)")
+            grep -qE "^#{1,3}[[:space:]]+.*Blueprint" "$unix_path" \
+                || blocking_missing+=("Blueprint (plan 템플릿)")
+            grep -qE "^#{1,3}[[:space:]]+.*(작업 분해|WBS|Work Breakdown)" "$unix_path" \
+                || blocking_missing+=("작업 분해 WBS (plan 템플릿)")
+            grep -qE "^#{1,3}[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
+                || blocking_missing+=("장기 영향 (CLAUDE.md §4.1 강제)")
+            grep -qE "^#{1,3}[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
+                || blocking_missing+=("재발 방지 (CLAUDE.md §4.1 강제)")
+            grep -qE "^#{1,3}[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
+                || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제)")
+            grep -qE "Status[[:space:]]*[::][[:space:]]*Plan Complete" "$unix_path" \
+                || blocking_missing+=("Status: Plan Complete (plan 템플릿)")
+            ;;
+        *result*.md)
+            # 차단: 변경 영향 기록 + 실행 요약 + Self-Critique + 테스트 결과 + 잔여 이슈 + Status
+            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+                || blocking_missing+=("변경 영향 기록 (§4 필수)")
+            grep -qE "^#{1,3}[[:space:]]+.*실행 요약" "$unix_path" \
+                || blocking_missing+=("실행 요약 (result 템플릿)")
+            grep -qE "^#{1,3}[[:space:]]+.*Self-Critique" "$unix_path" \
+                || blocking_missing+=("Self-Critique 체크리스트 (result 템플릿)")
+            grep -qE "^#{1,3}[[:space:]]+.*테스트 결과" "$unix_path" \
+                || blocking_missing+=("테스트 결과 (result 템플릿)")
+            grep -qE "^#{1,3}[[:space:]]+.*잔여 이슈" "$unix_path" \
+                || blocking_missing+=("잔여 이슈 (result 템플릿)")
+            grep -qE "Status[[:space:]]*[::][[:space:]]*(Done|Partial)" "$unix_path" \
+                || blocking_missing+=("Status: Done/Partial (result 템플릿)")
+            # hint: Before/After, 롤백은 hint 수준 유지
             grep -qE "^#{1,3}[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
                 || missing+=("## Before/After 대조 (§4 필수)")
             grep -qE "^#{1,3}[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
@@ -105,6 +155,35 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
                 || blocking_missing+=("타당성 검토 (§4 필수)")
             ;;
     esac
+fi
+
+# 역소급 면제 (CLAUDE.md §"역소급 면제 2026-05-06 시행" 정합)
+# 생성일 < 2026-05-07 산출물은 차단 항목을 hint 로 강등 (강화 hook 도입 이전 작성분 보호)
+# Why: hook 강화로 인해 기존 산출물 수정 시 흐름 차단되면 회귀 위험. 신규 산출물부터 강제.
+#
+# 날짜 결정 우선순위 (가장 신뢰도 높은 순):
+#  1) frontmatter `생성일: YYYY-MM-DD`
+#  2) 파일명 prefix `YYYY-MM-DD-...`
+#  3) 폴더 경로 `tasks/YYYYMMDD/...`
+created_date=""
+if grep -qE "^---" "$unix_path"; then
+    created_date=$(awk '/^---/{c++; next} c==1 && /^생성일:/ {sub(/^생성일:[[:space:]]*/,""); sub(/[[:space:]]*$/,""); print; exit}' "$unix_path")
+fi
+if [[ -z "$created_date" ]]; then
+    created_date=$(echo "$basename" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+fi
+if [[ -z "$created_date" ]]; then
+    folder_date=$(echo "$file_path" | grep -oE '/tasks/[0-9]{8}/' | grep -oE '[0-9]{8}' | head -1)
+    if [[ -n "$folder_date" ]]; then
+        created_date="${folder_date:0:4}-${folder_date:4:2}-${folder_date:6:2}"
+    fi
+fi
+TEMPLATE_STRICT_FROM="2026-05-07"
+if [[ -n "$created_date" && "$created_date" < "$TEMPLATE_STRICT_FROM" ]]; then
+    if [[ ${#blocking_missing[@]} -gt 0 ]]; then
+        missing+=("[역소급 면제 — 생성일 ${created_date}] ${blocking_missing[*]}")
+        blocking_missing=()
+    fi
 fi
 
 # 차단 항목 우선 처리 (exit 2 — PostToolUse turn 재진입 강제)
