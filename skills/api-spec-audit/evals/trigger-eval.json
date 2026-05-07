@@ -1,0 +1,23 @@
+[
+  {"query": "commerce 모듈 Routes 에 47개 EP 가 있는데 SRS 에는 42개만 매핑되어 있음. 5개 누락 식별자 자동 생성해서 정합성 audit 돌려줘", "should_trigger": true},
+  {"query": "auth 모듈 OpenAPI YAML components.schemas 랑 IDD 응답 모델 일치하는지 검증 — 특히 LoginResponse 스키마 필드 케이스 차이 있을듯", "should_trigger": true},
+  {"query": "전체 모듈 일괄 audit 돌려서 FAIL 항목 우선순위 매트릭스로 정리. archive 모듈은 제외", "should_trigger": true},
+  {"query": "POST /v1/orders 단일 EP 가 SDD 인증 표랑 OpenAPI security 블록 일치하는지 확인 — 9축 그대로 적용", "should_trigger": true},
+  {"query": "api-docs 마크다운 응답 예시랑 spectral lint 통과한 OpenAPI 가 응답 키 케이스(snake/camel) 모듈 내 일관 유지하는지 점검", "should_trigger": true},
+  {"query": "member 모듈 신규 EP 3개 추가했는데 SRS 도 같이 갱신함. 식별자(MEMBER-EP-MIS, MEMBER-MAP-MIS) 자동 생성해서 추적 가능하게", "should_trigger": true},
+  {"query": "Routes filter 에 ['auth'] 빠진 EP 있는지 SDD 인증 표랑 대조해서 CRITICAL 식별자 뽑아줘 — 보안 영향 큼", "should_trigger": true},
+  {"query": "환경별 base URL — dev/staging/prod — 가 OpenAPI servers 블록이랑 nginx upstream 설정이랑 SDD 배포 절 일치하는지", "should_trigger": true},
+  {"query": "에러 코드 카탈로그 IDD 랑 controller throw new ApiException 코드 일치 검증. 클라이언트 파싱 깨질까봐 우선 확인", "should_trigger": true},
+  {"query": "스펙 정합성 자동화 — 9축 매트릭스 한 번 전체 모듈 돌려서 FAIL/WARN/PASS 분류된 마크다운 산출물 만들어줘", "should_trigger": true},
+
+  {"query": "commerce 모듈 SRS 새로 작성해야 함 — 기능 요구사항 FR-001부터 FR-040까지 IEEE 양식으로", "should_trigger": false},
+  {"query": "POST /v1/orders/{id}/cancel EP 새로 만들어야 함. Controller / Service / Repository 레이어 + phpunit 까지", "should_trigger": false},
+  {"query": "API 응답 필드명을 snake_case 에서 camelCase 로 일괄 변경하려고 함. 마이그레이션 단계 분리 필요", "should_trigger": false},
+  {"query": "OpenAPI 3.0 스펙 작성 가이드 알려줘 — components, paths, security, parameters 구조 잡는 법", "should_trigger": false},
+  {"query": "MySQL 인덱스 추가해야 하는데 commerce_orders.user_id 랑 created_at 복합 인덱스가 좋을지 분리가 좋을지", "should_trigger": false},
+  {"query": "POST /v1/orders 엔드포인트가 prod 에서 500 떨어지는데 BE 로그에 deadlock 흔적. 디버그 좀", "should_trigger": false},
+  {"query": "이번 주 작업 주간 리포트 만들어줘 — commerce 모듈 변경분 위주로", "should_trigger": false},
+  {"query": "auth 모듈 코드 OWASP Top 10 기준으로 보안 감사 한 번 돌려야 함 — CSRF, SQL injection, JWT 처리 위주", "should_trigger": false},
+  {"query": "phpunit 테스트 커버리지 어떻게 측정하지 — coverage-html 옵션이랑 모듈별 분리해서 보고 싶음", "should_trigger": false},
+  {"query": "specs 폴더 구조 어떻게 잡아야 하는지 — IEEE 산출물 SRS/SDD/IDD/STD 명명 규칙이랑 history 추적", "should_trigger": false}
+]
