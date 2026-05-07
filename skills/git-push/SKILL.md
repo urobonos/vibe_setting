@@ -89,21 +89,26 @@ BREAKING CHANGE: 기존 session 기반 인증이 제거됨
 
 ## 규칙
 
-1. `git push`를 현재 브랜치에서 **즉시 실행**한다
-2. push 실패 시 에러를 보여주고 수정 방안을 제안한다
-3. **[High]** `--force` 또는 `--force-with-lease`는 사용자가 명시적으로 요청한 경우에만 사용한다
-4. **실행 주체:** 모든 `git` 명령은 Claude 가 Bash 도구로 **직접 실행**한다. 사용자에게 `! git push` 또는 `! git commit ...` 형태로 떠넘기는 것은 지침 위반이다. 로컬/조회(`status`, `log`, `diff`, `add`, `commit`, `branch`, `checkout`)는 승인 대기 없이 즉시 실행. `push`, `--force`, main/master force push 등 공유 상태 변경은 승인 요청 후 **승인 확인 즉시 Claude 가 직접 호출**한다. 승인 후 실행하지 않고 텍스트만 출력하는 것은 지침 위반이다.
-5. **[Critical]** `main`/`master` 브랜치에 force push 요청 시 **경고 후 사용자 확인**을 받는다 (히스토리 손상·공유 상태 비가역 변경)
+1. **[Critical · 2026-05-07 갱신] 자동 원격 push 전면 금지** — Claude 는 Bash 도구로 `git push` 를 직접 호출하지 않는다. 모든 분기(feature / source / personal / backup / relay) · 모든 옵션(`--force` / `--force-with-lease` / `--delete` / refspec push 등) 예외 0. `branch-enforce.sh` PreToolUse hook 이 모든 분기에서 `git push` 명령을 exit 2 차단한다. 본 룰은 종전 "승인 후 직접 실행" 정책을 폐기한다 (글로벌 CLAUDE.md §"자동 원격 push 전면 금지" 결정 우선).
+2. **사용자 직접 실행 안내** — 사용자가 push 를 원하면 다음 두 경로 중 하나를 안내한다.
+   - `! git push ...` (Bash prompt prefix `!` — hook 미적용)
+   - PowerShell 셸에서 `git push ...` 직접 입력
+3. **본 스킬 호출 시 동작** — `/git-push` 또는 푸시 관련 트리거 호출 시:
+   - (a) 현재 분기 + 대상 refspec 확인 (`git rev-parse --abbrev-ref HEAD`, `git log @{u}..HEAD --oneline`)
+   - (b) push 시 영향(commit 수, 신규/삭제 분기, force 여부) 보고
+   - (c) 사용자에게 직접 실행할 명령 라인 제시 (`! git push origin <branch>` 형태)
+   - (d) Claude 가 직접 `git push` 호출 시도하지 않음
+4. **실행 주체 (push 외 명령):** 그 외 git 명령(`status`, `log`, `diff`, `add`, `commit`, `branch`, `checkout`, `merge` 등)은 Claude 가 Bash 도구로 직접 실행한다. 사용자에게 `! git commit ...` 텍스트로 떠넘기는 것은 지침 위반이다.
+5. **[Critical] main/master 자동 force push 시도 자체 금지** — push 자체가 차단되므로 force push 도 자동 호출 불가. 사용자 직접 실행 시에도 main/master force 는 경고 안내.
 
 ---
 
 ## 자가 검증 체크리스트
 
-push 실행 전후 반드시 확인:
+본 스킬 호출 시 반드시 확인:
 
-- [ ] `git push`를 **즉시 실행**했는가 (사전 `git status`, `git log` 등 진단을 수행하지 않았는가)
-- [ ] 사용자가 명시적으로 요청하지 않은 `--force` / `--force-with-lease` 옵션을 사용하지 않았는가
-- [ ] `main`/`master` 브랜치에 force push 시 사용자 경고 + 확인을 받았는가
-- [ ] push 실패 시 에러 메시지를 사용자에게 보여주고 수정 방안을 제안했는가
-- [ ] upstream이 설정되지 않은 경우 `-u origin {branch}` 옵션을 포함했는가
-- [ ] push 성공 시 결과(remote URL, 브랜치, 커밋 범위)를 간결하게 보고했는가
+- [ ] Claude 가 Bash 도구로 `git push` 를 **직접 호출하지 않았는가** (자동 push 전면 금지 — 위반 0)
+- [ ] 사용자에게 직접 실행할 명령 라인(`! git push ...` 또는 PowerShell)을 제시했는가
+- [ ] 현재 분기 + 대상 refspec + push 영향(commit 수, force 여부)을 보고했는가
+- [ ] `main`/`master` force push 의도 감지 시 경고를 안내했는가
+- [ ] upstream 미설정 케이스에 `-u origin {branch}` 옵션 안내를 포함했는가
