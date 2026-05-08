@@ -99,18 +99,52 @@ if [ "$KIND" = "output" ]; then
     echo "  예시: $SUGGEST_DATE-$SUGGEST_BASE" >&2
     exit 2
   fi
+  # 자동 면제: 부모 폴더 직속 자식이 모두 YYYY-MM-DD- prefix 이고 2건 이상이면 누적형
+  # Why: 동일 topic 다중 dated 자식 (예: api-spec-audit/2026-05-08-member/) 케이스 자동 처리
+  auto_exempt_check() {
+    local parent_path="$1"
+    [ ! -d "$parent_path" ] && return 1
+    local children
+    # 직속 자식 디렉토리만 (.) 제외, 숨김 제외
+    children=$(find "$parent_path" -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' 2>/dev/null)
+    [ -z "$children" ] && return 1
+    local total=0
+    local dated=0
+    while IFS= read -r child; do
+      [ -z "$child" ] && continue
+      total=$((total+1))
+      local cb
+      cb=$(basename "$child")
+      if echo "$cb" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
+        dated=$((dated+1))
+      fi
+    done <<< "$children"
+    # 모든 자식이 dated + 2건 이상
+    if [ "$total" -ge 2 ] && [ "$total" = "$dated" ]; then
+      return 0  # 면제
+    fi
+    return 1
+  }
+
   # 폴더명 YYYY-MM-DD- prefix 강제 (단발성 작업 필수, ongoing 폴더만 화이트리스트 면제)
   # ongoing 화이트리스트: daily-report / weekly-work-report / monthly-report — 동일 주제로 다회 산출물 누적되는 폴더만
   case "$TOPIC_SLUG" in
     daily-report|weekly-work-report|monthly-report) ;;
     *)
       if ! echo "$TOPIC_SLUG" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
-        SUGGEST_FOLDER="${TODAY_ISO_FOR_FOLDER:-$(date +%Y-%m-%d)}-${TOPIC_SLUG}"
-        echo "[OUTPUT-NAMING] 폴더명 날짜 prefix 누락 차단: '$TOPIC_SLUG' — '{yyyy-mm-dd}-{topic-slug}/' 형식 필수." >&2
-        echo "  예시: $SUGGEST_FOLDER" >&2
-        echo "  ongoing 면제: daily-report / weekly-work-report / monthly-report (동일 주제 다회 누적 폴더)" >&2
-        echo "  참고: ~/.claude/CLAUDE.md §File Paths '폴더·파일명 날짜 표기'" >&2
-        exit 2
+        # 자동 면제 검사: 부모 폴더 (output/{category}/{topic-slug}/) 절대 경로 추출
+        FOLDER_ABS=$(echo "$FILE_PATH" | sed -E 's|(.*/docs/[^/]+/output/[^/]+/[^/]+)/.*|\1|')
+        if auto_exempt_check "$FOLDER_ABS"; then
+          echo "[OUTPUT-NAMING] 자동 면제 (누적형 — 자식 dated >= 2): $FOLDER_ABS" >&2
+        else
+          SUGGEST_FOLDER="${TODAY_ISO_FOR_FOLDER:-$(date +%Y-%m-%d)}-${TOPIC_SLUG}"
+          echo "[OUTPUT-NAMING] 폴더명 날짜 prefix 누락 차단: '$TOPIC_SLUG' — '{yyyy-mm-dd}-{topic-slug}/' 형식 필수." >&2
+          echo "  예시: $SUGGEST_FOLDER" >&2
+          echo "  ongoing 면제: daily-report / weekly-work-report / monthly-report (동일 주제 다회 누적 폴더)" >&2
+          echo "  자동 면제: 부모 폴더 직속 자식이 모두 YYYY-MM-DD- prefix 이고 2건 이상" >&2
+          echo "  참고: ~/.claude/CLAUDE.md §File Paths '폴더·파일명 날짜 표기'" >&2
+          exit 2
+        fi
       fi
       ;;
   esac
