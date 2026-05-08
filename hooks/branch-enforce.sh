@@ -11,7 +11,7 @@
 #   - **2026-05-07 추가**: git push 는 모든 분기에서 차단 (자동 원격 push 전면 금지 룰)
 #     → 사용자가 직접 `! git push` 또는 PowerShell 셸로 실행해야 통과
 #
-# 산출물 SSOT: ~/.claude/docs/claude-harness/output/branch-workflow/2026-04-30-branch-workflow-design.md
+# 산출물 SSOT: ~/.claude/docs/claude-harness/output/guide/2026-04-30-branch-workflow/2026-04-30-branch-workflow-design.md
 
 source "$(dirname "$0")/lib/hook-input.sh"
 hook_init
@@ -35,20 +35,36 @@ except Exception:
 fi
 
 # ─────────────────────────────────────────────────────────
-# (1) git push — 모든 분기에서 차단 (자동 원격 push 전면 금지, 2026-05-07)
+# (1) git push — 모든 분기에서 차단 (자동 원격 push 전면 금지, 2026-05-07 / 2026-05-08 정밀화)
+# 매칭: 명령을 ;/&&/|| 로 분리한 각 절을 shlex 토큰화 → 첫 두 토큰이 ['git','push'] 인 절만 차단.
+# Why: substring 매칭은 commit 메시지·heredoc 본문·grep 인자 안의 'git push' 문자열까지 false-positive 차단함.
 # ─────────────────────────────────────────────────────────
 if [ "$TOOL_NAME" = "Bash" ]; then
   hook_parse_command
-  case "$COMMAND" in
-    *"git push"*)
-      echo "[BRANCH-GUARD] 차단: 자동 원격 push 전면 금지 (현재 분기 '$BRANCH')" >&2
-      echo "              명령: $COMMAND" >&2
-      echo "              정책: Claude 는 Bash 도구로 git push 를 직접 호출하지 않습니다 (모든 분기 / 모든 옵션 예외 0)." >&2
-      echo "              조치: 사용자가 직접 \`! git push ...\` (Bash prefix) 또는 PowerShell 셸에서 실행" >&2
-      echo "              SSOT: 글로벌 CLAUDE.md §\"자동 원격 push 전면 금지\" + skills/git-push/SKILL.md" >&2
-      exit 2
-      ;;
-  esac
+  PUSH_DETECTED="0"
+  hook_python
+  if [ -n "$HOOK_PY" ]; then
+    PUSH_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" -c "
+import sys, shlex, re
+cmd = sys.stdin.read()
+for part in re.split(r'(?:&&|\|\||;)', cmd):
+    try:
+        tokens = shlex.split(part, posix=True)
+    except ValueError:
+        tokens = part.strip().split()
+    if len(tokens) >= 2 and tokens[0] == 'git' and tokens[1] == 'push':
+        print('1'); sys.exit(0)
+print('0')
+" 2>/dev/null)
+  fi
+  if [ "$PUSH_DETECTED" = "1" ]; then
+    echo "[BRANCH-GUARD] 차단: 자동 원격 push 전면 금지 (현재 분기 '$BRANCH')" >&2
+    echo "              명령: $COMMAND" >&2
+    echo "              정책: Claude 는 Bash 도구로 git push 를 직접 호출하지 않습니다 (모든 분기 / 모든 옵션 예외 0)." >&2
+    echo "              조치: 사용자가 직접 \`! git push ...\` (Bash prefix) 또는 PowerShell 셸에서 실행" >&2
+    echo "              SSOT: 글로벌 CLAUDE.md §\"자동 원격 push 전면 금지\" + skills/git-push/SKILL.md" >&2
+    exit 2
+  fi
 fi
 
 # ─────────────────────────────────────────────────────────
