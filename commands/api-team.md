@@ -1,3 +1,9 @@
+---
+description: API 추가/디버그 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석 팀
+allowed-tools: Skill, Bash, Read, Glob, Grep, Agent, Task
+argument-hint: <add|debug> <METHOD> <PATH> [추가 컨텍스트]
+---
+
 API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 영향 분석을 수행한다.
 
 > **[SSOT 일원화]** 본 슬래시 커맨드는 `api-team` 스킬의 thin wrapper. 인자 형식·진입 신호만 본 파일에서 정의하며, **모든 절차·페르소나·멤버 spawn prompt·산출물 템플릿·가드는 `skills/api-team/SKILL.md` 가 SSOT**. 두 파일 내용 충돌 시 skill SSOT 우선.

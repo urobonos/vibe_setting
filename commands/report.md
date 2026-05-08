@@ -1,3 +1,11 @@
+---
+description: 일일·주간·월간 업무 리포트 생성. ~/.claude/docs/{product}/tasks/ 작업 이력 기반 그룹화·진행률 판정
+allowed-tools: Skill, Bash, Read, Glob, Grep
+argument-hint: "[daily|weekly|monthly] [날짜 또는 주차]"
+---
+
+본 슬래시 = `skills/report` SSOT 의 thin wrapper.
+
 오늘 날짜 기준 업무 리포트를 생성한다.
 
 ## 데이터 소스
