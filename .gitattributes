@@ -1,0 +1,2 @@
+# Force LF line endings for shell scripts (cross-OS hook consistency)
+*.sh text eol=lf

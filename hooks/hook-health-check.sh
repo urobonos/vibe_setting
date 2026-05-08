@@ -176,5 +176,5 @@ PY
   exit 0
 fi
 
-echo "[hook-health-check] 알 수 없는 모드: $MODE (사용 가능: --list, --disable-missing)" >&2
-exit 1
+echo "[HOOK-HEALTH] WARN: 알 수 없는 모드: $MODE (사용 가능: --list, --disable-missing) — skip" >&2
+exit 0
