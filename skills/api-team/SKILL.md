@@ -121,7 +121,7 @@ Lead (Claude 본체)
   3. 산출물 경로 사전 준비 (product 변환):
      source ~/.claude/hooks/lib/product-resolver.sh
      PRODUCT=$(resolve_product "$PWD")   # basename $PWD (단 .claude → claude-harness)
-     ~/.claude/docs/$PRODUCT/output/api-impact/
+     ~/.claude/docs/$PRODUCT/output/analysis/api-impact/
        └─ {YYYY-MM-DD}-{slug}-{add|debug}.md
   4. 3명 병렬 Agent spawn (run_in_background=true)
        ├─ FE  멤버: model=opus, subagent_type=general-purpose
@@ -401,7 +401,7 @@ Lead 는 다음 템플릿을 채워 3개 멤버를 동시 spawn 한다. 모든 �
 ## 9. 출력 산출물 위치 (단일)
 
 ```
-~/.claude/docs/{product}/output/api-impact/
+~/.claude/docs/{product}/output/analysis/api-impact/
   └─ {YYYY-MM-DD}-{METHOD-slug-PATH-slug}-{add|debug}.md
 ```
 
@@ -411,7 +411,7 @@ Lead 는 다음 템플릿을 채워 3개 멤버를 동시 spawn 한다. 모든 �
 ```bash
 source ~/.claude/hooks/lib/product-resolver.sh
 PRODUCT=$(resolve_product "$PWD")
-OUTPUT_DIR=~/.claude/docs/$PRODUCT/output/api-impact
+OUTPUT_DIR=~/.claude/docs/$PRODUCT/output/analysis/api-impact
 ```
 
 **파일명 슬러그 규칙:**
