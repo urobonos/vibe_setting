@@ -48,7 +48,7 @@ mirrors/
 skills.zip
 
 # Skill 평가 임시 산출물 (skill-creator improve 사이클 결과 — 스킬 소스 아님)
-skills/api-spec-audit-workspace/
+skills/.workspace/
 
 # Cache / temp
 stats-cache.json
