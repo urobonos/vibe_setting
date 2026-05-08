@@ -2,12 +2,14 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # PreToolUse:Edit|Write|Bash Hook — Trunk-Based + Short-lived Feature Branch 강제
 #
-# 정책 (사용자 결정 2026-04-30):
+# 정책 (사용자 결정 2026-04-30 / 2026-05-07 갱신):
 #   - 분기명 규칙: feature/{source-branch}_{작업명}
 #   - Protected 브랜치 = production / staging / develop / main / master (정확 매칭)
 #   - Protected 위에서 코드/설정/문서 변경 시 차단 + feature 분기 생성 유도
 #   - 면제 영역: ~/.claude/docs/{product}/  (산출물) + projects/.../memory/  (메모리)
-#   - Bash 도구: git commit / merge / rebase / push 만 차단 (checkout/branch/status 등 통과)
+#   - Bash 도구: git commit / merge / rebase 는 protected 위에서만 차단
+#   - **2026-05-07 추가**: git push 는 모든 분기에서 차단 (자동 원격 push 전면 금지 룰)
+#     → 사용자가 직접 `! git push` 또는 PowerShell 셸로 실행해야 통과
 #
 # 산출물 SSOT: ~/.claude/docs/claude-harness/output/branch-workflow/2026-04-30-branch-workflow-design.md
 
@@ -18,12 +20,6 @@ hook_read_stdin
 # 현재 브랜치 — git repo 가 아니면 통과
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 [ -z "$BRANCH" ] && exit 0
-
-# Protected 브랜치 정확 매칭
-case "$BRANCH" in
-  production|staging|develop|main|master) ;;
-  *) exit 0 ;;
-esac
 
 # tool_name 추출 (Edit / Write / Bash 분기)
 TOOL_NAME=""
@@ -38,11 +34,35 @@ except Exception:
 " 2>/dev/null)
 fi
 
-# Bash 도구 — 변경계 git 명령만 차단
+# ─────────────────────────────────────────────────────────
+# (1) git push — 모든 분기에서 차단 (자동 원격 push 전면 금지, 2026-05-07)
+# ─────────────────────────────────────────────────────────
 if [ "$TOOL_NAME" = "Bash" ]; then
   hook_parse_command
   case "$COMMAND" in
-    *"git commit"*|*"git merge"*|*"git rebase"*|*"git push"*)
+    *"git push"*)
+      echo "[BRANCH-GUARD] 차단: 자동 원격 push 전면 금지 (현재 분기 '$BRANCH')" >&2
+      echo "              명령: $COMMAND" >&2
+      echo "              정책: Claude 는 Bash 도구로 git push 를 직접 호출하지 않습니다 (모든 분기 / 모든 옵션 예외 0)." >&2
+      echo "              조치: 사용자가 직접 \`! git push ...\` (Bash prefix) 또는 PowerShell 셸에서 실행" >&2
+      echo "              SSOT: 글로벌 CLAUDE.md §\"자동 원격 push 전면 금지\" + skills/git-push/SKILL.md" >&2
+      exit 2
+      ;;
+  esac
+fi
+
+# ─────────────────────────────────────────────────────────
+# (2) Protected 브랜치 강제 — production/staging/develop/main/master
+# ─────────────────────────────────────────────────────────
+case "$BRANCH" in
+  production|staging|develop|main|master) ;;
+  *) exit 0 ;;
+esac
+
+# Bash 도구 — 변경계 git 명령 차단 (push 는 위에서 이미 처리)
+if [ "$TOOL_NAME" = "Bash" ]; then
+  case "$COMMAND" in
+    *"git commit"*|*"git merge"*|*"git rebase"*)
       ;;
     *)
       exit 0
