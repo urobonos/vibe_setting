@@ -84,6 +84,20 @@ if [ -f "$PENDING_MARKER" ]; then
   exit 0
 fi
 
+# --- 스킵 6 (T1-b, 2026-05-11): 묶음 승인 후 60분 후속 면제 ---
+# gate-approve.sh 가 BUNDLED_APPROVED=true 매칭 시 GATE_FILE 을 2 로 설정.
+# 묶음 승인 직후 60분 내 후속 mutation/분석 지시는 의도 정리 단계 면제.
+# — 단일 묶음 승인이 권고 처리 흐름 끝까지 자동 진행 보장.
+# — 60분 초과 시 다시 Echo-Back 정상 발동 (새 작업으로 간주).
+GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
+if [ -f "$GATE_FILE" ] && [ "$(cat "$GATE_FILE" 2>/dev/null)" = "2" ]; then
+  # mtime 60분 이내 검사 (find -mmin 호환 — Windows Git Bash 동작 확인)
+  if find "$GATE_FILE" -mmin -60 2>/dev/null | grep -q .; then
+    log "BUNDLED_RECENT sid=$SESSION_ID len=$PROMPT_LEN — skip (gate=2, <60min)"
+    exit 0
+  fi
+fi
+
 # --- 트리거 키워드 매칭 (코드 mutation + 분석 + 실행) ---
 TRIGGER=false
 

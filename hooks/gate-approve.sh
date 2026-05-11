@@ -151,6 +151,9 @@ if [ "$APPROVED" = true ]; then
   CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
   if [ "$BUNDLED_APPROVED" = true ]; then
     NEW_LEVEL=2
+    # T1-c (2026-05-11): 묶음 승인 시 prompt-echo-confirm 펜딩 마커 자동 제거
+    # — Echo-Back Confirm 후속 발동 차단 (CLAUDE.md §4.4 면제 영역 (f) 와 정합)
+    rm -f "/tmp/claude_echo_pending_${SESSION_ID}" 2>/dev/null
   else
     NEW_LEVEL=$((CURRENT + 1))
   fi
