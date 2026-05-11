@@ -1,5 +1,5 @@
 ---
-name: notion_cli
+name: notion-cli
 description: >
   Notion API curl 기반 CLI 스킬.
   페이지 조회/생성/수정, 데이터베이스 검색, 블록 조작을 수행한다.
@@ -38,12 +38,12 @@ min_claude_md_version: "4.0"
 ## 인증
 
 - **방식:** Bearer Token
-- **토큰 파일:** `~/.claude/skills/notion_cli/.token`
-- **토큰 읽기:** `TOKEN=$(cat ~/.claude/skills/notion_cli/.token)`
+- **토큰 파일:** `~/.claude/skills/notion-cli/.token`
+- **토큰 읽기:** `TOKEN=$(cat ~/.claude/skills/notion-cli/.token)`
 
 ### 인증 헤더 구성
 ```bash
-TOKEN=$(cat ~/.claude/skills/notion_cli/.token)
+TOKEN=$(cat ~/.claude/skills/notion-cli/.token)
 ```
 
 ## 기본 설정
@@ -55,7 +55,7 @@ TOKEN=$(cat ~/.claude/skills/notion_cli/.token)
 
 ### 단축 변수
 ```bash
-TOKEN=$(cat ~/.claude/skills/notion_cli/.token)
+TOKEN=$(cat ~/.claude/skills/notion-cli/.token)
 BASE="https://api.notion.com/v1"
 AUTH="Authorization: Bearer $TOKEN"
 VER="Notion-Version: 2022-06-28"

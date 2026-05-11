@@ -120,97 +120,23 @@ Lead 가 사용자에게 보고할 때 **결론 + 표/diff 위주**로 압축한
 
 **Why:** Checklist는 cold context에서 spawn된 멤버가 해당 페르소나의 책임 범위를 빠짐없이 검증하는 유일한 수단이며, 누락 시 Lead가 "어디까지 검증되었는지" 알 수 없어 후행 팀이 빈틈을 안고 진행한다.
 
-## 2.1. Core Agents
+## 2.1. Core Agents (9-Core)
 
-**1. Analyst**
-"요구사항의 본질을 꿰뚫어 작업의 지도를 그리는 전략 분석가". 요구사항 분석, WBS, 리스크, 영향 범위 도출.
+9-Core 페르소나 상세 (역할·트리거·산출물·Completion Checklist) 는 [`references/team-personas.md`](references/team-personas.md) 를 참고.
 
-> **Checklist:**
-> - [ ] 영향 범위(파일, 모듈, 의존관계) 완전 식별
-> - [ ] WBS 항목에 ID, 설명, 산출물, 의존관계 정의
-> - [ ] 리스크 식별 및 완화 방안 포함
-> - [ ] 우선순위 정의 + 근거 포함
+**요약 매트릭스:**
 
-**2. Architect**
-"확장성과 패턴의 일관성을 수호하는 설계 거장". 설계, API 인터페이스, Blueprint, 스키마 설계.
-
-> **Checklist:**
-> - [ ] Blueprint에 디렉토리 구조, 클래스명, 메서드 시그니처 포함
-> - [ ] 기존 아키텍처 패턴과 일관성 검증
-> - [ ] 인터페이스 계약(Input/Output, 예외) 명세
-> - [ ] 스키마 설계 시 ERD, FK/인덱스, 네이밍 컨벤션 준수
-> - [ ] 디자인 결정에 근거(Why) 포함
-
-**3. Worker**
-"최소한의 코드로 완벽을 기하는 정밀 조립공". 구현, 마이그레이션, 문서 동기화.
-
-> **Checklist:**
-> - [ ] 코드 문법이 정상인가
-> - [ ] 3-Layer 아키텍처 준수
-> - [ ] Blueprint/인터페이스 계약 대비 누락 없음
-> - [ ] 환경변수로 관리되고 디버그 코드가 정리되었는가
-> - [ ] 변경 파일 목록과 diff 포함
-
-**4. Reviewer**
-"타협 없는 코드 품질 검사관". 코드 품질, 컨벤션, 규정 준수.
-
-> **Checklist:**
-> - [ ] 모든 변경 파일 검토 완료
-> - [ ] 이슈에 심각도(Critical/High/Medium/Low) 부여
-> - [ ] 각 이슈에 구체적 수정 권고 포함
-> - [ ] 컨벤션 준수 확인 (네이밍, 축약어 금지)
-> - [ ] 최종 판정(Pass/Conditional/Reject) + 근거
-
-**5. Tester**
-"코드의 빈틈을 찾아 무너뜨리는 품질 보증 전문가". QA, 엣지케이스, 장애 시나리오.
-
-> **Checklist:**
-> - [ ] 모든 public 메서드 최소 1개 테스트
-> - [ ] happy path + error path 커버
-> - [ ] 엣지 케이스 식별 및 테스트
-> - [ ] 장애 시나리오(타임아웃, DB 다운) 고려
-> - [ ] 테스트 실행 결과 보고
-
-**6. Security**
-"무결성 시스템 구축 및 침입 차단 관제관". 보안, 인프라, 연동 안정성.
-
-> **Checklist:**
-> - [ ] OWASP Top 10 매핑 완료
-> - [ ] Critical 이슈 0건 확인
-> - [ ] 하드코딩 시크릿/API 키 미존재
-> - [ ] 인증 필터 적용 확인
-> - [ ] 에러 응답에 내부 정보 미노출
-> - [ ] 외부 연동 시 재시도/타임아웃 확인
-
-**7. Performance**
-"병목을 추적하고 최적화를 설계하는 성능 엔지니어". 성능, 쿼리 최적화, 캐싱.
-
-> **Checklist:**
-> - [ ] 주요 쿼리 EXPLAIN 분석 (풀스캔 0건 또는 사유)
-> - [ ] N+1 쿼리 미존재 확인
-> - [ ] 목록 조회 페이지네이션 적용 확인
-> - [ ] 시간 복잡도 O(n²)+ 로직 식별 및 최적화 권고
-> - [ ] 캐싱 적용 가능 지점 식별
-
-**8. Data**
-"데이터의 흐름과 구조를 설계하는 데이터 아키텍트". 스키마, ERD, 데이터 무결성.
-
-> **Checklist:**
-> - [ ] 테이블/컬럼 네이밍 snake_case 복수형 준수
-> - [ ] FK/인덱스 설계에 근거 포함
-> - [ ] 데이터 타입 최적화 확인
-> - [ ] 정규화 수준 결정 + 근거
-> - [ ] 데이터 무결성 제약 조건 정의
-
-**9. Ops**
-"서비스의 안정적 운영과 무중단 배포를 책임지는 운영 엔지니어". 배포 전략, 로깅, 모니터링, 장애 복구, 롤백.
-
-> **Checklist:**
-> - [ ] 배포 전략 확인 (무중단 배포, 롤백 계획)
-> - [ ] 로깅 충분성 확인 (에러 추적, 감사 로그)
-> - [ ] 모니터링/알림 지점 식별
-> - [ ] 장애 복구 시나리오 정의 (타임아웃, 재시도, 서킷브레이커)
-> - [ ] 환경별 설정 분리 확인 (dev/staging/prod)
+| # | 페르소나 | 역할 1줄 | 주요 트리거 |
+|---|---------|---------|-----------|
+| 1 | Analyst | 요구사항 분석·WBS·리스크·영향 범위 도출 | 분석 진입, Team 1/2 Lead |
+| 2 | Architect | 설계·API 인터페이스·Blueprint·스키마 설계 | 아키텍처 결정, Blueprint 수립 |
+| 3 | Worker | 구현·마이그레이션·문서 동기화 | Team 3 Lead, 코드 작성 |
+| 4 | Reviewer | 코드 품질·컨벤션·규정 준수 검사 | 코드 리뷰, 컨벤션 검증 |
+| 5 | Tester | QA·엣지케이스·장애 시나리오 | 테스트 작성/실행 |
+| 6 | Security | 보안·인프라·연동 안정성 (OWASP) | 보안 검토, 인증/인가 영향 |
+| 7 | Performance | 성능·쿼리 최적화·캐싱·N+1 | 병목 추적, EXPLAIN 분석 |
+| 8 | Data | 스키마·ERD·데이터 무결성 | 스키마 설계, FK/인덱스 |
+| 9 | Ops | 배포 전략·로깅·모니터링·롤백 | 운영 안정성, L등급 진입 |
 
 ## 2.2. 3-Consultants (온디맨드)
 
@@ -283,62 +209,10 @@ Team Lead로 spawn되는 에이전트의 prompt에 주입:
 
 # Part 3. Communication Protocol
 
-## 3.1. Input Protocol (에이전트 prompt 구성)
+Input/Output Protocol, Status 코드, Decision Request 형식 상세는 [`references/communication-protocol.md`](references/communication-protocol.md) 를 참고. 본문에서는 진입 절차만 요약.
 
-| 항목 | 설명 |
-|------|------|
-| `Task_Goal` | 수행할 작업의 명확한 목표 |
-| `Context_Path` | 선행 팀 산출물 파일 경로(기본). 에이전트가 직접 Read하여 사용한다. |
-| `Context_Inline` | (1M 컨텍스트 모델 한정 예외) 산출물 원문을 prompt에 삽입. 3.1.1 조건 충족 시에만 허용. |
-| `Authority_Level` | 권한 범위 (Read-only / Read-Write) |
-| `Output_Format` | 반환 결과 기대 형식 |
-
-## 3.1.1. 1M Context 예외 — 원문 주입 허용
-
-**기본 원칙:** `Context_Path` 방식(경로만 전달, 에이전트가 Read)을 우선한다. 이유 — 주입 토큰 최소화, 캐시 재사용, 재현성 확보.
-
-**예외 조건:** 현재 기준 모델이 1M context를 지원할 경우(Opus 4.7 이상), 아래 조건 **중 하나라도** 해당하면 `Context_Inline`으로 원문 주입을 선택할 수 있다.
-
-| 허용 조건 | 설명 |
-|-----------|------|
-| **교차 참조 필수** | analyze.md의 다중 섹션을 교차 대조해야 판단이 정확해지는 경우 (Architect, Worker) |
-| **Read 불가 환경** | worktree/샌드박스 격리로 원본 파일 접근이 제한되는 경우 |
-| **소용량 주입** | 총 주입 토큰이 50K 이하로 캐시 히트율 손상이 경미한 경우 |
-
-**제약:**
-- `Context_Inline` 선택 시 Orchestrator는 **선택 이유를 prompt 내 주석으로 명시**한다. 이유 미기록은 지침 위반.
-- `Context_Path` + `Context_Inline` **동시 사용 금지** (에이전트 혼선 방지). 하나만 선택.
-- **Why:** 동일 산출물이 경로와 원문 두 채널로 동시 전달되면 에이전트가 어느 쪽을 정본으로 삼아야 할지 판단할 수 없어 분석 결과가 두 버전으로 갈라지고 종합 단계에서 결론 편향이 발생한다.
-- 5개 이상의 원문을 동시에 주입해야 하는 경우, 주입 대신 선행 단계에서 요약본을 생성해 전달한다.
-
-## 3.2. Output Protocol (Orchestrator → 사용자)
-
-| 태그 | 내용 |
-|------|------|
-| `[Analyze Report]` | Team 1 분석 결과 요약 |
-| `[Plan Report]` | Team 2 계획 결과 요약 |
-| `[Execute Report]` | Team 3 실행 결과 요약 |
-| `[Status]` | 아래 상태 중 하나 |
-
-## 3.3. Status 코드
-
-| 상태 | 의미 | 다음 액션 |
-|------|------|-----------|
-| `Analyze Complete` | Team 1 완료, 승인 대기 | 승인 → Team 2 |
-| `Plan Complete` | Team 2 완료, 승인 대기 | 승인 → Team 3 |
-| `Progress` | Team 3 실행 중 | 완료 후 result.md |
-| `Done` | 전체 완료 + 사용자 확인 | Terminate |
-| `Failed` | 오류 발생 | Recovery 최대 3회 → 에스컬레이션 |
-
-## 3.4. Decision Request (트레이드오프 발생 시)
-
-| 항목 | 내용 |
-|------|------|
-| `[Issue Summary]` | 쟁점 요약 |
-| `[Pragmatist]` | 실용적 대안 + 장단점 |
-| `[Visionary]` | 이상적 대안 + 장단점 |
-| `[Innovator]` | 제3의 대안 + 장단점 |
-| `[Request]` | "사용자의 선택을 기다립니다." |
+- **§3.1 Input:** Agent prompt = `Task_Goal` + `Context_Path` (선행 팀 산출물 경로) + `Authority_Level` + `Output_Format`. **§3.1.1 1M Context 예외:** Opus 4.7 이상에서 교차 참조 필수 / Read 불가 환경 / 50K 이하 소용량 시 `Context_Inline` 원문 주입 허용 — `Context_Path` 와 동시 사용 금지.
+- **§3.2 Output:** `[Analyze Report]` / `[Plan Report]` / `[Execute Report]` + `[Status]`. **§3.3 Status:** `Analyze Complete` / `Plan Complete` / `Progress` / `Done` / `Failed`. **§3.4 Decision Request:** 트레이드오프 발생 시 `[Issue Summary]` + `[Pragmatist]` / `[Visionary]` / `[Innovator]` 대안 + `[Request]` 형식으로 사용자 선택 요청.
 
 ---
 
@@ -489,55 +363,12 @@ Orchestrator:
 
 # Part 5. Vibe Coding Group Protocol
 
-사용자가 "바이브코딩" 지시 시 활성화. 3-Team 대신 Lead가 미니 사이클을 자체 완결하는 경량 모드.
+사용자가 "바이브코딩" 지시 시 활성화. 3-Team 대신 Lead 가 미니 사이클을 자체 완결하는 경량 모드.
 
-## 5.1. 3-Team vs Vibe Group
+Vibe Coding Group 상세 (등급·미니 사이클·Lead 페르소나·3-Team 전환 조건) 는 [`references/vibe-coding-group.md`](references/vibe-coding-group.md) 를 참고.
 
-| 항목 | 3-Team | Vibe Group |
-|------|--------|------------|
-| 트리거 | 기본값 | "바이브코딩" |
-| 구조 | 3팀 순차 | 도메인별 자율 팀 병렬 |
-| Context Passing | 팀 간 순차 전달 | Lead 내부 자체 해결 |
-| 적합 | 복잡·대규모·보안 민감 | 독립 기능 병렬, CRUD, 리팩토링 |
-
-## 5.2. Vibe Group 등급
-
-| 등급 | 기준 | Group 수 | 승인 |
-|------|------|---------|------|
-| **S** | 단일 독립 기능 | 1개 | 1회 |
-| **M** | 2~3개 독립 기능 | 2~3개 병렬 | 1회 |
-| **L** | 4개+ 독립 기능 | 4개+ 병렬 | 2회 |
-
-## 5.3. 미니 사이클 (6단계)
-
-1. **분석:** Read/Grep/Glob으로 탐색, 영향 범위 파악
-2. **설계:** 방향 자체 판단, 아키텍처 정합성 확인
-3. **개발:** 직접 구현 또는 멤버 spawn
-4. **검수:** Reviewer 관점 자체 리뷰
-5. **QA:** 테스트 작성/실행
-6. **반환:** diff + 테스트 결과 + 이슈 대시보드
-
-- Critical/High → Stage 3으로 회귀 (최대 3회)
-- 3회 미해소 → Orchestrator 에스컬레이션
-
-## 5.4. Lead 페르소나
-
-```
-[Lead Authority] Orchestrator 권한을 위임받은 Vibe Group Lead.
-- 미니 사이클 6단계를 자체 완결하여 "완제품" 반환.
-- 필요 시 멤버/3-Consultants spawn 가능.
-- 반환 후 즉시 terminate.
-
-[Vibe Group Task]
-- Group ID: {Group-ID}
-- 작업 목표: {Task Goal}
-- 작업 범위: {파일/모듈 목록}
-```
-
-## 5.5. 3-Team 전환 조건
-- Group 간 인터페이스 충돌 2건+
-- Critical 3회 회귀 미해소
-- 사용자 명시적 요청
-
-전환 시 기존 결과물은 Team 3(Execute)의 입력으로 취급.
+- **§5.1 vs 3-Team:** 독립 기능 병렬·CRUD·리팩토링 등 빠른 반복 / 소규모 작업용. **§5.2 등급:** S (1개 Group, 1회 승인) / M (2~3 병렬, 1회) / L (4개+ 병렬, 2회).
+- **§5.3 미니 사이클:** 분석 → 설계 → 개발 → 검수 → QA → 반환 (6단계). Critical/High → Stage 3 회귀 최대 3회.
+- **§5.4 Lead 페르소나:** Orchestrator 권한 위임받은 Vibe Group Lead, 자체 완결 후 즉시 terminate.
+- **§5.5 3-Team 전환 조건:** Group 간 인터페이스 충돌 2건+ / Critical 3회 회귀 미해소 / 사용자 명시 요청 → 기존 결과물은 Team 3(Execute) 입력으로 취급.
 

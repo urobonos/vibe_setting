@@ -1,5 +1,5 @@
 ---
-name: bitbucket_cli
+name: bitbucket-cli
 description: >
   Bitbucket Cloud REST API 스킬.
   curl + API 토큰 기반으로 파이프라인, PR, 브랜치, 커밋 등을 조회/관리한다.
@@ -30,12 +30,12 @@ min_claude_md_version: "4.0"
 
 - **방식:** Basic Auth (`-u "email:token"`)
 - **설정 파일:** `~/.claude/.config` (`BITBUCKET_EMAIL`, `BITBUCKET_WORKSPACE`, `BITBUCKET_REPO_BE`, `BITBUCKET_REPO_FE`)
-- **토큰 파일:** `~/.claude/skills/bitbucket_cli/.token`
+- **토큰 파일:** `~/.claude/skills/bitbucket-cli/.token`
 
 ### 인증 헤더 구성
 ```bash
 source ~/.claude/.config
-TOKEN=$(cat ~/.claude/skills/bitbucket_cli/.token)
+TOKEN=$(cat ~/.claude/skills/bitbucket-cli/.token)
 AUTH="$BITBUCKET_EMAIL:$TOKEN"
 ```
 
@@ -51,7 +51,7 @@ AUTH="$BITBUCKET_EMAIL:$TOKEN"
 ### 단축 변수
 ```bash
 source ~/.claude/.config
-TOKEN=$(cat ~/.claude/skills/bitbucket_cli/.token)
+TOKEN=$(cat ~/.claude/skills/bitbucket-cli/.token)
 AUTH="$BITBUCKET_EMAIL:$TOKEN"
 BASE="https://api.bitbucket.org/2.0/repositories/$BITBUCKET_WORKSPACE"
 BE="$BITBUCKET_REPO_BE"

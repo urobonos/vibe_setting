@@ -52,7 +52,7 @@
   - **Why:** API 명세 3군데 정합성 유지를 hook 레벨에서 강제. 수동 cp 누락으로 인한 동기화 깨짐을 원천 차단. 사용자 결정 (2026-04-30) — `mirror-docs.sh` 가 SSOT.
   - **specs/ 미러링은 제거됨 (2026-05-04 사용자 결정):** 글로벌 `~/.claude/docs/{product}/specs/` 가 SSOT. 프로젝트 미러본 사용 중단.
 - **외부 프로젝트 CLAUDE.md 미러링 (2026-05-07):** `~/.claude/mirrors/{product}/CLAUDE.md` 가 외부 프로젝트(현재: `hongcafe_global_backend`)의 `CLAUDE.md` **양방향** 자동 미러본이다. `mirror-claude-md.sh` PostToolUse hook 이 양쪽 Edit/Write 시 반대편을 자동 cp 한다. 단일 작성자 전제 last-write-wins. 글로벌 미러본은 `.gitignore` 로 추적 제외 (SSOT 는 외부 프로젝트 git). 수동 진입점 = `mirror-be-claude` 스킬 (`/mirror-be-claude` — `verify` / `sync-from-be` / `sync-from-global` 3 모드, 후자는 §3 Checkpoint 발동). **Why:** 외부 프로젝트 지침을 글로벌 세션에서 cd 없이 즉시 read 가능 + 수동 cp 누락·외부 IDE 편집·git checkout 회피 경로 안전망 확보. **다른 프로젝트 확장:** `~/.claude/mirrors/{product}/` 패턴 동일 적용 — 별도 hook/skill 작성 또는 본 hook 다중 프로젝트 지원으로 일반화 (skill-creator 경유). SSOT: `hooks/mirror-claude-md.sh` (자동) + `skills/mirror-be-claude/SKILL.md` (수동).
-- **Notion 연동 (요청 기반):** `notion_cli` 스킬을 단일 진입점으로 사용. 사용자가 "노션에 반영"·"Notion 동기화" 등 명시 요청할 때만 실행 (지침 수정에 대한 자동 반영 금지). MCP 도구 폐기·인증·블록 교체 절차 등 세부는 스킬 SSOT. 사용자 요청 없이 선제 실행은 지침 위반.
+- **Notion 연동 (요청 기반):** `notion-cli` 스킬을 단일 진입점으로 사용. 사용자가 "노션에 반영"·"Notion 동기화" 등 명시 요청할 때만 실행 (지침 수정에 대한 자동 반영 금지). MCP 도구 폐기·인증·블록 교체 절차 등 세부는 스킬 SSOT. 사용자 요청 없이 선제 실행은 지침 위반.
 
 ---
 
@@ -62,7 +62,7 @@
 
 1. 프로젝트 루트 구조 파악 + 현재 브랜치/커밋 확인
 2. `~/.claude/docs/{product}/tasks/history.md` 로드 (작업 이력 요약). `{product}` = `basename $CWD` (단 `.claude` → `claude-harness`).
-3. `.claude/skills/` 전 스킬은 SessionStart 훅(`hooks/skill-preload.sh`)이 자동으로 전량 preload — Claude는 주입된 스킬 중 `triggers`에 부합하는 스킬만 활성 호출한다. (`audit-config`는 preload 제외되며 `/audit-config` 명시 호출 시에만 로드)
+3. `.claude/skills/` 전 스킬은 SessionStart 훅(`hooks/skill-preload.sh`)이 자동으로 전량 preload — Claude는 주입된 스킬 중 `triggers`에 부합하는 스킬만 활성 호출한다.
 
 → 완료 후 반드시 **"Context Loaded."** 보고
 
@@ -117,15 +117,62 @@
 - **Co-Authored-By 라인 금지 (필수):** git commit 메시지에 `Co-Authored-By: Claude ...` 라인 포함 금지 (jypark 단독 author 정책). `dangerous-ops-guard.sh` hook 이 SSOT 로 강제 차단.
 - **Hook 차단 자가 복구 (필수):** hook(특히 `gate-approve.sh`, `task-docs` 관련)이 "파일 미생성 — 차단" 유형 메시지를 던지면, 사용자에게 "생성해주세요"라고 되묻지 말고 Claude 가 직접 그 파일을 작성해서 gate 를 통과시킨다. 단 (a) 이미 사용자 승인을 받은 진행 맥락일 것, (b) 차단 메시지에 명시된 파일 경로·역할 정확히 따를 것 — 두 조건 충족 시에만 자가 작성. 미승인 작업의 강제 진입은 금지. 자가 작성 후 "hook 이 지적한 누락분을 채웠음"만 짧게 보고하고 다시 승인 키워드 대기.
 - **Hook 우회 목적 임의 파일 생성 금지 (필수):** hook 차단을 회피하려고 임의로 파일을 생성·커밋하지 않는다. 위 "Hook 차단 자가 복구" 룰의 정당한 누락분 보완(승인된 작업의 누락 산출물 작성)과 다르며, 무관한 파일을 만들거나 hook 경로 위장 목적의 더미 파일을 생성하는 모든 행위가 위반이다. 차단이 정당하지 않다고 판단되면 사용자에게 보고하고 지시를 기다린다.
-- **audit 결과 자동 수정 금지 (필수):** `/audit-config` 등 진단 명령의 N 판정에 대해 Claude 가 자동으로 "개선 제안"·"수정 계획"을 덧붙이지 않는다. audit 는 현황 진단 도구이지 무조건 고쳐야 하는 task 가 아니다. 사용자가 특정 항목에 대해 명시적으로 수정을 요청할 때만 개선안을 제시하고, 수정 시에도 단건 패치가 아닌 영향 범위 전체를 고려한 접근을 제안한다. 잘 돌아가는 구조를 점수 올리려고 건드리면 정합성 악순환이 생긴다.
+- **audit 결과 자동 수정 금지 (필수):** audit 진단 명령(예: `/api-spec-audit`·`/security-audit` 등) 의 N 판정에 대해 Claude 가 자동으로 "개선 제안"·"수정 계획"을 덧붙이지 않는다. audit 는 현황 진단 도구이지 무조건 고쳐야 하는 task 가 아니다. 사용자가 특정 항목에 대해 명시적으로 수정을 요청할 때만 개선안을 제시하고, 수정 시에도 단건 패치가 아닌 영향 범위 전체를 고려한 접근을 제안한다. 잘 돌아가는 구조를 점수 올리려고 건드리면 정합성 악순환이 생긴다.
 - **브랜치 워크플로우 — Trunk-Based + Short-lived Feature Branch (필수):** 세션 시작 시 현재 브랜치(`production` / `staging` / `develop` / `main` / `master`)에서 즉시 `feature/{source-branch}_{작업명}` 분기를 생성한다. `{source-branch}` 는 분기 직전 `git rev-parse --abbrev-ref HEAD` 결과 — 분기명 자체에 머지 타깃이 명시됨. 작업명은 kebab-case 영문(기존 `~/.claude/docs/{product}/tasks/{YYYYMMDD}/{작업명}/` 폴더명 규약 재사용). 사용자 명시 머지 승인(`머지` / `merge` / `완료`) 시 분기명에서 추출한 source 브랜치로 `--ff-only` (fast-forward) 머지 + 분기 삭제. push 는 별도 승인. **면제 영역:** `~/.claude/docs/{product}/` (산출물) / `projects/.../memory/` (메모리) / `.skill-creator-active.lock` (락 파일). **Why:** 단일 세션 = 분기 수명 보장으로 trunk 안정성 + linear history 유지(fast-forward) + 분기명에 source 가 있어 동일 repo 의 production/staging/develop 다중 환경을 명확히 구분 (env CWD-매핑 방식 폐기 사유). 분기 머지 직전 분기 위에서 `git rebase {source}` 로 fast-forward 가능 상태 확보. `branch-enforce.sh` PreToolUse hook 이 protected 브랜치 위 직접 변경(Edit/Write/MultiEdit + git commit/merge/rebase/push) 을 exit 2 차단. 산출물 SSOT: `~/.claude/docs/claude-harness/output/guide/2026-04-30-branch-workflow/2026-04-30-branch-workflow-design.md`.
 - **자동 원격 push 전면 금지 (필수, 2026-05-07):** Claude 는 어떤 분기에서도 `git push` 를 Bash 도구로 자동 호출하지 않는다 — feature 분기 / source 분기(production/staging/develop/main/master) / personal·backup 분기 / 임시 relay 분기 모두 예외 없음. 사용자가 push 를 원할 경우 직접 `! git push ...` 또는 PowerShell 셸에서 실행한다. **예외 0:** 협업 PR · 리뷰 공유 · 원격 백업 · 분기 삭제 (`push origin --delete`) · `--force-with-lease` 등 모든 시나리오 포함. **Why:** (1) 운영 영향이 큰 push 사고는 자동화 1회 실수로 즉시 발생하나 사용자 직접 실행 1 라인은 비용이 거의 없음 (2) feature 분기를 origin 에 올리면 PR 워크플로우가 trunk-based 정신과 충돌하고 origin 정리 비용이 누적됨 (3) 본 룰 도입 직전 세션에서 production push 차단을 사용자가 `! git push` 로 우회한 사례 — 자동 push 가 hook 차단을 회피하는 통로로 변질되는 것을 원천 봉쇄. **강제:** `branch-enforce.sh` PreToolUse hook 가 모든 분기에서 Bash 도구의 `git push` 명령을 exit 2 차단. 사용자 직접 (`! ` prefix) 실행은 hook 미적용 경로라 통과. SSOT: 본 룰 + `~/.claude/skills/git-push/SKILL.md`.
 - **스킬 생성·수정·최적화 — skill-creator 강제 진입점 (필수):** `.claude/skills/{skill}/` 하위 모든 파일(SKILL.md / scripts/ / references/ / agents/ / assets/ / evals/ 등) 생성·수정·최적화는 **반드시 `skill-creator` 스킬을 경유**해야 한다. `skill-edit-guard.sh` PreToolUse hook 이 .claude/skills/ 하위 Edit/Write 시도를 exit 2 로 차단하고, skill-creator 진입 시 모델이 직접 생성한 락 파일(`~/.claude/.skill-creator-active.lock`) 존재 시에만 우회 통과시킨다. **진입 절차:** (1) `/skill-creator` 또는 "스킬 만들기/수정/개선/최적화" 트리거로 호출 → (2) 진입 직후 `touch ~/.claude/.skill-creator-active.lock` 실행 → (3) Edit/Write 작업 → (4) 작업 완전 종료 시 `rm ~/.claude/.skill-creator-active.lock`. **Why:** 즉흥 스킬 편집을 hook 레벨에서 원천 차단해 description·triggers·평가 절차 누락을 방지. `skill-creator` SKILL.md §"Skill Edit Lock" 이 SSOT (사용자 결정 2026-04-30). 세션 종료 시 `gate-init.sh` 가 잔여 락 자동 정리.
 - **로컬 수정 사전 승인 + 서버 우선 검증 (필수):** 프로덕션·공유 환경 영향 코드(특히 운영 중 API·배포 대상 파일)는 로컬 수정 전에 (1) 서버에서 원인 파악 + 테스트 우선, (2) 수정 필요 사항을 목록으로 정리해 사용자에게 제시, (3) 사용자 승인 후에만 로컬 소스 수정. 서버 로그로 원인 파악했다고 즉시 로컬 수정·커밋·푸시·머지 진행하는 것은 지침 위반이다.
 - **e2e 검증 (필수):** 코드 수정 완료 판단은 유닛 테스트 통과 + 환경/스키마/실 엔드포인트 검증. 5점 체크(env / 함수·클래스 정의 / DB 스키마 / 프로덕션 curl / mock 검증) 세부는 `php8` 스킬 §"e2e 검증" SSOT.
 - **답변 깊이 (Anticipatory Depth, 필수):** 답변 작성 전에 "이걸 들으면 사용자가 뭘 더 궁금해할까"를 먼저 생각하고, 한 단계 더 깊이 응답하여 후속 질문 빈틈을 줄인다. 핵심 후속 의문만 선제적으로 커버하되, 불필요하게 길어지는 것은 피한다. 피상적이거나 당연한 후속 질문을 유발하는 답변은 시간 낭비다. **적용 영역 분리 (필수):** 본 룰은 **사용자 질문 답변** 에 우선 적용된다. **작업 진행/완료 보고** 출력은 §"응답 간결 (Concise Reporting)" 룰이 우선이며, 결론·표·diff 위주로 압축한다. 즉 "왜 그래?" / "근거는?" 같은 명시 질문에는 한 단계 깊이로 풀고, 진행 보고는 결론 1~2줄 + 표/diff 1개로 압축한다. 두 룰은 영역이 다르므로 충돌 아님.
-- **Auto mode 룰 우선순위 (필수):** Auto mode (settings.json `defaultMode: auto` + system reminder "Execute immediately") · §3 Checkpoint · 실행 책임 · Echo-Back Confirm 룰이 동시 적용되는 상황에서는 다음 우선순위로 결정한다 — **(1) §3 Checkpoint 5조건** (비가역·광범위·요구사항 상충·외부 시스템·권한 외 접근) → 절대 우선, 사용자 승인 필수. **(2) 실행 책임** (Bash allow + hook exit 0 통과 명령 / 사용자 승인 키워드 직후 명령) → Claude 직접 실행 (떠넘기기 금지). **(3) Auto mode** (즉시 실행 신호) → 위 두 룰을 위반하지 않는 범위에서만 적용. **(4) Echo-Back Confirm** (코드/분석 지시 첫 응답 의도 정리·승인 대기) → Auto mode 신호와 충돌하지 않는 범위에서 적용. **Why:** 네 룰을 평행 적용하면 §3 ↔ Auto mode deadlock — trivial 판정으로 빠지면 §3 위반, Checkpoint 로 빠지면 Auto mode 위반인 결정 불능 상태가 발생한다. 우선순위 고정 = §3 > 실행 책임 > Auto mode > Echo-Back Confirm. 사용자가 명시적으로 Auto mode 강행을 요청해도 §3 발동 시 승인 대기가 우선이다.
+- **Auto mode 룰 우선순위 (필수):** Auto mode (settings.json `defaultMode: auto` + system reminder "Execute immediately") · §3 Checkpoint · 실행 책임 · Echo-Back Confirm 룰이 동시 적용되는 상황에서는 다음 우선순위로 결정한다 — **(1) §3 Checkpoint 5조건** (비가역·광범위·요구사항 상충·외부 시스템·권한 외 접근) → 절대 우선, 사용자 승인 필수. **(2) 실행 책임** (Bash allow + hook exit 0 통과 명령 / 사용자 승인 키워드 직후 명령) → Claude 직접 실행 (떠넘기기 금지). **(3) Auto mode** (즉시 실행 신호) → 위 두 룰을 위반하지 않는 범위에서만 적용. **(4) Echo-Back Confirm** (코드/분석 지시 첫 응답 의도 정리·승인 대기) → Auto mode 신호와 충돌하지 않는 범위에서 적용. **Why:** 네 룰을 평행 적용하면 §3 ↔ Auto mode deadlock — trivial 판정으로 빠지면 §3 위반, Checkpoint 로 빠지면 Auto mode 위반인 결정 불능 상태가 발생한다. 우선순위 고정 = §3 > 실행 책임 > Auto mode > Echo-Back Confirm. 사용자가 명시적으로 Auto mode 강행을 요청해도 §3 발동 시 승인 대기가 우선이다. **최초 진입 규칙:** 코드/분석 mutation 지시 첫 응답 시 = Echo-Back Confirm 발동 → 펜딩 마커(`/tmp/claude_echo_pending_${SESSION_ID}`) 생성 → 승인 키워드 대기. 이미 펜딩 상태면 §4.4 면제 영역 (d) `승인 키워드 단독` 적용. Auto mode 활성 신호는 §3 Checkpoint 와 본 진입 규칙을 위반하지 않는 범위에서만 즉시 실행으로 해석.
 - **응답 톤 (필수 / 존댓말):** 사용자에게 응답할 때 항상 존댓말을 사용한다. "~함", "~임", "~할까", "~인데" 같은 명사형/평서형 종결어미는 반말로 인식되므로 금지한다. 단답("진행", "확인" 등)도 "진행하겠습니다", "확인했습니다" 형식으로 풀어 응답한다. 본 룰은 모든 세션·모든 톤(긴급/일상/리뷰)에 무조건 적용된다. 표·목록 안의 짧은 항목 외 모든 서술 문장에 존댓말을 적용한다.
 - **응답 간결 (Concise Reporting, 필수):** 보고·결과·분석 출력은 **결론·핵심 표·diff** 위주로 압축한다. 사족·진행 서술("~을 진행했습니다", "~을 살펴봤습니다", "~한 결과")·중복 요약·메타 설명은 제거한다. 기본 형태 = **핵심 결론 1~2줄 + 표/diff 1개 + 잔여 액션 1줄**. 상세 설명은 사용자가 명시적으로 질문할 때만 풀어쓴다. **면제 영역 (양식 강제):** "Before/After 대조 보고" / "타당성 검토" / "변경 영향 기록" / `tasks/` 산출물 (analyze·plan·result) — 두 가지 면제 영역 안에서도 같은 정보 반복·진행 서술은 제거한다. **Why:** 긴 보고는 사용자가 핵심을 골라내는 비용을 유발하고, "보고 행위 = 작업 완료 신호" 로 변질되어 반복 작업의 결과 검증을 어렵게 만든다. SSOT: 본 룰. 보조 강제: `agent-first-banner.sh` SessionStart 1줄 + `orchestration` 스킬 §"Concise Reporting".
 - **Echo-Back Confirm (필수, 2026-05-07):** 코드/분석 지시 프롬프트 수신 시 **곧장 작업에 진입하지 않고**, 응답 첫 단락에서 사용자 의도를 정리해 재출력하고 명시 승인 키워드 수신 후 작업을 시작한다. **응답 절차:** (1) **첫 단락 = 의도 정리 (echo back)** — "내가 이해한 바:" 로 시작, 작업 범위·산출물·예상 영향을 3~6줄로 압축 재출력. (2) **마지막 줄 = 승인 요청** — "위 정리가 맞으면 '진행/ok/맞아' 중 하나로 응답해주세요. 다르면 정정 부탁드립니다." (3) **승인 키워드 수신 전 mutation 도구 호출 금지** — Edit/Write/MultiEdit/NotebookEdit/Bash mutation(rm·mv·cp 변경계, git commit·push, aws *변경계*, DB 변경 등) 모두 차단. 단 **read-only 도구** (Read/Glob/Grep/git status·log·diff/aws *describe*·list*·get*/SELECT 등) 1~2건은 의도 정리 정확성을 위해 허용. (4) **사용자 정정 시** = 의도 재정리 + 다시 승인 요청. (5) **펜딩 마커** = `/tmp/claude_echo_pending_${SESSION_ID}` — 본 hook 가 승인 키워드 단독 수신 시 자동 제거. **적용 범위 (트리거):** 코드 mutation 키워드 (만들/구현/추가/수정/리팩/디버그/픽스/생성/삭제/변경/제거/통합/분리/적용/연결/리네임/개선/최적화 등) 또는 분석 키워드 (분석/조사/비교/검토/점검/audit/리뷰/파악/대조/매핑/추적/영향 등) 또는 실행/배포 키워드 (실행/돌려/배포/마이그레이션/롤백 등) 매칭 시 발동. **면제 영역:** (a) 단순 조회·잡담 (트리거 키워드 미매칭), (b) 단답 (10자 미만), (c) 부정 컨텍스트 (취소/보류/no/cancel), (d) 승인 키워드 단독 (`진행`/`ok`/`맞아` 등), (e) 펜딩 마커 이미 존재 (정정/추가 지시). **§3 Checkpoint 우선 적용** — Checkpoint 발동 작업은 본 룰 위에 추가 승인 절차 적용 (Checkpoint 가 우선). **Auto mode 우선순위와 정합:** §3 Checkpoint > 실행 책임 > Auto mode > Echo-Back Confirm. Auto mode 신호는 본 룰을 위반하지 않는 범위에서만 적용. **Why:** 사용자 의도 ↔ Claude 이해 사이 alignment 가 첫 응답에서 검증되지 않으면, 오해 작업 진입 후 전체 산출물·커밋을 재작업해야 하는 비용이 발생한다. 본 룰은 **첫 응답 1단락 추가 비용**으로 **재작업 0%** 를 보장하는 trade-off (사용자 결정 2026-05-07). **SSOT:** 본 룰 + `hooks/prompt-echo-confirm.sh`. 양쪽이 동일한 트리거·면제·응답 절차를 정의하며, hook 비활성 시에도 본 룰만으로 강제, 본 룰 망각 시 hook 의 system reminder 가 매번 주입한다.
 - **경로 안내 형식 (OS 정합, 필수):** 사용자에게 파일·폴더 경로를 보고할 때는 **현재 OS 환경에 맞는 형식**으로 변환해 출력한다. **Windows** = 백슬래시 + 절대 경로 (`C:\Users\PV\.claude\docs\...`, `C:\Works\hongcafe_global_backend\...`). **POSIX** (Linux/macOS) = forward slash + 홈 표기 (`~/.claude/docs/...` 또는 절대 경로 `/home/user/...`). **Why:** POSIX 형식 (`~/...` / `/c/...`) 은 Windows 사용자가 탐색기·에디터·PowerShell `cd` 에 그대로 붙여넣지 못해 매번 변환 비용 발생. 반대로 Windows 형식을 POSIX 환경에 노출하면 동일하게 비효율. **How to apply:** (1) 산출물 경로 / 코드·스키마 위치 / 기획안 위치 / 도구 결과 보고 등 **사용자에게 노출되는 모든 경로** 는 OS 정합 형식으로 변환. (2) **Bash 도구 `command` 파라미터** 는 POSIX 형식 유지 (Git Bash 환경 — 도구 내부용, 사용자 미노출). (3) **Glob/Grep 패턴** 은 `/` 그대로 (`**/*.php`). (4) **PowerShell 도구 사용 시** 는 백슬래시 + 큰따옴표 (스페이스 포함 경로). (5) **세션 OS 판정** = SessionStart 의 `Platform: win32` / `OS Version` / 환경 정보 영역 참조 (본 세션 = Windows). **양식 면제 (양식 그대로 유지):** 코드·스키마·hook·스킬 정의 등 OS 무관 식별자 표기 (예: `app/Modules/Member/Models/MemberModel.php` 의 모듈 경로 표기) 는 forward slash 그대로 — 컨벤션 일관성 우선. **위반 시:** 사용자가 경로 변환 요청 (`~/...` → `C:\...`) 을 반복해야 하면 본 룰 미적용 신호. SSOT: 본 룰. 보조 강제: `task-docs` 스킬 §"공통 규칙" 1줄 참조.
+
+---
+
+## 5. Skill & Slash Inventory
+
+> **목적:** user-invocable skill 카탈로그 SSOT. 신규/삭제/rename 시 본 표를 함께 갱신.
+> **SSOT 일관성:** skill frontmatter `user-invocable: true` ↔ 본 표 ↔ `commands/{name}.md` (있다면) ↔ CLAUDE.md 멘션.
+
+### 5.1 user-invocable Skills (호출 가능 진입점)
+
+| Skill | 용도 (1줄) | Slash | commands/.md |
+|-------|----------|-------|-------------|
+| api-spec-audit | API 명세 ↔ IEEE 산출물 9축 정합성 audit | `/api-spec-audit` | ✗ (skill 진입) |
+| api-team | API 추가/디버그 FE+BE+인프라 3-멤버 영향분석 | `/api-team` | ✓ |
+| aws | AWS 서비스 (CLI / CloudWatch / Lambda 등) | `/aws` | ✗ (skill 진입) |
+| bitbucket-cli | Bitbucket Cloud REST API (curl + 토큰) | `/bitbucket-cli` | ✗ (skill 진입) |
+| debate | Multi-Agent Subagent Debate (4그룹 12 서브에이전트) | `/debate` | ✗ (skill 진입) |
+| debug-skill | 다영역 디버깅 (PHP / DB / AWS / 보안) | `/debug-skill` | ✗ (skill 진입) |
+| docset-ref | Dash docset 오프라인 기술 레퍼런스 검색 | `/docset-ref` | ✗ (skill 진입) |
+| git-push | Conventional Commits + git push 즉시 실행 | `/git-push` | ✗ (skill 진입) |
+| mirror-be-claude | be 프로젝트 CLAUDE.md ↔ 글로벌 미러본 동기화 | `/mirror-be-claude` | ✗ (skill 진입) |
+| mysql8 | MySQL 8.x 쿼리·스키마·인덱스 | `/mysql8` | ✗ (skill 진입) |
+| notion-cli | Notion API curl 기반 CLI | `/notion-cli` | ✗ (skill 진입) |
+| orchestration | 3-Team (Analyze → Plan → Execute) 통합 | `/orchestration` | ✗ (skill 진입) |
+| php8 | PHP 8.4+ / CI 4.7+ Modular Monolith | `/php8` | ✗ (skill 진입) |
+| report | 일일·주간·월간 업무 리포트 생성 | `/report` | ✓ |
+| security-audit | 7개 도메인 통합 보안 감사 (OWASP/CWE 등) | `/security-audit` | ✗ (skill 진입) |
+| skill-creator | 스킬 생성·수정·최적화 강제 진입점 | `/skill-creator` | ✗ (skill 진입) |
+| skill-validator | skill 풀 검증 (frontmatter + 본문 품질) | `/skill-validator` | ✗ (skill 진입) |
+| sns-oauth | SNS OAuth (kakao/naver/google/apple) 표준 패턴 | `/sns-oauth` | ✗ (skill 진입) |
+| task-docs | 작업 문서 생명주기 (analyze → plan → result) | `/task-docs` | ✗ (skill 진입) |
+| workflow-enforcer | 3-Team Workflow Gate 강제 (Checkpoint 체크리스트) | `/workflow-enforcer` | ✗ (skill 진입) |
+
+### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)
+
+| Skill | 용도 (1줄) | 비고 |
+|-------|----------|------|
+| global-context | HongCafe Global 다국가 서비스 컨텍스트 | 프로젝트 한정 |
+
+### 5.3 Claude Code 내장 Slash (참고)
+`/help` `/clear` `/loop` `/fast` `/config` — Claude Code 자체 명령.
+
+### 5.4 동기화 규칙
+- skill 신규 추가 → 본 표에 1줄 추가.
+- skill rename → 폴더명 + SKILL.md frontmatter name + 본 표 동시 갱신.
+- skill 삭제 → 본 표에서 제거 + 의존성 grep (`depends_on` 그래프) 후 영향 skill 갱신.
+- **Why:** 본 인벤토리가 사용자 진입점 SSOT. 누락 시 "어떤 skill 이 있는지" 매번 폴더 탐색 비용 발생.
