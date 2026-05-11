@@ -81,6 +81,7 @@ scripts/count_rows.sh
 
 # Backup files (rollback safety copies)
 *.bak
+backup/*.bak-*
 docs-backup-*.zip
 
 # OS files
