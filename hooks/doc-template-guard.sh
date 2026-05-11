@@ -121,6 +121,10 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
                 || blocking_missing+=("작업 등급 S/M/L (plan 템플릿)")
             grep -qE "^#{1,3}[[:space:]]+.*Blueprint" "$unix_path" \
                 || blocking_missing+=("Blueprint (plan 템플릿)")
+            grep -qE "^#{1,3}[[:space:]]+.*수정 대상" "$unix_path" \
+                || blocking_missing+=("수정 대상 (plan 템플릿 §수정 대상)")
+            grep -qE "^#{1,3}[[:space:]]+.*실행 계획" "$unix_path" \
+                || blocking_missing+=("실행 계획 (plan 템플릿 §실행 계획)")
             grep -qE "^#{1,3}[[:space:]]+.*(작업 분해|WBS|Work Breakdown)" "$unix_path" \
                 || blocking_missing+=("작업 분해 WBS (plan 템플릿)")
             grep -qE "^#{1,3}[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
