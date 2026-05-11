@@ -147,7 +147,6 @@
 | bitbucket-cli | Bitbucket Cloud REST API (curl + 토큰) | `/bitbucket-cli` | ✗ (skill 진입) |
 | debate | Multi-Agent Subagent Debate (4그룹 12 서브에이전트) | `/debate` | ✗ (skill 진입) |
 | debug-skill | 다영역 디버깅 (PHP / DB / AWS / 보안) | `/debug-skill` | ✗ (skill 진입) |
-| docset-ref | Dash docset 오프라인 기술 레퍼런스 검색 | `/docset-ref` | ✗ (skill 진입) |
 | git-push | Conventional Commits + git push 즉시 실행 | `/git-push` | ✗ (skill 진입) |
 | mirror-be-claude | be 프로젝트 CLAUDE.md ↔ 글로벌 미러본 동기화 | `/mirror-be-claude` | ✗ (skill 진입) |
 | mysql8 | MySQL 8.x 쿼리·스키마·인덱스 | `/mysql8` | ✗ (skill 진입) |
@@ -166,6 +165,7 @@
 
 | Skill | 용도 (1줄) | 비고 |
 |-------|----------|------|
+| docset-ref | Dash docset 오프라인 기술 레퍼런스 검색 | `타당성 검토` (§4.1) 자동 호출용 — frontmatter `user-invocable: false` |
 | global-context | HongCafe Global 다국가 서비스 컨텍스트 | 프로젝트 한정 |
 
 ### 5.3 Claude Code 내장 Slash (참고)
