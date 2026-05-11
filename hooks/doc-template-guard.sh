@@ -104,6 +104,12 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
                 || blocking_missing+=("재발 방지 (CLAUDE.md §4.1 강제)")
             grep -qE "^#{1,3}[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
                 || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제)")
+            # hongcafe_global_backend product 한정 — 참조 문서 검토 결과 섹션 강제
+            # SSOT: 프로젝트 CLAUDE.md §"분석·계획 시 참조 강제 룰" (6항목 매트릭스)
+            if echo "$file_path" | grep -q "/hongcafe_global_backend/"; then
+                grep -qE "^#{1,3}[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
+                    || blocking_missing+=("참조 문서 검토 결과 (hongcafe_global_backend CLAUDE.md §\"분석·계획 시 참조 강제 룰\" 6항목)")
+            fi
             ;;
         *plan*.md)
             # 차단: 타당성 검토 + 변경 영향 기록 + 작업 등급 + Blueprint + WBS + 장기영향 + 재발방지 + SSOT 일관성 + Status
@@ -125,6 +131,12 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
                 || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제)")
             grep -qE "Status[[:space:]]*[::][[:space:]]*Plan Complete" "$unix_path" \
                 || blocking_missing+=("Status: Plan Complete (plan 템플릿)")
+            # hongcafe_global_backend product 한정 — 참조 문서 검토 결과 섹션 강제
+            # SSOT: 프로젝트 CLAUDE.md §"분석·계획 시 참조 강제 룰" (6항목 매트릭스)
+            if echo "$file_path" | grep -q "/hongcafe_global_backend/"; then
+                grep -qE "^#{1,3}[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
+                    || blocking_missing+=("참조 문서 검토 결과 (hongcafe_global_backend CLAUDE.md §\"분석·계획 시 참조 강제 룰\" 6항목)")
+            fi
             ;;
         *result*.md)
             # 차단: 변경 영향 기록 + 실행 요약 + Self-Critique + 테스트 결과 + 잔여 이슈 + Status
