@@ -3,7 +3,7 @@
 # PostToolUse:Edit|Write Hook — 타당성 검토 섹션 + 엄격 인용 검증 (G1)
 #
 # 대상:
-#   ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan}.md
+#   ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|unified}.md
 #
 # 검증 정책 (false positive 회피 우선):
 #   1. 산출물에 "## ... 타당성 검토" / "## ... Feasibility Review" 헤더가 *있다면*
@@ -36,8 +36,8 @@ FILE_NAME=$(basename "$FILE_PATH")
 [ "$FILE_NAME" = "summary.md" ] && exit 0
 [ "$FILE_NAME" = "history.md" ] && exit 0
 
-# analyze/plan 단계만 검증 (result 는 구현 보고로 5영역 결정 시점 아님)
-echo "$FILE_NAME" | grep -qE '\-(analyze|plan)\.md$' || exit 0
+# analyze/plan/unified 단계만 검증 (result 는 구현 보고로 5영역 결정 시점 아님, unified 는 analyze+plan 포함)
+echo "$FILE_NAME" | grep -qE '\-(analyze|plan|unified)\.md$' || exit 0
 
 [ -f "$FILE_PATH" ] || exit 0
 

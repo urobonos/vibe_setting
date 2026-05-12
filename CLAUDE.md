@@ -11,12 +11,17 @@
     ```
     ~/.claude/docs/
     ├── references/                       (글로벌 공용 docset·KB)
+    ├── working/                          (진행 중 작업 단일 통합 문서 — product 분리 없음, 글로벌 통합)
+    │   └── YYYYMMDD/
+    │       └── {yyyy-mm-dd}-{product}-{작업명}.md   (단일 통합: 분석 + 계획 + 실행/결과)
     └── {product}/
         ├── tasks/
         │   ├── history.md
         │   └── YYYYMMDD/
         │       ├── summary.md
-        │       └── {작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md
+        │       └── {작업명}/
+        │           ├── {yyyy-mm-dd}-{작업명}-unified.md          (신규 정책 2026-05-12~ : 단일 통합)
+        │           └── {yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md  (기존 3종 분리 — 2026-05-12 이전 보존)
         ├── output/{category}/{제목}/{yyyy-mm-dd}-{제목}-{type}.md   (카테고리화 필수, 날짜 prefix 필수)
         │     ↳ category ∈ { audit, verification, research, analysis, report, guide, archive }
         └── specs/{모듈}-{srs|sdd|idd|sdp|stp|std}.md  (IEEE 산출물)
@@ -39,8 +44,15 @@
     - 자동 면제 (2026-05-08 추가): 부모 폴더 직속 자식이 모두 `YYYY-MM-DD-` prefix 형식이고 2건 이상이면 부모 폴더는 누적형으로 간주 — 부모 폴더 자체의 prefix 룰 자동 면제. 기존 명시 화이트리스트(daily-report / weekly-work-report / monthly-report)는 그대로 유지.
     - Why (자동 면제): 동일 topic 다중 audit·analysis (예: `output/audit/api-spec-audit/2026-05-08-member/`, `output/analysis/api-impact/2026-05-08-...add/`) 케이스에서 매번 화이트리스트에 topic 을 추가하는 비용을 제거. 자식 dated 폴더가 2건 이상 누적되면 시간순 정렬·grep 정합성이 자동 보장되므로 부모 prefix 가 불필요.
     - 강제: `output-naming-check.sh` hook 이 자동 면제 로직을 SSOT 로 구현 (자식 dated 폴더 ≥ 2 시 통과).
+- **working/ 단일 통합 문서 (필수, 2026-05-12 시행):** 진행 중 코드 작업은 `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 통합 파일로 작성한다. 한 파일 안에 `## 분석`·`## 계획`·`## 실행` 3 섹션이 통합되며, 각 섹션은 기존 3종 분리 산출물 (analyze.md / plan.md / result.md) 이 강제하던 필수 하위섹션을 모두 보유한다 (타당성 검토 / 변경 영향 기록 / Critical~Low 4분류 / Blueprint / WBS / Self-Critique / 장기 영향 / 재발 방지 / SSOT 일관성).
+  - **자동 이동 트리거:** 문서에 `^Status:\s*Done` (시작 라인) + `## Self-Critique` 섹션 두 마커가 동시 존재하면 `working-lifecycle.sh` PostToolUse hook 이 즉시 `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 이동하며 working/ 원본은 제거한다. 사용자 명시 키워드 (`작업 완료` / `tasks 이동` / `working 정리` / `done`) 도 동일 트리거 — UserPromptSubmit 에서 working/ 파일 스캔 후 이동.
+  - **충돌 처리:** 이동 대상 `tasks/{작업명}/` 폴더가 이미 존재하고 동명 `-unified.md` 파일이 있으면 `.bak-{timestamp}` 백업 후 덮어쓰기. 3종 분리 산출물 (역소급) 과 공존 가능 (파일명 suffix `-unified` 로 구분).
+  - **product 식별:** 글로벌 `~/.claude/docs/working/` 1개 디렉토리에 전 product 작업 통합. 파일명 prefix `{product}-` 로 식별 (예: `2026-05-12-claude-harness-working-folder.md`, `2026-05-12-hongcafe_global_backend-auth-refactor.md`). 동시 작업 다수 시에도 파일명만으로 product·작업 구분.
+  - **`tasks/` 산출물 정책 전환 + 역소급 면제:** 신규 작업 (생성일 ≥ 2026-05-12) = 단일 통합 (`-unified.md`) 1개로 영구 보존. 기존 3종 분리 (`-analyze.md` + `-plan.md` + `-result.md`, 생성일 < 2026-05-12) 는 그대로 보존 — 분해/통합 변환 없음. doc-template-guard.sh / output-naming-check.sh / checklist-count-check.sh / session-completeness-check.sh 모두 unified·3종 양쪽 패턴 인식.
+  - **단일 통합 문서 작성 책임:** `task-docs` 스킬 (`/plan` / `/task-docs` / 자연어 트리거) 이 진입점. `references/unified-template.md` SSOT 골격을 prepend 후 의미 채움 (SKILL.md §"산출물 작성 첫 단계 = SSOT 헤더 골격 prepend 의무" 동일 적용).
+  - **Why:** 진행 중 작업 1개 = 단일 파일 1개. 3 파일 분리는 (1) 파일 간 컨텍스트 스왑 비용, (2) 중복 메타데이터 (생성일·작성자·작업명) , (3) `summary.md` 매핑 복잡도, (4) `analyze.md` 작성 후 `plan.md` 시작 시 컨텍스트 단절 — 4가지 비용을 발생시킨다. 단일 통합 = 동일 작업의 분석~결과를 연속 흐름으로 읽고, `~/.claude/docs/working/` 디렉토리 = "현재 진행 중인 모든 작업" 한눈에 확인 가능 (tasks 폴더 + 산재된 3 파일 검색 비용 0). SSOT: 본 룰 + `hooks/working-lifecycle.sh` (자동 이동) + `skills/task-docs/SKILL.md` §"working/ 단일 통합 워크플로우" (작성 절차) + `skills/task-docs/references/unified-template.md` (양식).
 - **`tasks/` vs `output/` 용도 구분 (필수):** 경로를 혼용하지 않는다. 혼용은 지침 위반.
-  - **`tasks/` → 개발 작업 프롬프트 전용.** 코드 작성·수정·리팩토링·디버깅·기능 추가·설정 변경 등 **코드/설정에 변경이 발생하는 프롬프트**를 받았을 때 사용한다. 3-Team Workflow 의 `{yyyy-mm-dd}-{작업명}-analyze.md` / `{yyyy-mm-dd}-{작업명}-plan.md` / `{yyyy-mm-dd}-{작업명}-result.md` 가 여기로 들어간다. Gate ≥ 2 강제 대상.
+  - **`tasks/` → 개발 작업 프롬프트 전용 (완료 보존).** 코드 작성·수정·리팩토링·디버깅·기능 추가·설정 변경 등 **코드/설정에 변경이 발생하는 프롬프트**를 받았을 때 사용한다. **신규 정책 (2026-05-12~):** 진행 중 작업은 `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 통합 문서로 작성하고, 완료 시 `working-lifecycle.sh` hook 이 자동으로 `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 이동한다. **기존 정책 (역소급 면제, 생성일 < 2026-05-12):** 3종 분리 (`-analyze.md` + `-plan.md` + `-result.md`) 그대로 보존. Gate ≥ 2 강제 대상.
   - **`output/` → 분석·문서 생성 프롬프트 전용.** "분석해줘", "조사해줘", "비교해줘", "리포트 만들어줘", "문서로 정리해줘" 등 **코드 변경 없이 결과물만 산출하는 프롬프트**를 받았을 때 사용한다. 주제별 폴더(`{제목}/`) 하위에 `{yyyy-mm-dd}-{제목}-{type}.md` 형식(kebab-case + 날짜 prefix 필수) 으로 단일/다중 문서를 배치한다. 3-Team Workflow 비적용, Gate ≥ 1 만으로 충분.
   - 판단 애매한 경우: "**이 프롬프트가 코드를 바꾸게 하는가?**" → 예 = `tasks/`, 아니오 = `output/`. 혼합된 경우(분석 후 바로 구현)는 `tasks/` 로 통합.
   - `specs/` 는 IEEE 공식 산출물(SRS/SDD/IDD/SDP/STP/STD) 전용. `tasks/` · `output/` 과 별개 경로.
@@ -106,7 +118,7 @@
 - **Persistence (필수):** 모든 작업 완료 시 `~/.claude/docs/{product}/tasks/history.md` + `YYYYMMDD/summary.md` 기록. `session-completeness-check.sh` hook 이 SSOT 로 누락 차단 (`{product}` 변환은 §File Paths 규칙).
 - **타당성 검토 (Feasibility Review, 필수):** 다음 영역에서는 **예외 없이** "타당성 검토" 섹션을 포함한다 — (1) 분석(analyze)·사전 계획(preplan)·설계(SDD/SRS/SDP/IDD) 산출물, (2) 라이브러리·프레임워크 선택, (3) 아키텍처 결정(DB 스키마·통신 패턴·계층 구조), (4) API 설계·계약 변경, (5) 보안·인증 패턴. 근거 확보는 `docset-ref` 스킬 절차 (Docset SQLite 검색 → 마크다운 캐시 → WebFetch fallback) 를 따른다. "통상적", "일반적으로" 같은 모호 표현으로 검토를 대체하는 것은 지침 위반이다. **일반 코드 수정·버그 픽스·리팩토링·명명·주석·typo 는 본 룰 적용 대상이 아니다** (사용자가 diff 로 즉시 검증 가능한 영역). 적용 대상에서 검토를 생략하는 escape hatch 는 두지 않는다 — 위 5개 영역은 무조건 검토를 포함한다.
 - **변경 영향 기록 (Change Impact Log, 필수):** analyze/preplan 결과를 반영할 때, **변경되는 사항**, **개선점**, **왜 해야 하는지(수행 이유)**를 산출물에 필수 기록한다. 변경 사항만 나열하고 이유를 생략하는 것은 지침 위반이다.
-- **산출물 유연성 (Flexible Deliverables):** 작업 성격에 따라 `analyze / plan / result` 중 필요한 단계만 작성한다. 분석 단독 세션은 `analyze.md` 하나로, 작은 구현 세션은 `result.md` 하나로 완결할 수 있다. 3종 쌍(analyze+plan+result)은 구현 규모가 큰 다단계 작업에만 요구된다.
+- **산출물 유연성 (Flexible Deliverables, 2026-05-12 갱신):** 신규 작업 (생성일 ≥ 2026-05-12) = `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` **단일 통합 문서 1개**로 작성 후 완료 시 `tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 자동 이동 — 작업 규모(S/M/L)와 무관하게 단일 통합. 한 파일 안에서 `## 분석` / `## 계획` / `## 실행` 3 섹션 중 필요한 섹션만 채울 수 있으며 (예: 분석 단독 = `## 분석`만, 작은 구현 = `## 실행`만), 단일 파일 구조는 유지. **기존 정책 (역소급 면제, 생성일 < 2026-05-12)** = 3종 분리 (`analyze.md` / `plan.md` / `result.md`) 중 필요한 것만 작성 — 그대로 보존, 분해/통합 변환 없음. **Why:** 단일 통합으로 통일 후에도 "필요한 섹션만 채우는" 유연성을 그대로 보장하면서, 파일 분리로 인한 컨텍스트 스왑·중복 메타데이터·summary 매핑 비용을 제거 (§File Paths working/ 단일 통합 룰 정합).
 - **에이전트 우선 위임 (필수):** 사용자 요청은 **default 로 Agent 도구(Explore / general-purpose / Plan) 또는 팀 스킬(api-team / debate / orchestration / security-audit 등) 을 통해 처리**한다. 직접 작업은 (1) 단일 파일 trivial 수정(오타·1~3줄 패치·명백한 typo) (2) 단발성 조회 1회(단일 grep / cat / git status) (3) 위임 비용이 작업 비용을 명백히 초과하는 경우만 예외 허용. 그 외 **탐색(3쿼리+)·다파일 분석·리팩토링·설계·디버깅·다영역 영향 검토는 무조건 Agent spawn 우선**한다. 트리거 매핑 — 코드베이스 탐색 → `Explore` / 다파일 영향 분석 → Team 1 (Analyze) / 다단계 구현(M·L) → 3-Team 전체 / 설계 결정 → `Plan` agent / API 추가·디버깅 → `api-team` 스킬 / 의견 갈림·트레이드오프 → `debate` 스킬 / 보안 검토 → `security-audit` 스킬. **판정 기준:** "이 작업이 cold context 로 분리해서 검증할 가치가 있나?" → 예 = 위임, 아니오 = 직접. 직접 작업 결정 시 사유(trivial / 단발 조회 / cost) 를 한 줄로 보고한다. **Why:** 메인 컨텍스트 오염 방지 + 다각적 검증(Reviewer / Security / Performance 페르소나) + 병렬 처리로 응답 시간 단축. 사용자가 매번 "에이전트 써" 라고 지시해야 하는 상황을 원천 차단. **§3 Checkpoint 우선 적용** — Checkpoint 발동 변경은 위임 여부와 무관하게 사용자 승인 필수. 위임 시에도 Agent 호출은 Lead = Claude 본체 책임이며, Agent 결과만 그대로 패스하지 않고 종합 보고한다.
 - **실행 책임 (필수):** Claude 는 작업의 실행 주체이며, 사용자에게 실행을 떠넘기지 않는다. 다음 3개 형태가 모두 위반이다. (1) **승인 대기 떠넘기기** — 코드 작업 중 Claude 가 제시한 개선 제안(리팩토링·명명 개선·누락 처리·방어 코드)은 사용자가 기본 수락하는 것을 전제로 별도 승인 대기 없이 반영한다. (2) **명령 실행 떠넘기기** — Bash 도구 allow 목록 + hook exit 0 통과 명령은 Claude 가 Bash 도구로 직접 호출한다. `! <command>` 안내문이나 "다음 명령을 실행해 주세요" 텍스트로 대체하지 않는다. 로컬/조회 명령(`git status`/`log`/`diff`/`add`/`commit`, `aws *describe*`/`list*`/`get*`, `SELECT` 등)은 즉시 실행. 공유 상태 변경·비가역 명령(`git push`, `aws ssm send-command`, DB 변경 등)은 영향·롤백 보고 → 사용자 승인 키워드(`승인`/`해`/`진행`/`ok` 등) 확인 즉시 같은 턴에서 직접 실행. Hook stdout 경고(exit 0)는 차단이 아닌 "승인 후 직접 실행" 신호로 해석한다 (exit 2 만 실제 차단). (3) **인프라 떠넘기기** — 토큰·과부하·인프라 문제를 사용자에게 핑계로 전가하지 않는다. 529/Overloaded 시 자동 재시도(30초~1분 간격, 배치 축소), 실패 지속 시 Claude 가 직접 처리로 전환. "토큰이 많이 들 수 있습니다" 류 경고 금지(사용자는 유료 Max 구독자 — 결과만 전달). **§3 Checkpoint 5조건은 본 룰에 우선 적용된다** — Checkpoint 대상 변경은 1·2·3 어느 케이스에서도 사용자 승인 대기가 필수다.
 - **묶음 승인 Fast-Track (Gate 0→2):** 사용자 묶음 승인 키워드 입력 시 `gate-approve.sh` 가 Gate 0/1 → 2 점프. 매칭 키워드·단계 문서 검증·Checkpoint 분리 등 세부는 `workflow-enforcer` 스킬 §1 SSOT. **Claude 측 활용:** M/L 코드 작업에서 분석/계획이 단일 사이클로 압축 가능하면 analyze.md + plan.md 묶어 보고해 사용자 1회 승인 유도. 단 §3 Checkpoint 발동 가능성·아키텍처 결정·트레이드오프가 분석 단계에 걸린 작업은 단계별 보고 유지.

@@ -1,16 +1,18 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-# PreToolUse:Edit|Write Hook — 산출물 파일명 규칙 검증 (tasks/ + output/)
+# PreToolUse:Edit|Write Hook — 산출물 파일명 규칙 검증 (tasks/ + output/ + working/)
 #
 # 대상:
 #   - ~/.claude/docs/{product}/output/{topic-slug}/{파일명}.md
 #   - ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{파일명}.md
+#   - ~/.claude/docs/working/YYYYMMDD/{파일명}.md  (2026-05-12 시행, product 분리 없음)
 #
 # 규칙 (task-docs SKILL.md §산출물 네이밍 규칙):
 #   - output/ 허용:  {yyyy-mm-dd}-{topic-slug}-{type}.md
-#   - tasks/ 허용:   {yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md
+#   - tasks/ 허용:   {yyyy-mm-dd}-{작업명}-{analyze|plan|result|unified}.md (unified 는 2026-05-12~ 신규)
+#   - working/ 허용: {yyyy-mm-dd}-{product}-{작업명}.md  (단일 파일, 하위 폴더 금지)
 #   - 공통 필수:     파일명은 ^[0-9]{4}-[0-9]{2}-[0-9]{2}- 날짜 prefix 로 시작
-#   - 공통 금지:     generic 단독 이름 (analysis.md, result.md, report.md, recommendation.md, comparison.md, guide.md, proposal.md, summary.md, doc.md, notes.md, readme.md, analyze.md)
+#   - 공통 금지:     generic 단독 이름 (analysis.md, result.md, report.md, recommendation.md, comparison.md, guide.md, proposal.md, summary.md, doc.md, notes.md, readme.md, analyze.md, unified.md)
 #
 # 예외:
 #   - tasks/YYYYMMDD/summary.md (일일 요약)
@@ -23,11 +25,13 @@ hook_parse_file_path
 # Windows backslash → forward slash 정규화 (기존 동작 보존)
 FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
 
-# 검증 대상 경로 판정 (output/ 또는 tasks/)
+# 검증 대상 경로 판정 (output/ / tasks/ / working/)
 if echo "$FILE_PATH" | grep -qE '/docs/[^/]+/output/'; then
   KIND="output"
 elif echo "$FILE_PATH" | grep -qE '/docs/[^/]+/tasks/[0-9]{8}/'; then
   KIND="tasks"
+elif echo "$FILE_PATH" | grep -qE '/docs/working/[0-9]{8}/'; then
+  KIND="working"
 else
   exit 0
 fi
@@ -54,6 +58,19 @@ if [ "$KIND" = "tasks" ]; then
   fi
   WORK_NAME=$(echo "$REL_FROM_DATE" | awk -F/ '{print $1}')
   CONTEXT_SLUG="$WORK_NAME"
+fi
+
+# working/ 구조 검증 — working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md 단일 파일 (2026-05-12 시행)
+if [ "$KIND" = "working" ]; then
+  REL_FROM_DATE=$(echo "$FILE_PATH" | sed -E 's|.*/docs/working/[0-9]{8}/||')
+  DEPTH=$(echo "$REL_FROM_DATE" | awk -F/ '{print NF}')
+  if [ "$DEPTH" -ne 1 ]; then
+    echo "[WORKING-NAMING] working/YYYYMMDD/ 직속 단일 파일 형식 필수 (하위 폴더 금지). 현재: working/.../$REL_FROM_DATE" >&2
+    echo "  형식: working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md" >&2
+    echo "  참고: ~/.claude/CLAUDE.md §File Paths 'working/ 단일 통합 문서'" >&2
+    exit 2
+  fi
+  CONTEXT_SLUG=""  # working/ 은 product+작업명 자유 slug, 첫 단어 정합성 검증 면제
 fi
 
 # tasks/history.md 예외
@@ -157,6 +174,7 @@ GENERIC_NAMES=(
   "analyze.md"
   "plan.md"
   "result.md"
+  "unified.md"
   "report.md"
   "recommendation.md"
   "comparison.md"
@@ -177,8 +195,13 @@ for g in "${GENERIC_NAMES[@]}"; do
   if [ "$FILE_NAME" = "$g" ]; then
     if [ "$KIND" = "tasks" ]; then
       SUGGEST="${TODAY_ISO}-${CONTEXT_SLUG}-${g%.md}.md"
-      echo "[TASK-NAMING] 제네릭/날짜 prefix 누락 차단: '$FILE_NAME' — '{yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md' 형식으로 바꾸세요." >&2
+      echo "[TASK-NAMING] 제네릭/날짜 prefix 누락 차단: '$FILE_NAME' — '{yyyy-mm-dd}-{작업명}-{analyze|plan|result|unified}.md' 형식으로 바꾸세요." >&2
       echo "  예시: $SUGGEST" >&2
+    elif [ "$KIND" = "working" ]; then
+      SUGGEST="${TODAY_ISO}-{product}-{작업명}.md"
+      echo "[WORKING-NAMING] 제네릭/날짜 prefix 누락 차단: '$FILE_NAME' — '{yyyy-mm-dd}-{product}-{작업명}.md' 형식으로 바꾸세요." >&2
+      echo "  예시: $SUGGEST" >&2
+      echo "  참고: ~/.claude/CLAUDE.md §File Paths 'working/ 단일 통합 문서'" >&2
     else
       SUGGEST="${TODAY_ISO}-${CONTEXT_SLUG}-${g%.md}.md"
       [ "${g%.md}" = "analyze" ] && SUGGEST="${TODAY_ISO}-${CONTEXT_SLUG}-analysis.md"
@@ -196,6 +219,9 @@ if ! echo "$FILE_NAME" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
   if [ "$KIND" = "tasks" ]; then
     SUGGEST="${TODAY_ISO}-${CONTEXT_SLUG}-${FILE_NAME}"
     echo "[TASK-NAMING] 날짜 prefix 누락 차단: '$FILE_NAME' — 파일명은 '{yyyy-mm-dd}-{작업명}-{type}.md' 형식 필수." >&2
+  elif [ "$KIND" = "working" ]; then
+    SUGGEST="${TODAY_ISO}-{product}-${FILE_NAME%.md}.md"
+    echo "[WORKING-NAMING] 날짜 prefix 누락 차단: '$FILE_NAME' — 파일명은 '{yyyy-mm-dd}-{product}-{작업명}.md' 형식 필수." >&2
   else
     SUGGEST="${TODAY_ISO}-${FILE_NAME}"
     echo "[OUTPUT-NAMING] 날짜 prefix 누락 차단: '$FILE_NAME' — 파일명은 '{yyyy-mm-dd}-{topic-slug}-{type}.md' 형식 필수." >&2

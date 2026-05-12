@@ -131,6 +131,14 @@ except:
     exit 0
   fi
 
+  # docs/working/ — 진행 중 단일 통합 작업 문서 (게이트 면제, Gate-0 직행, 2026-05-12 시행)
+  # CLAUDE.md §File Paths "working/ 단일 통합 문서" 룰 정합.
+  # 진행 중 작업은 working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md 단일 파일로 작성하며,
+  # 완료 시 working-lifecycle.sh hook 이 tasks/ 폴더로 자동 이동. 작성 시점 Gate 없음.
+  if echo "$FILE_PATH" | grep -qE '(^|/)docs/working/'; then
+    exit 0
+  fi
+
   # 비코드 경로 판별
   IS_NON_CODE=false
 

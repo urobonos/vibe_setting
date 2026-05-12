@@ -34,6 +34,14 @@ case "$file_path" in
         ;;
 esac
 
+# 제외 대상: docs/working/ — 진행 중 단일 통합 문서 (자유 양식 허용, 이동 후 tasks/ 에서 unified 양식 검증)
+# CLAUDE.md §File Paths "working/ 단일 통합 문서" 룰 정합 (2026-05-12 시행)
+case "$file_path" in
+    */docs/working/*)
+        exit 0
+        ;;
+esac
+
 # docs/ 또는 docs 관련 경로의 문서만 검증 (글로벌 ~/.claude/docs/{product}/ 및 구 프로젝트 로컬 호환)
 case "$file_path" in
     */docs/tasks/*|*/docs/output/*|*/docs/specs/*|*/docs/*/tasks/*|*/docs/*/output/*|*/docs/*/specs/*)
@@ -79,6 +87,66 @@ grep -q "## 변경 기록" "$unix_path" || missing+=("## 변경 기록")
 lower_base=$(echo "$basename" | tr '[:upper:]' '[:lower:]')
 if [[ "$IS_OUTPUT" == "0" ]]; then
     case "$lower_base" in
+        *-unified.md|*_unified.md)
+            # 단일 통합 문서 (2026-05-12 시행) — analyze + plan + result 필수 섹션 합집합 검증
+            # SSOT: CLAUDE.md §File Paths "working/ 단일 통합 문서" + skills/task-docs/references/unified-template.md
+            # working/ → tasks/ 이동 후 검증 (working/ 경로 자체는 위 case 에서 면제)
+            # === analyze 필수 ===
+            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+                || blocking_missing+=("타당성 검토 (§4 필수, unified §분석)")
+            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+                || blocking_missing+=("변경 영향 기록 (§4 필수, unified)")
+            grep -qE "^#{1,3}[[:space:]]+.*(분석 관점별|관점별 요약|Perspective Summary)" "$unix_path" \
+                || blocking_missing+=("분석 관점별 요약 (unified §분석)")
+            grep -qE "^#{1,3}[[:space:]]+.*Critical[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("Critical 이슈 분류 (unified §분석)")
+            grep -qE "^#{1,3}[[:space:]]+.*High[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("High 이슈 분류 (unified §분석)")
+            grep -qE "^#{1,3}[[:space:]]+.*Medium[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("Medium 이슈 분류 (unified §분석)")
+            grep -qE "^#{1,3}[[:space:]]+.*Low[[:space:]]*이슈" "$unix_path" \
+                || blocking_missing+=("Low 이슈 분류 (unified §분석)")
+            grep -qE "^#{1,3}[[:space:]]+.*우선순위[[:space:]]*권고" "$unix_path" \
+                || blocking_missing+=("우선순위 권고 (unified §분석)")
+            grep -qE "^#{1,3}[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
+                || blocking_missing+=("장기 영향 (CLAUDE.md §4.1 강제, unified)")
+            grep -qE "^#{1,3}[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
+                || blocking_missing+=("재발 방지 (CLAUDE.md §4.1 강제, unified)")
+            grep -qE "^#{1,3}[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
+                || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제, unified)")
+            # === plan 필수 ===
+            grep -qE "(^#{1,3}[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::])" "$unix_path" \
+                || blocking_missing+=("작업 등급 S/M/L (unified §계획)")
+            grep -qE "^#{1,3}[[:space:]]+.*Blueprint" "$unix_path" \
+                || blocking_missing+=("Blueprint (unified §계획)")
+            grep -qE "^#{1,3}[[:space:]]+.*수정 대상" "$unix_path" \
+                || blocking_missing+=("수정 대상 (unified §계획)")
+            grep -qE "^#{1,3}[[:space:]]+.*실행 계획" "$unix_path" \
+                || blocking_missing+=("실행 계획 (unified §계획)")
+            grep -qE "^#{1,3}[[:space:]]+.*(작업 분해|WBS|Work Breakdown)" "$unix_path" \
+                || blocking_missing+=("작업 분해 WBS (unified §계획)")
+            # === result 필수 ===
+            grep -qE "^#{1,3}[[:space:]]+.*실행 요약" "$unix_path" \
+                || blocking_missing+=("실행 요약 (unified §실행)")
+            grep -qE "^#{1,3}[[:space:]]+.*Self-Critique" "$unix_path" \
+                || blocking_missing+=("Self-Critique 체크리스트 (unified §실행)")
+            grep -qE "^#{1,3}[[:space:]]+.*테스트 결과" "$unix_path" \
+                || blocking_missing+=("테스트 결과 (unified §실행)")
+            grep -qE "^#{1,3}[[:space:]]+.*잔여 이슈" "$unix_path" \
+                || blocking_missing+=("잔여 이슈 (unified §실행)")
+            grep -qE "Status[[:space:]]*[::][[:space:]]*(Done|Partial)" "$unix_path" \
+                || blocking_missing+=("Status: Done/Partial (unified §실행)")
+            # hint: Before/After + 롤백
+            grep -qE "^#{1,3}[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
+                || missing+=("## Before/After 대조 (§4 필수, unified §실행)")
+            grep -qE "^#{1,3}[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
+                || missing+=("## 롤백 (§4 필수, unified §실행)")
+            # hongcafe_global_backend 한정 — 참조 문서 검토 결과
+            if echo "$file_path" | grep -q "/hongcafe_global_backend/"; then
+                grep -qE "^#{1,3}[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
+                    || blocking_missing+=("참조 문서 검토 결과 (be 한정, unified §분석)")
+            fi
+            ;;
         *analyze*.md)
             # 차단: 타당성 검토 + 변경 영향 기록 + 분석 관점별 요약 + Critical/High/Medium/Low 4분류 + 우선순위 권고 + 장기영향 + 재발방지 + SSOT 일관성
             # references/analyze-template.md SSOT (2026-05-07 강화 — 사용자 지시 "훅으로 템플릿 출력 할때 강제")

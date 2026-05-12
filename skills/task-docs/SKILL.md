@@ -1,10 +1,12 @@
 ---
 name: task-docs
 description: >
-  작업 문서 생명주기(분석→계획→결과)를 ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/ 디렉토리에 표준 템플릿으로 생성한다.
-  일일 작업 요약을 ~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md에, 전체 이력을 ~/.claude/docs/{product}/tasks/history.md에 기록한다.
-  모든 문서 파일은 `{yyyy-mm-dd}-{작업명}-` prefix 를 필수로 가진다 (예: 2026-04-27-pay-refactor-analyze.md). 단계 문서는 analyze, plan, result 3종.
-  보고용 산출물은 ~/.claude/docs/{product}/output/{제목}/{파일명}.md에, 소프트웨어 개발 산출물(SDP/SRS/SDD/IDD/STP/STD)은 ~/.claude/docs/{product}/specs/에 생성·관리한다.
+  작업 문서 생명주기(분석→계획→결과)를 표준 템플릿으로 생성·이동한다.
+  **신규 (2026-05-12~)** = `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 통합 문서로 진행 후 완료 시 `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 자동 이동 (working-lifecycle.sh hook).
+  **기존 (역소급 면제, < 2026-05-12)** = `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/` 에 analyze/plan/result 3종 분리 그대로 보존.
+  일일 작업 요약을 `~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md`, 전체 이력을 `~/.claude/docs/{product}/tasks/history.md` 에 기록.
+  모든 문서 파일은 `{yyyy-mm-dd}-` prefix 필수.
+  보고용 산출물은 `~/.claude/docs/{product}/output/{category}/{제목}/{파일명}.md`, IEEE 산출물(SDP/SRS/SDD/IDD/STP/STD)은 `~/.claude/docs/{product}/specs/`.
   {product}는 basename $CWD (.claude→claude-harness 예외). 규칙은 글로벌 CLAUDE.md §File Paths 참조.
 triggers:
   - "/plan"
@@ -18,13 +20,22 @@ triggers:
   - "코드 분석 문서"
   - "영향 범위 조사 문서"
   - "task-docs"
+  - "작업 문서 만들"
+  - "작업 시작"
+  - "working 문서"
+  - "단일 통합 문서"
+  - "unified 산출물"
+  - "작업 완료"
+  - "작업 완료 정리"
+  - "tasks 이동"
+  - "working 정리"
   - "SDP 작성"
   - "SRS 작성"
   - "SDD 작성"
   - "IDD 작성"
   - "STP 작성"
   - "STD 작성"
-version: 4.0.0
+version: 5.0.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -33,10 +44,16 @@ min_claude_md_version: "4.0"
 
 # Task Docs Skill
 
-> **호출 방식:** 슬래시 — `/plan` (계획 문서) / `/research` (리서치 문서) / `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `리서치 해줘`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"3-Team Workflow 연동" 절차를 동일하게 따른다.
+> **호출 방식:** 슬래시 — `/plan` (계획 문서) / `/research` (리서치 문서) / `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물) / `/working-done` (working/ 완료 → tasks/ 이동). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `작업 시작`, `작업 완료`, `working 정리`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"working/ 단일 통합 워크플로우" 절차를 동일하게 따른다.
 
-작업 문서 3종(analyze, plan, result)과 일일 요약(summary)을 `~/.claude/docs/{product}/tasks/YYYYMMDD/` 디렉토리에 표준 템플릿으로 생성·관리한다.
-보고용 산출물은 `~/.claude/docs/{product}/output/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `~/.claude/docs/{product}/specs/` 디렉토리에 생성·관리한다.
+> **[신규 정책 2026-05-12 시행]** 코드 작업 산출물은 **단일 통합 문서 1개**로 작성·보존된다 (이전 3종 분리 정책 종료, 역소급 면제 적용).
+> - **진행 중:** `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` (글로벌 통합, product 분리 없음)
+> - **완료 후:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` (`working-lifecycle.sh` hook 자동 이동)
+> - **역소급 면제:** 생성일 < 2026-05-12 = 3종 분리 (`-analyze.md` / `-plan.md` / `-result.md`) 그대로 보존
+> - 상세 워크플로우는 본문 §"working/ 단일 통합 워크플로우" 참조
+
+작업 문서(신규: unified 1개 / 기존: analyze+plan+result 3종)와 일일 요약(summary)을 표준 템플릿으로 생성·관리한다.
+보고용 산출물은 `~/.claude/docs/{product}/output/{category}/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `~/.claude/docs/{product}/specs/` 디렉토리에 생성·관리한다.
 
 **`{product}` 결정 규칙:** `basename $CWD`. 단 `.claude` 는 `claude-harness` 로 치환. 구현은 `hooks/lib/product-resolver.sh`. 예:
 - `C:/Works/hongcafe_global_backend` → `hongcafe_global_backend`
@@ -143,23 +160,28 @@ min_claude_md_version: "4.0"
 
 ## 파일 경로
 
-모든 산출물은 **글로벌 루트** `~/.claude/docs/{product}/` 하위에 생성한다. 프로젝트 레포 내부에는 생성하지 않는다.
+모든 산출물은 **글로벌 루트** `~/.claude/docs/` 하위에 생성한다. 프로젝트 레포 내부에는 생성하지 않는다.
 
 ```
-~/.claude/docs/{product}/
-├── tasks/
-│   ├── history.md                    ← 전체 이력 인덱스 (YYYY.MM.DD 항목)
+~/.claude/docs/
+├── working/                          ← **신규 2026-05-12~** (진행 중 단일 통합, product 분리 없음 — 글로벌 통합)
 │   └── YYYYMMDD/
-│       ├── summary.md                ← 일일 작업 요약
-│       └── {작업명}/
-│           ├── {yyyy-mm-dd}-{작업명}-analyze.md   ← Team 1 (Analyze) 분석 결과
-│           ├── {yyyy-mm-dd}-{작업명}-plan.md      ← Team 2 (Plan) 실행 계획 + Blueprint
-│           └── {yyyy-mm-dd}-{작업명}-result.md    ← Team 3 (Execute) 완료 결과
-├── output/
-│   └── {제목}/                                    ← 보고용 산출물 (kebab-case 주제별 폴더)
-│       └── {yyyy-mm-dd}-{제목}-{type}.md          ← 날짜 prefix 필수
-└── specs/                            ← 소프트웨어 개발 산출물 (SDP/SRS/SDD/IDD/STP/STD)
-    └── {모듈}-{문서타입}.md
+│       └── {yyyy-mm-dd}-{product}-{작업명}.md   ← 분석+계획+실행 통합, 완료 시 tasks/ 자동 이동
+└── {product}/
+    ├── tasks/
+    │   ├── history.md                ← 전체 이력 인덱스 (YYYY.MM.DD 항목)
+    │   └── YYYYMMDD/
+    │       ├── summary.md            ← 일일 작업 요약
+    │       └── {작업명}/
+    │           ├── {yyyy-mm-dd}-{작업명}-unified.md           ← **신규 2026-05-12~** (working/ 자동 이동, 단일 통합 보존)
+    │           ├── {yyyy-mm-dd}-{작업명}-analyze.md           ← (역소급 < 2026-05-12) Team 1 분석 결과
+    │           ├── {yyyy-mm-dd}-{작업명}-plan.md              ← (역소급 < 2026-05-12) Team 2 계획 + Blueprint
+    │           └── {yyyy-mm-dd}-{작업명}-result.md            ← (역소급 < 2026-05-12) Team 3 완료 결과
+    ├── output/
+    │   └── {category}/{제목}/        ← 보고용 산출물 (kebab-case 주제별 폴더)
+    │       └── {yyyy-mm-dd}-{제목}-{type}.md   ← 날짜 prefix 필수
+    └── specs/                        ← 소프트웨어 개발 산출물 (SDP/SRS/SDD/IDD/STP/STD)
+        └── {모듈}-{문서타입}.md
 ```
 
 `{product}` 변환은 `hooks/lib/product-resolver.sh` 를 참조한다. bash 에서:
@@ -176,11 +198,107 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 각 단계 문서의 상세 템플릿·체크리스트·예시는 references/ 파일에 분리됐다. 본문 작성 전 해당 references 파일을 정독 후 그대로 따른다.
 
-| 단계 | 파일명 | 용도 | references |
+| 정책 | 파일명 | 용도 | references |
 |---|---|---|---|
-| **1. Analyze** | `{yyyy-mm-dd}-{작업명}-analyze.md` | Team 1 분석 결과 (이슈 4단계 분류, 트레이드오프, 분석 체크리스트 ≥ 30) | `references/analyze-template.md` |
-| **2. Plan** | `{yyyy-mm-dd}-{작업명}-plan.md` | Team 2 실행 계획 + Blueprint + WBS (실행 전 체크리스트 ≥ 20). 사용자 승인 후 Team 3 진입 | `references/plan-template.md` |
-| **3. Result** | `{yyyy-mm-dd}-{작업명}-result.md` | Team 3 완료 결과 + Self-Critique 체크리스트 ≥ 20 + 잔여 이슈 | `references/result-template.md` |
+| **신규 Unified (2026-05-12~)** | (진행) `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` → (완료) `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` | 분석 + 계획 + 실행 단일 통합 (체크리스트 ≥ 50). working-lifecycle.sh hook 자동 이동 | `references/unified-template.md` |
+| **역소급 1. Analyze** | `{yyyy-mm-dd}-{작업명}-analyze.md` | (< 2026-05-12 보존) Team 1 분석 결과 (이슈 4단계 분류, 체크리스트 ≥ 30) | `references/analyze-template.md` |
+| **역소급 2. Plan** | `{yyyy-mm-dd}-{작업명}-plan.md` | (< 2026-05-12 보존) Team 2 실행 계획 + Blueprint + WBS (체크리스트 ≥ 20) | `references/plan-template.md` |
+| **역소급 3. Result** | `{yyyy-mm-dd}-{작업명}-result.md` | (< 2026-05-12 보존) Team 3 완료 결과 + Self-Critique ≥ 20 + 잔여 이슈 | `references/result-template.md` |
+
+---
+
+## working/ 단일 통합 워크플로우 (2026-05-12 시행, 필수)
+
+> **SSOT:** 본 섹션 + `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + `~/.claude/hooks/working-lifecycle.sh` (자동 이동 강제) + `~/.claude/commands/working-done.md` (수동 진입점) + `~/.claude/skills/task-docs/references/unified-template.md` (양식 SSOT).
+
+### 1. 작업 시작 — working/ 단일 통합 문서 생성
+
+신규 코드 작업 프롬프트 수신 시 (의도 정리·Gate 통과 직후):
+1. **작업명 결정** — kebab-case 영문 (예: `auth-refactor`, `working-folder-intro`)
+2. **product 결정** — `basename $CWD` (`.claude` → `claude-harness` 치환)
+3. **working 파일 생성** — `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 파일 (하위 폴더 금지)
+4. **SSOT 골격 prepend (필수)** — `references/unified-template.md` 전체를 그대로 복사·prepend 후 의미만 채움. 자체 번호 헤더로 자유 작성 = hook 차단 (`doc-template-guard.sh` exit 2)
+5. **섹션 작성 순서** — `## 분석` → `## 계획` → `## 실행` (필요한 섹션만 채움 허용, 단일 파일 구조는 유지)
+
+### 2. 진행 중 작성 — Gate / 양식 면제
+
+- **Gate 면제:** working/ 경로는 `gate-enforce.sh` Gate-0 직행 면제 (`output/` 와 동일 정책 — CLAUDE.md §"output/ 경로 Gate-0 직행" 정합)
+- **양식 면제 (진행 중):** `doc-template-guard.sh` working/ 경로 자체 면제 — 자유 양식 작성 허용. 양식 검증은 tasks/ 이동 후 `*-unified.md` 패턴으로 1회 발동
+- **강제 (진행 중):** `output-naming-check.sh` — 파일명 prefix `{yyyy-mm-dd}-{product}-` 강제 + working/YYYYMMDD/ 직속 단일 파일 (하위 폴더 금지)
+
+### 3. 작업 완료 — tasks/ 자동 이동 (OR 조건 트리거)
+
+**트리거 1 — 본문 마커 자동 감지 (PostToolUse 자동):**
+- `working-lifecycle.sh` PostToolUse hook 이 working/ 파일 저장 직후 다음 두 마커 동시 존재 검사:
+  - `^Status:\s*Done` (시작 라인 패턴)
+  - `## Self-Critique` 섹션 헤더 존재
+- 둘 다 매칭 시 즉시 이동 절차 발동
+
+**트리거 2 — 사용자 명시 키워드 (UserPromptSubmit / 슬래시):**
+- 슬래시 `/working-done` 직접 호출
+- 자연어 키워드 — `작업 완료` / `tasks 이동` / `working 정리` / `done` / `완료 저장`
+
+**이동 절차:**
+1. working/ 파일 → `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md`
+2. tasks/ 폴더 미존재 시 `mkdir -p`
+3. 동일 파일명 충돌 시 `.bak-{timestamp}` 백업 후 덮어쓰기 (역소급 3종 산출물과는 suffix `-unified` 로 자연 구분, 충돌 없음)
+4. working/ 원본 제거 (진행 중 상태 마커 클린업)
+5. `~/.claude/docs/{product}/tasks/history.md` + `~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md` 자동 갱신
+6. Claude 본체에 stderr 로 이동 결과 보고 (조용한 처리, 사용자 대기 없음)
+
+### 4. 사후 hook 검증 (tasks/ 이동 후 1회 발동)
+
+이동 후 `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` 에 대해:
+- `doc-template-guard.sh` — `*-unified.md` 패턴 검증, 합집합 ≈ 20개 필수 헤더 (analyze 11 + plan 5 + result 4 — 통합 변경 영향 / 타당성 검토는 합쳐서 1회) 누락 시 `[BLOCKED]` exit 2
+- `checklist-count-check.sh` — 체크리스트 `- [ ]` + `- [x]` 합산 ≥ 50 (analyze 30 + plan 20 + result 20 의 의미적 절충, 통합 문서라 중복 제거 허용)
+- `change-impact-section-check.sh` — `## 변경 영향` 섹션 + 3열 표(변경/개선/이유) 존재
+- `feasibility-section-check.sh` — `## 타당성 검토` 헤더 + `[Source: <name> §<id>]` 인용 ≥ 1건
+- 모두 통과 시 `tasks/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 가 영구 보존 산출물로 확정
+
+### 5. 역소급 호환 (생성일 < 2026-05-12)
+
+기존 3종 분리 산출물 (`-analyze.md` / `-plan.md` / `-result.md`) 은:
+- **그대로 보존** — 분해/통합 변환 없음
+- **수정 시 변경 로그만 추가**, 통합 변환 금지 (의미 손실 방지)
+- 신규 작업이 같은 작업명 폴더를 재사용해도 `-unified.md` 와 공존 가능 (파일명 suffix 로 자연 구분)
+- 모든 hook 양쪽 패턴 (analyze/plan/result + unified) 인식, 둘 중 어느 쪽이든 통과 가능
+
+### 6. 글로벌 통합 — product 식별
+
+`~/.claude/docs/working/` 단일 디렉토리에 전 product 작업 동시 진행 가능. 파일명 prefix 로 식별:
+- `2026-05-12-claude-harness-working-folder-intro.md` ← claude-harness (글로벌 harness) 작업
+- `2026-05-12-hongcafe_global_backend-auth-refactor.md` ← be 작업
+- `2026-05-12-infra-rds-migration.md` ← infra 작업
+
+product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토리 = "현재 진행 중인 모든 작업"을 OS 파일 탐색기·`ls`·hook 일괄 스캔 한 번으로 파악 가능 (분리 시 product 별 폴더 순회 비용 발생).
+
+### 7. 워크플로우 다이어그램
+
+```
+[사용자 작업 지시]
+    ↓
+[Echo-Back Confirm + Gate 통과]
+    ↓
+[작업명 + product 결정]
+    ↓
+[Write: working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md]
+    ↓ (unified-template.md SSOT 골격 prepend)
+[Edit: ## 분석 채움 → ## 계획 채움 → ## 실행 채움]
+    ↓
+[완료 마커: Status: Done + ## Self-Critique 작성]
+    ↓ (또는 사용자 "작업 완료" 키워드 / /working-done 호출)
+[working-lifecycle.sh PostToolUse hook 자동 발동]
+    ↓
+[tasks/YYYYMMDD/{작업명}/ 폴더 생성 → mv → working/ 원본 제거]
+    ↓
+[history.md + summary.md 자동 갱신]
+    ↓
+[doc-template-guard / checklist-count / change-impact / feasibility 사후 검증 1회]
+    ↓
+[영구 보존: tasks/.../{yyyy-mm-dd}-{작업명}-unified.md]
+```
+
+---
 
 ### 등급별 플랜 구성 (Plan 단계)
 

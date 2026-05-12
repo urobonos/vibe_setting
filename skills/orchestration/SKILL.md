@@ -26,6 +26,8 @@ min_claude_md_version: "4.0"
 
 3-Team 순차 실행 (Analyze → Plan → Execute) 구조의 멀티 에이전트 오케스트레이션.
 
+> **[신규 산출물 정책 2026-05-12]** 3-Team 산출물 = **단일 통합 문서 (`-unified.md`) 1개**로 영구 보존. 기존 3종 분리 (`analyze.md` / `plan.md` / `result.md`) 는 **역소급 면제** (생성일 < 2026-05-12 보존). 신규 작업은 `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 파일 안에 `## 분석` + `## 계획` + `## 실행` 섹션을 통합 작성하며, Team 완료 시 `working-lifecycle.sh` hook 이 `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 자동 이동한다. **본 SKILL.md 본문의 `analyze.md` / `plan.md` / `result.md` 언급은 통합 문서의 `## 분석` / `## 계획` / `## 실행` 섹션을 가리키는 의미적 등가물로 해석한다** (3-Team 실행 흐름·Lead 책임·Worktree 격리 등 본 SKILL.md 의 모든 규칙은 그대로 적용). 상세 정합·작성 절차 = `~/.claude/skills/task-docs/SKILL.md` §"working/ 단일 통합 워크플로우" + `~/.claude/skills/task-docs/references/unified-template.md`.
+
 ---
 
 # Part 0. Agent-First Default (필수)

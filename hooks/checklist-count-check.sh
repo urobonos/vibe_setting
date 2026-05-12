@@ -3,12 +3,13 @@
 # PostToolUse:Edit|Write Hook — 체크리스트 최소 개수 검증 (G6)
 #
 # 대상:
-#   ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md
+#   ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result|unified}.md
 #
 # 검증:
 #   - analyze.md → `- [ ]` + `- [x]` 카운트 ≥ 30
 #   - plan.md    → ≥ 20
 #   - result.md  → ≥ 20
+#   - unified.md → ≥ 50 (analyze+plan+result 통합, 2026-05-12 시행)
 #
 # 예외:
 #   - summary.md, history.md → 검증 비활성
@@ -34,8 +35,8 @@ FILE_NAME=$(basename "$FILE_PATH")
 [ "$FILE_NAME" = "summary.md" ] && exit 0
 [ "$FILE_NAME" = "history.md" ] && exit 0
 
-# 단계 추출 (analyze|plan|result)
-STAGE=$(echo "$FILE_NAME" | grep -oE '\-(analyze|plan|result)\.md$' | sed -E 's/^-//;s/\.md$//')
+# 단계 추출 (analyze|plan|result|unified)
+STAGE=$(echo "$FILE_NAME" | grep -oE '\-(analyze|plan|result|unified)\.md$' | sed -E 's/^-//;s/\.md$//')
 [ -z "$STAGE" ] && exit 0
 
 # 파일 미존재 시 스킵
@@ -50,6 +51,7 @@ case "$STAGE" in
   analyze) MIN=30 ;;
   plan)    MIN=20 ;;
   result)  MIN=20 ;;
+  unified) MIN=50 ;;  # 단일 통합 (analyze+plan+result 합산, 2026-05-12 시행)
   *)       exit 0 ;;
 esac
 
@@ -83,6 +85,6 @@ if [ -n "$created_date" ] && [ "$created_date" \< "$TEMPLATE_STRICT_FROM" ]; the
 fi
 
 echo "[BLOCKED] $FILE_PATH: 체크리스트 ${COUNT}개 부족 (필요: ${MIN}개)" >&2
-echo "          task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20." >&2
-echo "          references/{analyze,plan,result}-template.md SSOT 골격 prepend 후 보강하세요." >&2
+echo "          task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20 / unified≥50." >&2
+echo "          references/{analyze,plan,result,unified}-template.md SSOT 골격 prepend 후 보강하세요." >&2
 exit 2

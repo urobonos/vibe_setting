@@ -107,17 +107,30 @@ S등급 작업은 다음 두 가지 경로 중 하나를 선택한다:
 
 **보안:** Gate 0→2 점프 시에도 task-docs 검증 조건은 동일 (`gate-approve.sh` 의 `[ "$CURRENT" -lt 2 ] && [ "$NEW_LEVEL" -eq 2 ]`). 단계 문서 누락 시 차단되어 산출물 우회는 불가능하다.
 
-### 산출물 유연성 (Flexible Deliverables) 예외
+### 산출물 유연성 (Flexible Deliverables) 예외 — 2026-05-12 갱신
 
-CLAUDE.md §4 Guardrails "Flexible Deliverables" 와 정합. **작업 성격이 단일 단계로 완결 가능한 경우** Gate 적용을 생략할 수 있다. 단, Gate-3/6/7 은 항상 유지한다.
+CLAUDE.md §4 Guardrails "Flexible Deliverables" 와 정합. 신규 정책 (2026-05-12~) = 단일 통합 (`-unified.md`) 1개로 전환. 기존 3종 분리는 역소급 면제 (생성일 < 2026-05-12 보존). 작업 규모와 무관하게 단일 파일 안에서 필요한 섹션만 채울 수 있다. 단 Gate-3/6/7 은 항상 유지.
 
-| 작업 성격 | 작성 산출물 | 적용 Gate |
-|----------|-----------|----------|
-| **분석 단독** (구현 없는 조사·리포트) | `analyze.md` 만 | Gate-1 만 |
-| **소규모 단발 구현** (S 경량 경로) | `result.md` 만 | Gate-1 (Gate-2 통합) |
-| **표준 다단계** (M/L) | analyze + plan + result 3종 | Gate-1 + Gate-2 |
+| 정책 | 작성 산출물 | 적용 Gate |
+|-----|-----------|----------|
+| **신규 Unified (2026-05-12~)** | (진행) `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` → (완료) `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` | Gate-1 + Gate-2 (M/L) / Gate-1 만 (S 경량 + 분석 단독) |
+| **역소급 분석 단독** (생성일 < 2026-05-12) | `analyze.md` 만 | Gate-1 만 |
+| **역소급 소규모 단발** (S 경량 경로) | `result.md` 만 | Gate-1 (Gate-2 통합) |
+| **역소급 표준 다단계** (M/L) | analyze + plan + result 3종 | Gate-1 + Gate-2 |
 
-판단 기준: "이 작업이 별도 plan 단계 없이 분석 또는 구현 한 번으로 끝나는가?" 예 = 단일 산출물 + Gate 축약, 아니오 = 표준 3종 + Gate-1/2 둘 다.
+**신규 정책 적용 판단:** "작업 시작일이 2026-05-12 이후인가?" 예 = 단일 통합 (`working/` → `tasks/` unified), 아니오 = 기존 3종 보존 (수정 시 변경 로그만 추가, 통합 변환 금지).
+
+**Gate 진행 시 working/ 인지:**
+- `working/` 경로는 `gate-enforce.sh` Gate-0 면제 (`output/` 와 동일 정책) — 분석 단계부터 즉시 작성 가능
+- 단 코드 mutation (Edit/Write tasks/ 외 파일) 은 종전대로 Gate ≥ 2 필요. working/ 문서 작성 자체는 분석/계획 단계라 Gate-0 통과 OK
+- Gate-1 / Gate-2 승인 자체는 working/ 단일 문서 안에 `## 분석` / `## 계획` 섹션 채워졌는지 확인 후 진행 (산출물 SSOT = `~/.claude/skills/task-docs/references/unified-template.md`)
+
+**완료 시 자동 이동:**
+- working/ 단일 통합 문서에 `^Status:\s*Done` + `## Self-Critique` 마커 동시 존재 → `working-lifecycle.sh` PostToolUse hook 자동으로 `tasks/` 이동
+- 사용자 명시 키워드 (`/working-done` / `작업 완료` / `tasks 이동` 자연어) → 동일 이동 발동
+- 이동 후 `doc-template-guard.sh` (`*-unified.md` 패턴) / `checklist-count-check.sh` (≥ 50) / `change-impact-section-check.sh` / `feasibility-section-check.sh` 사후 검증 1회
+
+> **Why:** 단일 통합 정책은 파일 분리로 인한 컨텍스트 스왑·중복 메타데이터·summary 매핑 복잡도를 제거하면서, 단일 파일 안에서 필요한 섹션만 채우는 유연성은 그대로 보장한다. Gate 적용은 작업 규모 기준 (M/L 은 분석+계획 양쪽 승인, S 는 통합 1회 승인) 그대로 유지한다.
 
 ---
 

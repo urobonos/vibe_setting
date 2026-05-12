@@ -3,7 +3,7 @@
 # PostToolUse:Edit|Write Hook — 변경 영향 기록 섹션 검증 (G2)
 #
 # 대상:
-#   ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md
+#   ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result|unified}.md
 #
 # 검증:
 #   1. 헤더 "## .*변경 영향" 또는 "## .*Change Impact" 존재
@@ -31,8 +31,8 @@ FILE_NAME=$(basename "$FILE_PATH")
 [ "$FILE_NAME" = "summary.md" ] && exit 0
 [ "$FILE_NAME" = "history.md" ] && exit 0
 
-# analyze/plan/result 단계 산출물만 검증
-echo "$FILE_NAME" | grep -qE '\-(analyze|plan|result)\.md$' || exit 0
+# analyze/plan/result/unified 단계 산출물만 검증 (unified = 2026-05-12 시행 단일 통합)
+echo "$FILE_NAME" | grep -qE '\-(analyze|plan|result|unified)\.md$' || exit 0
 
 # 파일 미존재 (Write 직후 race) 시 스킵
 [ -f "$FILE_PATH" ] || exit 0

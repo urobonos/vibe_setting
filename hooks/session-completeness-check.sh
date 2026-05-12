@@ -88,19 +88,22 @@ fi
 
 # --- 2. 단계 문서 존재 여부 (gate>=2 + 코드 수정 세션만) ---
 # CLAUDE.md §File Paths 규칙:
-#   tasks/   → 코드 작업 프롬프트 (analyze/plan/result 단계 문서)
-#   output/  → 분석·문서 생성 프롬프트 ({제목}/*.md 산출물)
-# 둘 중 하나라도 오늘자 산출물이 존재하면 통과 (경로 이중화 허용).
+#   tasks/    → 코드 작업 완료 산출물 (analyze/plan/result 3종 또는 unified 단일 통합 — 2026-05-12~)
+#   output/   → 분석·문서 생성 프롬프트 ({제목}/*.md 산출물)
+#   working/  → 진행 중 단일 통합 작업 문서 (2026-05-12~, 완료 시 tasks/ 로 자동 이동)
+# 셋 중 하나라도 오늘자 산출물이 존재하면 통과 (경로 이중화 허용).
 if [ "$CURRENT" -ge 2 ] && [ "$IS_NONCODE_ONLY" = false ]; then
   TASK_DIR="$TASKS_DIR/$TODAY"
   OUTPUT_DIR=$(product_output_dir "$CWD")
+  WORKING_DIR="$HOME/.claude/docs/working/$TODAY"
   TODAY_ISO=$(date +%Y-%m-%d)
   STAGE_DOC=""
   OUTPUT_DOC=""
+  WORKING_DOC=""
 
-  # tasks/ 단계 문서 확인 (코드 작업 세션)
+  # tasks/ 단계 문서 확인 (코드 작업 세션, unified 단일 통합 포함)
   if [ -d "$TASK_DIR" ]; then
-    STAGE_DOC=$(find "$TASK_DIR" \( -name '*analyze*' -o -name '*plan*' -o -name '*result*' \) -type f 2>/dev/null | head -1)
+    STAGE_DOC=$(find "$TASK_DIR" \( -name '*analyze*' -o -name '*plan*' -o -name '*result*' -o -name '*unified*' \) -type f 2>/dev/null | head -1)
   fi
 
   # output/ 오늘 생성·수정된 .md 확인 (분석·문서 세션)
@@ -108,10 +111,18 @@ if [ "$CURRENT" -ge 2 ] && [ "$IS_NONCODE_ONLY" = false ]; then
     OUTPUT_DOC=$(find "$OUTPUT_DIR" -name '*.md' -type f -newermt "$TODAY_ISO" 2>/dev/null | head -1)
   fi
 
-  if [ -z "$STAGE_DOC" ] && [ -z "$OUTPUT_DOC" ]; then
+  # working/ 진행 중 단일 통합 문서 확인 (2026-05-12 시행)
+  # working/ 는 product 분리 없이 글로벌 통합 — 파일명 prefix 로 product 식별
+  if [ -d "$WORKING_DIR" ]; then
+    WORKING_DOC=$(find "$WORKING_DIR" -name "*${PRODUCT}*" -type f 2>/dev/null | head -1)
+  fi
+
+  if [ -z "$STAGE_DOC" ] && [ -z "$OUTPUT_DOC" ] && [ -z "$WORKING_DOC" ]; then
     WARNINGS="${WARNINGS}\n[BLOCKED] 오늘자 산출물이 없습니다. 아래 중 1종 이상 필요:"
-    WARNINGS="${WARNINGS}\n  - (코드 작업) ~/.claude/docs/${PRODUCT}/tasks/$TODAY/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md"
-    WARNINGS="${WARNINGS}\n  - (분석·문서) ~/.claude/docs/${PRODUCT}/output/{제목}/{yyyy-mm-dd}-{제목}-{type}.md"
+    WARNINGS="${WARNINGS}\n  - (코드 작업 신규 2026-05-12~) ~/.claude/docs/working/$TODAY/{yyyy-mm-dd}-${PRODUCT}-{작업명}.md (진행 중)"
+    WARNINGS="${WARNINGS}\n    또는 ~/.claude/docs/${PRODUCT}/tasks/$TODAY/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md (완료 후 자동 이동)"
+    WARNINGS="${WARNINGS}\n  - (코드 작업 기존 < 2026-05-12) ~/.claude/docs/${PRODUCT}/tasks/$TODAY/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md"
+    WARNINGS="${WARNINGS}\n  - (분석·문서) ~/.claude/docs/${PRODUCT}/output/{category}/{제목}/{yyyy-mm-dd}-{제목}-{type}.md"
     BLOCKED=true
   fi
 fi
