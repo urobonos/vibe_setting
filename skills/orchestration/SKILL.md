@@ -217,6 +217,7 @@ Input/Output Protocol, Status 코드, Decision Request 형식 상세는 [`refere
 
 - **§3.1 Input:** Agent prompt = `Task_Goal` + `Context_Path` (선행 팀 산출물 경로) + `Authority_Level` + `Output_Format`. **§3.1.1 1M Context 예외:** Opus 4.7 이상에서 교차 참조 필수 / Read 불가 환경 / 50K 이하 소용량 시 `Context_Inline` 원문 주입 허용 — `Context_Path` 와 동시 사용 금지.
 - **§3.2 Output:** `[Analyze Report]` / `[Plan Report]` / `[Execute Report]` + `[Status]`. **§3.3 Status:** `Analyze Complete` / `Plan Complete` / `Progress` / `Done` / `Failed`. **§3.4 Decision Request:** 트레이드오프 발생 시 `[Issue Summary]` + `[Pragmatist]` / `[Visionary]` / `[Innovator]` 대안 + `[Request]` 형식으로 사용자 선택 요청.
+- **§3.5 장기 관점 추천 (필수):** Decision Request 대안 제시 시 단기 효율 (Pragmatist 즉시 동작) 만 보지 말고 **장기 누적 비용·복잡도·유지보수성** 가중. (1) "(추천)" 표시는 6~12개월 후 시점 best 옵션에. (2) 단기 OK / 장기 부담 옵션 = "장기 SSOT 분기·hook 복잡도 누적" 명시 경고. (3) 신설 hook / 스킬 / SSOT 권고 = "6개월 후에도 필요한가" 자가 점검. (4) 기존 시스템 폐기 권고 시 = "검증 안 됨 / 사용 빈도 낮음 / 누적 복잡도 vs 가치" 천칭에서 폐기 우선 고려. (5) 임시 우회·hardcode·feature flag = 거의 항상 비추천. SSOT: CLAUDE.md §4.4 "장기 관점 추천".
 
 ---
 
