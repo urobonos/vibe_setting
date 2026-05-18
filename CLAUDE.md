@@ -149,7 +149,7 @@
   | "계획 짜줘" / "플랜 작성" | `/계획` | working/ §계획 채움 (수정 대상 / Blueprint / WBS). Status: Plan Complete |
   | "구현" / "실행" / "작업 진행" | `/실행` | working/ §실행 + Self-Critique + Status: Done/Partial. Done + Self-Critique 동시 시 working-lifecycle 자동 이동 |
   | "검증" / "e2e" / "테스트" | `/검증` | env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock 5점 체크. `verify-e2e-check.sh` 강제 |
-  | "리뷰" / "코드 리뷰" / "Self-Critique" | `/리뷰` | Self-Critique 체크리스트 ≥ 15 + `simplify` 보조 |
+  | "리뷰" / "코드 리뷰" / "Self-Critique" | `/리뷰` | Self-Critique 체크리스트 ≥ 20 + `simplify` 보조 (§4.3 L132 SSOT) |
   | "머지" / "push" / "배포" | `/배포` | `git-push` + `branch-enforce` 통합 안내. **Claude 자동 push·master 머지 금지**, 사용자 직접 (`! ` prefix) |
   | "회고" / "세션 마감" / "retro" | `/회고` | history.md + summary.md 기록 (Persistence 강제) |
   | "토론" / "의견 갈림" / "트레이드오프" | `/토론` | 4 에이전트팀 × 4 Agent = 16 Agent 풀-병렬 spawn. 비용 4×, 의견 깊이 ↑ |
@@ -238,7 +238,7 @@
 | 병렬 | Modifier 슬래시 — `/병렬 /{인자 슬래시}` 형식으로 인자 슬래시 진행 중 Agent spawn 강제 병렬화. UserPromptSubmit marker 생성 + PreToolUse Task matcher reminder 주입 | `/병렬` | ✓ | A |
 | 프로세스 | Claude Code 프로세스 + 세션 sid 매핑 조회 + REGISTRY/lock orphan 분류·정리. 3 모드 — 기본 (read-only), `cleanup` (orphan 정리), `kill` (좀비 PID 종료 명령 안내, 사용자 직접) | `/프로세스` | ✓ | B |
 
-**자동화 분류 카운트:** A = 21 (api-spec-audit · api-team · debate · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 5 (debug-skill · mysql8 · php8 · skill-validator + sns-oauth add·debug) / C = 8 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
+**자동화 분류 카운트:** A = 22 (api-spec-audit · api-team · debate · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 병렬 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 6 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 + sns-oauth add·debug) / C = 8 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 
 ### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)
 
