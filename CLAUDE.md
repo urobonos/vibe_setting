@@ -236,6 +236,7 @@
 | 회고 | history.md + summary.md 자동 기록 + 세션 마감 정리 (thin wrapper) | `/회고` | ✓ | A |
 | 토론 | 4 에이전트팀 × 4 Agent = 16 Agent 풀-병렬 spawn 토론 진입 (한글 진입점, `/debate` 호환) (thin wrapper) | `/토론` | ✓ | A |
 | 병렬 | Modifier 슬래시 — `/병렬 /{인자 슬래시}` 형식으로 인자 슬래시 진행 중 Agent spawn 강제 병렬화. UserPromptSubmit marker 생성 + PreToolUse Task matcher reminder 주입 | `/병렬` | ✓ | A |
+| 프로세스 | Claude Code 프로세스 + 세션 sid 매핑 조회 + REGISTRY/lock orphan 분류·정리. 3 모드 — 기본 (read-only), `cleanup` (orphan 정리), `kill` (좀비 PID 종료 명령 안내, 사용자 직접) | `/프로세스` | ✓ | B |
 
 **자동화 분류 카운트:** A = 21 (api-spec-audit · api-team · debate · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 5 (debug-skill · mysql8 · php8 · skill-validator + sns-oauth add·debug) / C = 8 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 
