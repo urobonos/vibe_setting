@@ -47,10 +47,12 @@
   - **`output/` → 분석·문서 생성 프롬프트 전용.** 코드 변경 없는 결과물만 산출 시. Gate ≥ 1 만으로 충분.
   - 판단 애매: "이 프롬프트가 코드를 바꾸게 하는가?" → 예 = `tasks/`, 아니오 = `output/`.
   - `specs/` = IEEE 공식 산출물 (SRS/SDD/IDD/SDP/STP/STD) 전용. `api-docs/` = API 명세 전용. 별개 경로.
-- **api-docs 3-way 자동 미러링 (필수):** `~/.claude/docs/{product}/api-docs/` Edit/Write 시 `mirror-docs.sh` PostToolUse hook 가 자동 cp.
-  - 동기화 대상: `C:\Works\hongcafe_global_backend\api-docs\` + `C:\Works\hongcafe_global_docs\be\api-docs\`.
-  - 정책: 3회 재시도 (200ms 간격) + 대상 미존재 시 SKIP. 실패 stderr 로그만 (PostToolUse 정책).
+- **api-docs 3-way 미러링 (필수, 2026-05-18 재설계):** `mirror-be-claude` 스킬이 단일 명시 진입점. 자동 PostToolUse hook (`mirror-docs.sh`) **폐기** — 정책 ↔ 실 사용 어긋남 (be 가 실 SSOT 인데 글로벌 → 외부 단방향이라 IDE / be cwd 편집 미감지). 산출물 = `output/analysis/2026-05-18-mirror-policy-redesign/`.
+  - 동기화 대상: `~/.claude/docs/hongcafe_global_backend/api-docs/` ↔ `C:\Works\hongcafe_global_backend\api-docs\` ↔ `C:\Works\hongcafe_global_docs\be\api-docs\`.
+  - 명시 진입: `/mirror-be-claude verify` (3-way 정합 read-only 검증) → 차이 발견 시 `/mirror-be-claude sync-from-be` (be → 글로벌 + docs) 또는 `/mirror-be-claude sync-from-global` (글로벌 → be, §3 매칭).
+  - 보조 자동: `mirror-sanity-check.sh` SessionStart hook 가 매 세션 시작 시 mtime 경량 drift 감지 → stderr 경고만 (exit 0, 자동 sync 안 함). 사용자에게 `verify` 명시 호출 유도.
   - **specs/ 미러링 제거됨 (2026-05-04):** 글로벌 `~/.claude/docs/{product}/specs/` 가 SSOT.
+  - SSOT: `skills/mirror-be-claude/SKILL.md` + `hooks/mirror-sanity-check.sh` + 본 단락.
 - **외부 프로젝트 CLAUDE.md 미러링:** `~/.claude/mirrors/{product}/CLAUDE.md` 가 외부 프로젝트 (현재: `hongcafe_global_backend`) CLAUDE.md 양방향 미러본. `mirror-claude-md.sh` PostToolUse hook 가 양쪽 Edit/Write 시 반대편 자동 cp. 단일 작성자 last-write-wins. 글로벌 미러본 = `.gitignore` 추적 제외. 수동 진입점 = `mirror-be-claude` 스킬 (3 모드 — `verify` / `sync-from-be` / `sync-from-global`, 후자 §3 Checkpoint). 다른 프로젝트 확장 = `~/.claude/mirrors/{product}/` 패턴 동일 적용. SSOT: `hooks/mirror-claude-md.sh` + `skills/mirror-be-claude/SKILL.md`.
 - **Notion 연동 (요청 기반):** `notion-cli` 스킬 단일 진입점. 사용자 명시 요청 ("노션에 반영"·"Notion 동기화") 시에만 실행. 자동 반영 금지.
 
