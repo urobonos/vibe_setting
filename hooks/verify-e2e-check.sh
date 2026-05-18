@@ -25,9 +25,8 @@
 #   - 역소급 면제: 생성일 < 2026-05-15 산출물 = hint 강등 (exit 0)
 #
 # 설치:
-#   - settings.json 자동 등록 안 함 (사용자 결정 영역).
-#   - 등록 시 PostToolUse hooks 배열에 추가:
-#       { "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "bash $CLAUDE_PROJECT_DIR/hooks/verify-e2e-check.sh" }] }
+#   - settings.json PostToolUse Edit|Write 블록 등록됨 (2026-05-15~).
+#   - 추가 등록 또는 disable 시 settings.json 직접 편집 (update-config 스킬).
 
 # --- self-test ---
 if [ "${1:-}" = "--self-test" ]; then

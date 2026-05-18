@@ -9,7 +9,7 @@
 #   - analyze.md → `- [ ]` + `- [x]` 카운트 ≥ 30
 #   - plan.md    → ≥ 20
 #   - result.md  → ≥ 20
-#   - unified.md → ≥ 50 (analyze+plan+result 통합, 2026-05-12 시행)
+#   - unified.md → ≥ 30 (analyze+plan+result 통합, 2026-05-12 시행 / 2026-05-13 ≥ 50→30 완화)
 #
 # 예외:
 #   - summary.md, history.md → 검증 비활성

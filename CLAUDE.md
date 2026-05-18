@@ -145,7 +145,7 @@
   | 자연어 키워드 | 진입 슬래시 | 동작 / 강제 hook |
   |--------------|----------|-----------------|
   | "분석해줘" / "코드 분석" / 작업 진단 | `/분석` | working/ §분석 채움 (관점별 요약 / Critical~Low / 우선순위 권고). `doc-template-guard.sh` unified §분석 헤더 강제 |
-  | "타당성 검토" / "공식 근거 확인" | `/타당성` | `docset-ref` 호출 + working/ §타당성 검토 `[Source:...]` ≥ 1건. `feasibility-section-check.sh` 강제 |
+  | "타당성 검토" / "공식 근거 확인" | `/타당성` | `docset-ref` 호출 + working/ §타당성 검토 `[Source:...]` ≥ 1건. `feasibility-section-check.sh` 권고 (hint only, exit 0 + stderr 경고. 행동 룰 = §4.1 "타당성 검토 (필수)" 본문 SSOT) |
   | "계획 짜줘" / "플랜 작성" | `/계획` | working/ §계획 채움 (수정 대상 / Blueprint / WBS). Status: Plan Complete |
   | "구현" / "실행" / "작업 진행" | `/실행` | working/ §실행 + Self-Critique + Status: Done/Partial. Done + Self-Critique 동시 시 working-lifecycle 자동 이동 |
   | "검증" / "e2e" / "테스트" | `/검증` | env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock 5점 체크. `verify-e2e-check.sh` 강제 |
@@ -247,6 +247,7 @@
 |-------|----------|------|--------|
 | docset-ref | Dash docset 오프라인 기술 레퍼런스 검색 | `타당성 검토` (§4.1) 자동 호출용 — frontmatter `user-invocable: false` | A |
 | global-context | HongCafe Global 다국가 서비스 컨텍스트 | 프로젝트 한정 | A |
+| simplify | 변경 코드 재사용성·가독성·효율성 리뷰 후 이슈 픽스 | Claude Code 내장 plugin skill — `~/.claude/skills/` 본체 없음, available-skills 카탈로그 등재. `/리뷰` 보조 호출용 (Skill 도구) | B |
 
 ### 5.3 Claude Code 내장 Slash (참고)
 `/help` `/clear` `/loop` `/fast` `/config` — Claude Code 자체 명령.
