@@ -9,11 +9,13 @@
 #   - 사용자 결정 (2026-04-30): 스킬 생성·수정·최적화는 전부 skill-creator 경유 강제
 
 source "$(dirname "$0")/lib/hook-input.sh"
+source "$(dirname "$0")/lib/path-utils.sh"
 hook_init
 hook_read_stdin
 hook_parse_file_path
 
-FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
+# Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT)
+FILE_PATH=$(normalize_path "$FILE_PATH")
 
 # .claude/skills/ 하위가 아니면 통과
 echo "$FILE_PATH" | grep -qiE '/\.claude/skills/' || exit 0

@@ -14,8 +14,10 @@ hook_parse_session_id
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 
-# 세션 시작 시 gate 리셋
-echo "0" > "$GATE_FILE"
+# 자동 순차 진행 정책 (2026-05-12): 세션 시작 시 gate = 2 (EXECUTE) 초기화
+# 단계별 차단 폐기 — §3 Checkpoint 5조건 보호는 별 hook (dangerous-ops-guard / branch-enforce / git-quality-gate 등)
+# SSOT: ~/.claude/CLAUDE.md §"자동 순차 진행 정책"
+echo "2" > "$GATE_FILE"
 
 # stale gate 파일 정리 (7일 이상 미수정 — 활성 세션 파일은 mtime 갱신되어 보존)
 find /tmp -maxdepth 1 -name 'claude_gate_*' -mtime +7 -delete 2>/dev/null

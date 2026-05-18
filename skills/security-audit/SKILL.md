@@ -70,7 +70,9 @@ min_claude_md_version: "4.0"
 4. **설정 변경** — Filters, Security, Cors, Nginx 등 설정 파일 수정 사항
 5. **보안 테스트** — 추가해야 할 테스트 케이스
 6. **타당성 검토 (Feasibility Review)** — 각 권고 조치의 공식 근거를 명시한다. OWASP, CWE, ASVS, CIS Benchmark 등 적용한 프레임워크의 **정확한 버전과 항목 번호**를 출처로 기재한다. 근거 없는 보안 권고는 지침 위반.
+   **Why:** 보안 권고는 코드 영향이 크고 트레이드오프(가용성·UX·성능) 가 명확해, 공식 프레임워크 항목 번호 인용 없이 권고하면 사용자가 "이 위협이 실재하는가" 를 검증할 방법이 없어 권고 신뢰도가 LLM 환각 수준으로 떨어진다.
 7. **변경 영향 기록 (Change Impact Log)** — 보안 감사 결과 반영 시 변경되는 사항, 개선점, 왜 해야 하는지(수행 이유)를 필수 기록한다. 이유 생략은 지침 위반.
+   **Why:** 보안 조치는 1년 후 "왜 이렇게 막아놨지" 추적 불가능 시 회귀 작업으로 무력화되거나, 동일 위협이 다른 경로로 재발해도 같은 분석을 처음부터 다시 해야 하는 비용이 누적된다.
 
 ---
 
@@ -132,6 +134,8 @@ min_claude_md_version: "4.0"
 - CI4 `app/Filters/SecureHeadersFilter.php`로 구현, 글로벌 필터 등록
 - `forceGlobalSecureRequests = true` (프로덕션 HTTPS 강제) 병행 설정
 
+**Why:** Phase 1 헤더는 모두 "기본 비활성" 이라 명시 설정 없이는 브라우저가 보호를 적용하지 않는다. `nosniff` 누락 시 MIME sniffing 으로 업로드 이미지가 JS 로 실행되고, `X-Frame-Options` 누락 시 clickjacking, HSTS 누락 시 첫 요청이 HTTP 로 떨어져 SSL Strip 공격 노출. 각 헤더는 1줄 비용 = 1개 공격 표면 차단으로 ROI 가 매우 높다.
+
 ### 외부 노출 API 보안 Phase 2 (7-10)
 
 Phase 1(SecureHeaders, `forceGlobalSecureRequests`)에 추가로 적용하는 심화 방어. 도입 시점은 트래픽 지표·보안 감사 결과에 따라 결정한다.
@@ -148,6 +152,8 @@ Phase 1(SecureHeaders, `forceGlobalSecureRequests`)에 추가로 적용하는 �
 2. `limit_req_zone` / WAF 룰셋 dry-run (log only) 모드 관찰
 3. False positive 확인 후 enforce 모드 전환
 4. 차단 로그 모니터링 대시보드 필수 (CloudWatch Alarm 또는 Grafana)
+
+**Why:** prod 직접 enforce 시 정상 사용자 트래픽이 false positive 로 차단돼 서비스 장애로 즉시 직결된다. dry-run → false positive 검증 → enforce 의 3단계는 보안 강화의 트레이드오프(사용성 손실)를 통제 가능한 수준으로 만들기 위한 표준 패턴이며, 단계 압축은 보안 + 가용성 양쪽을 모두 잃는 경로다.
 
 **주의**:
 - WAF 룰 변경은 트래픽 영향 큼 — Checkpoint 발동 필수

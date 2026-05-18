@@ -13,11 +13,13 @@
 #   - specs/ 미러링은 2026-05-04 사용자 결정으로 제거 (글로벌 specs/ SSOT 단일화)
 
 source "$(dirname "$0")/lib/hook-input.sh"
+source "$(dirname "$0")/lib/path-utils.sh"
 hook_init
 hook_read_stdin
 hook_parse_file_path
 
-FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
+# Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT)
+FILE_PATH=$(normalize_path "$FILE_PATH")
 
 # api-docs/ 하위가 아니면 통과
 echo "$FILE_PATH" | grep -qiE '/\.claude/docs/[^/]+/api-docs/' || exit 0

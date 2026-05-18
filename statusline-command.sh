@@ -9,19 +9,16 @@ if [ -n "$input" ]; then
   all_pcts=$(echo "$input" | grep -o '"used_percentage":[0-9]*' | grep -o '[0-9]*$')
   ctx=$(echo "$all_pcts" | sed -n '1p')
   five_hour=$(echo "$all_pcts" | sed -n '2p')
-  # total tokens: sum of total_input_tokens + total_output_tokens
-  total_input=$(echo "$input" | grep -o '"total_input_tokens":[0-9]*' | grep -o '[0-9]*$')
-  total_output=$(echo "$input" | grep -o '"total_output_tokens":[0-9]*' | grep -o '[0-9]*$')
-  if [ -n "$total_input" ] && [ -n "$total_output" ]; then
-    total_tokens=$((total_input + total_output))
-  fi
+  seven_day=$(echo "$all_pcts" | sed -n '3p')
+  sid=$(echo "$input" | grep -o '"session_id":"[^"]*"' | head -1 | sed 's/"session_id":"//;s/"//')
 fi
 
 [ -z "$cwd" ] && cwd=$(pwd)
 cwd=$(echo "$cwd" | sed 's/\\\\/\//g')
 five_hour=${five_hour:-}
+seven_day=${seven_day:-}
 ctx=${ctx:-}
-total_tokens=${total_tokens:-}
+sid8=${sid:0:8}
 
 # 5초 TTL 캐시 — Windows + Git Bash 환경에서 매 토큰마다 git fork 비용 누적 방지
 git_branch=""
@@ -49,9 +46,10 @@ dim='\033[2m'
 reset='\033[0m'
 
 usage=""
-[ -n "$ctx" ] && usage="Ctx:${ctx}%%"
-[ -n "$five_hour" ] && usage="5h:${five_hour}%% ${usage}"
-[ -n "$total_tokens" ] && usage="${usage:+${usage} }Tokens:${total_tokens}"
+[ -n "$sid8" ] && usage="sid:${sid8}"
+[ -n "$five_hour" ] && usage="${usage:+${usage} }5h:${five_hour}%%"
+[ -n "$seven_day" ] && usage="${usage:+${usage} }7d:${seven_day}%%"
+[ -n "$ctx" ] && usage="${usage:+${usage} }Ctx:${ctx}%%"
 
 if [ -n "$usage" ]; then
   printf "${yellow}${cwd}${reset}${cyan}${git_branch}${reset} ${dim}|${reset} ${white}${usage}${reset}"

@@ -10,6 +10,9 @@
 #   L5. Why: 라인 짝지움 — 강제 어휘 빈도 vs Why: 라인 빈도 (목표 30% 이상)
 #   L6. depends_on 의 모든 스킬 실재 (글로벌 스킬 폴더 기준)
 #   L7. conflicts_with 의 모든 스킬 실재 + 자기 참조 경고
+#   L8. depends_on 순환 의존 감지 (DAG 그래프 + DFS, 2026-05-13 신규, CLAUDE.md §5.4)
+#   L9. version semver 형식 검증 (^\d+\.\d+\.\d+$, 2026-05-13 신규, CLAUDE.md §5.4)
+#   L10. min_claude_md_version 호환성 검증 (CLAUDE.md 현재 버전과 대조, 2026-05-13 신규)
 #
 # 사용법:
 #   bash ~/.claude/bin/lint-skills.sh                    # 글로벌 모든 스킬 검증
@@ -50,6 +53,95 @@ if [ "$JSON" = "0" ]; then
 fi
 
 ALL_SKILLS=$(ls -1 "$SKILLS_DIR" 2>/dev/null | sort)
+
+# ─────────────────────────────────────────────────────────
+# L8 사전 준비: depends_on 순환 의존 그래프 빌드 + DFS 순환 탐지 (Python)
+# 2026-05-13 신규, CLAUDE.md §5.4 "depends_on 방향성"
+# ─────────────────────────────────────────────────────────
+CIRCULAR_DEPS=$(SKILLS_DIR="$SKILLS_DIR" python3 - <<'PYEOF' 2>/dev/null
+import os, re
+from collections import defaultdict
+
+skills_dir = os.environ.get('SKILLS_DIR', os.path.expanduser('~/.claude/skills'))
+graph = defaultdict(list)
+try:
+    skill_names = sorted(os.listdir(skills_dir))
+except OSError:
+    print('')
+    raise SystemExit(0)
+
+for skill in skill_names:
+    sm = os.path.join(skills_dir, skill, 'SKILL.md')
+    if not os.path.isfile(sm):
+        continue
+    try:
+        with open(sm, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read(20000)
+    except OSError:
+        continue
+    # depends_on: [a, b, c] (inline) 또는 depends_on:\n  - a\n  - b (block)
+    m = re.search(r'^depends_on:[ \t]*\[([^\]]*)\]', content, re.MULTILINE)
+    deps = []
+    if m:
+        deps = re.findall(r'[a-z][a-z0-9_-]+', m.group(1))
+    else:
+        m2 = re.search(r'^depends_on:[ \t]*\n((?:[ \t]+-[ \t]*[^\n]+\n?)+)', content, re.MULTILINE)
+        if m2:
+            for line in m2.group(1).splitlines():
+                t = re.search(r'-[ \t]*"?([a-z][a-z0-9_-]+)"?', line)
+                if t:
+                    deps.append(t.group(1))
+    graph[skill] = deps
+
+WHITE, GRAY, BLACK = 0, 1, 2
+color = defaultdict(lambda: WHITE)
+cycles = []
+
+def dfs(node, path):
+    color[node] = GRAY
+    path.append(node)
+    for nb in graph.get(node, []):
+        if color[nb] == GRAY:
+            idx = path.index(nb) if nb in path else 0
+            cycle = path[idx:] + [nb]
+            cycles.append(','.join(cycle))
+        elif color[nb] == WHITE:
+            dfs(nb, list(path))
+    color[node] = BLACK
+
+for n in list(graph.keys()):
+    if color[n] == WHITE:
+        dfs(n, [])
+
+if cycles:
+    seen = set()
+    for c in cycles:
+        # 같은 순환 (회전된 동일 cycle) 정규화
+        nodes = c.split(',')
+        if len(nodes) < 2:
+            continue
+        min_idx = nodes.index(min(nodes[:-1]))
+        norm = nodes[min_idx:-1] + nodes[:min_idx]
+        norm.append(norm[0])
+        norm_str = ','.join(norm)
+        if norm_str in seen:
+            continue
+        seen.add(norm_str)
+        print(norm_str)
+PYEOF
+)
+
+# CLAUDE.md 버전 추출 (L10 호환성 검증용)
+# 우선순위: (a) Multi-Agent Orchestration: Full Specification (vX.Y) (b) v4.0 류 본문 토큰
+CLAUDE_MD_FILE="$HOME/.claude/CLAUDE.md"
+CLAUDE_MD_VERSION=""
+if [ -f "$CLAUDE_MD_FILE" ]; then
+  CLAUDE_MD_VERSION=$(grep -oE '\(v[0-9]+\.[0-9]+(\.[0-9]+)?\)' "$CLAUDE_MD_FILE" 2>/dev/null | head -1 | sed 's/^(v//; s/)$//')
+  [ -z "$CLAUDE_MD_VERSION" ] && CLAUDE_MD_VERSION=$(grep -oE 'v[0-9]+\.[0-9]+(\.[0-9]+)?' "$CLAUDE_MD_FILE" 2>/dev/null | head -1 | sed 's/^v//')
+fi
+[ -z "$CLAUDE_MD_VERSION" ] && CLAUDE_MD_VERSION="4.0"
+# semver 형식 (X.Y) → X.Y.0 보정 (sort -V 호환성)
+echo "$CLAUDE_MD_VERSION" | grep -qE '^[0-9]+\.[0-9]+$' && CLAUDE_MD_VERSION="${CLAUDE_MD_VERSION}.0"
 
 lint_skill() {
   local skill_name="$1"
@@ -178,6 +270,50 @@ lint_skill() {
   if [ "$self_ref" = "1" ]; then
     issues+=("L7-WARN: conflicts_with 자기 참조 — 의도 명시 권고")
     [ "$status" = "PASS" ] && status="WARN"
+  fi
+
+  # L8 — depends_on 순환 의존 (CIRCULAR_DEPS 사전 빌드 결과 매칭, 2026-05-13 신규)
+  if [ -n "$CIRCULAR_DEPS" ]; then
+    while IFS= read -r cyc; do
+      [ -z "$cyc" ] && continue
+      # cyc = "a,b,c,a" 형식. 본 스킬이 cycle 안 첫 노드인 경우만 보고 (중복 방지)
+      local first_node
+      first_node=$(echo "$cyc" | cut -d',' -f1)
+      if [ "$first_node" = "$skill_name" ]; then
+        local cyc_display
+        cyc_display=$(echo "$cyc" | tr ',' '→' | sed 's/→/ → /g')
+        issues+=("L8-FAIL: depends_on 순환 의존 — $cyc_display (CLAUDE.md §5.4)")
+        status="FAIL"
+      fi
+    done <<< "$CIRCULAR_DEPS"
+  fi
+
+  # L9 — version semver 형식 검증 (^\d+\.\d+\.\d+$, 2026-05-13 신규)
+  # L8 (depends_on 순환) 은 전체 스킬 그래프 필요 → 본 함수 외부 (lint_circular_deps) 에서 일괄 처리
+  # L10 (min_claude_md_version 호환성) 도 CLAUDE.md 버전 read 후 일괄 처리
+  local version_raw
+  version_raw=$(grep -E '^version:' "$skill_md" | head -1 | sed 's/^version:[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')
+  if [ -n "$version_raw" ]; then
+    if ! echo "$version_raw" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+      issues+=("L9-WARN: version '$version_raw' semver 형식 불일치 (^\\d+.\\d+.\\d+$) — CLAUDE.md §5.4 (2026-05-13)")
+      [ "$status" = "PASS" ] && status="WARN"
+    fi
+  fi
+
+  # L10 — min_claude_md_version 호환성 (CLAUDE.md 현재 버전 < 스킬 요구 시 FAIL)
+  local skill_min_ver skill_min_ver_norm
+  skill_min_ver=$(grep -E '^min_claude_md_version:' "$skill_md" | head -1 | sed 's/^min_claude_md_version:[[:space:]]*//; s/[[:space:]]*$//; s/^"//; s/"$//')
+  if [ -n "$skill_min_ver" ] && [ -n "$CLAUDE_MD_VERSION" ]; then
+    # 4.0 → 4.0.0 normalize (CLAUDE_MD_VERSION 도 동일 룰 적용됨)
+    skill_min_ver_norm="$skill_min_ver"
+    echo "$skill_min_ver_norm" | grep -qE '^[0-9]+\.[0-9]+$' && skill_min_ver_norm="${skill_min_ver_norm}.0"
+    # 요구 ≤ 현재 이면 OK (정렬 순서)
+    if printf '%s\n%s\n' "$skill_min_ver_norm" "$CLAUDE_MD_VERSION" | sort -V -C; then
+      : # 요구 ≤ 현재, OK
+    else
+      issues+=("L10-FAIL: min_claude_md_version '$skill_min_ver' > CLAUDE.md 현재 '$CLAUDE_MD_VERSION' (미래 요구사항)")
+      status="FAIL"
+    fi
   fi
 
   case "$status" in

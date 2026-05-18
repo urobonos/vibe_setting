@@ -6,13 +6,26 @@ description: >
   SQS/SNS는 Lambda 트리거 구성 중심이며 CI4 SDK 직접 연동은 포함하지 않는다.
   Lambda 핸들러 작성, IAM 최소 권한, 보안 그룹 설정, Aurora 연결 패턴을 정의한다.
 triggers:
-  - "Lambda 함수 만들어줘", "Lambda 작성", "Lambda 배포"
-  - "SQS 트리거", "SNS 트리거", "이벤트 트리거"
-  - "Aurora 연결", "RDS 연결", "DB 연결 패턴"
-  - "EC2 설정", "인스턴스 생성", "보안 그룹 설정"
-  - "RDS Proxy 설정", "커넥션 풀링"
-  - "IAM 역할", "IAM 정책", "최소 권한"
-  - AWS 관련 코드(Python Lambda, serverless.yml, SAM template) 작성/수정 시
+  - "Lambda 함수 만들어줘"
+  - "Lambda 작성"
+  - "Lambda 배포"
+  - "SQS 트리거"
+  - "SNS 트리거"
+  - "이벤트 트리거"
+  - "Aurora 연결"
+  - "RDS 연결"
+  - "DB 연결 패턴"
+  - "EC2 설정"
+  - "인스턴스 생성"
+  - "보안 그룹 설정"
+  - "RDS Proxy 설정"
+  - "커넥션 풀링"
+  - "IAM 역할"
+  - "IAM 정책"
+  - "최소 권한"
+  - "Python Lambda"
+  - "serverless.yml"
+  - "SAM template"
 version: 1.0.0
 user-invocable: true
 depends_on: [mysql8, security-audit]

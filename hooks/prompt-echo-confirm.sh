@@ -24,10 +24,16 @@ hook_parse_session_id
 
 PROMPT=$(hook_parse_field "prompt")
 
-# --- 디버그 로그 설정 ---
-LOG_FILE="$HOME/.claude/prompt-echo-confirm.log"
-mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
-log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$LOG_FILE" 2>/dev/null; }
+# --- 디버그 로그 설정 (2026-05-13 telemetry lib 마이그레이션) ---
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
+  LOG_FILE="$HOME/.claude/prompt-echo-confirm.log"
+  log_event() {
+    local hook="$1" event="$2"; shift 2
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [$event] $*" >> "$LOG_FILE" 2>/dev/null
+  }
+}
+log() { log_event "prompt-echo-confirm" "info" "$*"; }
 
 PENDING_MARKER="/tmp/claude_echo_pending_${SESSION_ID}"
 

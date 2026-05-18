@@ -20,6 +20,9 @@
 #   6. tasks/history.md + tasks/YYYYMMDD/summary.md 자동 갱신
 #   7. stderr 로 이동 결과 1줄 보고
 
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || true
+
 STDIN_DATA=$(cat)
 
 HOOK_EVENT=$(echo "$STDIN_DATA" | python3 -c "
@@ -32,12 +35,22 @@ except:
 " 2>/dev/null)
 
 # ============= 헬퍼: 완료 마커 검사 =============
+# 정규식 SSOT = lib/template-patterns.sh (2026-05-13 도입, audit S-3/H-2/H-3 묶음).
+# 본 hook 의 has_completion_markers 는 lib 함수 wrapper 로 단순화.
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/template-patterns.sh" 2>/dev/null || {
+  # lib 로드 실패 fallback — 인라인 정규식 보존 (회귀 안전성)
+  has_status_done() { [ -f "$1" ] && grep -qE '^(Status|상태):[[:space:]]*(Done|완료)[[:space:]]*$' "$1"; }
+  has_self_critique_h2() { [ -f "$1" ] && grep -qE '^##[[:space:]]+.*Self-Critique' "$1"; }
+  detect_self_critique_wrong_heading() { [ -f "$1" ] && grep -nE '^#{3,}[[:space:]]+.*Self-Critique|^#{1}[[:space:]]+.*Self-Critique' "$1" 2>/dev/null | head -1; }
+}
+
+# Active Task Registry entry/lock 정리 함수 (lib 가용 시에만, 2026-05-15)
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/registry-utils.sh" 2>/dev/null || true
+
 has_completion_markers() {
-  local file="$1"
-  [ -f "$file" ] || return 1
-  grep -qE '^Status:[[:space:]]*Done[[:space:]]*$' "$file" || return 1
-  grep -qE '^##[[:space:]]+.*Self-Critique' "$file" || return 1
-  return 0
+  has_status_done "$1" && has_self_critique_h2 "$1"
 }
 
 # ============= 헬퍼: working 파일 → tasks 이동 =============
@@ -111,20 +124,76 @@ move_working_to_tasks() {
     return 1
   }
 
-  # history.md 갱신
+  # Active Task Registry — 동일 slug 모든 entry + lock 일괄 정리 (작업 완료 신호, 2026-05-15)
+  if [ -n "${REGISTRY_PATH:-}" ] && [ -f "$REGISTRY_PATH" ]; then
+    awk -v slug="$task_name" -F"${REGISTRY_FS:-[[:space:]]*\\|[[:space:]]*}" '
+      /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $2 == slug { next }
+      { print }
+    ' "$REGISTRY_PATH" >"$REGISTRY_PATH.tmp" 2>/dev/null && mv "$REGISTRY_PATH.tmp" "$REGISTRY_PATH" 2>/dev/null
+  fi
+  if [ -n "${SESSIONS_DIR:-}" ] && [ -d "$SESSIONS_DIR/$task_name" ]; then
+    rm -f "$SESSIONS_DIR/$task_name"/*.lock 2>/dev/null
+    rmdir "$SESSIONS_DIR/$task_name" 2>/dev/null || true
+  fi
+
+  # history.md 갱신 — reverse chronological insert (최신 위)
+  # 버그 정정 (2026-05-14): 기존 코드는 today 헤더 매칭만 검사 후 entry 를 파일 끝 append →
+  # 다른 날짜 섹션 안에 entry 가 들어가는 버그. 본 정정 = today 섹션 안 정확 insert + 미존재 시 파일 상단 신규 섹션.
   local history="$docs_root/$product/tasks/history.md"
   local today_dot
   today_dot=$(date +%Y.%m.%d)
   if [ ! -f "$history" ]; then
     printf "# %s tasks 이력\n\n" "$product" > "$history"
   fi
-  if ! grep -qE "^## ${today_dot}" "$history" 2>/dev/null; then
-    printf "\n## %s\n" "$today_dot" >> "$history"
-  fi
-  if ! grep -qE "${date_part}-${task_name}-unified" "$history" 2>/dev/null; then
-    printf -- "- [%s](%s/%s/%s-%s-unified.md) — working/ → tasks/ 자동 이동 (unified)\n" \
-      "$task_name" "$yyyymmdd" "$task_name" "$date_part" "$task_name" >> "$history"
-  fi
+
+  local entry_line
+  entry_line=$(printf -- "- [%s](%s/%s/%s-%s-unified.md) — working/ → tasks/ 자동 이동 (unified)" \
+    "$task_name" "$yyyymmdd" "$task_name" "$date_part" "$task_name")
+
+  python3 - "$history" "$today_dot" "$entry_line" "$date_part" "$task_name" <<'PYEOF'
+import sys
+history_path, today_dot, entry_line, date_part, task_name = sys.argv[1:6]
+with open(history_path, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+marker = f"{date_part}-{task_name}-unified"
+if marker in content:
+    sys.exit(0)
+
+header = f"## {today_dot}"
+lines = content.split('\n')
+
+header_idx = -1
+for idx, line in enumerate(lines):
+    if line.startswith(header):
+        header_idx = idx
+        break
+
+if header_idx >= 0:
+    insert_pos = header_idx + 1
+    if insert_pos < len(lines) and lines[insert_pos] == '':
+        insert_pos += 1
+    to_insert = [entry_line]
+    if insert_pos < len(lines) and lines[insert_pos] != '':
+        to_insert.append('')
+    new_lines = lines[:insert_pos] + to_insert + lines[insert_pos:]
+else:
+    h1_idx = -1
+    for idx, line in enumerate(lines):
+        if line.startswith('# '):
+            h1_idx = idx
+            break
+    if h1_idx >= 0:
+        insert_pos = h1_idx + 1
+        if insert_pos < len(lines) and lines[insert_pos] == '':
+            insert_pos += 1
+        new_lines = lines[:insert_pos] + [header, '', entry_line, ''] + lines[insert_pos:]
+    else:
+        new_lines = [header, '', entry_line, ''] + lines
+
+with open(history_path, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(new_lines))
+PYEOF
 
   # summary.md 갱신
   local summary_dir="$docs_root/$product/tasks/$yyyymmdd"
@@ -157,7 +226,8 @@ except:
 
   [ -z "$FILE_PATH" ] && exit 0
 
-  FILE_PATH_NORM=$(echo "$FILE_PATH" | tr '\\' '/')
+  # Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT)
+  FILE_PATH_NORM=$(normalize_path "$FILE_PATH")
 
   echo "$FILE_PATH_NORM" | grep -qE '/docs/working/[0-9]{8}/[^/]+\.md$' || exit 0
 
@@ -168,6 +238,17 @@ except:
 
   if has_completion_markers "$unix_path"; then
     move_working_to_tasks "$unix_path"
+  else
+    # 양식 위반 침묵 실패 방지 (2026-05-13) — Status: Done 매칭 + ## Self-Critique 미매칭 시 stderr 경고
+    # 정규식 SSOT: lib/template-patterns.sh (audit S-3/H-2/H-3 묶음으로 lib 통합)
+    if has_status_done "$unix_path" && ! has_self_critique_h2 "$unix_path"; then
+      LOOSE_MATCH=$(detect_self_critique_wrong_heading "$unix_path")
+      echo "[working-lifecycle] $(basename "$unix_path") — Status: Done 매칭 but '## Self-Critique' (h2) 미매칭 → 자동 이동 스킵" >&2
+      if [ -n "$LOOSE_MATCH" ]; then
+        echo "                    감지: $LOOSE_MATCH (헤딩 레벨 불일치 — h2 '## ' 로 수정 필요)" >&2
+      fi
+      echo "                    SSOT: skills/task-docs/references/unified-template.md L10" >&2
+    fi
   fi
 
   exit 0
@@ -192,18 +273,24 @@ except:
     working_root="$HOME/.claude/docs/working"
     [ -d "$working_root" ] || exit 0
 
+    skipped_count=0
     for dir in "$working_root"/*/; do
       [ -d "$dir" ] || continue
       for f in "$dir"*.md; do
         [ -f "$f" ] || continue
+        if ! has_completion_markers "$f"; then
+          echo "[working-lifecycle] $(basename "$f") — Status:Done + Self-Critique 미충족, 스킵" >&2
+          skipped_count=$((skipped_count + 1))
+          continue
+        fi
         if move_working_to_tasks "$f"; then
           moved_count=$((moved_count + 1))
         fi
       done
     done
 
-    if [ "$moved_count" -gt 0 ]; then
-      echo "[working-lifecycle] 명시 키워드 트리거 — ${moved_count}건 working/ → tasks/ 이동 완료" >&2
+    if [ "$moved_count" -gt 0 ] || [ "$skipped_count" -gt 0 ]; then
+      echo "[working-lifecycle] 명시 키워드 트리거 — 이동 ${moved_count}건 / 스킵 ${skipped_count}건 (Partial 보존)" >&2
     fi
   fi
 

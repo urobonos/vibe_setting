@@ -20,9 +20,11 @@
 # 출처: task-docs §TD-5
 
 source "$(dirname "$0")/lib/hook-input.sh"
+source "$(dirname "$0")/lib/path-utils.sh"
 hook_read_stdin
 hook_parse_file_path
-FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
+# Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT)
+FILE_PATH=$(normalize_path "$FILE_PATH")
 
 echo "$FILE_PATH" | grep -qE '/docs/[^/]+/tasks/[0-9]{8}/[^/]+/.+\.md$' || exit 0
 

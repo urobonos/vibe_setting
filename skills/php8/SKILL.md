@@ -52,6 +52,8 @@ Mono-repo + **Modular Monolith** 아키텍처. 레거시 코드는 마이그레�
 - `app/Modules/` 하위 신규 생성/수정 → **New 모드** 적용
 - 새 도메인(기존에 없던 기능) 개발 요청 → **New 모드**로 `app/Modules/{BC}/` 생성
 
+**Why:** 모드 판별 누락 시 Legacy 영역에 모듈 구조를 강요하거나 New 영역을 플랫 MVC 로 만들어 두 패턴이 한 코드베이스에서 혼재하게 되고, 결국 어느 컨벤션도 일관되게 적용되지 않아 마이그레이션 경계가 영구히 흐려진다.
+
 ---
 
 ## Legacy 모드 (기존 코드 유지)
@@ -218,6 +220,7 @@ Controller에서 1차 검증, Model 검증은 2차 안전망:
 
 핵심 강제룰 (정책/알고리즘/TTL 규격은 `security-audit` §7-2/§7-3/§7-4/§7-6/§7-9/§7-10 SSOT — 본 스킬은 코드 패턴만):
 - Filter 체인 순서 고정: `ratelimit → csrftoken → auth → role:{name} → CountryResolver → Controller → SecureHeaders`
+  **Why:** 순서가 어긋나면 인증 전 비싼 비즈니스 로직이 실행되거나(DoS 표면 노출) ratelimit 적용 전 토큰 검증이 우선되어 brute force 차단 효과가 사라진다. 체인 순서는 보안과 성능을 동시에 결정한다.
 - 쿠키 ↔ 헤더 비교는 **반드시 `hash_equals()`** — `===`/`==` **금지** (타이밍 공격 방어).
   **Why:** `===`/`==` 는 첫 불일치 바이트에서 즉시 반환해 응답 시간 차이로 토큰을 추정할 수 있는 사이드채널이 노출되며, `hash_equals()` 는 상수 시간 비교로 이를 차단한다.
 - `Authorization: Bearer` 헤더 폴백 **금지** — JWT 는 HttpOnly 쿠키 전용.
@@ -225,6 +228,7 @@ Controller에서 1차 검증, Model 검증은 2차 안전망:
 - `samesite=None` 쿠키 발급 **금지** — `Lax` 강제.
   **Why:** `samesite=None` 은 임의 외부 도메인이 사용자 쿠키를 동반한 요청을 보낼 수 있게 해 CSRF 토큰이 탈취된 단일 시점에 전체 계정 변조가 가능해진다.
 - RBAC 3계층 Defense in Depth (라우트 필터 / Controller 검증 / Repository `WHERE owner_id` 쿼리) — 단일 Layer 신뢰 **금지**.
+  **Why:** 단일 계층에 의존하면 그 계층의 단일 버그(필터 누락·검증 우회·쿼리 누락) 하나로 전체 권한 모델이 무너지나, 3계층 중첩은 한 계층이 깨져도 나머지 둘이 차단해 IDOR·권한 상승 공격을 다중 방어한다.
 
 ---
 

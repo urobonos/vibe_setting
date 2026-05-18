@@ -51,6 +51,7 @@ SELECT COALESCE(column_name, 'default') FROM table_name;
 
 - **필요 컬럼만 명시**한다.
 - 쿼리빌더 사용 시에도 사용하는 컬럼만 명시적으로 지정한다.
+**Why:** `SELECT *` 는 (1) 불필요한 컬럼(BLOB·TEXT)까지 네트워크·메모리로 끌어와 대량 페이지에서 응답 지연을 유발하고, (2) 컬럼 추가 시 자동으로 스키마 변경에 따라가버려 API 응답 계약이 silently 변경된다.
 
 ```php
 // 금지
@@ -115,6 +116,7 @@ WHERE status = 'active' AND created_at >= '2026-01-01';
 
 - 임시테이블이 필요한 경우 **CTE(Common Table Expression)** 를 사용한다.
 - CTE는 ANSI SQL:1999 표준이므로 대부분의 DB에서 호환되나, 호환되지 않는 DB를 위해 **서브쿼리 기반 ANSI 대안을 병기**한다.
+**Why:** 실제 임시 테이블(`CREATE TEMPORARY TABLE`)은 디스크 I/O·세션 누수 위험이 있고, 중첩 서브쿼리는 가독성을 무너뜨린다. CTE 는 최적화 가능 + 가독성 + 재사용성 3가지를 동시에 제공하며, ANSI 표준이라 이관 비용도 낮다.
 
 ```sql
 -- CTE 버전 (MySQL 8.x, PostgreSQL, SQL Server 호환)
@@ -199,6 +201,7 @@ VALUES (AES_ENCRYPT(:plaintext:, :key:, :iv:));
 **Why:** 키 하드코딩은 git 히스토리·바이너리 디컴파일·로그 유출 경로로 즉시 노출되어, 침해 시 키 회전이 불가능해 전체 데이터 재암호화로만 복구된다.
 - 알고리즘 선택(CBC/GCM/ECB 등)은 프로젝트 `security-audit` 정책을 따른다
 - 연결 풀링 환경(RDS Proxy 등)에서는 `SET SESSION` 이 다음 세션에 이어지지 않을 수 있으므로 암호화 쿼리마다 세션 변수를 재설정하거나 `init_connect` 에 등록
+**Why:** RDS Proxy 는 커넥션을 다중 클라이언트가 재사용하므로 `SET SESSION` 이 다른 클라이언트의 다음 쿼리에서 유실되거나 의도치 않게 누설된다. 쿼리마다 재설정하거나 `init_connect` 로 모든 신규 연결에 강제하지 않으면 ECB 기본값으로 폴백되어 AES-256-CBC 보안 가정이 무너진다.
 
 ### 11. 연결 시 타임존 강제 (UTC 고정)
 

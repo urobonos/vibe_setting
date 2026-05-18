@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# registry-utils.sh — Active Task Registry CRUD lib
+# SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md
+#
+# 사용:
+#   source "$(dirname "$0")/lib/registry-utils.sh"
+#   registry_init_if_missing
+#   registry_add "slug" "product" "session_id" "cwd" "working_file"
+#   registry_update "slug" "session_id" [status]
+#   registry_remove "slug" "session_id"
+#   registry_find "slug"                # 다른 sid 점유 감지용
+#   registry_list_active                  # status=active 전체
+#   registry_mark_stale "slug" "session_id"
+#
+# Lock: mkdir lock (POSIX atomic, Git Bash on Windows 동작 검증 완료 — flock 부재 대안)
+
+REGISTRY_PATH="${REGISTRY_PATH:-$HOME/.claude/docs/working/REGISTRY.md}"
+REGISTRY_LOCK="${REGISTRY_LOCK:-/tmp/claude-registry.lock.d}"
+REGISTRY_LOCK_RETRIES="${REGISTRY_LOCK_RETRIES:-50}"
+REGISTRY_LOCK_SLEEP="${REGISTRY_LOCK_SLEEP:-0.1}"
+
+registry_lock_acquire() {
+  local i=0
+  while ! mkdir "$REGISTRY_LOCK" 2>/dev/null; do
+    i=$((i + 1))
+    if [ "$i" -ge "$REGISTRY_LOCK_RETRIES" ]; then
+      echo "[registry-utils] lock timeout: $REGISTRY_LOCK" >&2
+      return 1
+    fi
+    sleep "$REGISTRY_LOCK_SLEEP"
+  done
+  return 0
+}
+
+registry_lock_release() {
+  rmdir "$REGISTRY_LOCK" 2>/dev/null || true
+}
+
+registry_sanitize() {
+  printf '%s' "$1" | tr -cd '[:alnum:]/_:.-' | tr -s ' '
+}
+
+registry_init_if_missing() {
+  if [ ! -f "$REGISTRY_PATH" ]; then
+    mkdir -p "$(dirname "$REGISTRY_PATH")"
+    cat >"$REGISTRY_PATH" <<'EOF'
+# Active Work Registry
+
+> SSOT: working/ 진행 중 작업의 글로벌 인덱스. hook 자동 갱신.
+> 갱신 주체: working-{register,heartbeat,release,stale-cleanup}.sh + working-lifecycle.sh
+> 형식: 마크다운 표 1개. 직접 편집 금지 (race 보호 — registry-utils.sh 경유).
+
+| slug | product | session_id | started | last_update | status | cwd | working_file |
+|------|---------|-----------|---------|-------------|--------|-----|-------------|
+EOF
+  fi
+}
+
+# 데이터 라인 식별: `|` 시작 + 첫 컬럼이 slug 헤더 / 구분자 아닌 것
+# 마크다운 표 컬럼 = ` | ` 구분 (pipe + space)
+# awk -F ' \\| ' 시 라인 = `| s | p | sid | ... |`
+#   → $1 = "|", $2 = "s", $3 = "p", $4 = "sid", ...
+
+# awk FS = `[[:space:]]*\|[[:space:]]*` — 마크다운 표 ` | ` 분리 + 라인 시작/끝 pipe 처리
+# 결과 인덱스: $1 = "" (라인 시작 |), $2 = slug, $3 = product, $4 = sid, $5 = started,
+#              $6 = last_update, $7 = status, $8 = cwd, $9 = working_file, $10 = "" (라인 끝 |)
+REGISTRY_FS='[[:space:]]*\\|[[:space:]]*'
+
+registry_find() {
+  local slug
+  slug="$(registry_sanitize "$1")"
+  registry_init_if_missing
+  awk -v slug="$slug" -F"$REGISTRY_FS" '
+    /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $2 == slug { print }
+  ' "$REGISTRY_PATH" 2>/dev/null
+}
+
+registry_list_active() {
+  registry_init_if_missing
+  awk -F"$REGISTRY_FS" '
+    /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $7 == "active" { print }
+  ' "$REGISTRY_PATH" 2>/dev/null
+}
+
+registry_remove() {
+  local slug sid
+  slug="$(registry_sanitize "$1")"
+  sid="$(registry_sanitize "$2")"
+  registry_init_if_missing
+  registry_lock_acquire || return 1
+  awk -v slug="$slug" -v sid="$sid" -F"$REGISTRY_FS" '
+    /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $2 == slug && $4 == sid { next }
+    { print }
+  ' "$REGISTRY_PATH" >"$REGISTRY_PATH.tmp" && mv "$REGISTRY_PATH.tmp" "$REGISTRY_PATH"
+  registry_lock_release
+  return 0
+}
+
+registry_add() {
+  local slug product sid cwd_val wfile started now
+  slug="$(registry_sanitize "$1")"
+  product="$(registry_sanitize "$2")"
+  sid="$(registry_sanitize "$3")"
+  cwd_val="$(registry_sanitize "$4")"
+  wfile="$(registry_sanitize "$5")"
+  now="$(date +'%Y-%m-%d %H:%M')"
+  started="$now"
+
+  [ -z "$slug" ] && { echo "[registry-utils] slug empty" >&2; return 1; }
+  [ -z "$sid" ] && { echo "[registry-utils] sid empty" >&2; return 1; }
+
+  registry_init_if_missing
+  registry_lock_acquire || return 1
+
+  # 동일 slug+sid 존재 시 = update (started 보존, last_update 갱신)
+  local existing
+  existing="$(awk -v slug="$slug" -v sid="$sid" -F"$REGISTRY_FS" '
+    /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $2 == slug && $4 == sid { print $5; exit }
+  ' "$REGISTRY_PATH" 2>/dev/null)"
+
+  if [ -n "$existing" ]; then
+    started="$existing"
+  fi
+
+  awk -v slug="$slug" -v sid="$sid" -F"$REGISTRY_FS" '
+    /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $2 == slug && $4 == sid { next }
+    { print }
+  ' "$REGISTRY_PATH" >"$REGISTRY_PATH.tmp"
+  printf '| %s | %s | %s | %s | %s | %s | %s | %s |\n' \
+    "$slug" "$product" "$sid" "$started" "$now" "active" "$cwd_val" "$wfile" \
+    >>"$REGISTRY_PATH.tmp"
+  mv "$REGISTRY_PATH.tmp" "$REGISTRY_PATH"
+
+  registry_lock_release
+  return 0
+}
+
+registry_update() {
+  local slug sid status now
+  slug="$(registry_sanitize "$1")"
+  sid="$(registry_sanitize "$2")"
+  status="${3:-active}"
+  status="$(registry_sanitize "$status")"
+  now="$(date +'%Y-%m-%d %H:%M')"
+
+  registry_init_if_missing
+  registry_lock_acquire || return 1
+
+  # printf 명시 출력 — OFS+빈 $1/$NF 로 인한 라인 양끝 공백 회피
+  awk -v slug="$slug" -v sid="$sid" -v status="$status" -v now="$now" -F"$REGISTRY_FS" '
+    /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $2 == slug && $4 == sid {
+      printf "| %s | %s | %s | %s | %s | %s | %s | %s |\n", $2, $3, $4, $5, now, status, $8, $9
+      next
+    }
+    { print }
+  ' "$REGISTRY_PATH" >"$REGISTRY_PATH.tmp" && mv "$REGISTRY_PATH.tmp" "$REGISTRY_PATH"
+
+  registry_lock_release
+  return 0
+}
+
+registry_mark_stale() {
+  registry_update "$1" "$2" "stale"
+}
+
+# Lock 파일 (state/sessions/{slug}/{sid}.lock) lifecycle
+SESSIONS_DIR="${SESSIONS_DIR:-$HOME/.claude/state/sessions}"
+
+session_lock_create() {
+  local slug sid lock_dir lock_file
+  slug="$(registry_sanitize "$1")"
+  sid="$(registry_sanitize "$2")"
+  lock_dir="$SESSIONS_DIR/$slug"
+  lock_file="$lock_dir/$sid.lock"
+  mkdir -p "$lock_dir"
+  : >"$lock_file"
+}
+
+session_lock_touch() {
+  local slug sid lock_file
+  slug="$(registry_sanitize "$1")"
+  sid="$(registry_sanitize "$2")"
+  lock_file="$SESSIONS_DIR/$slug/$sid.lock"
+  [ -f "$lock_file" ] && touch "$lock_file" 2>/dev/null
+  return 0
+}
+
+session_lock_remove() {
+  local slug sid lock_file lock_dir
+  slug="$(registry_sanitize "$1")"
+  sid="$(registry_sanitize "$2")"
+  lock_dir="$SESSIONS_DIR/$slug"
+  lock_file="$lock_dir/$sid.lock"
+  [ -f "$lock_file" ] && rm -f "$lock_file" 2>/dev/null
+  rmdir "$lock_dir" 2>/dev/null || true
+  return 0
+}
+
+session_lock_list_stale() {
+  local stale_hours="${STALE_HOURS:-24}"
+  local stale_minutes=$((stale_hours * 60))
+  [ -d "$SESSIONS_DIR" ] || return 0
+  find "$SESSIONS_DIR" -name '*.lock' -type f -mmin "+$stale_minutes" 2>/dev/null
+}

@@ -20,10 +20,11 @@
 #   - specs/ 경로 (IEEE 공식 산출물 — 별도 규칙)
 
 source "$(dirname "$0")/lib/hook-input.sh"
+source "$(dirname "$0")/lib/path-utils.sh"
 hook_read_stdin
 hook_parse_file_path
-# Windows backslash → forward slash 정규화 (기존 동작 보존)
-FILE_PATH=$(echo "$FILE_PATH" | tr '\\' '/')
+# Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT)
+FILE_PATH=$(normalize_path "$FILE_PATH")
 
 # 검증 대상 경로 판정 (output/ / tasks/ / working/)
 if echo "$FILE_PATH" | grep -qE '/docs/[^/]+/output/'; then

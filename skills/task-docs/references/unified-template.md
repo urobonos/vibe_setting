@@ -207,6 +207,67 @@
 
 > CLAUDE.md §4.1 강제 3섹션 — S(단발) = 1행 "해당 없음 (사유)" 허용, M·L = 실질 시나리오 1건+ 필수.
 
+---
+
+# § 타당성 검토 (Feasibility — 선택, /타당성 진입 시)
+
+## 공식 근거 인용
+| # | 권고/설계 항목 | 공식 근거 | 출처 |
+|---|------------|----------|------|
+| 1 | {권고 내용} | {공식 문서/RFC/IEEE/OWASP} | [Source: {name} §{id}] |
+
+> `feasibility-section-check.sh` — `[Source: <name> §<id>]` ≥ 1건 강제 (헤더 존재 시).
+> CLAUDE.md §4.1 5영역 (분석·설계 / 라이브러리·프레임워크 / 아키텍처 / API 설계 / 보안·인증) 진입 시 필수.
+
+---
+
+# § 검증 (Verify — 선택, /검증 진입 시)
+
+## e2e 5점 체크
+| # | 점검 항목 | 결과 (PASS/FAIL) | 근거 |
+|---|---------|----------------|------|
+| 1 | env / 설정 | - | - |
+| 2 | 함수/클래스 시그니처 | - | - |
+| 3 | DB 스키마 | - | - |
+| 4 | 프로덕션 curl | - | - |
+| 5 | mock 검증 분리 | - | - |
+
+> `verify-e2e-check.sh` — 5건 모두 PASS 시 통과, 일부 FAIL 시 exit 2.
+> SSOT: php8 §"e2e 검증" + CLAUDE.md §4.3 "e2e 검증 (필수)".
+
+---
+
+# § 리뷰 (Review — 선택, /리뷰 진입 시)
+
+## simplify 스킬 결과
+- 코드 재사용성 / 가독성 / 효율성 리뷰 결과 요약.
+
+## Self-Critique 보강
+(§ 실행 §Self-Critique 체크리스트와 동일 — 미체크 항목 채움)
+
+> 진입점: `/리뷰` (~/.claude/commands/리뷰.md) + `simplify` 스킬 보조.
+
+---
+
+# § 회고 (Retrospective — 선택, /회고 진입 시)
+
+## 본 세션 변경 내역 요약
+| # | 변경 사항 | 영향 영역 |
+|---|----------|---------|
+| 1 | {변경} | {영역} |
+
+## history.md / summary.md 기록 확인
+- [ ] `~/.claude/docs/{product}/tasks/history.md` 항목 추가
+- [ ] `~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md` 항목 추가
+
+## 잘된 점 / 개선점
+- 잘된 점: {1~2줄}
+- 개선점: {1~2줄}
+
+> 진입점: `/회고` (~/.claude/commands/회고.md). CLAUDE.md §4.1 "Persistence (필수)" 정합.
+
+---
+
 ## 참조 문서 검토 결과 (프로젝트별 적용)
 
 > **적용 대상:** 프로젝트 CLAUDE.md 에 §"분석·계획 시 참조 강제 룰" 정의 시 본 섹션 필수. 미정의 product 는 "해당 없음 (적용 룰 없음)" 1행으로 면제 (예: `hongcafe_global_backend` 만 6항목 강제).

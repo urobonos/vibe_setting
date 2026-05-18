@@ -92,142 +92,152 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
             # SSOT: CLAUDE.md §File Paths "working/ 단일 통합 문서" + skills/task-docs/references/unified-template.md
             # working/ → tasks/ 이동 후 검증 (working/ 경로 자체는 위 case 에서 면제)
             # === analyze 필수 ===
-            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
                 || blocking_missing+=("타당성 검토 (§4 필수, unified §분석)")
-            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
                 || blocking_missing+=("변경 영향 기록 (§4 필수, unified)")
-            grep -qE "^#{1,3}[[:space:]]+.*(분석 관점별|관점별 요약|Perspective Summary)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(분석 관점별|관점별 요약|Perspective Summary)" "$unix_path" \
                 || blocking_missing+=("분석 관점별 요약 (unified §분석)")
-            grep -qE "^#{1,3}[[:space:]]+.*Critical[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Critical[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("Critical 이슈 분류 (unified §분석)")
-            grep -qE "^#{1,3}[[:space:]]+.*High[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*High[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("High 이슈 분류 (unified §분석)")
-            grep -qE "^#{1,3}[[:space:]]+.*Medium[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Medium[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("Medium 이슈 분류 (unified §분석)")
-            grep -qE "^#{1,3}[[:space:]]+.*Low[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Low[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("Low 이슈 분류 (unified §분석)")
-            grep -qE "^#{1,3}[[:space:]]+.*우선순위[[:space:]]*권고" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*우선순위[[:space:]]*권고" "$unix_path" \
                 || blocking_missing+=("우선순위 권고 (unified §분석)")
-            grep -qE "^#{1,3}[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
                 || blocking_missing+=("장기 영향 (CLAUDE.md §4.1 강제, unified)")
-            grep -qE "^#{1,3}[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
                 || blocking_missing+=("재발 방지 (CLAUDE.md §4.1 강제, unified)")
-            grep -qE "^#{1,3}[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
                 || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제, unified)")
             # === plan 필수 ===
-            grep -qE "(^#{1,3}[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::])" "$unix_path" \
+            grep -qE "(^##[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::])" "$unix_path" \
                 || blocking_missing+=("작업 등급 S/M/L (unified §계획)")
-            grep -qE "^#{1,3}[[:space:]]+.*Blueprint" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Blueprint" "$unix_path" \
                 || blocking_missing+=("Blueprint (unified §계획)")
-            grep -qE "^#{1,3}[[:space:]]+.*수정 대상" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*수정 대상" "$unix_path" \
                 || blocking_missing+=("수정 대상 (unified §계획)")
-            grep -qE "^#{1,3}[[:space:]]+.*실행 계획" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*실행 계획" "$unix_path" \
                 || blocking_missing+=("실행 계획 (unified §계획)")
-            grep -qE "^#{1,3}[[:space:]]+.*(작업 분해|WBS|Work Breakdown)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(작업 분해|WBS|Work Breakdown)" "$unix_path" \
                 || blocking_missing+=("작업 분해 WBS (unified §계획)")
             # === result 필수 ===
-            grep -qE "^#{1,3}[[:space:]]+.*실행 요약" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*실행 요약" "$unix_path" \
                 || blocking_missing+=("실행 요약 (unified §실행)")
-            grep -qE "^#{1,3}[[:space:]]+.*Self-Critique" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Self-Critique" "$unix_path" \
                 || blocking_missing+=("Self-Critique 체크리스트 (unified §실행)")
-            grep -qE "^#{1,3}[[:space:]]+.*테스트 결과" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*테스트 결과" "$unix_path" \
                 || blocking_missing+=("테스트 결과 (unified §실행)")
-            grep -qE "^#{1,3}[[:space:]]+.*잔여 이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*잔여 이슈" "$unix_path" \
                 || blocking_missing+=("잔여 이슈 (unified §실행)")
             grep -qE "Status[[:space:]]*[::][[:space:]]*(Done|Partial)" "$unix_path" \
                 || blocking_missing+=("Status: Done/Partial (unified §실행)")
             # hint: Before/After + 롤백
-            grep -qE "^#{1,3}[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
                 || missing+=("## Before/After 대조 (§4 필수, unified §실행)")
-            grep -qE "^#{1,3}[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
                 || missing+=("## 롤백 (§4 필수, unified §실행)")
+            # /타당성·/검증·/리뷰·/회고 선택 진입 — hint 수준 (2026-05-15 신설 8 슬래시 정합)
+            # 선택 섹션이므로 blocking 아님, 진입 시 권장
+            grep -qE "^#[[:space:]]+§[[:space:]]*타당성 검토" "$unix_path" \
+                || missing+=("# § 타당성 검토 (선택, /타당성 진입 시)")
+            grep -qE "^#[[:space:]]+§[[:space:]]*검증" "$unix_path" \
+                || missing+=("# § 검증 (선택, /검증 진입 시)")
+            grep -qE "^#[[:space:]]+§[[:space:]]*리뷰" "$unix_path" \
+                || missing+=("# § 리뷰 (선택, /리뷰 진입 시)")
+            grep -qE "^#[[:space:]]+§[[:space:]]*회고" "$unix_path" \
+                || missing+=("# § 회고 (선택, /회고 진입 시)")
             # hongcafe_global_backend 한정 — 참조 문서 검토 결과
             if echo "$file_path" | grep -q "/hongcafe_global_backend/"; then
-                grep -qE "^#{1,3}[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
+                grep -qE "^##[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
                     || blocking_missing+=("참조 문서 검토 결과 (be 한정, unified §분석)")
             fi
             ;;
         *analyze*.md)
             # 차단: 타당성 검토 + 변경 영향 기록 + 분석 관점별 요약 + Critical/High/Medium/Low 4분류 + 우선순위 권고 + 장기영향 + 재발방지 + SSOT 일관성
             # references/analyze-template.md SSOT (2026-05-07 강화 — 사용자 지시 "훅으로 템플릿 출력 할때 강제")
-            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
                 || blocking_missing+=("타당성 검토 (§4 필수)")
-            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
                 || blocking_missing+=("변경 영향 기록 (§4 필수)")
-            grep -qE "^#{1,3}[[:space:]]+.*(분석 관점별|관점별 요약|Perspective Summary)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(분석 관점별|관점별 요약|Perspective Summary)" "$unix_path" \
                 || blocking_missing+=("분석 관점별 요약 (analyze 템플릿 §관점별 요약)")
-            grep -qE "^#{1,3}[[:space:]]+.*Critical[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Critical[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("Critical 이슈 분류 (analyze 템플릿 §1)")
-            grep -qE "^#{1,3}[[:space:]]+.*High[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*High[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("High 이슈 분류 (analyze 템플릿 §2)")
-            grep -qE "^#{1,3}[[:space:]]+.*Medium[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Medium[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("Medium 이슈 분류 (analyze 템플릿 §3)")
-            grep -qE "^#{1,3}[[:space:]]+.*Low[[:space:]]*이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Low[[:space:]]*이슈" "$unix_path" \
                 || blocking_missing+=("Low 이슈 분류 (analyze 템플릿 §4)")
-            grep -qE "^#{1,3}[[:space:]]+.*우선순위[[:space:]]*권고" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*우선순위[[:space:]]*권고" "$unix_path" \
                 || blocking_missing+=("우선순위 권고 (analyze 템플릿 §9)")
-            grep -qE "^#{1,3}[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
                 || blocking_missing+=("장기 영향 (CLAUDE.md §4.1 강제)")
-            grep -qE "^#{1,3}[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
                 || blocking_missing+=("재발 방지 (CLAUDE.md §4.1 강제)")
-            grep -qE "^#{1,3}[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
                 || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제)")
             # hongcafe_global_backend product 한정 — 참조 문서 검토 결과 섹션 강제
             # SSOT: 프로젝트 CLAUDE.md §"분석·계획 시 참조 강제 룰" (6항목 매트릭스)
             if echo "$file_path" | grep -q "/hongcafe_global_backend/"; then
-                grep -qE "^#{1,3}[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
+                grep -qE "^##[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
                     || blocking_missing+=("참조 문서 검토 결과 (hongcafe_global_backend CLAUDE.md §\"분석·계획 시 참조 강제 룰\" 6항목)")
             fi
             ;;
         *plan*.md)
             # 차단: 타당성 검토 + 변경 영향 기록 + 작업 등급 + Blueprint + WBS + 장기영향 + 재발방지 + SSOT 일관성 + Status
-            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
                 || blocking_missing+=("타당성 검토 (§4 필수)")
-            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
                 || blocking_missing+=("변경 영향 기록 (§4 필수)")
-            grep -qE "(^#{1,3}[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::])" "$unix_path" \
+            grep -qE "(^##[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::])" "$unix_path" \
                 || blocking_missing+=("작업 등급 S/M/L (plan 템플릿)")
-            grep -qE "^#{1,3}[[:space:]]+.*Blueprint" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Blueprint" "$unix_path" \
                 || blocking_missing+=("Blueprint (plan 템플릿)")
-            grep -qE "^#{1,3}[[:space:]]+.*수정 대상" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*수정 대상" "$unix_path" \
                 || blocking_missing+=("수정 대상 (plan 템플릿 §수정 대상)")
-            grep -qE "^#{1,3}[[:space:]]+.*실행 계획" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*실행 계획" "$unix_path" \
                 || blocking_missing+=("실행 계획 (plan 템플릿 §실행 계획)")
-            grep -qE "^#{1,3}[[:space:]]+.*(작업 분해|WBS|Work Breakdown)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(작업 분해|WBS|Work Breakdown)" "$unix_path" \
                 || blocking_missing+=("작업 분해 WBS (plan 템플릿)")
-            grep -qE "^#{1,3}[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(장기 영향|Long-term Impact)" "$unix_path" \
                 || blocking_missing+=("장기 영향 (CLAUDE.md §4.1 강제)")
-            grep -qE "^#{1,3}[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(재발 방지|Regression Prevention)" "$unix_path" \
                 || blocking_missing+=("재발 방지 (CLAUDE.md §4.1 강제)")
-            grep -qE "^#{1,3}[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(SSOT 일관성|SSOT Consistency)" "$unix_path" \
                 || blocking_missing+=("SSOT 일관성 (CLAUDE.md §4.1 강제)")
             grep -qE "Status[[:space:]]*[::][[:space:]]*Plan Complete" "$unix_path" \
                 || blocking_missing+=("Status: Plan Complete (plan 템플릿)")
             # hongcafe_global_backend product 한정 — 참조 문서 검토 결과 섹션 강제
             # SSOT: 프로젝트 CLAUDE.md §"분석·계획 시 참조 강제 룰" (6항목 매트릭스)
             if echo "$file_path" | grep -q "/hongcafe_global_backend/"; then
-                grep -qE "^#{1,3}[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
+                grep -qE "^##[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
                     || blocking_missing+=("참조 문서 검토 결과 (hongcafe_global_backend CLAUDE.md §\"분석·계획 시 참조 강제 룰\" 6항목)")
             fi
             ;;
         *result*.md)
             # 차단: 변경 영향 기록 + 실행 요약 + Self-Critique + 테스트 결과 + 잔여 이슈 + Status
-            grep -qE "^#{1,3}[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(변경 영향|Change Impact)" "$unix_path" \
                 || blocking_missing+=("변경 영향 기록 (§4 필수)")
-            grep -qE "^#{1,3}[[:space:]]+.*실행 요약" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*실행 요약" "$unix_path" \
                 || blocking_missing+=("실행 요약 (result 템플릿)")
-            grep -qE "^#{1,3}[[:space:]]+.*Self-Critique" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*Self-Critique" "$unix_path" \
                 || blocking_missing+=("Self-Critique 체크리스트 (result 템플릿)")
-            grep -qE "^#{1,3}[[:space:]]+.*테스트 결과" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*테스트 결과" "$unix_path" \
                 || blocking_missing+=("테스트 결과 (result 템플릿)")
-            grep -qE "^#{1,3}[[:space:]]+.*잔여 이슈" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*잔여 이슈" "$unix_path" \
                 || blocking_missing+=("잔여 이슈 (result 템플릿)")
             grep -qE "Status[[:space:]]*[::][[:space:]]*(Done|Partial)" "$unix_path" \
                 || blocking_missing+=("Status: Done/Partial (result 템플릿)")
             # hint: Before/After, 롤백은 hint 수준 유지
-            grep -qE "^#{1,3}[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(Before.?/.?After|최초 실행안|최초안|제안.?반영)" "$unix_path" \
                 || missing+=("## Before/After 대조 (§4 필수)")
-            grep -qE "^#{1,3}[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
                 || missing+=("## 롤백 (§4 필수)")
             ;;
     esac
@@ -235,7 +245,7 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
     # specs 문서(SDP/SRS/SDD/IDD/STP/STD)는 타당성 검토 누락 시 차단
     case "$file_path" in
         */docs/specs/*|*/docs/*/specs/*)
-            grep -qE "^#{1,3}[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
+            grep -qE "^##[[:space:]]+.*(타당성 검토|Feasibility Review)" "$unix_path" \
                 || blocking_missing+=("타당성 검토 (§4 필수)")
             ;;
     esac

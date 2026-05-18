@@ -8,6 +8,7 @@ description: >
   모든 문서 파일은 `{yyyy-mm-dd}-` prefix 필수.
   보고용 산출물은 `~/.claude/docs/{product}/output/{category}/{제목}/{파일명}.md`, IEEE 산출물(SDP/SRS/SDD/IDD/STP/STD)은 `~/.claude/docs/{product}/specs/`.
   {product}는 basename $CWD (.claude→claude-harness 예외). 규칙은 글로벌 CLAUDE.md §File Paths 참조.
+  **backlog 메모리 (2026-05-13~)** = 잔여 후속·시간 트리거·사용자 결정 보류 작업은 `~/.claude/projects/C--Users-PV--claude/memory/backlog_{slug}.md` 단일 파일로 보관. frontmatter `status: done` 시 `backlog-lifecycle.sh` hook 가 `~/.claude/docs/{product}/tasks/{YYYYMMDD}/backlog/{yyyy-mm-dd}-{slug}.md` 자동 이동. SSOT = CLAUDE.md §4 "backlog 메모리 정책".
 triggers:
   - "/plan"
   - "/research"
@@ -29,13 +30,27 @@ triggers:
   - "작업 완료 정리"
   - "tasks 이동"
   - "working 정리"
+  - "backlog 추가"
+  - "backlog 작성"
+  - "backlog 완료"
+  - "backlog 정리"
+  - "backlog 이동"
+  - "/backlog-done"
   - "SDP 작성"
   - "SRS 작성"
   - "SDD 작성"
   - "IDD 작성"
   - "STP 작성"
   - "STD 작성"
-version: 5.0.0
+  - "/분석"
+  - "/타당성"
+  - "/계획"
+  - "/실행"
+  - "/검증"
+  - "/리뷰"
+  - "/배포"
+  - "/회고"
+version: 5.1.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -89,14 +104,19 @@ min_claude_md_version: "4.0"
 ## 공통 규칙
 
 1. **날짜별·작업별 누적 보관한다** — 기존 파일을 덮어쓰지 않는다. 새 작업마다 새 서브디렉토리를 생성한다.
+   > **Why:** 덮어쓰기 허용 시 이전 작업의 분석·계획·결정 근거가 영구 소실되어, 회귀·재발 시 동일 분석을 처음부터 다시 수행해야 하고 history.md/summary.md 인덱싱이 깨진다.
 2. **보고용 문서 산출물:** 사용자 요청 보고서는 `~/.claude/docs/{product}/output/{제목}/{yyyy-mm-dd}-{제목}-{type}.md` 형식으로 생성. `~/.claude/docs/{product}/tasks/`와 혼용하지 않는다.
+   > **Why:** `tasks/` 와 `output/` 혼용 시 일일 요약 자동화·gate 강제·3-Team Workflow 적용 여부 판정이 모두 깨져 산출물 분류·승인 절차가 동시에 붕괴된다.
 3. `{작업명}`은 작업 내용을 간결하게 표현하는 kebab-case 이름으로 한다 (예: `pay-refactor`, `callee-migration`).
 4. `YYYYMMDD`는 폴더명용 작업 시작일(예: `20260324`), `{yyyy-mm-dd}`는 파일명 prefix 용 ISO-8601 표기(예: `2026-03-24`). 두 형식이 같은 날짜를 가리키도록 일치시킨다.
+   > **Why:** 두 형식이 어긋나면 `ls` 시간순 정렬·grep 검색·hook 정합성 검증이 모두 깨져 동일 작업의 폴더·파일 매핑이 수동 처리로 회귀한다.
 5. 사용자에게 보고하는 동시에 파일에도 동일 내용을 기록한다. 채팅으로만 보고하고 파일 생성을 누락하는 것은 지침 위반이다.
    > **Why:** 채팅 컨텍스트는 압축·세션 종료 시 휘발하므로, 파일로 영속화되지 않은 산출물은 history.md/summary.md 인덱싱과 추후 재개 시 복원 매체가 될 수 없다.
 5b. **사용자 보고용 경로는 OS 정합 형식으로 변환한다.** Windows = 백슬래시 + 절대 경로 (`C:\Users\PV\.claude\docs\...`), POSIX = forward slash + 홈 표기 (`~/.claude/docs/...`). 산출물 경로 보고 / `tasks/`·`output/`·`specs/` 위치 안내 / 단계 문서 경로 출력 등 사용자에게 노출되는 모든 경로에 적용. Bash 도구 `command` 파라미터·Glob/Grep 패턴은 POSIX 그대로 (도구 내부용). 글로벌 CLAUDE.md §4.4 "경로 안내 형식 (OS 정합)" SSOT.
 6. **팀 간 산출물 체이닝:** 다단계 작업에서 Team 2는 `analyze.md`를 Read한 뒤 기반으로 plan을 작성하고, Team 3는 `plan.md`를 Read한 뒤 기반으로 실행한다. 단, 분석 단독/소규모 작업은 단일 문서(예: `analyze.md`만, 또는 `result.md`만)로 완결할 수 있다. 작업 규모에 맞는 단계만 작성한다.
+   > **Why:** Team 2/3가 선행 산출물 Read 없이 자체 컨텍스트로 진행하면 분석 단계의 트레이드오프·리스크 식별이 계획·실행에 반영되지 않아 동일 결론을 매 팀마다 재도출하는 비용이 발생하고, 의사결정 근거가 팀별로 분기된다.
 7. **체크리스트 최대 생성 원칙:** 모든 문서(analyze, plan, result)에 검증 가능한 체크리스트(`- [ ]`)를 최대한 생성한다. 분석 항목, 작업 단계, 검증 조건, 보안 점검, 테스트 케이스 등 체크박스로 표현 가능한 항목은 전부 체크리스트로 작성한다. 서술형 나열보다 체크리스트를 우선한다.
+   > **Why:** 서술형 나열은 후속 팀이 "어떤 항목이 끝났는지" 명확히 판정할 수 없어 누락·중복 작업을 유발하지만, 체크박스는 `- [x]`/`- [ ]` 상태 토글만으로 진행 상황·잔여 항목을 자동 추적 가능한 단일 매체가 된다.
 8. **이전 문서 체크리스트 소거 의무:** 이전 팀 산출물을 참조하여 실행하는 팀은, 해당 문서의 체크리스트를 검증 후 체크 표시(`- [x]`)하고 판단 근거를 기록한다. 구체적으로:
    - **Team 2 (Plan):** `analyze.md`의 체크리스트를 읽고, plan 수립 시 반영 여부를 `analyze.md`에 직접 체크한다. (`- [x] 항목 — plan에 반영` 또는 `- [x] 항목 — 해당 없음 (사유)`)
    - **Team 3 (Execute):** `plan.md`의 체크리스트를 읽고, 실행 완료된 항목을 `plan.md`에 직접 체크한다. (`- [x] 항목 — 완료 (커밋 해시)` 또는 `- [x] 항목 — 스킵 (사유)`)

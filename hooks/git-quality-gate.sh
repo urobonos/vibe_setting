@@ -77,9 +77,12 @@ if [ -n "$COMMIT_MSG" ]; then
     exit 2
   fi
 
-  MSG_LEN=${#COMMIT_MSG}
+  # 문자 단위 길이 (multibyte safe — 한국어 / em dash 정합, 2026-05-12 정정)
+  # bash ${#var} 는 byte 단위 — 한국어 utf-8 (3 byte/char) + em dash (3 byte) 시 byte 계산 오류
+  MSG_LEN=$(printf '%s' "$COMMIT_MSG" | python -c "import sys; print(len(sys.stdin.read()))" 2>/dev/null)
+  [ -z "$MSG_LEN" ] && MSG_LEN=${#COMMIT_MSG}
   if [ "$MSG_LEN" -gt 72 ]; then
-    echo "[BLOCKED] 커밋 제목 72자 초과 (${MSG_LEN}자) — 72자 이내로 줄이세요." >&2
+    echo "[BLOCKED] 커밋 제목 72자 초과 (${MSG_LEN}자, 문자 단위) — 72자 이내로 줄이세요." >&2
     echo "  현재: $COMMIT_MSG" >&2
     exit 2
   fi

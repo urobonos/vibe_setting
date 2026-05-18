@@ -8,12 +8,24 @@
 
 STDIN_DATA=$(cat)
 
-# --- 디버그 로그 설정 ---
-LOG_FILE="$HOME/.claude/gate-approve.log"
-mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
-log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$LOG_FILE" 2>/dev/null; }
+# --- 디버그 로그 설정 (2026-05-13 telemetry lib 마이그레이션) ---
+# 신규 = lib/log-helper.sh 의 log_event 사용 (~/.claude/logs/gate-approve.log ndjson)
+# fallback = lib 로드 실패 시 기존 free-text 포맷 보존
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
+  LOG_FILE="$HOME/.claude/gate-approve.log"
+  log_event() {
+    local hook="$1" event="$2"; shift 2
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [$event] $*" >> "$LOG_FILE" 2>/dev/null
+  }
+}
+# 기존 log() 함수 wrapper — 점진 마이그레이션 호환 (event="info" 기본)
+log() { log_event "gate-approve" "info" "$*"; }
 
 # session_id와 prompt 추출 (python3 우선, 실패 시 grep/sed fallback)
+# 보안 (2026-05-13 H-1 픽스): eval 폐기. Python 이 2 줄로 분리 출력 (line 1 = sid, line 2 = prompt) →
+# command substitution 으로 받은 값은 텍스트 — `$()` / backtick / `$VAR` expansion 미발생.
+# 기존 `eval "$PARSED"` 에서 prompt 안 `$(cmd)` / backtick 이 expand 되던 injection 통로 차단.
 PARSE_OK=0
 PARSED=$(echo "$STDIN_DATA" | python3 -c "
 import json, sys
@@ -23,15 +35,19 @@ try:
     prompt = data.get('prompt', '')
     if not sid:
         sys.exit(2)
-    safe = prompt.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"').replace('\n', ' ')
-    print(f'SESSION_ID=\"{sid}\"')
-    print(f'PROMPT=\"{safe}\"')
+    # newline 을 공백으로 치환 (2줄 분리 출력 정합)
+    safe_prompt = prompt.replace('\n', ' ').replace('\r', ' ')
+    print(sid)
+    print(safe_prompt)
 except Exception as e:
     print(f'# parse_error: {e}', file=sys.stderr)
     sys.exit(1)
-" 2>>"$LOG_FILE")
+" 2>/dev/null)
 if [ -n "$PARSED" ]; then
-  eval "$PARSED"
+  SESSION_ID=$(printf '%s\n' "$PARSED" | sed -n '1p')
+  PROMPT=$(printf '%s\n' "$PARSED" | sed -n '2,$p' | tr '\n' ' ')
+  # trailing 공백 제거
+  PROMPT=${PROMPT% }
   PARSE_OK=1
 fi
 
@@ -61,15 +77,15 @@ PROMPT_LEN=${#PROMPT}
 if [ "$PROMPT_LEN" -gt 50 ]; then
   LOWER_CHECK=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
   HAS_APPROVAL=false
-  if echo "$LOWER_CHECK" | grep -qE '(진행|승인|확인|오케이|오키|해봐|해줘|좋아|좋습니다|넵|네|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|고고)'; then
+  if echo "$LOWER_CHECK" | grep -qE '(진행|승인|확인|오케이|오키|해봐|해줘|좋아|좋습니다|넵|네|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|맞음|맞아|자동|권장|권고안)'; then
     HAS_APPROVAL=true
   fi
   if echo "$LOWER_CHECK" | grep -qE '(^|\s)(ok|okay|yes|y|go|proceed|approve|lgtm|sure)(\s|$)'; then
     HAS_APPROVAL=true
   fi
-  # 승인 키워드 없는 긴 메시지 = 새 작업 요청 → gate 리셋
+  # 자동 진행 정책 (2026-05-12): 긴 메시지 + 승인 키워드 없음 = gate reset 폐기
+  # 새 작업 진입 시에도 gate 보존 (§3 Checkpoint 5조건은 별 hook 보호)
   if [ "$HAS_APPROVAL" = false ]; then
-    echo "0" > "$GATE_FILE"
     exit 0
   fi
   # 승인 키워드 있는 긴 메시지 = 조건부 승인 → 아래로 계속 진행
@@ -96,6 +112,13 @@ if echo "$LOWER_PROMPT" | grep -qE '(승인|진행|확인|ok|okay|yes|approve|go
 fi
 
 if [ "$NEGATED" = true ]; then
+  # 자동 위임 정책 중단 신호 — "중단" / "보류" / "멈춰" / stop / abort / cancel 감지 시
+  # stop marker 생성 → auto-iterate-stop-guard.sh (Stop hook) 가 통과 신호로 사용
+  if echo "$LOWER_PROMPT" | grep -qE '(중단|보류|멈춰|stop|abort|cancel)'; then
+    STOP_MARKER_FILE="/tmp/claude_stop_requested_${SESSION_ID}"
+    touch "$STOP_MARKER_FILE" 2>/dev/null
+    log "stop marker created (auto-iterate cancel) sid=$SESSION_ID"
+  fi
   log "NEGATED prompt sid=$SESSION_ID prompt_len=${#PROMPT} — 승인 매칭 skip"
   exit 0
 fi
@@ -105,11 +128,19 @@ APPROVED=false
 
 # --- 한국어 승인 (위치 제약: 시작 또는 종결부 + 단어/문장 경계) ---
 # 시작부 매칭: prompt 가 키워드로 시작 (선택적 공백/문장부호 허용)
-if echo "$LOWER_PROMPT" | grep -qE '^[[:space:]]*(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응응|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|콜)([[:space:]!.?,~]|$)'; then
+if echo "$LOWER_PROMPT" | grep -qE '^[[:space:]]*(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응응|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|콜|맞음|맞아|동의|채택|적용|반영)([[:space:]!.?,~]|$)'; then
+  APPROVED=true
+fi
+# 시작부 매칭 (접미사 흡수 — 진행해/진행하/승인해/승인하/확인해/확인하 등 자연어 변형)
+if echo "$LOWER_PROMPT" | grep -qE '^[[:space:]]*(진행|승인|확인|동의|채택|적용|반영)(해|하)([[:space:]!.?,~]|$)'; then
   APPROVED=true
 fi
 # 종결부 매칭: prompt 가 키워드로 끝남
-if echo "$LOWER_PROMPT" | grep -qE '([[:space:]]|^)(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응응|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|콜)[[:space:]!.?,~]*$'; then
+if echo "$LOWER_PROMPT" | grep -qE '([[:space:]]|^)(진행|승인|확인|오케이|오키|오케|해봐|해줘|좋아|좋습니다|넵|네|응응|응|ㄱㄱ|ㄱ|ㅇㅇ|ㅇ|ㅇㅋ|고고|그래|콜|맞음|맞아|동의|채택|적용|반영)[[:space:]!.?,~]*$'; then
+  APPROVED=true
+fi
+# 종결부 매칭 (접미사 흡수 — "...진행해", "...코드 진행해", "...승인하" 등)
+if echo "$LOWER_PROMPT" | grep -qE '([[:space:]]|^)(진행|승인|확인|동의|채택|적용|반영)(해|하)[[:space:]!.?,~]*$'; then
   APPROVED=true
 fi
 
@@ -134,6 +165,11 @@ fi
 # 부정 컨텍스트는 위에서 사전 차단됐으므로 여기서는 위치 앵커만 보강.
 BUNDLED_APPROVED=false
 if echo "$LOWER_PROMPT" | grep -qE '(분석.{0,3}계획|계획.{0,3}분석|둘.?다|한.?번에|한꺼번에|묶어서|통째)([[:space:]]|.)*?(진행|승인|ok|확인|approve|go|proceed)'; then
+  APPROVED=true
+  BUNDLED_APPROVED=true
+fi
+# fast-track 묶음 승인 키워드 — "자동 진행" / "코드 진행" / "전체 진행" / "권장으로 진행" / "권고안으로 진행" / "기본으로 진행" / "auto 진행"
+if echo "$LOWER_PROMPT" | grep -qE '(자동|auto|코드|전체|모두|권장|권고안|권고|기본)([으]?로)?[[:space:]]*(진행|승인|채택|적용|반영|ok|approve|go|proceed)'; then
   APPROVED=true
   BUNDLED_APPROVED=true
 fi
@@ -170,7 +206,7 @@ try:
     print(data.get('cwd', '.'))
 except:
     print('.')
-" 2>>"$LOG_FILE")
+" 2>/dev/null)
     # Fallback: python3 실패 시 grep/sed
     if [ -z "$CWD" ] || [ "$CWD" = "." ]; then
       CWD_FB=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
