@@ -49,7 +49,7 @@ case "$TOOL_NAME" in
     ;;
 esac
 
-# Functional exemption 7건
+# Functional exemption 7건 (FILE_PATH 기준)
 case "$FILE_PATH" in
   */worktrees/*)                   exit 0 ;;
   */state/sessions/*.lock)         exit 0 ;;
@@ -60,12 +60,10 @@ case "$FILE_PATH" in
   */.claude/settings.local.json)   exit 0 ;;
 esac
 
-# cwd 보조 검사 (Bash 모드)
-CWD=$(pwd 2>/dev/null | sed 's|\\|/|g')
-case "$CWD" in
-  */worktrees/*) exit 0 ;;
-esac
+# Bash 모드: FILE_PATH = pwd 이므로 위 면제로 cwd 자동 처리됨
+# (별도 cwd 보조 검사 = Edit 모드 우회 통로 → 제거 2026-05-20 fix)
 
+CWD=$(pwd 2>/dev/null | sed 's|\\|/|g')
 echo "[WORKTREE-ENFORCE] 차단: worktree 진입 필수 (정책 2026-05-20)" >&2
 echo "              파일: $FILE_PATH" >&2
 echo "              cwd: $CWD" >&2
