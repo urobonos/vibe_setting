@@ -9,7 +9,7 @@
 #   - 모든 소스 작업 = worktree 격리 (사고 영구 차단)
 #   - feature 분기 = 사용자 요청 시 생성 (자동 강제 폐기)
 #
-# Functional exemption 7건:
+# Functional exemption 8건:
 #   1. */worktrees/*                  (worktree 자체)
 #   2. */state/sessions/*.lock        (session lock)
 #   3. */projects/*/memory/*          (auto memory)
@@ -17,6 +17,7 @@
 #   5. */.claude/docs/*               (산출물 - Gate-0 직행 정합, working/REGISTRY.md 포함)
 #   6. */.claude/settings.json        (git untracked, worktree 동기화 불가능)
 #   7. */.claude/settings.local.json  (git untracked)
+#   8. C:/Works/infra/*               (dev-team 인프라 영역, git 미추적, 2026-05-20)
 #
 # SSOT: CLAUDE.md §4.3 "worktree 항상 강제" + 본 hook
 # 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + commands/feature-{create,merge}.md
@@ -49,7 +50,7 @@ case "$TOOL_NAME" in
     ;;
 esac
 
-# Functional exemption 7건 (FILE_PATH 기준)
+# Functional exemption 8건 (FILE_PATH 기준)
 case "$FILE_PATH" in
   */worktrees/*)                   exit 0 ;;
   */state/sessions/*.lock)         exit 0 ;;
@@ -58,6 +59,7 @@ case "$FILE_PATH" in
   */.claude/docs/*)                exit 0 ;;
   */.claude/settings.json)         exit 0 ;;
   */.claude/settings.local.json)   exit 0 ;;
+  C:/Works/infra/*|/c/Works/infra/*) exit 0 ;;  # #8: dev-team 인프라 영역 (git 미추적, 2026-05-20 추가)
 esac
 
 # Bash 모드: FILE_PATH = pwd 이므로 위 면제로 cwd 자동 처리됨
@@ -70,7 +72,8 @@ echo "              cwd: $CWD" >&2
 echo "              조치:" >&2
 echo "                신규 작업 = git worktree add ~/.claude/worktrees/{sid}-{slug} -b wip/{sid}-{slug}" >&2
 echo "                기존 feature 수정 = git worktree add ~/.claude/worktrees/{sid}-{slug} feature/X" >&2
-echo "              면제 7건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
-echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json" >&2
+echo "              면제 8건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
+echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json /" >&2
+echo "                       C:/Works/infra/* (dev-team)" >&2
 echo "              SSOT: CLAUDE.md §4.3 \"worktree 항상 강제\"" >&2
 exit 2

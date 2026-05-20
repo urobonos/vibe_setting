@@ -136,7 +136,7 @@
 - **브랜치·worktree·push·머지 통합 정책 (필수, 2026-05-20 재정의):** 단일 SSOT = `hooks/worktree-enforce.sh` + `hooks/worktree-prompt-detect.sh` + `commands/{자동진행,feature-create,feature-merge}.md` + `hooks/branch-enforce.sh` (잔존 영역) + `skills/git-push/SKILL.md`.
   - **(a) worktree 항상 강제 (전 영역):** 모든 소스 mutation 작업은 worktree 안에서 수행. cwd 또는 FILE_PATH 가 worktree (`*/worktrees/*`) 가 아니고 functional exemption 7건 매칭 안 됨 → `worktree-enforce.sh` PreToolUse exit 2 차단. **사용자 작업 키워드 매칭 시** UserPromptSubmit `worktree-prompt-detect.sh` 안내 stderr 주입 → Claude 본체 즉시 `git worktree add ~/.claude/worktrees/{sid}-{slug} -b wip/{sid}-{slug}` 실행. **claude-harness 영역 (`~/.claude/`) 면제 폐기 (2026-05-20)** — 본 영역도 worktree 강제.
   - **(b) feature 분기 = 사용자 요청 시 생성:** 신규 feature 생성 = `/feature-create` (worktree → 신규 feature 정착). 기존 feature 수정 = `/feature-merge` (worktree → 기존 feature ff-only 머지). 자동 강제 폐기 (구 `branch-enforce.sh` §(2) retire) — 사용자 작업 의도 트리거 시에만.
-  - **(c) Functional exemption 7건 (`worktree-enforce.sh` SSOT):**
+  - **(c) Functional exemption 8건 (`worktree-enforce.sh` SSOT):**
     1. `*/worktrees/*` — worktree 자체
     2. `*/state/sessions/*.lock` — session lock (working-register/heartbeat/release hook 자기참조)
     3. `*/projects/*/memory/*` — auto memory
@@ -144,6 +144,7 @@
     5. `*/.claude/docs/*` — 산출물 (working/REGISTRY.md 포함, Gate-0 직행 정합)
     6. `*/.claude/settings.json` — git untracked, worktree 동기화 불가능
     7. `*/.claude/settings.local.json` — git untracked
+    8. `C:/Works/infra/*` — dev-team 인프라 영역 (git 미추적, 2026-05-20 dev-team 도입 동반 추가)
   - **(d) `git push` 전면 금지:** 어떤 분기·시나리오에서도 Claude 자동 `git push` 금지 (feature/source/personal/relay 모두 포함, `--delete`·`--force-with-lease` 포함). 사용자 직접 (`! git push ...`) 만 허용. 강제: `branch-enforce.sh` §(1) shlex 토큰화 exit 2 (잔존).
   - **(e) master/main 머지·체크아웃 절대 금지:** `git merge {main|master|origin/main|origin/master|refs/heads/main|refs/heads/master|upstream/main|upstream/master}` / `git checkout {위 target}` / `git switch {위 target}` + chained 명령 모두 자동 호출 금지. 사용자 직접만. 강제: `branch-enforce.sh` §(1.5) 잔존. worktree 정착 시 source = main/master 이면 정착 절대 금지 — PR 절차로 대체.
   - **(f) ff-only 머지 + worktree 정리:** worktree 정착 명령 (`/feature-create`·`/feature-merge`) = **사용자 직접 (`! ` prefix) 실행 권장**. Claude 자동 머지 금지 — §3 Checkpoint "비가역적 작업" 매칭. 정착 후 `git worktree remove` + `git branch -D wip/*`.
@@ -222,6 +223,7 @@
 | bitbucket-cli | Bitbucket Cloud REST API (curl + 토큰) | `/bitbucket-cli` | ✗ (skill 진입) | C |
 | debate | Multi-Agent Subagent Debate (4그룹 12 서브에이전트) | `/debate` | ✓ | A |
 | debug-skill | 다영역 디버깅 (PHP / DB / AWS / 보안) | `/debug-skill` | ✗ (skill 진입) | B |
+| dev-team | HongCafe Global 다레포 개발 전용 팀 (BE / 인프라 / 문서 / FE read-only). Lead 라우팅 1~4 spawn. api-team(영향분석)→dev-team(구현) handoff | `/dev-team` | ✗ (skill 진입) | A |
 | feature-create | worktree → 신규 feature 분기 정착 (사용자 직접 머지) | `/feature-create` | ✓ | C |
 | feature-merge | worktree → 기존 feature 분기 ff-only 머지 (사용자 직접 머지) | `/feature-merge` | ✓ | C |
 | git-push | Conventional Commits + git push 즉시 실행 | `/git-push` | ✗ (skill 진입) | C |
@@ -253,7 +255,7 @@
 | 병렬 | Modifier 슬래시 — `/병렬 /{인자 슬래시}` 형식으로 단일 응답 내 Agent spawn 강제 병렬화. 매 응답마다 명시 입력 필요 (60분 활성 marker 폐기, 2026-05-18). hook 의존 0 | `/병렬` | ✓ | A |
 | 프로세스 | Claude Code 프로세스 + 세션 sid 매핑 조회 + REGISTRY/lock orphan 분류·정리. 3 모드 — 기본 (read-only), `cleanup` (orphan 정리), `kill` (좀비 PID 종료 명령 안내, 사용자 직접) | `/프로세스` | ✓ | B |
 
-**자동화 분류 카운트:** A = 22 (api-spec-audit · api-team · debate · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 병렬 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 6 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 + sns-oauth add·debug) / C = 10 (aws · bitbucket-cli · feature-create · feature-merge · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
+**자동화 분류 카운트:** A = 23 (api-spec-audit · api-team · debate · dev-team · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 병렬 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 6 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 + sns-oauth add·debug) / C = 10 (aws · bitbucket-cli · feature-create · feature-merge · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 
 ### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)
 
