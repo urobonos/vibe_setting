@@ -48,18 +48,28 @@ if [ -f "$BE_MD" ] && [ -f "$MIRROR_MD" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────
-# (2) api-docs 3-way — file count 차이 또는 maxdepth mtime sample
+# (2) api-docs 3-way — top-dir mtime 경량 비교 (Tier 1) → drift 의심 시 sample yaml mtime (Tier 2)
+#     2026-05-20 F2: find -maxdepth 3 ×3 (≈600 stat) → stat ×3 (≈3 stat) 로 경량화
+#     정확성 보강 = sample yaml mtime 비교는 그대로 유지
+#     file count 완전 일치 검증 = `/mirror-be-claude verify` (sha256 + count) 위임
 # ─────────────────────────────────────────────────────────
 if [ -d "$GLOBAL_DIR" ] && [ -d "$BE_DIR" ] && [ -d "$DOCS_DIR" ]; then
-  g_count=$(find "$GLOBAL_DIR" -maxdepth 3 -type f 2>/dev/null | wc -l)
-  b_count=$(find "$BE_DIR"     -maxdepth 3 -type f 2>/dev/null | wc -l)
-  d_count=$(find "$DOCS_DIR"   -maxdepth 3 -type f 2>/dev/null | wc -l)
+  # Tier 1: top-dir mtime 3-way 비교 (파일 추가/삭제 시 부모 dir mtime 갱신)
+  g_dt=$(stat -c %Y "$GLOBAL_DIR" 2>/dev/null || echo 0)
+  b_dt=$(stat -c %Y "$BE_DIR"     2>/dev/null || echo 0)
+  d_dt=$(stat -c %Y "$DOCS_DIR"   2>/dev/null || echo 0)
 
-  if [ "$g_count" != "$b_count" ] || [ "$g_count" != "$d_count" ]; then
-    echo "[mirror-sanity] api-docs file count drift: global=$g_count / be=$b_count / docs=$d_count — \`/mirror-be-claude verify\` 권장" >&2
+  max_t=$g_dt; [ "$b_dt" -gt "$max_t" ] && max_t=$b_dt; [ "$d_dt" -gt "$max_t" ] && max_t=$d_dt
+  min_t=$g_dt; [ "$b_dt" -lt "$min_t" ] && min_t=$b_dt; [ "$d_dt" -lt "$min_t" ] && min_t=$d_dt
+
+  if [ "$((max_t - min_t))" -gt 300 ]; then
+    newer="global"
+    [ "$b_dt" = "$max_t" ] && newer="be"
+    [ "$d_dt" = "$max_t" ] && newer="docs"
+    echo "[mirror-sanity] api-docs top-dir mtime drift: $((max_t - min_t))초 (newer=$newer) — \`/mirror-be-claude verify\` 권장" >&2
     WARNINGS=$((WARNINGS + 1))
   else
-    # 같은 count 라도 be 의 1 sample mtime 이 글로벌보다 5분+ 새로우면 alarm
+    # Tier 2: top-dir 동일 mtime 이라도 sample yaml mtime drift 검사 (내용 수정만 발생한 경우)
     sample_file=$(find "$BE_DIR" -maxdepth 3 -type f -name '*.yaml' 2>/dev/null | head -1)
     if [ -n "$sample_file" ]; then
       rel="${sample_file#$BE_DIR/}"
