@@ -19,8 +19,11 @@ GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 # SSOT: ~/.claude/CLAUDE.md §"자동 순차 진행 정책"
 echo "2" > "$GATE_FILE"
 
-# stale gate 파일 정리 (7일 이상 미수정 — 활성 세션 파일은 mtime 갱신되어 보존)
-find /tmp -maxdepth 1 -name 'claude_gate_*' -mtime +7 -delete 2>/dev/null
+# stale claude_* 마커 정리 (7일 이상 미수정 — 활성 세션 마커는 mtime 갱신되어 보존)
+# 대상: claude_gate_* / claude_edit_flag_* / claude_selfcheck_done_* / claude_completeness_warned_*
+#       claude_statusline_branch_* / claude_echo_pending_* / claude_iterate_count_* 등 전 패턴
+# SSOT: backlog_harness-audit-followup F1 (2026-05-20 GC 범위 확장)
+find /tmp -maxdepth 1 -name 'claude_*' -mtime +7 -delete 2>/dev/null
 
 # skill-creator 락 파일 잔여 정리 (이전 세션에서 미삭제 가능성 차단)
 rm -f "$HOME/.claude/.skill-creator-active.lock" 2>/dev/null
