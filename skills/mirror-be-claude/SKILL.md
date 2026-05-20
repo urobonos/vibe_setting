@@ -22,7 +22,7 @@ triggers:
   - "api-docs 정합"
   - "be 미러링 검증"
   - "/mirror-be-claude"
-version: 1.1.0
+version: 1.2.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -129,20 +129,33 @@ comm -23 \
   <(cd "$BE_DIR" && find . -maxdepth 3 -type f 2>/dev/null | sort) \
   <(cd "$GLOBAL_DIR" && find . -maxdepth 3 -type f 2>/dev/null | sort)
 
-# 4. sha256 mismatch 식별 (3-way 비교)
-echo "===== sha256 mismatch ====="
+# 4. sha256 비교 (3-way) — LF 정규화 후 실 drift / LF-only drift 분리
+#    - 실 drift = LF 정규화 후 내용 차이 (push 시 실제 변경 발생)
+#    - LF-only drift = raw byte 차이 + LF 정규화 후 동일 (docs 레포 core.autocrlf=true 영향)
+#    Why: docs 레포 working tree 가 CRLF 로 저장되어 raw byte 비교 시 97% 가 라인 종결자만 차이로
+#         over-count 됨 (2026-05-20 발견 — commit 4d8961d 실 변경 1행 vs raw mismatch 66건).
+echo "===== sha256 비교 (LF 정규화) ====="
 cd "$BE_DIR" && find . -maxdepth 3 -type f 2>/dev/null | sort | while read f; do
-  g=$(sha256sum "$GLOBAL_DIR/$f" 2>/dev/null | awk '{print $1}')
-  b=$(sha256sum "$BE_DIR/$f"     2>/dev/null | awk '{print $1}')
-  d=$(sha256sum "$DOCS_DIR/$f"   2>/dev/null | awk '{print $1}')
-  if [ "$g" != "$b" ] || [ "$g" != "$d" ]; then
+  # raw byte sha256 (참고용 — LF-only drift 식별)
+  g_raw=$(sha256sum "$GLOBAL_DIR/$f" 2>/dev/null | awk '{print $1}')
+  b_raw=$(sha256sum "$BE_DIR/$f"     2>/dev/null | awk '{print $1}')
+  d_raw=$(sha256sum "$DOCS_DIR/$f"   2>/dev/null | awk '{print $1}')
+  # LF normalize 후 sha256 (실 내용 비교)
+  g_lf=$(tr -d '\r' < "$GLOBAL_DIR/$f" 2>/dev/null | sha256sum | awk '{print $1}')
+  b_lf=$(tr -d '\r' < "$BE_DIR/$f"     2>/dev/null | sha256sum | awk '{print $1}')
+  d_lf=$(tr -d '\r' < "$DOCS_DIR/$f"   2>/dev/null | sha256sum | awk '{print $1}')
+  if [ "$g_lf" != "$b_lf" ] || [ "$g_lf" != "$d_lf" ]; then
+    # 실 drift — push 시 실제 변경 발생
     g_t=$(stat -c %Y "$GLOBAL_DIR/$f" 2>/dev/null || echo 0)
     b_t=$(stat -c %Y "$BE_DIR/$f"     2>/dev/null || echo 0)
     d_t=$(stat -c %Y "$DOCS_DIR/$f"   2>/dev/null || echo 0)
     newest="be"; max=$b_t
     [ "$g_t" -gt "$max" ] && newest="global" && max=$g_t
     [ "$d_t" -gt "$max" ] && newest="docs"   && max=$d_t
-    echo "MISMATCH: $f (newest=$newest)"
+    echo "DRIFT: $f (newest=$newest)"
+  elif [ "$g_raw" != "$b_raw" ] || [ "$g_raw" != "$d_raw" ]; then
+    # LF-only drift — 라인 종결자만 차이, push 시 실 변경 0
+    echo "LF-ONLY: $f (안내 — 실 내용 동일)"
   fi
 done
 ```
@@ -226,8 +239,9 @@ done
 [영역 2 — api-docs 3-way]
 - file count: global={N} / be={N} / docs={N}
 - be 만 존재 (누락): {N}건 → 파일 목록
-- sha256 mismatch: {N}건 → newest source 분포 (be={N} / global={N} / docs={N})
-- 결과: ✅ 정합 / ❌ 불일치
+- 실 drift: {N}건 → newest source 분포 (be={N} / global={N} / docs={N})
+- LF-only drift: {M}건 (안내 — 라인 종결자만 차이, push 시 실 변경 0)
+- 결과: ✅ 정합 / ❌ 불일치 (실 drift 기준 — LF-only 는 정합 판정에 미반영)
 
 [상이 시 권고]
 - newest source = be → /mirror-be-claude sync-from-be (글로벌 + docs 일괄 갱신)
@@ -275,3 +289,4 @@ done
 |------|------|------|
 | 2026-05-07 | 1.0.0 | 신규 생성 — be CLAUDE.md ↔ 글로벌 미러본 양방향 동기화 검증·강제 스킬 (사용자 결정: 양방향 + `~/.claude/mirrors/{product}/`) |
 | 2026-05-18 | 1.1.0 | api-docs 3-way 영역 통합 — `mirror-docs.sh` 자동 hook 폐기 결정 (정책 ↔ 실 사용 어긋남, 산출물 `output/analysis/2026-05-18-mirror-policy-redesign/`) 후 본 스킬이 api-docs 3-way 단일 명시 진입점으로 확장. `verify` / `sync-from-be` / `sync-from-global` 3 모드 모두 양 영역 통합 처리 |
+| 2026-05-20 | 1.2.0 | sha256 비교 LF 정규화 도입 — `tr -d '\r'` 후 비교로 실 drift / LF-only drift 분리. 발견 commit `4d8961d` (`hongcafe_global_docs` master) = 실 변경 1 파일 1행 (`be/api-docs/member/payment-api.md` L16 `/api/member` → `/api/members`) vs raw sha256 mismatch 66 건 (97% LF over-count). docs 레포 `core.autocrlf=true` + `.gitattributes` 부재 영향 — 스킬 측 정규화로 보고 정확도 향상. §2.1.2 비교 로직 + §3 보고 양식 "실 drift / LF-only drift" 분리 |
