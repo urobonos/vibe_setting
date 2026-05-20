@@ -151,7 +151,19 @@
   - **Why:** push/머지 사고는 자동화 1회 실수로 즉시 발생, 사용자 직접 1라인 비용은 거의 0. worktree 항상 강제 = 원본 working tree 영구 격리, 사고 영구 차단. claude-harness 면제 폐기 = (A) 통일 강제 — 본 영역도 SSOT 룰 작업 사고 차단. 시점 단락 = changelog.md 참조.
   - **산출물 SSOT:** `~/.claude/docs/working/20260520/2026-05-20-claude-harness-worktree-always-policy.md` + `~/.claude/docs/claude-harness/output/guide/2026-04-30-branch-workflow/` (구 정책 참조).
 - **스킬 생성·수정·최적화 — skill-creator 강제 진입점 (필수):** `.claude/skills/{skill}/` 하위 모든 파일 생성·수정·최적화 = `skill-creator` 스킬 경유 필수. `skill-edit-guard.sh` PreToolUse hook 가 Edit/Write 시도를 exit 2 차단, 락 파일 (`~/.claude/.skill-creator-active.lock`) 존재 시에만 우회. **진입 절차:** (1) `/skill-creator` 또는 "스킬 만들기/수정/개선/최적화" 트리거 → (2) `touch ~/.claude/.skill-creator-active.lock` → (3) Edit/Write → (4) 종료 시 `rm` 락. 세션 종료 시 `gate-init.sh` 가 잔여 락 자동 정리.
-- **로컬 수정 사전 승인 + 서버 우선 검증 (필수):** 프로덕션·공유 환경 영향 코드는 로컬 수정 전 (1) 서버 원인 파악 + 테스트, (2) 수정 필요 사항 목록 사용자 제시, (3) 승인 후 로컬 수정. 서버 로그로 원인 파악 후 즉시 로컬 수정·커밋·푸시·머지 = 지침 위반.
+- **서버 우선 디버그 → 로컬 반영 흐름 (필수, 2026-05-20 강화):** prd / stg / dev API 오류 발생 시 **EC2 직접 접속 → 서버 점검·수정 → 서버 검증 통과 → 로컬 반영** 강제 흐름. 서버 로그로 원인 파악 후 즉시 로컬 수정·커밋·푸시·머지 = 지침 위반. **5 단계 흐름:**
+  - **(1) EC2 접속:** `aws ssm start-session` 권장 (SSH 비추천 — key 관리 부담 + 22 포트 노출 위험). `aws` skill §"실행 주체" 정합 (조회/변경 분리 패턴).
+  - **(2) 서버 점검·수정:** 자동화 = `aws ssm send-command` (비대화형, 결과 자동 캡처 + 다중 인스턴스). 대화형 디버그 = start-session 안 직접 명령. 사용자 명시 승인 후 Claude 직접 실행 (aws skill §"실행 주체" 정합).
+  - **(3) 서버 검증 통과:** e2e 5점 (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock) — `php8` 스킬 §"e2e 검증" SSOT 매핑. **검증 통과 정의 = curl 200 OK + 비즈니스 로직 정상 + 로그 무오류 + 회귀 매트릭스 PASS** (단순 curl 200 만으로 부족).
+  - **(4) 로컬 반영:** 검증 통과 후에만 진행. (a) 서버에서 git diff / patch 추출 → 로컬 적용 또는 (b) scp / rsync 서버 → 로컬. 사용자 명시 승인 필수.
+  - **(5) audit log:** AWS 측 = CloudTrail 자동 (`aws ssm` API 호출 자동 기록, SSM CloudWatch Logs 통합). 사용자 측 = 본 정책 보조 audit (`~/.claude/docs/claude-harness/output/audit/prod-debug-log/{yyyy-mm-dd-HHMM}-{slug}/`) 신설 — 서버 수정 → 로컬 반영 추적.
+  - **환경별 분기 매트릭스:**
+    - **prd:** **최후 수단** — stg 검증 후 정상 CI/CD 우선. hotfix 필요 시만 본 흐름, 사용자 명시 승인.
+    - **stg:** 서버 우선 검증 가능 (사용자 명시 영역).
+    - **dev:** 일상 작업 가능 (로컬 수정 + 즉시 ssh/scp 동기화 허용).
+  - **SSOT 위임:** 본 흐름 명시 진입점 = `prod-debug` skill (3 모드 `connect` / `verify` / `sync` + 환경별 매트릭스). depends_on = `aws` / `security-audit` / `php8`.
+  - **§3 우선 적용:** SSM 변경 명령 / 서버 직접 수정 / 로컬 반영 모두 사용자 명시 승인 필수 (aws skill §"실행 주체" + 본 §4.3 통합).
+  - **Why:** 서버 수정 후 로컬 미반영 = 다음 정상 배포 시 erasure (배포 사고 / 동일 오류 재발). 서버 우선 = 즉시 hotfix + 검증 후 안전 반영. CloudTrail audit + 본 정책 보조 audit = AWS 측 + 사용자 측 추적 분리, SSOT 분기 X.
 - **e2e 검증 (필수):** 코드 수정 완료 판단 = 유닛 테스트 통과 + 환경/스키마/실 엔드포인트 검증. 5점 체크 (env / 함수·클래스 정의 / DB 스키마 / 프로덕션 curl / mock 검증) 세부는 `php8` 스킬 §"e2e 검증" SSOT.
 - **단계별 슬래시 워크플로우 (필수, 2026-05-15 도입):** 작업 사이클을 8 단계 슬래시 + `/토론` 으로 명시 진입한다. 자연어 키워드 자동 매칭 + 직접 슬래시 호출 모두 동일 동작. **키워드 → 슬래시 매핑:**
 
@@ -254,8 +266,9 @@
 | 토론 | 4 에이전트팀 × 4 Agent = 16 Agent 풀-병렬 spawn 토론 진입 (한글 진입점, `/debate` 호환) (thin wrapper) | `/토론` | ✓ | A |
 | 병렬 | Modifier 슬래시 — `/병렬 /{인자 슬래시}` 형식으로 단일 응답 내 Agent spawn 강제 병렬화. 매 응답마다 명시 입력 필요 (60분 활성 marker 폐기, 2026-05-18). hook 의존 0 | `/병렬` | ✓ | A |
 | 프로세스 | Claude Code 프로세스 + 세션 sid 매핑 조회 + REGISTRY/lock orphan 분류·정리. 3 모드 — 기본 (read-only), `cleanup` (orphan 정리), `kill` (좀비 PID 종료 명령 안내, 사용자 직접) | `/프로세스` | ✓ | B |
+| prod-debug | prd/stg/dev EC2 직접 접속 → 점검·수정 → 검증 → 로컬 반영 통합 진입점. 3 모드 — `connect` (aws ssm start-session/send-command), `verify` (e2e 5점), `sync` (서버 → 로컬, 사용자 명시 승인). 환경별 매트릭스 (prd 최후 수단 / stg 검증 우선 / dev 일상). | `/prod-debug` | ✓ | C |
 
-**자동화 분류 카운트:** A = 23 (api-spec-audit · api-team · debate · dev-team · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 병렬 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 6 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 + sns-oauth add·debug) / C = 10 (aws · bitbucket-cli · feature-create · feature-merge · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
+**자동화 분류 카운트:** A = 23 (api-spec-audit · api-team · debate · dev-team · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 병렬 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 6 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 + sns-oauth add·debug) / C = 11 (aws · bitbucket-cli · feature-create · feature-merge · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 > **혼합 분류 카운트 방식 (필수):** mirror-be-claude (A/C) · sns-oauth (A/B) 처럼 모드별 자동화 강도가 다른 skill 은 **각 모드별로 분리 카운트**. 행 1줄 = 1 표기 (`A (verify·sync-from-be) / C (sync-from-global)`), 카운트는 모드 단위. 표 행 단순 카운트 (skill 단일 count) 와 다름.
 
 ### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)
