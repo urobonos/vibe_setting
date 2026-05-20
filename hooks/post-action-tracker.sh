@@ -8,6 +8,21 @@
 
 STDIN_DATA=$(cat)
 
+# 2026-05-20 F3-P3: fast-path — .md/.txt/.json/.yaml/.yml file_path 면 python eval 회피
+#   본 hook = (a) Edit/Write edit_flag 기록 + secrets 감지 (.env/.md/tests 등 제외) (b) Bash 테스트 감지
+#   secrets 감지는 L41 에서 .md 등 제외하지만 python eval 가 그 전에 실행됨 (~40ms)
+#   fast-path = stdin 직접 grep 으로 file_path 추출 후 docs 파일이면 edit_flag 만 기록 + 즉시 exit
+#   (효과: 본 세션 작업 대부분 .md = python eval 회피, 평균 ~20ms 절감)
+_QUICK_PATH=$(echo "$STDIN_DATA" | grep -o '"file_path":[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+if [ -n "$_QUICK_PATH" ] && echo "$_QUICK_PATH" | grep -qiE '\.(md|txt|json|yaml|yml)$'; then
+  _QUICK_SID=$(echo "$STDIN_DATA" | grep -o '"session_id":[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  _QUICK_TN=$(echo "$STDIN_DATA" | grep -o '"tool_name":[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+  if [[ "$_QUICK_TN" == "Edit" || "$_QUICK_TN" == "Write" ]] && [ -n "$_QUICK_SID" ]; then
+    touch "/tmp/claude_edit_flag_${_QUICK_SID}"
+  fi
+  exit 0
+fi
+
 eval "$(echo "$STDIN_DATA" | python -c "
 import json, sys
 try:

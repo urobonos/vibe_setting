@@ -29,33 +29,39 @@ if echo "$FILE" | grep -qiE '\.claude/skills/[^/]+/SKILL\.md$'; then
   HAS_WARNING=0
   AGGREGATE_OUTPUT=""
 
-  # 1. lint-skills.sh
+  # 2026-05-20 F3-P2: 3 도구 직렬 → background 병렬 spawn + wait
+  #   기존 = lint + audit + why 직렬 (worst-case 누적)
+  #   변경 = max(lint, audit, why) wall-clock (≈ 3배 절감)
+  TMP_DIR=$(mktemp -d "/tmp/claude_skill_lint_XXXXXX" 2>/dev/null) || TMP_DIR="/tmp/claude_skill_lint_$$"
+  mkdir -p "$TMP_DIR"
+
   if [ -x "$BIN_DIR/lint-skills.sh" ]; then
-    OUT=$(bash "$BIN_DIR/lint-skills.sh" --skill "$SKILL_NAME" 2>&1)
-    if [ "$?" -ne 0 ]; then
-      HAS_WARNING=1
-      AGGREGATE_OUTPUT="${AGGREGATE_OUTPUT}\n--- lint-skills ---\n$(echo "$OUT" | tail -8)"
-    fi
+    ( bash "$BIN_DIR/lint-skills.sh" --skill "$SKILL_NAME" >"$TMP_DIR/lint.out" 2>&1; echo "$?" >"$TMP_DIR/lint.rc" ) &
   fi
-
-  # 2. audit-references.sh (§N cross-skill 참조 검증)
   if [ -x "$BIN_DIR/audit-references.sh" ]; then
-    OUT=$(bash "$BIN_DIR/audit-references.sh" --skill "$SKILL_NAME" 2>&1)
-    if [ "$?" -ne 0 ]; then
-      HAS_WARNING=1
-      AGGREGATE_OUTPUT="${AGGREGATE_OUTPUT}\n--- audit-references ---\n$(echo "$OUT" | tail -8)"
-    fi
+    ( bash "$BIN_DIR/audit-references.sh" --skill "$SKILL_NAME" >"$TMP_DIR/audit.out" 2>&1; echo "$?" >"$TMP_DIR/audit.rc" ) &
+  fi
+  if [ -x "$BIN_DIR/why-line-coverage.sh" ]; then
+    ( bash "$BIN_DIR/why-line-coverage.sh" --skill "$SKILL_NAME" >"$TMP_DIR/why.out" 2>&1; echo "$?" >"$TMP_DIR/why.rc" ) &
   fi
 
-  # 3. why-line-coverage.sh (강제어휘 ↔ Why 라인 커버리지)
-  if [ -x "$BIN_DIR/why-line-coverage.sh" ]; then
-    OUT=$(bash "$BIN_DIR/why-line-coverage.sh" --skill "$SKILL_NAME" 2>&1)
-    # why-line-coverage 는 등급(GOOD/FAIR/POOR) 만 출력 — POOR 일 때만 경고
-    if echo "$OUT" | grep -q "POOR"; then
-      HAS_WARNING=1
-      AGGREGATE_OUTPUT="${AGGREGATE_OUTPUT}\n--- why-line-coverage ---\n$(echo "$OUT" | tail -5)"
-    fi
+  wait
+
+  # 결과 수집 — 동일 stderr 출력 형식 유지
+  if [ -f "$TMP_DIR/lint.rc" ] && [ "$(cat "$TMP_DIR/lint.rc")" != "0" ]; then
+    HAS_WARNING=1
+    AGGREGATE_OUTPUT="${AGGREGATE_OUTPUT}\n--- lint-skills ---\n$(tail -8 "$TMP_DIR/lint.out" 2>/dev/null)"
   fi
+  if [ -f "$TMP_DIR/audit.rc" ] && [ "$(cat "$TMP_DIR/audit.rc")" != "0" ]; then
+    HAS_WARNING=1
+    AGGREGATE_OUTPUT="${AGGREGATE_OUTPUT}\n--- audit-references ---\n$(tail -8 "$TMP_DIR/audit.out" 2>/dev/null)"
+  fi
+  if [ -f "$TMP_DIR/why.out" ] && grep -q "POOR" "$TMP_DIR/why.out" 2>/dev/null; then
+    HAS_WARNING=1
+    AGGREGATE_OUTPUT="${AGGREGATE_OUTPUT}\n--- why-line-coverage ---\n$(tail -5 "$TMP_DIR/why.out" 2>/dev/null)"
+  fi
+
+  rm -rf "$TMP_DIR" 2>/dev/null
 
   if [ "$HAS_WARNING" -eq 1 ]; then
     echo "" >&2
