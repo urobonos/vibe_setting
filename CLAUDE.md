@@ -102,11 +102,11 @@
 > - **§4.4 응답 형식 + 자동 위임:** 응답 톤 / 응답 간결 / 답변 깊이 / 자동 위임 정책 (Echo-Back / 우선순위 / 4축 자동화) / 경로 안내 형식
 > - **§4.5 산출물 생명주기:** working/ 자동 이동 / backlog 메모리 정책
 >
-> **역소급 면제 (필수):** 신규/강화 강제 룰은 도입 이전 산출물에 역소급 적용하지 않는다. 시점 단락 SSOT = `~/.claude/docs/claude-harness/changelog.md`.
+> **역소급 면제 (필수):** 신규/강화 강제 룰은 도입 이전 산출물에 역소급 적용하지 않는다. 시점 단락 SSOT = `~/.claude/docs/claude-harness/changelog.md`. **검증 hook (`verify-e2e-check.sh` 2026-05-15 도입 / `feasibility-section-check.sh` / `checklist-count-check.sh` 등) = 신규 산출물 전용, 도입 이전 working/·tasks/ 에 역소급 적용 안 함 (audit H10 명문, 2026-05-20).**
 
 ### §4.1 코드 품질·산출물
 
-- **장기 관점 분석·계획·실행 (필수):** **분석** = 증상만 보지 않고 근본 원인 + 재발 가능성 + 인접 SSOT (룰/템플릿/hook) 영향 범위. **계획** = 단기 패치 + 재발 방지 + SSOT 일관성 + 마이그레이션 비용. **실행** = 임시 우회·hardcode·주석 처리 금지. **Why:** 단기 fix 누적 = SSOT 분기·산출물 정합성 붕괴. **How to apply:** S = "장기 영향" 1줄. M·L = working/ 통합 문서에 **"장기 영향 / 재발 방지 / SSOT 일관성"** 3섹션 필수. 강제: `task-docs` 템플릿 + `workflow-enforcer` Gate. §3 Checkpoint 우선 적용. 역소급 면제 = changelog.md 참조.
+- **장기 관점 분석·계획·실행 (필수):** **분석** = 증상만 보지 않고 근본 원인 + 재발 가능성 + 인접 SSOT (룰/템플릿/hook) 영향 범위. **계획** = 단기 패치 + 재발 방지 + SSOT 일관성 + 마이그레이션 비용. **실행** = 임시 우회·hardcode·주석 처리 금지. **Why:** 단기 fix 누적 = SSOT 분기·산출물 정합성 붕괴. **How to apply:** S = "장기 영향" 1줄. M·L = working/ 통합 문서에 **"장기 영향 / 재발 방지 / SSOT 일관성"** 3섹션 필수. 강제: `task-docs` 템플릿 + `workflow-enforcer` Gate. **§3 Checkpoint 우선 적용 — §3 광범위 매트릭스 (3 파일+ 아키텍처 변경) 또는 본 룰 자체 수정/삭제 매칭 시 사용자 명시 승인 필수. "장기 영향" 명시는 §3 보호의 보조이지 우회 통로 아님 (audit M2 명문, 2026-05-20).** 역소급 면제 = changelog.md 참조.
 - **Proactive Correction:** 오타만 즉시 수정. 문법·컨벤션·로직은 Team 1 분석 후 승인.
 - **Readability:** 주석 없이 읽히는 명시적 코드. 전체 단어 (fullName, index) 사용.
 - **Validation ("No Test, No Merge"):** 모든 수정은 유닛 테스트 또는 실행 로그 증빙 동반.
@@ -277,3 +277,4 @@
 - **depends_on 방향성 (필수):** A 가 B 의 출력/SSOT/산출물을 소비 시 `A.depends_on = [B]` **단방향** 명시. 양방향 (A↔B) / 순환 (A→B→C→A) 금지. 의존 = 정적 참조, 동적 호출은 워크플로우. 강제 hook = `skill-validator` 강화 후보 (별 작업). 시점 단락 = changelog.md 참조.
 - **version 컨벤션 (필수):** SKILL.md frontmatter `version` = semver 2.0.0. **Major** = 진입점·메인 모드·triggers 의미 변경 / **Minor** = 새 모드·trigger 추가 / **Patch** = 양식 보강·버그 픽스. 신규 스킬 = `1.0.0` 시작. 역소급 면제 — 도입 이전 version 값 보존.
 - **min_claude_md_version 갱신 (필수):** CLAUDE.md 메이저 업그레이드 (v4→v5) 시 일괄 갱신 금지. 영향받는 스킬만 개별 갱신. 기본 동작 = 기존 값 유지.
+- **dual entry slash 정책 (필수, audit L11 명문 2026-05-20):** `/토론` (한글) ↔ `/debate` (영문) 동일 진입점 매핑. 양쪽 모두 §5.1 표 + commands/토론.md 본문에 "동일 (영문 슬래시 호환)" 명문 동기화 필수. **장기 관점:** dual entry 신설 = SSOT 분기 위험 — 영문 진입점 유지 사유 (외부 docs 참조 / 다른 skill 호환 / 기존 사용자 호환) 있을 때만 허용, 임의 다국어 진입점 신설은 비추천 (CLAUDE.md §4.4 장기 관점 추천 정합).
