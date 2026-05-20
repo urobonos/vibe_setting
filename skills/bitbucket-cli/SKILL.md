@@ -16,8 +16,8 @@ triggers:
   - "브랜치 목록"
   - "commit 조회"
   - "diff 조회"
-  - "/bitbucket"
-version: 1.0.0
+  - "/bitbucket-cli"
+version: 1.0.1
 user-invocable: true
 depends_on: []
 conflicts_with: []

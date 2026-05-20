@@ -4,8 +4,12 @@ description: >
   글로벌(~/.claude/skills/)과 프로젝트 로컬(.claude/skills/) 스킬 파일의
   경로 정합성, 구조 완전성, CLAUDE.md 규칙 정합성, 스킬 간 미스매치를 4개 병렬 에이전트로 자동 검증한다.
 triggers:
-  - "스킬 검증", "skill validate", "스킬 점검", "스킬 미스매치"
-version: 2.0.0
+  - "스킬 검증"
+  - "skill validate"
+  - "스킬 점검"
+  - "스킬 미스매치"
+  - "/skill-validator"
+version: 2.0.1
 user-invocable: true
 depends_on: []
 conflicts_with: []

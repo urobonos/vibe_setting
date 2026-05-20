@@ -26,7 +26,8 @@ triggers:
   - "Python Lambda"
   - "serverless.yml"
   - "SAM template"
-version: 1.0.0
+  - "/aws"
+version: 1.0.1
 user-invocable: true
 depends_on: [mysql8, security-audit]
 conflicts_with: []

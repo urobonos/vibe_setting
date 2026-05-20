@@ -13,8 +13,8 @@ triggers:
   - "노션 페이지 수정"
   - "노션 검색"
   - "노션 데이터베이스"
-  - "/notion"
-version: 1.0.0
+  - "/notion-cli"
+version: 1.0.1
 user-invocable: true
 depends_on: []
 conflicts_with: []
