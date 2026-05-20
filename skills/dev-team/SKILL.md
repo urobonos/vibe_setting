@@ -20,10 +20,10 @@ triggers:
   - "다레포 구현"
   - "cross-repo 개발"
   - "/dev-team"
-version: 1.0.0
+version: 1.0.1
 user-invocable: true
 depends_on: [orchestration, php8, mysql8, aws, security-audit, task-docs, global-context]
-conflicts_with: []
+conflicts_with: [api-team]
 min_claude_md_version: "4.0"
 ---
 
