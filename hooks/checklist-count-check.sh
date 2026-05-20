@@ -87,6 +87,6 @@ if [ -n "$created_date" ] && [ "$created_date" \< "$TEMPLATE_STRICT_FROM" ]; the
 fi
 
 echo "[BLOCKED] $FILE_PATH: 체크리스트 ${COUNT}개 부족 (필요: ${MIN}개)" >&2
-echo "          task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20 / unified≥50." >&2
+echo "          task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20 / unified≥30." >&2
 echo "          references/{analyze,plan,result,unified}-template.md SSOT 골격 prepend 후 보강하세요." >&2
 exit 2
