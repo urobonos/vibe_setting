@@ -256,6 +256,7 @@
 | 프로세스 | Claude Code 프로세스 + 세션 sid 매핑 조회 + REGISTRY/lock orphan 분류·정리. 3 모드 — 기본 (read-only), `cleanup` (orphan 정리), `kill` (좀비 PID 종료 명령 안내, 사용자 직접) | `/프로세스` | ✓ | B |
 
 **자동화 분류 카운트:** A = 23 (api-spec-audit · api-team · debate · dev-team · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 병렬 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 6 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 + sns-oauth add·debug) / C = 10 (aws · bitbucket-cli · feature-create · feature-merge · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
+> **혼합 분류 카운트 방식 (필수):** mirror-be-claude (A/C) · sns-oauth (A/B) 처럼 모드별 자동화 강도가 다른 skill 은 **각 모드별로 분리 카운트**. 행 1줄 = 1 표기 (`A (verify·sync-from-be) / C (sync-from-global)`), 카운트는 모드 단위. 표 행 단순 카운트 (skill 단일 count) 와 다름.
 
 ### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)
 
