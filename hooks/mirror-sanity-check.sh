@@ -85,7 +85,7 @@ fi
 
 # 텔레메트리
 if command -v log_event >/dev/null 2>&1; then
-  log_event "mirror-sanity-check" "info" "warnings=$WARNINGS"
+  log_event "mirror-sanity-check" "enter" "warnings=$WARNINGS"
 fi
 
 exit 0
