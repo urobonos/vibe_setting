@@ -78,6 +78,6 @@ cat <<EOF
 </system-reminder>
 EOF
 
-log "REMINDER injected sid=$SESSION_ID elapsed=${DIFF}s remaining=${REMAINING}s"
+log "enter" "REMINDER injected sid=$SESSION_ID elapsed=${DIFF}s remaining=${REMAINING}s"
 
 exit 0
