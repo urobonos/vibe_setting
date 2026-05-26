@@ -25,7 +25,7 @@ echo "2" > "$GATE_FILE"
 # SSOT: backlog_harness-audit-followup F1 (2026-05-20 GC 범위 확장)
 find /tmp -maxdepth 1 -name 'claude_*' -mtime +7 -delete 2>/dev/null
 
-# skill-creator 락 파일 잔여 정리 (이전 세션에서 미삭제 가능성 차단)
-rm -f "$HOME/.claude/.skill-creator-active.lock" 2>/dev/null
+# skill-creator 락 파일 잔여 정리 (이전 세션에서 미삭제 가능성 차단, 2026-05-26 경로 이전 — gate-init L26 GC 와 별도 즉시 정리)
+rm -f "/tmp/claude_skill_creator_active.lock" 2>/dev/null
 
 exit 0

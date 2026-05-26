@@ -4,7 +4,7 @@
 #
 # 정책:
 #   - .claude/skills/{skill}/* 하위 파일은 skill-creator 스킬을 통해서만 수정·생성
-#   - 락 파일 ~/.claude/.skill-creator-active.lock 존재 시 통과 (skill-creator 진입 시 모델이 생성)
+#   - 락 파일 /tmp/claude_skill_creator_active.lock 존재 시 통과 (skill-creator 진입 시 모델이 생성)
 #   - 차단 시 exit 2 + stderr 메시지로 skill-creator 호출 유도
 #   - 사용자 결정 (2026-04-30): 스킬 생성·수정·최적화는 전부 skill-creator 경유 강제
 
@@ -21,7 +21,7 @@ FILE_PATH=$(normalize_path "$FILE_PATH")
 echo "$FILE_PATH" | grep -qiE '/\.claude/skills/' || exit 0
 
 # 락 파일 escape — skill-creator 진입 시 모델이 touch 로 생성
-LOCK_FILE="$HOME/.claude/.skill-creator-active.lock"
+LOCK_FILE="/tmp/claude_skill_creator_active.lock"
 if [ -f "$LOCK_FILE" ]; then
   exit 0
 fi
