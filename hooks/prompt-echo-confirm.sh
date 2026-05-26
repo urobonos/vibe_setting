@@ -33,7 +33,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [$event] $*" >> "$LOG_FILE" 2>/dev/null
   }
 }
-log() { log_event "prompt-echo-confirm" "info" "$*"; }
+log() {
+  local event="info"
+  if [[ "${1:-}" =~ ^(enter|approve|block|skip|error|info)$ ]]; then
+    event="$1"; shift
+  fi
+  log_event "prompt-echo-confirm" "$event" "$*"
+}
 
 PENDING_MARKER="/tmp/claude_echo_pending_${SESSION_ID}"
 

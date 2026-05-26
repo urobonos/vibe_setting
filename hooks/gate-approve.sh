@@ -20,7 +20,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
   }
 }
 # 기존 log() 함수 wrapper — 점진 마이그레이션 호환 (event="info" 기본)
-log() { log_event "gate-approve" "info" "$*"; }
+log() {
+  local event="info"
+  if [[ "${1:-}" =~ ^(enter|approve|block|skip|error|info)$ ]]; then
+    event="$1"; shift
+  fi
+  log_event "gate-approve" "$event" "$*"
+}
 
 # session_id와 prompt 추출 (python3 우선, 실패 시 grep/sed fallback)
 # 보안 (2026-05-13 H-1 픽스): eval 폐기. Python 이 2 줄로 분리 출력 (line 1 = sid, line 2 = prompt) →

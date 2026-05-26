@@ -25,7 +25,14 @@ mkdir -p "$LOG_HELPER_ROOT" 2>/dev/null
 # log_event <hook-name> <event-type> [detail...]
 # ─────────────────────────────────────────────────────────
 # hook-name: 'gate-approve' / 'working-lifecycle' 등 — 파일 분리 키
-# event-type: 'approve' / 'block' / 'skip' / 'move' / 'error' 등 — 집계 카운트 키
+# event-type: 6 분류 표준 (2026-05-19 debate 결정, 2026-05-26 정렬)
+#   enter   — hook 진입 시작점
+#   approve — 승인/통과 (성공 분기)
+#   block   — 차단/exit 2 (강제 차단 분기)
+#   skip    — 면제/스킵 (조건 미충족 통과)
+#   error   — 오류 발생 (예외 흐름)
+#   info    — 기타 디버그 (fallback)
+# 예약어: 'move' = work-lifecycle hook 향 별 차원 (6 분류와 독립). event-type 자체는 자유 텍스트 유지, 6 분류는 권장 표준.
 # detail: 자유 텍스트 (1줄, newline 제거)
 log_event() {
   local hook_name="${1:-unknown}"

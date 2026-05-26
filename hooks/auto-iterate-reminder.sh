@@ -37,7 +37,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [$event] $*" >> "$LOG_FILE" 2>/dev/null
   }
 }
-log() { log_event "auto-iterate-reminder" "info" "$*"; }
+log() {
+  local event="info"
+  if [[ "${1:-}" =~ ^(enter|approve|block|skip|error|info)$ ]]; then
+    event="$1"; shift
+  fi
+  log_event "auto-iterate-reminder" "$event" "$*"
+}
 
 # gate 파일 미존재 시 통과
 if [ ! -f "$GATE_FILE" ]; then

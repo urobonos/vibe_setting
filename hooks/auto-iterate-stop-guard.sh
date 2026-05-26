@@ -48,7 +48,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [$event] $*" >> "$LOG_FILE" 2>/dev/null
   }
 }
-log() { log_event "auto-iterate-stop-guard" "info" "$*"; }
+log() {
+  local event="info"
+  if [[ "${1:-}" =~ ^(enter|approve|block|skip|error|info)$ ]]; then
+    event="$1"; shift
+  fi
+  log_event "auto-iterate-stop-guard" "$event" "$*"
+}
 
 # 사용자 명시 중단 마커 — gate-approve.sh 가 "중단"/"보류"/"멈춰" 감지 시 생성
 if [ -f "$STOP_MARKER" ]; then
