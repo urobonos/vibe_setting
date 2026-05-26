@@ -17,6 +17,7 @@ source "$(dirname "$0")/lib/hook-input.sh"
 
 hook_init
 hook_read_stdin
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "audit-no-autofix-guard" "enter" "pid=$$"
 hook_parse_session_id
 
 # --- 도구 이름 추출 ---

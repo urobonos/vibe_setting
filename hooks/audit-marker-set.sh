@@ -12,6 +12,7 @@ source "$(dirname "$0")/lib/hook-input.sh"
 
 hook_init
 hook_read_stdin
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "audit-marker-set" "enter" "pid=$$"
 hook_parse_session_id
 
 # --- 사용자 프롬프트 추출 ---

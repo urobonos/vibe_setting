@@ -14,6 +14,7 @@ source "$(dirname "$0")/lib/hook-input.sh"
 
 hook_init
 hook_read_stdin
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "rollback-state-guard" "enter" "pid=$$"
 hook_parse_command
 
 if [ -z "$COMMAND" ]; then

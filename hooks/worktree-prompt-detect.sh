@@ -11,6 +11,7 @@
 set -uo pipefail
 
 PAYLOAD=$(cat)
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "worktree-prompt-detect" "enter" "pid=$$"
 PROMPT=$(echo "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('prompt',''))" 2>/dev/null)
 
 if [ -z "$PROMPT" ]; then exit 0; fi

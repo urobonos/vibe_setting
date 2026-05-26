@@ -10,6 +10,7 @@
 # SSOT: CLAUDE.md §4.2 "사용자 직접 실행 명령 스크립트화"
 
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "scripts-cleanup" "enter" "pid=$$"
 
 SCRIPTS_DIR="$HOME/.claude/docs/scripts"
 
