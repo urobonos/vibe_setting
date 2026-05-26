@@ -3,7 +3,9 @@
 #
 # 정책: 모든 소스 mutation 작업은 worktree 안에서 수행되어야 한다.
 #   cwd 또는 FILE_PATH 가 worktree (`*/worktrees/*`) 가 아니고
-#   functional exemption 7건 매칭 안 됨 → exit 2 차단.
+#   functional exemption 8건 매칭 안 됨 → exit 2 차단.
+#   단, cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) 면제 — worktree 생성 자체가
+#   불가능하므로 강제 차단이 작업을 막는다 (path-pattern 면제와 별개인 state-condition 면제).
 #
 # Why: branch-enforce.sh (protected 분기 자동 강제) retire. worktree-first 단일 정책 전환.
 #   - 모든 소스 작업 = worktree 격리 (사고 영구 차단)
@@ -62,6 +64,13 @@ case "$FILE_PATH" in
   */.claude/settings.local.json)   exit 0 ;;
   C:/Works/infra/*|/c/Works/infra/*) exit 0 ;;  # #8: dev-team 인프라 영역 (git 미추적, 2026-05-20 추가)
 esac
+
+# git 미연동 cwd 면제 (2026-05-26): worktree 는 git 기능 — cwd 가 git work-tree 가
+# 아니면 worktree 생성 자체가 불가능하므로 강제 차단 시 모든 작업이 막힌다. pwd 기준 판정
+# (FILE_PATH 기준은 신규 디렉토리 dirname 미존재 → git repo 인데 면제되는 우회 구멍).
+if ! git -C "$(pwd)" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  exit 0
+fi
 
 # Bash 모드: FILE_PATH = pwd 이므로 위 면제로 cwd 자동 처리됨
 # (별도 cwd 보조 검사 = Edit 모드 우회 통로 → 제거 2026-05-20 fix)

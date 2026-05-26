@@ -145,6 +145,7 @@
     6. `*/.claude/settings.json` — git untracked, worktree 동기화 불가능
     7. `*/.claude/settings.local.json` — git untracked
     8. `C:/Works/infra/*` — dev-team 인프라 영역 (git 미추적, 2026-05-20 dev-team 도입 동반 추가)
+  - **(c-2) git 미연동 cwd 면제 (state-condition, 2026-05-26 신설):** cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) `worktree-enforce.sh` 가 면제 (exit 0). **Why:** worktree 는 git 기능 — git 미연동 디렉토리에서는 worktree 생성 자체가 불가능하므로 강제 차단 시 모든 mutation 작업이 막힌다. **판정:** `git -C "$(pwd)" rev-parse --is-inside-work-tree` 실패(비0) = 면제. **FILE_PATH 가 아닌 pwd 기준 판정 (필수):** FILE_PATH 기준은 신규 디렉토리 dirname 미존재 시 git 명령 실패 → git repo 인데 면제되는 우회 구멍 발생. **(c) 8건과 별개:** 8건은 path-pattern 면제, 본 항은 작업 디렉토리 git 연동 여부 state-condition 면제. **§3 우선:** git repo 안 신규 디렉토리 경로 mutation 은 본 면제와 무관하게 차단 유지.
   - **(d) `git push` 전면 금지:** 어떤 분기·시나리오에서도 Claude 자동 `git push` 금지 (feature/source/personal/relay 모두 포함, `--delete`·`--force-with-lease` 포함). 사용자 직접 (`! git push ...`) 만 허용. 강제: `branch-enforce.sh` §(1) shlex 토큰화 exit 2 (잔존).
   - **(e) master/main 머지·체크아웃 절대 금지:** `git merge {main|master|origin/main|origin/master|refs/heads/main|refs/heads/master|upstream/main|upstream/master}` / `git checkout {위 target}` / `git switch {위 target}` + chained 명령 모두 자동 호출 금지. 사용자 직접만. 강제: `branch-enforce.sh` §(1.5) 잔존. worktree 정착 시 source = main/master 이면 정착 절대 금지 — PR 절차로 대체.
   - **(f) ff-only 머지 + worktree 정리:** worktree 정착 명령 (`/feature-create`·`/feature-merge`) = **사용자 직접 (`! ` prefix) 실행 권장**. Claude 자동 머지 금지 — §3 Checkpoint "비가역적 작업" 매칭. 정착 후 `git worktree remove` + `git branch -D wip/*`.
