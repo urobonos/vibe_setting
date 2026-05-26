@@ -55,7 +55,7 @@ if [ "$PROMPT_LEN" -lt 10 ]; then
   LOWER_SHORT=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
   if echo "$LOWER_SHORT" | grep -qE '^[[:space:]]*(진행|승인|확인|오케이|오키|해|해봐|해줘|좋아|넵|네|ㄱ|ㄱㄱ|ㅇ|ㅇㅇ|ㅇㅋ|ok|okay|yes|y|go|lgtm|sure|approve|proceed|맞아|맞|맞음)[[:space:]!.?,~]*$'; then
     rm -f "$PENDING_MARKER" 2>/dev/null
-    log "APPROVE_SHORT sid=$SESSION_ID len=$PROMPT_LEN — marker removed"
+    log approve "APPROVE_SHORT sid=$SESSION_ID len=$PROMPT_LEN — marker removed"
   fi
   exit 0
 fi
@@ -71,7 +71,7 @@ if echo "$LOWER_PROMPT" | grep -qE '(^|\s)(no|nope|stop|cancel|abort|hold|wait|n
   NEGATED=true
 fi
 if [ "$NEGATED" = true ]; then
-  log "NEGATED sid=$SESSION_ID len=$PROMPT_LEN — skip"
+  log skip "NEGATED sid=$SESSION_ID len=$PROMPT_LEN — skip"
   exit 0
 fi
 
@@ -86,13 +86,13 @@ fi
 # 승인 키워드 + 짧은 보충 (50자 이하)
 if [ "$APPROVED_ONLY" = true ] && [ "$PROMPT_LEN" -le 50 ]; then
   rm -f "$PENDING_MARKER" 2>/dev/null
-  log "APPROVE_LONG sid=$SESSION_ID len=$PROMPT_LEN — marker removed"
+  log approve "APPROVE_LONG sid=$SESSION_ID len=$PROMPT_LEN — marker removed"
   exit 0
 fi
 
 # --- 스킵 5: 펜딩 마커 이미 존재 (정정/추가 지시는 통과) ---
 if [ -f "$PENDING_MARKER" ]; then
-  log "PENDING_EXIST sid=$SESSION_ID len=$PROMPT_LEN — skip new echo"
+  log skip "PENDING_EXIST sid=$SESSION_ID len=$PROMPT_LEN — skip new echo"
   exit 0
 fi
 
@@ -105,7 +105,7 @@ GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 if [ -f "$GATE_FILE" ] && [ "$(cat "$GATE_FILE" 2>/dev/null)" = "2" ]; then
   # mtime 60분 이내 검사 (find -mmin 호환 — Windows Git Bash 동작 확인)
   if find "$GATE_FILE" -mmin -60 2>/dev/null | grep -q .; then
-    log "BUNDLED_RECENT sid=$SESSION_ID len=$PROMPT_LEN — skip (gate=2, <60min)"
+    log skip "BUNDLED_RECENT sid=$SESSION_ID len=$PROMPT_LEN — skip (gate=2, <60min)"
     exit 0
   fi
 fi
@@ -129,13 +129,13 @@ if [ "$TRIGGER" = false ] && echo "$LOWER_PROMPT" | grep -qE '(실행해|돌려|
 fi
 
 if [ "$TRIGGER" = false ]; then
-  log "NO_TRIGGER sid=$SESSION_ID len=$PROMPT_LEN — skip"
+  log skip "NO_TRIGGER sid=$SESSION_ID len=$PROMPT_LEN — skip"
   exit 0
 fi
 
 # --- 트리거 매칭 → 마커 생성 + system reminder 주입 ---
 touch "$PENDING_MARKER" 2>/dev/null
-log "TRIGGERED sid=$SESSION_ID len=$PROMPT_LEN — echo-back required"
+log enter "TRIGGERED sid=$SESSION_ID len=$PROMPT_LEN — echo-back required"
 
 cat <<'EOF'
 <system-reminder>
