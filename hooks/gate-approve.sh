@@ -63,7 +63,7 @@ if [ "$PARSE_OK" -eq 0 ]; then
   # prompt 단순 추출 (escape된 따옴표는 일단 잘릴 수 있으나 승인 키워드 매칭용으로 충분)
   PROMPT=$(echo "$STDIN_DATA" | grep -o '"prompt"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"prompt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
   SESSION_ID=${SESSION_ID:-default}
-  log "WARN fallback-grep used session_id=[$SESSION_ID] prompt_len=${#PROMPT}"
+  log error "WARN fallback-grep used session_id=[$SESSION_ID] prompt_len=${#PROMPT}"
 fi
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
@@ -123,9 +123,9 @@ if [ "$NEGATED" = true ]; then
   if echo "$LOWER_PROMPT" | grep -qE '(중단|보류|멈춰|stop|abort|cancel)'; then
     STOP_MARKER_FILE="/tmp/claude_stop_requested_${SESSION_ID}"
     touch "$STOP_MARKER_FILE" 2>/dev/null
-    log "stop marker created (auto-iterate cancel) sid=$SESSION_ID"
+    log info "stop marker created (auto-iterate cancel) sid=$SESSION_ID"
   fi
-  log "NEGATED prompt sid=$SESSION_ID prompt_len=${#PROMPT} — 승인 매칭 skip"
+  log skip "NEGATED prompt sid=$SESSION_ID prompt_len=${#PROMPT} — 승인 매칭 skip"
   exit 0
 fi
 
@@ -199,7 +199,7 @@ if [ "$APPROVED" = true ]; then
   else
     NEW_LEVEL=$((CURRENT + 1))
   fi
-  log "APPROVE sid=$SESSION_ID prompt_len=${#PROMPT} current=$CURRENT new=$NEW_LEVEL bundled=$BUNDLED_APPROVED"
+  log approve "APPROVE sid=$SESSION_ID prompt_len=${#PROMPT} current=$CURRENT new=$NEW_LEVEL bundled=$BUNDLED_APPROVED"
 
   # --- task-docs 체이닝 검증 ---
   # gate → 2 진입 시(1→2 단일승인 또는 0→2 묶음승인): 단계 문서 1종 이상 필수
@@ -237,7 +237,7 @@ except:
         # 분석 단독 세션은 analyze.md 하나로, 작은 구현 세션은 result.md 하나로 완결 가능.
         STAGE_DOC=$(find "$RECENT_SUBDIR" \( -name "*analyze.md" -o -name "*plan.md" -o -name "*result.md" \) -type f 2>/dev/null | head -1)
         if [ -z "$STAGE_DOC" ]; then
-          log "BLOCK stage doc missing subdir=$RECENT_SUBDIR"
+          log block "BLOCK stage doc missing subdir=$RECENT_SUBDIR"
           echo "[TASK-DOCS GATE] 단계 문서 미생성 — gate 1→2 차단. $RECENT_SUBDIR/ 에 analyze.md / plan.md / result.md 중 최소 1종을 생성하세요." >&2
           exit 2
         fi
@@ -252,7 +252,7 @@ except:
     NEW_LEVEL=2
   fi
   echo "$NEW_LEVEL" > "$GATE_FILE"
-  log "SAVED sid=$SESSION_ID gate=$NEW_LEVEL"
+  log info "SAVED sid=$SESSION_ID gate=$NEW_LEVEL"
 fi
 
 exit 0
