@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "doc-quality" "enter" "pid=$$"
 # PostToolUse Hook: 문서 품질 + 테스트 동반 + Notion 동기화
 # 통합: doc-checklist-guard.sh + test-coexistence-check.sh + notion-sync-reminder.sh
 #

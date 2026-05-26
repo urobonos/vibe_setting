@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "pre-idle-selfcheck" "enter" "pid=$$"
 # Stop Hook: 대기 진입 전 자가점검 프롬프트 주입
 #
 # 목적: Claude가 "모든 작업이 끝났다"고 판단하고 사용자 응답 대기로 들어가기 직전,

@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "verify-e2e-check" "enter" "pid=$$"
 # verify-e2e-check.sh
 # PostToolUse:Edit|Write Hook — e2e 5점 검증 (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock 분리) 강제
 #

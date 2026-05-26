@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "change-impact-section-check" "enter" "pid=$$"
 # PostToolUse:Edit|Write Hook — 변경 영향 기록 섹션 검증 (G2)
 #
 # 대상:

@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "skill-edit-guard" "enter" "pid=$$"
 # PreToolUse:Edit|Write Hook — 스킬 디렉토리 직접 수정 차단 (skill-creator 강제)
 #
 # 정책:

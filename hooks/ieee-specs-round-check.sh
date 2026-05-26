@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "ieee-specs-round-check" "enter" "pid=$$"
 # PostToolUse:Edit|Write Hook — IEEE specs 3-Round 메타데이터 검증 (G3)
 #
 # 대상:

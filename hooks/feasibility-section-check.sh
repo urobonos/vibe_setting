@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "feasibility-section-check" "enter" "pid=$$"
 # PostToolUse:Edit|Write Hook — 타당성 검토 섹션 + 엄격 인용 검증 (G1)
 #
 # 대상:

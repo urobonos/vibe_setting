@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "author-field-check" "enter" "pid=$$"
 # PreToolUse:Edit|Write|MultiEdit Hook — 산출물 frontmatter author/작성자 필드 위반 차단
 #
 # CLAUDE.md §4.1 "장기 관점 분석·계획·실행" 룰의 재발 방지 강제 수단.

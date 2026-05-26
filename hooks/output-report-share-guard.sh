@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "output-report-share-guard" "enter" "pid=$$"
 # PreToolUse:Edit|Write|MultiEdit Hook — 공유용 단일 통합 문서 양식 강제 (2026-05-12 신설)
 #
 # 대상 경로:

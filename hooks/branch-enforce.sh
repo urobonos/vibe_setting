@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "branch-enforce" "enter" "pid=$$"
 # PreToolUse:Edit|Write|Bash Hook — push 차단 + master/main 머지 금지 (잔존 영역, 2026-05-20 retire 후)
 #
 # 정책 (2026-04-30 / 2026-05-07 / 2026-05-13 / 2026-05-20 부분 retire):

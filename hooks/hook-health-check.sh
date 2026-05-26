@@ -12,6 +12,7 @@
 #   자동 비활성화는 settings.json 변경이라는 광범위한 영향이 있어 사용자 명시 호출(--disable-missing)로 분리.
 
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "hook-health-check" "enter" "pid=$$"
 
 source "$(dirname "$0")/lib/hook-input.sh"
 

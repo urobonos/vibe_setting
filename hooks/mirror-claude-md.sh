@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "mirror-claude-md" "enter" "pid=$$"
 # PostToolUse:Edit|Write Hook — be CLAUDE.md ↔ 글로벌 미러본 양방향 동기화
 #
 # 대상:

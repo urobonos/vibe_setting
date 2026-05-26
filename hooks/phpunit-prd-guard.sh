@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "phpunit-prd-guard" "enter" "pid=$$"
 # PreToolUse Hook: phpunit 실행 전 .env의 database.default.hostname이 prd Aurora를 가리키면 차단
 # 2026-04-22 phpunit-prd-db-incident 재발 방지 (Phase 5)
 #

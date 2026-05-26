@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "agent-first-banner" "enter" "pid=$$"
 # SessionStart Hook: Agent-First Default 배너 출력
 # CLAUDE.md §4 "에이전트 우선 위임" + orchestration §0 "Agent-First Default" SSOT.
 # 본 세션의 default 동작이 "Agent 도구 우선 위임" 임을 매 세션 시작 시 상기시킨다.

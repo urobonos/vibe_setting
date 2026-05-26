@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "session-checkpoint" "enter" "pid=$$"
 # Stop Hook: 세션 종료 시 체크포인트 메모리 자동 저장
 #
 # 동작:

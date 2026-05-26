@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-stale-cleanup" "enter" "pid=$$"
 # working-stale-cleanup.sh — SessionStart hook 진입 시 잔여 자원 정리 (lock + 빈 worktree 폴더)
 #
 # SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md

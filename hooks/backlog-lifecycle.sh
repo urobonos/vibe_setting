@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "backlog-lifecycle" "enter" "pid=$$"
 # backlog-lifecycle.sh — memory backlog 메모리 완료 시 tasks/ 자동 이동 (2026-05-13 시행)
 #
 # SSOT: CLAUDE.md §4 "backlog 메모리 정책" + skills/task-docs/SKILL.md §"backlog 메모리 워크플로우"

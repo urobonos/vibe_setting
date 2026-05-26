@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "gate-enforce" "enter" "pid=$$"
 # PreToolUse Hook: Gate 미통과 시 Edit/Write 차단 + Agent 검증
 # Phase 3 Harness — v2 (비코드 경로 완화)
 #

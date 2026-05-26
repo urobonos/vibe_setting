@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "session-completeness-check" "enter" "pid=$$"
 # Stop Hook: 세션 종료 시 산출물 누락 검증
 # exit 2 차단 — 산출물 미완성 시 세션 종료 차단
 #

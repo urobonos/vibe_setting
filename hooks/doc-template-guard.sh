@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "doc-template-guard" "enter" "pid=$$"
 # doc-template-guard.sh
 # PostToolUse hook: 문서 파일이 표준 양식을 따르는지 검증
 

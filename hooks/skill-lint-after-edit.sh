@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "skill-lint-after-edit" "enter" "pid=$$"
 # PostToolUse Hook: skills/{name}/SKILL.md 변경 시 bin/ 검증 도구 3종 자동 실행
 #
 # 정책: skill-creator/skill-validator 가 SKILL.md 편집한 직후 자동 검증 작동.

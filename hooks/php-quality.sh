@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "php-quality" "enter" "pid=$$"
 # PostToolUse Hook: PHP 코드 품질 검증
 # 통합: php-syntax-check.sh + php-pattern-lint.sh
 #

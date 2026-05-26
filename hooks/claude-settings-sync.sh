@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "claude-settings-sync" "enter" "pid=$$"
 # PostToolUse Hook: .claude/ 설정 파일 변경 시 git 자동 커밋+푸시
 
 source "$(dirname "$0")/lib/hook-input.sh"

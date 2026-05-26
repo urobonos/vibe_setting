@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "output-naming-check" "enter" "pid=$$"
 # PreToolUse:Edit|Write Hook — 산출물 파일명 규칙 검증 (tasks/ + output/ + working/)
 #
 # 대상:

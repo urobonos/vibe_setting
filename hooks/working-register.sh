@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-register" "enter" "pid=$$"
 # working-register.sh — PreToolUse Edit/Write working/*.md 진입 시 REGISTRY entry 등록 + lock 생성
 #
 # SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md

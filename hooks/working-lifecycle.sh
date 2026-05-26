@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-lifecycle" "enter" "pid=$$"
 # working-lifecycle.sh — working/ 단일 통합 문서 자동 이동 (2026-05-12 시행)
 #
 # SSOT: CLAUDE.md §File Paths "working/ 단일 통합 문서" + skills/task-docs/SKILL.md §"working/ 단일 통합 워크플로우"

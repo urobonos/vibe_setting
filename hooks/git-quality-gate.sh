@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "git-quality-gate" "enter" "pid=$$"
 # PreToolUse Hook: git commit 품질 게이트
 # 통합: git-commit-lint.sh + single-purpose-commit.sh + no-test-no-merge.sh
 # Fail-fast 순서: 1) 메시지 형식 → 2) 커밋 범위 → 3) 테스트 이력

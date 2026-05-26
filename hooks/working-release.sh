@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-release" "enter" "pid=$$"
 # working-release.sh — Stop hook 진입 시 본인 세션 active entry 를 status=paused 로 변경 + lock 정리
 #
 # SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md

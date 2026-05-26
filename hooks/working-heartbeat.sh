@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-heartbeat" "enter" "pid=$$"
 # working-heartbeat.sh — PostToolUse Edit/Write working/*.md 직후 last_update 갱신 + lock mtime touch
 #
 # SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md

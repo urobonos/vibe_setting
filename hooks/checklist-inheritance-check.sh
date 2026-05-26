@@ -1,5 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "checklist-inheritance-check" "enter" "pid=$$"
 # PostToolUse:Edit|Write Hook — 이전 단계 체크리스트 소거 검증 (G4)
 #
 # 대상:
