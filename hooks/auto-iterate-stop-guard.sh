@@ -59,7 +59,7 @@ log() {
 # 사용자 명시 중단 마커 — gate-approve.sh 가 "중단"/"보류"/"멈춰" 감지 시 생성
 if [ -f "$STOP_MARKER" ]; then
     rm -f "$STOP_MARKER" "$COUNTER_FILE" 2>/dev/null
-    log "stop marker detected — pass through"
+    log skip "stop marker detected — pass through"
     exit 0
 fi
 
@@ -115,10 +115,10 @@ print(last_text)
 - 제약: source = main / master 인 경우 정착 금지 (§"master/main 머지 절대 금지"). 별도 PR 절차 사용.
 - SSOT: commands/자동진행.md §"정착 절차" + CLAUDE.md §4.3 "자동진행 worktree-first 정책".
 EOF
-                log "settlement reminder emitted for wip branch=$CURRENT_BRANCH"
+                log info "settlement reminder emitted for wip branch=$CURRENT_BRANCH"
                 ;;
         esac
-        log "completion sentinel detected — pass through"
+        log skip "completion sentinel detected — pass through"
         exit 0
     fi
 fi
@@ -142,7 +142,7 @@ DIFF=$((NOW - GATE_MTIME))
 
 if [ "$DIFF" -gt 3600 ]; then
     rm -f "$COUNTER_FILE" 2>/dev/null
-    log "gate mtime expired (${DIFF}s > 3600s) — pass through"
+    log skip "gate mtime expired (${DIFF}s > 3600s) — pass through"
     exit 0
 fi
 
@@ -151,7 +151,7 @@ COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo "0")
 COUNT=$((COUNT + 0))
 
 if [ "$COUNT" -ge 5 ]; then
-    log "iteration limit reached (${COUNT} >= 5) — pass through, reset counter"
+    log block "iteration limit reached (${COUNT} >= 5) — pass through, reset counter"
     rm -f "$COUNTER_FILE" 2>/dev/null
     cat >&2 <<'EOF'
 [자동 위임 정책 — 재진입 한계 도달]
@@ -165,7 +165,7 @@ fi
 # 카운터 증가 + Stop 차단 + 재진입 지시
 COUNT=$((COUNT + 1))
 echo "$COUNT" > "$COUNTER_FILE"
-log "stop blocked, counter=${COUNT}, gate_age=${DIFF}s — request re-entry"
+log block "stop blocked, counter=${COUNT}, gate_age=${DIFF}s — request re-entry"
 
 cat >&2 <<EOF
 [자동 위임 정책 — Stop 차단 / 재진입 지시 (${COUNT}/5)]
