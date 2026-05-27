@@ -165,6 +165,7 @@ except:
     # 비코드: gate >= 1 (분석 방향 승인 후 수정 가능)
     if [ "$CURRENT" -lt 1 ]; then
       echo "[GATE BLOCKED] 비코드 파일 수정 차단 — 분석 방향을 먼저 제시하고 사용자 승인을 받으세요. (현재 gate=$CURRENT, 필요 gate>=1)" >&2
+      command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=non-code-gate"
       exit 2
     fi
   else
@@ -175,6 +176,7 @@ except:
       else
         echo "[GATE BLOCKED] 코드 수정 차단 — 실행 계획(plan)을 제시하고 사용자 승인을 받으세요. (현재 gate=$CURRENT, 필요 gate>=2)" >&2
       fi
+      command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=code-gate"
       exit 2
     fi
   fi
@@ -194,6 +196,7 @@ except:
       : # 통과
     else
       echo "[GATE BLOCKED] tasks/ 경로 규칙 위반 — 허용 패턴: history.md | YYYYMMDD/summary.md | YYYYMMDD/{작업명}/{단계}.md (현재: tasks/$REL_PATH)" >&2
+      command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=tasks-path"
       exit 2
     fi
   fi
@@ -207,6 +210,7 @@ if [[ "$TOOL_NAME" == "Task" || "$TOOL_NAME" == "SubagentSpawn" ]]; then
   if [[ "$SUBAGENT_TYPE" != "Explore" && "$SUBAGENT_TYPE" != "Plan" && "$SUBAGENT_TYPE" != "claude-code-guide" && "$SUBAGENT_TYPE" != "statusline-setup" && "$SUBAGENT_TYPE" != "general-purpose" ]]; then
     if [ -z "$MODEL" ]; then
       echo "[GATE BLOCKED] Subagent spawn 차단 — model 파라미터(opus/sonnet/haiku)를 반드시 지정하세요. (orchestration 스킬 §1.1 Effort 할당)" >&2
+      command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=subagent-model"
       exit 2
     fi
   fi
@@ -225,6 +229,7 @@ except:
   if echo "$PROMPT_TEXT" | grep -qiE '(team\s*3|execute|worker\s*lead)'; then
     if [[ "$ISOLATION" != "worktree" ]]; then
       echo "[GATE BLOCKED] Team 3 Agent spawn 차단 — isolation: \"worktree\" 필수. (orchestration §4.3 Worktree Isolation)" >&2
+      command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=team3-worktree"
       exit 2
     fi
   fi

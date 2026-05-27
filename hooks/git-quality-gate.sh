@@ -75,6 +75,7 @@ if [ -n "$COMMIT_MSG" ]; then
     echo "  허용 type: feat, fix, refactor, docs, test, chore, style, perf, ci, build, revert" >&2
     echo "  예시: feat(Commerce): 결제 API 추가" >&2
     echo "        fix: 인증 토큰 만료 처리 버그 수정" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=commit-format"
     exit 2
   fi
 
@@ -85,6 +86,7 @@ if [ -n "$COMMIT_MSG" ]; then
   if [ "$MSG_LEN" -gt 72 ]; then
     echo "[BLOCKED] 커밋 제목 72자 초과 (${MSG_LEN}자, 문자 단위) — 72자 이내로 줄이세요." >&2
     echo "  현재: $COMMIT_MSG" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=title-length"
     exit 2
   fi
 fi
@@ -104,6 +106,7 @@ if [ -n "$STAGED_FILES" ]; then
     echo "[BLOCKED] 1 커밋 1 변경 위반 — ${MODULE_COUNT}개 모듈 동시 변경 감지" >&2
     echo "  모듈: $MODULES" >&2
     echo "  각 모듈별로 커밋을 분리하세요." >&2
+    command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=multi-module"
     exit 2
   fi
 
@@ -156,4 +159,5 @@ fi
 echo "[NO TEST, NO MERGE] git commit 차단 — 이번 세션에서 테스트를 실행한 이력이 없습니다." >&2
 echo "  phpunit, composer test, npm test 등을 먼저 실행하세요." >&2
 echo "  테스트 불필요한 변경이라면 사용자에게 확인 후 진행하세요." >&2
+command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=no-test"
 exit 2
