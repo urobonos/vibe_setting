@@ -80,6 +80,7 @@ if [ "$HAS_OVERRIDE" = false ]; then
   echo "[PHPUNIT-PRD-GUARD BLOCKED] phpunit 실행 차단 — .env의 database.default.hostname이 prd를 가리킵니다: $DB_HOST" >&2
   echo "  → 해결: (1) phpunit.xml.dist 에 <server name=\"CI_ENVIRONMENT\" value=\"testing\" force=\"true\"/> 추가" >&2
   echo "           (2) 또는 .env 의 CI_ENVIRONMENT=testing 전환" >&2
+  command -v log_event >/dev/null 2>&1 && log_event "phpunit-prd-guard" "block" "reason=prd-db-host"
   exit 2
 fi
 

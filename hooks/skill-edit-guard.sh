@@ -33,4 +33,5 @@ echo "              .claude/skills/ 하위 파일은 skill-creator 스킬을 통
 echo "              조치: '/skill-creator' 또는 '스킬 수정/생성' 트리거로 진입하세요." >&2
 echo "              skill-creator 진입 직후 'touch $LOCK_FILE' 으로 락을 만들면 본 hook 을 우회합니다." >&2
 echo "              작업 종료 시 'rm $LOCK_FILE' 으로 락을 제거합니다." >&2
+command -v log_event >/dev/null 2>&1 && log_event "skill-edit-guard" "block" "reason=skill-locked"
 exit 2

@@ -57,6 +57,7 @@ if [ -n "$VIOLATING" ]; then
   echo "  정상값:    jypark (jypark 단독 author 정책)" >&2
   echo "  근거:      CLAUDE.md §4.1 '장기 관점 분석·계획·실행' 룰 — 재발 방지" >&2
   echo "             task-docs SKILL.md L128 — 작성자 기본값 = jypark" >&2
+  command -v log_event >/dev/null 2>&1 && log_event "author-field-check" "block" "reason=author-claude"
   exit 2
 fi
 

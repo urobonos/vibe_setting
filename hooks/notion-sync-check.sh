@@ -38,6 +38,7 @@ if [ -n "$PENDING" ]; then
   echo "동기화 완료 후 /tmp/claude_notion_done_${SESSION_ID} 마커 파일을 생성하거나" >&2
   echo "/tmp/claude_notion_request_${SESSION_ID} 를 삭제하세요." >&2
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" >&2
+  command -v log_event >/dev/null 2>&1 && log_event "notion-sync-check" "block" "reason=notion-pending"
   exit 2
 fi
 

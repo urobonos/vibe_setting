@@ -179,4 +179,5 @@ fi
     echo "SSOT: php8 §\"e2e 검증\" + CLAUDE.md §4.3 \"e2e 검증 (필수)\""
     echo "진입점: /검증  (~/.claude/commands/검증.md)"
 } >&2
+command -v log_event >/dev/null 2>&1 && log_event "verify-e2e-check" "block" "reason=e2e-incomplete"
 exit 2

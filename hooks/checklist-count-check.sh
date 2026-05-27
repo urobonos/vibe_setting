@@ -90,4 +90,5 @@ fi
 echo "[BLOCKED] $FILE_PATH: 체크리스트 ${COUNT}개 부족 (필요: ${MIN}개)" >&2
 echo "          task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20 / unified≥30." >&2
 echo "          references/{analyze,plan,result,unified}-template.md SSOT 골격 prepend 후 보강하세요." >&2
+command -v log_event >/dev/null 2>&1 && log_event "checklist-count-check" "block" "reason=checklist-short"
 exit 2

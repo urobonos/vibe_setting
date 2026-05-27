@@ -86,4 +86,5 @@ echo "              면제 8건: worktrees/* / state/sessions/*.lock / projects/
 echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json /" >&2
 echo "                       C:/Works/infra/* (dev-team)" >&2
 echo "              SSOT: CLAUDE.md §4.3 \"worktree 항상 강제\"" >&2
+command -v log_event >/dev/null 2>&1 && log_event "worktree-enforce" "block" "reason=worktree-required"
 exit 2

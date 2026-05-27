@@ -86,6 +86,7 @@ if [ ${#META_MISSING[@]} -gt 0 ]; then
   echo "    (A) '>' 블록 6 라인 — > **문서 ID**: ... / > **버전**: ... / ..." >&2
   echo "    (B) '## 작성 정보' 표 형식 — | 문서 ID | ... | / | 버전 | ... | / ..." >&2
   echo "  근거: ~/.claude/CLAUDE.md §File Paths '공유용 단일 통합 문서' 룰 (2026-05-12 시행)" >&2
+  command -v log_event >/dev/null 2>&1 && log_event "output-report-share-guard" "block" "reason=share-info-box"
   exit 2
 fi
 
@@ -154,6 +155,7 @@ if [ ${#MISSING_IDX[@]} -gt 0 ]; then
   echo "" >&2
   echo "  근거: ~/.claude/CLAUDE.md §File Paths '공유용 단일 통합 문서' 룰 (2026-05-12 시행)" >&2
   echo "  목적: 외부 공유 시 1 파일만으로 자족적 이해 가능 (multi-file 분산 = 의사결정 사이클 지연)" >&2
+  command -v log_event >/dev/null 2>&1 && log_event "output-report-share-guard" "block" "reason=share-12section"
   exit 2
 fi
 
