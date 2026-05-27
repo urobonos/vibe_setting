@@ -1,6 +1,14 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "sensitive-file-guard" "enter" "pid=$$"
+
+# block telemetry wrapper (Phase 2b Stage 2) — 정의 실패와 독립: log_event 미정의여도 echo+exit 2 보장 (C1/H1)
+block_exit() {
+  command -v log_event >/dev/null 2>&1 && log_event "sensitive-file-guard" "block" "reason=$1"
+  echo "$2" >&2
+  exit 2
+}
+
 # PreToolUse Hook: 보호 대상 파일 Edit/Write 물리적 차단
 # Phase 1 Harness — exit 2로 도구 호출 자체를 차단
 #
@@ -42,58 +50,47 @@ LOWER_FILE=$(echo "$FILE" | tr '[:upper:]' '[:lower:]' | tr '\\' '/' | sed 's|//
 #    이 정책이 부적절한 프로젝트는 프로젝트 로컬 hook에서 선처리하여 면제한다.
 case "$LOWER_BASENAME" in
   *.tsx|*.jsx)
-    echo "[BLOCKED] 프론트엔드 파일 수정 차단: $BASENAME — 글로벌 정책상 프론트엔드 파일은 Read 전용입니다." >&2
-    exit 2 ;;
+    block_exit "fe-tsx" "[BLOCKED] 프론트엔드 파일 수정 차단: $BASENAME — 글로벌 정책상 프론트엔드 파일은 Read 전용입니다." ;;
   *.ts)
-    echo "[BLOCKED] TypeScript 파일 수정 차단: $BASENAME — 글로벌 정책상 TypeScript 파일은 Read 전용입니다." >&2
-    exit 2 ;;
+    block_exit "fe-ts" "[BLOCKED] TypeScript 파일 수정 차단: $BASENAME — 글로벌 정책상 TypeScript 파일은 Read 전용입니다." ;;
   *.js)
-    echo "[BLOCKED] JavaScript 파일 수정 차단: $BASENAME — 글로벌 정책상 JavaScript 파일은 Read 전용입니다." >&2
-    exit 2 ;;
+    block_exit "fe-js" "[BLOCKED] JavaScript 파일 수정 차단: $BASENAME — 글로벌 정책상 JavaScript 파일은 Read 전용입니다." ;;
   *.css|*.scss)
-    echo "[BLOCKED] 스타일 파일 수정 차단: $BASENAME — 글로벌 정책상 스타일 파일은 Read 전용입니다." >&2
-    exit 2 ;;
+    block_exit "style" "[BLOCKED] 스타일 파일 수정 차단: $BASENAME — 글로벌 정책상 스타일 파일은 Read 전용입니다." ;;
   next.config.*|tailwind.config.*|postcss.config.*|middleware.ts)
-    echo "[BLOCKED] 프론트엔드 설정 파일 수정 차단: $BASENAME — 글로벌 정책상 Read 전용입니다." >&2
-    exit 2 ;;
+    block_exit "fe-config" "[BLOCKED] 프론트엔드 설정 파일 수정 차단: $BASENAME — 글로벌 정책상 Read 전용입니다." ;;
   package.json|yarn.lock|pnpm-lock.yaml)
-    echo "[BLOCKED] 프론트엔드 패키지 파일 수정 차단: $BASENAME — npm/yarn/pnpm 명령으로 관리하세요." >&2
-    exit 2 ;;
+    block_exit "fe-pkg" "[BLOCKED] 프론트엔드 패키지 파일 수정 차단: $BASENAME — npm/yarn/pnpm 명령으로 관리하세요." ;;
 esac
 
 # 2. 환경변수 파일 차단 (.env 와 환경별 변형만 차단, .env.example/.env.sample 은 허용)
 # CLAUDE.md §4 e2e 검증 — "새 env 변수 참조 시 .env.example 추가" 룰을 hook 이 막지 않도록.
 if [[ "$LOWER_BASENAME" == ".env" || "$LOWER_BASENAME" == .env.* ]] \
    && [[ "$LOWER_BASENAME" != ".env.example" && "$LOWER_BASENAME" != ".env.sample" ]]; then
-  echo "[BLOCKED] 환경변수 파일 수정 차단: $BASENAME — 수동으로 편집하세요. (.env.example/.env.sample 은 허용)" >&2
-  exit 2
+  block_exit "env" "[BLOCKED] 환경변수 파일 수정 차단: $BASENAME — 수동으로 편집하세요. (.env.example/.env.sample 은 허용)"
 fi
 
 # 3. 잠금 파일 차단
 if [[ "$LOWER_BASENAME" == "composer.lock" || "$LOWER_BASENAME" == "package-lock.json" ]]; then
-  echo "[BLOCKED] 잠금 파일 수정 차단: $BASENAME — composer/npm 명령으로 관리하세요." >&2
-  exit 2
+  block_exit "lock" "[BLOCKED] 잠금 파일 수정 차단: $BASENAME — composer/npm 명령으로 관리하세요."
 fi
 
 # 4. 인증서/키 파일 차단
 case "$LOWER_BASENAME" in
   *.pem|*.key|*.p12|*.pfx)
-    echo "[BLOCKED] 인증서/키 파일 수정 차단: $BASENAME — Read만 허용됩니다." >&2
-    exit 2 ;;
+    block_exit "cert-key" "[BLOCKED] 인증서/키 파일 수정 차단: $BASENAME — Read만 허용됩니다." ;;
 esac
 
 # 5. 인증 정보 파일 차단
 case "$LOWER_BASENAME" in
   credentials|credentials.json|secrets.json|service-account.json)
-    echo "[BLOCKED] 인증 정보 파일 수정 차단: $BASENAME — Read만 허용됩니다." >&2
-    exit 2 ;;
+    block_exit "credentials" "[BLOCKED] 인증 정보 파일 수정 차단: $BASENAME — Read만 허용됩니다." ;;
 esac
 
 # 6. 서버 설정 파일 차단
 case "$LOWER_BASENAME" in
   .htpasswd|.htaccess)
-    echo "[BLOCKED] 서버 설정 파일 수정 차단: $BASENAME — Read만 허용됩니다." >&2
-    exit 2 ;;
+    block_exit "server-config" "[BLOCKED] 서버 설정 파일 수정 차단: $BASENAME — Read만 허용됩니다." ;;
 esac
 
 # 차단 대상 아님 — 통과
