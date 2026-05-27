@@ -56,6 +56,7 @@ if [ "$KIND" = "tasks" ]; then
   # YYYYMMDD/{작업명}/ 하위가 아니면 검증 제외
   if [ "$DEPTH" -lt 2 ]; then
     echo "[TASK-NAMING] tasks/YYYYMMDD/{작업명}/ 하위에 파일을 배치하세요. 현재: tasks/.../$REL_FROM_DATE" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=tasks-depth"
     exit 2
   fi
   WORK_NAME=$(echo "$REL_FROM_DATE" | awk -F/ '{print $1}')
@@ -70,6 +71,7 @@ if [ "$KIND" = "working" ]; then
     echo "[WORKING-NAMING] working/YYYYMMDD/ 직속 단일 파일 형식 필수 (하위 폴더 금지). 현재: working/.../$REL_FROM_DATE" >&2
     echo "  형식: working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md" >&2
     echo "  참고: ~/.claude/CLAUDE.md §File Paths 'working/ 단일 통합 문서'" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=working-format"
     exit 2
   fi
   CONTEXT_SLUG=""  # working/ 은 product+작업명 자유 slug, 첫 단어 정합성 검증 면제
@@ -87,6 +89,7 @@ if [ "$KIND" = "output" ]; then
   if [ "$DEPTH" -lt 3 ]; then
     echo "[OUTPUT-NAMING] output/{category}/{topic-slug}/ 하위에 파일을 배치하세요. 현재: output/$REL_FROM_OUTPUT" >&2
     echo "  카테고리: audit | verification | research | analysis | report | guide | archive" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=output-depth"
     exit 2
   fi
   # DEPTH > 3 = sub-document (단일 산출물의 분할 chapter, 예: {topic-slug}/sections/01-intro.md)
@@ -97,6 +100,7 @@ if [ "$KIND" = "output" ]; then
       audit|verification|research|analysis|report|guide|archive) exit 0 ;;
       *)
         echo "[OUTPUT-NAMING] 알 수 없는 카테고리: '$CATEGORY' — audit | verification | research | analysis | report | guide | archive 중 하나를 사용하세요." >&2
+        command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=unknown-category-deep"
         exit 2
         ;;
     esac
@@ -106,6 +110,7 @@ if [ "$KIND" = "output" ]; then
     audit|verification|research|analysis|report|guide|archive) ;;
     *)
       echo "[OUTPUT-NAMING] 알 수 없는 카테고리: '$CATEGORY' — audit | verification | research | analysis | report | guide | archive 중 하나를 사용하세요." >&2
+      command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=unknown-category"
       exit 2
       ;;
   esac
@@ -116,6 +121,7 @@ if [ "$KIND" = "output" ]; then
     SUGGEST_BASE=$(echo "$TOPIC_SLUG" | sed -E 's/-[0-9]{8}$//')
     echo "[OUTPUT-NAMING] 폴더명 suffix 형식 '-YYYYMMDD' 금지: '$TOPIC_SLUG'. ISO-8601 prefix 'YYYY-MM-DD-' 형식만 허용." >&2
     echo "  예시: $SUGGEST_DATE-$SUGGEST_BASE" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=folder-suffix"
     exit 2
   fi
   # 자동 면제: 부모 폴더 직속 자식이 모두 YYYY-MM-DD- prefix 이고 2건 이상이면 누적형
@@ -162,6 +168,7 @@ if [ "$KIND" = "output" ]; then
           echo "  ongoing 면제: daily-report / weekly-work-report / monthly-report (동일 주제 다회 누적 폴더)" >&2
           echo "  자동 면제: 부모 폴더 직속 자식이 모두 YYYY-MM-DD- prefix 이고 2건 이상" >&2
           echo "  참고: ~/.claude/CLAUDE.md §File Paths '폴더·파일명 날짜 표기'" >&2
+          command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=folder-prefix"
           exit 2
         fi
       fi
@@ -212,6 +219,7 @@ for g in "${GENERIC_NAMES[@]}"; do
       echo "  허용 type: analysis | report | recommendation | final-recommendation | comparison | guide | deployment-guide | proposal | reflection | checklist" >&2
     fi
     echo "  참고: ~/.claude/skills/task-docs/SKILL.md §산출물 네이밍 규칙" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=generic-name"
     exit 2
   fi
 done
@@ -230,6 +238,7 @@ if ! echo "$FILE_NAME" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
   fi
   echo "  예시: $SUGGEST" >&2
   echo "  참고: ~/.claude/skills/task-docs/SKILL.md §산출물 네이밍 규칙" >&2
+  command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=date-prefix"
   exit 2
 fi
 
