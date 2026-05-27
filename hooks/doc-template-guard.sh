@@ -284,6 +284,7 @@ fi
 # 차단 항목 우선 처리 (exit 2 — PostToolUse turn 재진입 강제)
 if [[ ${#blocking_missing[@]} -gt 0 ]]; then
     blocking_str=$(IFS=", "; echo "${blocking_missing[*]}")
+    command -v log_event >/dev/null 2>&1 && log_event "doc-template-guard" "block" "missing=${blocking_str}"
     echo "[BLOCKED] ${blocking_str} 섹션 누락 — ${file_path} 보완 후 재작성하세요." >&2
     exit 2
 fi
