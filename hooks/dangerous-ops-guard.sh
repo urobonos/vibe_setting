@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "dangerous-ops-guard" "enter" "pid=$$"
+
+# block telemetry wrapper (Phase 2b) — 정의 실패와 독립: log_event 미정의여도 echo+exit 2 항상 보장 (C1/H1)
+block_exit() {
+  command -v log_event >/dev/null 2>&1 && log_event "dangerous-ops-guard" "block" "reason=$1"
+  echo "$2" >&2
+  exit 2
+}
+
 # PreToolUse Hook: 파괴적 명령 차단 + 비가역적 작업 Checkpoint 경고
 # 통합: dangerous-command-guard.sh + checkpoint-guard.sh
 #
@@ -67,64 +75,52 @@ LOWER_CMD=$(echo "$COMMAND" | tr '[:upper:]' '[:lower:]')
 
 # 1. 파일 삭제 — rm -rf, rm -r, rm -f
 if echo "$COMMAND" | grep -qE '^\s*rm\s+-(r|f|rf|fr)\b'; then
-  echo "[BLOCKED] 파괴적 삭제 명령 차단: rm with -r/-f 플래그 — 삭제 대상을 확인하고 사용자에게 승인을 요청하세요." >&2
-  exit 2
+  block_exit "rm-rf" "[BLOCKED] 파괴적 삭제 명령 차단: rm with -r/-f 플래그 — 삭제 대상을 확인하고 사용자에게 승인을 요청하세요."
 fi
 
 # 2. Git 파괴적 명령
 if echo "$COMMAND" | grep -qE 'git\s+push\s+.*--force'; then
-  echo "[BLOCKED] force push 차단 — 원격 히스토리가 파괴됩니다. 사용자 명시 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "force-push" "[BLOCKED] force push 차단 — 원격 히스토리가 파괴됩니다. 사용자 명시 승인 후 수동 실행하세요."
 fi
 if echo "$COMMAND" | grep -qE 'git\s+reset\s+--hard'; then
-  echo "[BLOCKED] git reset --hard 차단 — 커밋되지 않은 변경이 모두 손실됩니다. 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "reset-hard" "[BLOCKED] git reset --hard 차단 — 커밋되지 않은 변경이 모두 손실됩니다. 사용자 승인 후 수동 실행하세요."
 fi
 if echo "$COMMAND" | grep -qE 'git\s+clean\s+.*-f'; then
-  echo "[BLOCKED] git clean -f 차단 — 추적되지 않는 파일이 삭제됩니다. 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "clean-f" "[BLOCKED] git clean -f 차단 — 추적되지 않는 파일이 삭제됩니다. 사용자 승인 후 수동 실행하세요."
 fi
 if echo "$COMMAND" | grep -qE 'git\s+branch\s+.*-D\b'; then
-  echo "[BLOCKED] git branch -D 차단 — 머지되지 않은 브랜치가 삭제됩니다. git branch -d 또는 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "branch-D" "[BLOCKED] git branch -D 차단 — 머지되지 않은 브랜치가 삭제됩니다. git branch -d 또는 사용자 승인 후 수동 실행하세요."
 fi
 if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.\s*$'; then
-  echo "[BLOCKED] git checkout . 차단 — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "checkout-dot" "[BLOCKED] git checkout . 차단 — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요."
 fi
 if echo "$COMMAND" | grep -qE 'git\s+restore\s+\.\s*$'; then
-  echo "[BLOCKED] git restore . 차단 — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "restore-dot" "[BLOCKED] git restore . 차단 — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요."
 fi
 
 # 3. DB 파괴적 명령
 if echo "$LOWER_CMD" | grep -qE 'drop[[:space:]]+(table|database)|truncate[[:space:]]+table'; then
-  echo "[BLOCKED] DB 파괴 명령 차단: DROP/TRUNCATE 감지 — 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "db-drop-truncate" "[BLOCKED] DB 파괴 명령 차단: DROP/TRUNCATE 감지 — 사용자 승인 후 수동 실행하세요."
 fi
 
 # 4. 프로세스 강제 종료
 if echo "$COMMAND" | grep -qE '(kill\s+-9|pkill\s|killall\s)'; then
-  echo "[BLOCKED] 프로세스 강제 종료 차단 — 서비스 중단 위험. 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "kill-process" "[BLOCKED] 프로세스 강제 종료 차단 — 서비스 중단 위험. 사용자 승인 후 수동 실행하세요."
 fi
 
 # 5. 위험한 권한 변경
 if echo "$COMMAND" | grep -qE 'chmod\s+777'; then
-  echo "[BLOCKED] chmod 777 차단 — 보안 취약점. 최소 권한 원칙에 따라 적절한 권한을 설정하세요." >&2
-  exit 2
+  block_exit "chmod-777" "[BLOCKED] chmod 777 차단 — 보안 취약점. 최소 권한 원칙에 따라 적절한 권한을 설정하세요."
 fi
 if echo "$COMMAND" | grep -qE '^\s*chown\s'; then
-  echo "[BLOCKED] chown 차단 — 파일 소유권 변경은 사용자 승인 후 수동 실행하세요." >&2
-  exit 2
+  block_exit "chown" "[BLOCKED] chown 차단 — 파일 소유권 변경은 사용자 승인 후 수동 실행하세요."
 fi
 
 # 6. Co-Authored-By trailer 차단 (라인 시작 + 콜론 형식만 매칭, 본문 단어 언급은 허용)
 # CLAUDE.md §4 "공동 작성자 trailer 라인 금지" SSOT 룰. trailer 형식(예: "Co-Authored-By: Claude...")만 차단.
 # 본문에 "Co-Authored-By 단일화" 같이 설명용 단어 사용은 통과 (이전 차단 false positive 회피).
 if echo "$LOWER_CMD" | grep -qE '^[[:space:]]*co-authored-by:'; then
-  echo "[BLOCKED] Co-Authored-By trailer 차단 — 커밋 메시지 끝의 Co-Authored-By: 형식 trailer 라인은 사용하지 마세요. (본문 내 단어 언급은 허용)" >&2
-  exit 2
+  block_exit "co-authored-by" "[BLOCKED] Co-Authored-By trailer 차단 — 커밋 메시지 끝의 Co-Authored-By: 형식 trailer 라인은 사용하지 마세요. (본문 내 단어 언급은 허용)"
 fi
 
 # ===== Checkpoint 경고 (exit 0) =====
