@@ -58,6 +58,7 @@ print('0')
 " 2>/dev/null)
   fi
   if [ "$PUSH_DETECTED" = "1" ]; then
+    command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=auto-push branch=$BRANCH"
     echo "[BRANCH-GUARD] 차단: 자동 원격 push 전면 금지 (현재 분기 '$BRANCH')" >&2
     echo "              명령: $COMMAND" >&2
     echo "              정책: Claude 는 Bash 도구로 git push 를 직접 호출하지 않습니다 (모든 분기 / 모든 옵션 예외 0)." >&2
@@ -110,6 +111,7 @@ print('0')
 " 2>/dev/null)
   fi
   if [ "$MASTER_MERGE_DETECTED" != "0" ]; then
+    command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-merge pattern=$MASTER_MERGE_DETECTED branch=$BRANCH"
     echo "[BRANCH-GUARD] 차단: master/main 머지 절대 금지 (감지 패턴 '$MASTER_MERGE_DETECTED', 현재 분기 '$BRANCH')" >&2
     echo "              명령: $COMMAND" >&2
     echo "              정책: Claude 는 Bash 도구로 master/main 으로의 머지·checkout·switch 를 직접 호출하지 않습니다 (모든 분기 / 모든 옵션 예외 0)." >&2
