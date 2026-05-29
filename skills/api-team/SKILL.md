@@ -4,7 +4,7 @@ description: >
   API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석 팀.
   자동 트리거 (API 추가/엔드포인트 오류 키워드) + `/api-team` 슬래시 커맨드 호출.
   add 모드 = 3-레포 반영 체크리스트, debug 모드 = 3-레포 가설 우선순위.
-  Lead = Claude 본체, 멤버 3명은 cold context 로 병렬 Agent spawn (Opus 4.7 고정).
+  Lead = Claude 본체, 멤버 3명은 cold context 로 병렬 Agent spawn (opus 모델 고정).
   인프라 멤버는 폴더 read + AWS CLI 실시간 조회 (조회계 즉시, 변경계 사용자 승인).
 triggers:
   - "API 추가 영향"

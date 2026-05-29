@@ -34,7 +34,7 @@ HongCafe Global 다레포 (BE / 인프라 / 문서 / FE) **실 코드 개발 전
 > **[용도 한정]** 실 mutation 동반 개발 작업 전용. 분석·진단·영향 매핑은 `api-team` 또는 단일 도메인 스킬(`php8`/`aws`/`mysql8`) 영역.
 > **Why:** 분석 vs 구현 단계 명확 분리 = 단계별 사용자 결정점 확보 + cold context spawn 비용 최적화 + Lead 라우팅으로 필요 멤버만 호출.
 
-> **[실행 주체]** Lead = Claude 본체 (task 분석 → 도메인 라우팅 → 멤버 spawn → 결과 통합). 멤버는 cold context 로 병렬 Agent spawn (Opus 4.7 고정).
+> **[실행 주체]** Lead = Claude 본체 (task 분석 → 도메인 라우팅 → 멤버 spawn → 결과 통합). 멤버는 cold context 로 병렬 Agent spawn (opus 모델 고정).
 > **Why:** Lead context 와 멤버 context 분리 = Lead 가설 오염 차단 + 멤버 독립 검증.
 
 ---
