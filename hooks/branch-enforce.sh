@@ -35,9 +35,25 @@ except Exception:
 fi
 
 # ─────────────────────────────────────────────────────────
+# 기한부 push 예외 (2026-05-29 사용자 결정 / 전 프로젝트 / ~2026-07-31 자동 만료)
+#   출시 전 파이프라인 자동배포 기간 — Claude 가 push + worktree→production 머지 + 배포를 자율 수행 허용.
+#   2026-08-01 0시부터 TODAY(YYYYMMDD) > 20260731 → 예외 자동 비활성 → §(1) push 전면 금지 복귀.
+#   유지(예외 무관 그대로 차단): force push(dangerous-ops-guard L82) / master·main 머지·checkout(§1.5) /
+#     rm -rf / reset --hard / DB 마이그 등 §3 절대 차단. phpunit 그린-before-push 게이트도 정책상 유지.
+#   SSOT: 글로벌 CLAUDE.md §4.3 (d) "기한부 push 예외" + C:\Works\hongcafe_global_backend\CLAUDE.md "배포 자동화".
+# ─────────────────────────────────────────────────────────
+PUSH_EXCEPTION_UNTIL="20260731"
+PUSH_EXCEPTION_ACTIVE="0"
+_TODAY="$(date +%Y%m%d 2>/dev/null)"
+if [ -n "$_TODAY" ] && [ "$_TODAY" -le "$PUSH_EXCEPTION_UNTIL" ]; then
+  PUSH_EXCEPTION_ACTIVE="1"
+fi
+
+# ─────────────────────────────────────────────────────────
 # (1) git push — 모든 분기에서 차단 (자동 원격 push 전면 금지, 2026-05-07 / 2026-05-08 정밀화)
 # 매칭: 명령을 ;/&&/|| 로 분리한 각 절을 shlex 토큰화 → 첫 두 토큰이 ['git','push'] 인 절만 차단.
 # Why: substring 매칭은 commit 메시지·heredoc 본문·grep 인자 안의 'git push' 문자열까지 false-positive 차단함.
+# 2026-05-29~ : PUSH_EXCEPTION_ACTIVE=1 (≤2026-07-31) 이면 차단 스킵 (force push 는 dangerous-ops-guard 가 별도 차단).
 # ─────────────────────────────────────────────────────────
 if [ "$TOOL_NAME" = "Bash" ]; then
   hook_parse_command
