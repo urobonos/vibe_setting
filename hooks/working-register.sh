@@ -48,6 +48,11 @@ CWD="${REST#*|}"
 FILE_PATH_NORM=$(normalize_path "$FILE_PATH")
 echo "$FILE_PATH_NORM" | grep -qE '/docs/working/[0-9]{8}/[^/]+\.md$' || exit 0
 
+# step 평면 파일은 마스터 작업의 파생 실행 단위 — 별도 REGISTRY entry/lock 생성 금지 (보완형 step 정책, 2026-05-29)
+# Why: 마스터만 registry 등록, step 등록 시 working-lifecycle move-cleanup(마스터 slug 매칭)이
+#      step entry/lock 을 정리하지 못해 orphan 누적 (CLAUDE.md §4.4 장기 누적 경고)
+echo "$FILE_PATH_NORM" | grep -qE -- '-step-[0-9]+-[^/]*\.md$' && exit 0
+
 FILENAME=$(basename "$FILE_PATH_NORM")
 DATE_PART=$(echo "$FILENAME" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
 [ -z "$DATE_PART" ] && exit 0

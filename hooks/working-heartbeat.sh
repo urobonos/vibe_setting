@@ -45,6 +45,10 @@ SESSION_ID="${PARSED#*|}"
 FILE_PATH_NORM=$(normalize_path "$FILE_PATH")
 echo "$FILE_PATH_NORM" | grep -qE '/docs/working/[0-9]{8}/[^/]+\.md$' || exit 0
 
+# step 평면 파일은 마스터 작업의 파생 실행 단위 — 별도 last_update/lock touch 금지 (보완형 step 정책, 2026-05-29)
+# (register.sh 와 동일 가드 — step 은 registry 미등록이므로 heartbeat 도 대상 아님)
+echo "$FILE_PATH_NORM" | grep -qE -- '-step-[0-9]+-[^/]*\.md$' && exit 0
+
 FILENAME=$(basename "$FILE_PATH_NORM")
 DATE_PART=$(echo "$FILENAME" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
 [ -z "$DATE_PART" ] && exit 0

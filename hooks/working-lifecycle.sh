@@ -125,6 +125,25 @@ move_working_to_tasks() {
     return 1
   }
 
+  # step 평면 파일 → steps/ 분배 이동 (보완형 step 정책, 2026-05-29)
+  # working/YYYYMMDD/{date}-{product}-{task}-step-NN-{slug}.md → tasks/.../{task}/steps/NN-{slug}.md
+  # (mv 는 PreToolUse hook 미경유 → tasks/ prefix 강제 우회. 사용자 preview 구조 steps/NN-slug.md 정합)
+  local working_dir
+  working_dir=$(dirname "$working_file")
+  local step_prefix="${date_part}-${product}-${task_name}-step-"
+  local moved_steps=0
+  for step_file in "$working_dir/${step_prefix}"*.md; do
+    [ -f "$step_file" ] || continue
+    local step_rest
+    step_rest=$(basename "$step_file")
+    step_rest=${step_rest#"$step_prefix"}   # NN-{slug}.md
+    mkdir -p "$target_dir/steps" 2>/dev/null
+    if mv "$step_file" "$target_dir/steps/$step_rest" 2>/dev/null; then
+      moved_steps=$((moved_steps + 1))
+    fi
+  done
+  [ "$moved_steps" -gt 0 ] && echo "[working-lifecycle] ✓ step 분배: ${moved_steps}건 → tasks/$yyyymmdd/$task_name/steps/" >&2
+
   # Active Task Registry — 동일 slug 모든 entry + lock 일괄 정리 (작업 완료 신호, 2026-05-15)
   if [ -n "${REGISTRY_PATH:-}" ] && [ -f "$REGISTRY_PATH" ]; then
     awk -v slug="$task_name" -F"${REGISTRY_FS:-[[:space:]]*\\|[[:space:]]*}" '
@@ -231,6 +250,11 @@ except:
   FILE_PATH_NORM=$(normalize_path "$FILE_PATH")
 
   echo "$FILE_PATH_NORM" | grep -qE '/docs/working/[0-9]{8}/[^/]+\.md$' || exit 0
+
+  # step 평면 파일은 마스터 이동 트리거 대상 아님 (보완형 step 정책, 2026-05-29)
+  # {date}-{product}-{작업}-step-NN-{slug}.md — '-step-숫자-' 패턴. step frontmatter '상태: Done'
+  # 이 마스터 완료 마커를 오트리거하는 것을 차단 (step 파일엔 ## Self-Critique 도 없지만 이중 가드)
+  if echo "$FILE_PATH_NORM" | grep -qE -- '-step-[0-9]+-[^/]*\.md$'; then exit 0; fi
 
   # Windows 경로 변환
   unix_path=$(echo "$FILE_PATH_NORM" | sed 's|^C:|/c|')
