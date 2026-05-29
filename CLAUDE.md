@@ -22,8 +22,10 @@
         │       └── {작업명}/
         │           ├── {yyyy-mm-dd}-{작업명}-unified.md          (신규 정책 2026-05-12~ : 단일 통합)
         │           └── {yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md  (기존 3종 분리 — 2026-05-12 이전 보존)
-        ├── output/{category}/{제목}/{yyyy-mm-dd}-{제목}-{type}.md   (카테고리화 필수, 날짜 prefix 필수)
-        │     ↳ category ∈ { audit, verification, research, analysis, report, guide, archive }
+        ├── output/
+        │   ├── index.md                                          (전체 자동 추적 매니페스트 — hook 재생성, 직접 편집 금지)
+        │   └── {category}/{제목}/{yyyy-mm-dd}-{제목}-{type}.md   (카테고리화 필수, 날짜 prefix 필수)
+        │         ↳ category ∈ { audit, verification, research, analysis, report, guide, archive }
         └── specs/{모듈}-{srs|sdd|idd|sdp|stp|std}.md  (IEEE 산출물)
     ```
   - **`output/` 카테고리 (필수):** 신규 산출물은 7 카테고리 중 하나에 배치. 평면 `output/{제목}/` 직접 배치 금지.
@@ -34,6 +36,7 @@
     - 파일명: `{yyyy-mm-dd}-{topic-slug}-{type}.md`. 폴더명: `{yyyy-mm-dd}-{topic-slug}/` (단발성) 또는 `{topic-slug}/` (ongoing/누적형 — `daily-report` / `weekly-work-report` / `monthly-report` 등 화이트리스트).
     - 자동 면제: 부모 폴더 직속 자식이 모두 `YYYY-MM-DD-` prefix + 2건 이상 → 부모 폴더 누적형 자동 간주.
     - 강제: `output-naming-check.sh` SSOT.
+  - **`output/index.md` 자동 인덱스 (필수, 2026-05-29~):** `~/.claude/docs/{product}/output/` 하위 **모든 .md 의 전수 추적 매니페스트** (카테고리 / 제목 / 경로 / 수정일 표 1개). `output-index-maintain.sh` PostToolUse hook 이 output/**/*.md 의 Edit/Write 시 해당 product 의 index.md 를 **자동 재생성** (index.md 자기 제외 = 무한루프 차단, product 별 mkdir lock = race 보호, 비차단 exit 0). **강제점 1개(hook) — 문서를 output/ 에 쓰는 모든 스킬·커맨드·훅이 자동 인덱싱**되므로 개별 본문에 index 갱신 지시를 박지 않는다 (드리프트 0, §4.4 장기 관점). **직접 편집 금지** (다음 output write 시 자동 재생성에 덮어쓰여짐 — 파일 삭제도 다음 재생성 때 자동 반영). 용도 = `/분석`·`/계획` 등 워크플로우의 "참조 범위 전수 조사" 진입점 — 수백 문서를 리터럴 전체 read 하지 않고 **index 전수 스캔 → task 관련 항목만 선택 정독** (토큰 폭발 회피). **한계:** Edit/Write/MultiEdit/NotebookEdit 트리거만 인덱싱 — output/ 에 Bash heredoc·리다이렉트로 직접 쓴 문서는 미반영 (worktree-enforce 가 Bash mutation 을 차단하므로 실사례 거의 없음, 발생 시 임의 output write 1회로 재생성). SSOT: `hooks/output-index-maintain.sh` + settings.json PostToolUse 등록 + 본 단락.
 - **working/ 단일 통합 문서 (필수, 2026-05-12~):** 진행 중 작업 = `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 통합 파일. `## 분석`·`## 계획`·`## 실행` 3 섹션 통합, 각 섹션은 필수 하위섹션 (타당성 검토 / 변경 영향 기록 / Critical~Low 4분류 / Blueprint / WBS / Self-Critique / 장기 영향 / 재발 방지 / SSOT 일관성) 보유.
   - **자동 이동:** `^Status:\s*Done` (시작 라인) + `## Self-Critique` 섹션 동시 존재 시 `working-lifecycle.sh` PostToolUse hook 가 `tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 이동. 사용자 명시 키워드 (`작업 완료` / `tasks 이동` / `working 정리` / `done`) 도 동일 트리거.
   - **충돌 처리:** 동명 파일 존재 시 `.bak-{timestamp}` 백업 후 덮어쓰기. 3종 분리 (역소급) 와 공존 가능 (파일명 suffix `-unified` 로 구분).
@@ -187,6 +190,13 @@
   - **L 등급** = 8 단계 전체
 
   의견 갈림 시 어느 단계에서나 `/토론` 끼워 호출 가능. **§3 Checkpoint 우선 적용:** 단계 진입은 hook (`doc-template-guard.sh` / `checklist-count-check.sh` / `verify-e2e-check.sh` / `branch-enforce.sh`) 가 양식 강제. 사용자 명시 승인 룰은 그대로 유지 (특히 `/배포` = §3 비가역 매칭). **SSOT:** `~/.claude/commands/{분석,타당성,계획,실행,검증,리뷰,배포,회고,토론}.md` 9 파일.
+- **참조 범위 전수 조사 (필수, 2026-05-29~):** `/분석`·`/계획`·`/실행`·`/검증`·`/리뷰` **전체 워크플로우** 진입 시, 판단·실행 전에 다음 3 출처를 **전수 확인**한다.
+  - **(1) 참조 문서:** `~/.claude/docs/참조문서/*` (권고안 / 기획안 / 번역본 등 사용자 제공 참조 문서).
+  - **(2) 기존 산출물:** `~/.claude/docs/{product}/output/` 전체 — **`output/index.md` 전수 스캔 → task 관련 항목만 본문 정독** (수백 문서 리터럴 전체 read 아님, 토큰 폭발 회피).
+  - **(3) 현재 레포 레거시 영역:** 있을 시 확인 — 예: php8 `app/Libraries/` 등 마이그레이션 미완료 코드. product 별 자동 판단, 레거시 영역 없으면 skip. (별도 레거시 레포 아님 — 현재 작업 레포 내부 한정.)
+  - **추가 도출 내용 → output/:** 과정 중 새로 분석·조사된 내용은 기존 `output/{category}/` 7분류 경로에 문서로 추가 생성 (신규 경로 안 만듦, `output-naming-check.sh` 그대로). → `output-index-maintain.sh` 가 index.md 에 자동 반영.
+  - **Why:** 참조 문서·기존 산출물·레거시 맥락을 빠뜨린 분석은 이미 결정된 사항을 재발명하거나 레거시 제약을 위반한다. index 경유 선택 정독으로 "전수 확인"을 토큰 폭발 없이 실현.
+  - **등급별 압축:** S = (2) index 스캔만 / M·L = (1)(2)(3) 전수. SSOT: 본 단락 + `commands/{분석,계획,실행,검증,리뷰}.md` §"참조 범위" + `hooks/output-index-maintain.sh`.
 
 ### §4.4 응답 형식 + 자동 위임
 
