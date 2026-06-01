@@ -8,6 +8,7 @@
 |------|------|
 | 작성자 | jypark |
 | 작성일 | YYYY-MM-DD |
+| 개발언어/기술스택 | php / lambda / aws / infra 등 (복수 시 쉼표) |
 | 유형 | analyze / plan / result / report |
 | 상태 | 초안 / 확정 |
 

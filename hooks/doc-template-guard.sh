@@ -250,6 +250,20 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
                 || blocking_missing+=("타당성 검토 (§4 필수)")
             ;;
     esac
+
+    # 개발언어/기술스택 필드 (2026-06-01 신설) — 작성 정보 박스 보유 문서 한정 (specs IEEE 제외)
+    # SSOT: unified-template.md / doc-template.md 작성 정보 표 + CLAUDE.md §File Paths "개발언어·기술스택 메타"
+    # 차단/hint 판정은 created_date 산정 후(아래 역소급 게이트) 수행
+    MISSING_TECHSTACK=0
+    case "$file_path" in
+        */docs/specs/*|*/docs/*/specs/*) ;; # IEEE specs 제외
+        *)
+            if grep -q "## 작성 정보" "$unix_path" \
+                && ! grep -qE '(^\|[[:space:]]*개발언어|^개발언어[[:space:]]*:)' "$unix_path"; then
+                MISSING_TECHSTACK=1
+            fi
+            ;;
+    esac
 fi
 
 # 역소급 면제 (CLAUDE.md §"역소급 면제 2026-05-06 시행" 정합)
@@ -278,6 +292,17 @@ if [[ -n "$created_date" && "$created_date" < "$TEMPLATE_STRICT_FROM" ]]; then
     if [[ ${#blocking_missing[@]} -gt 0 ]]; then
         missing+=("[역소급 면제 — 생성일 ${created_date}] ${blocking_missing[*]}")
         blocking_missing=()
+    fi
+fi
+
+# 개발언어/기술스택 역소급 게이트 (2026-06-01 신설, 독립 임계 — 위 2026-05-07 강등과 별개)
+# 생성일 미상(빈 값) = 신규로 간주해 차단. 생성일 < 2026-06-01 = hint 강등(역소급 면제).
+TECHSTACK_STRICT_FROM="2026-06-01"
+if [[ "${MISSING_TECHSTACK:-0}" == "1" ]]; then
+    if [[ -n "$created_date" && "$created_date" < "$TECHSTACK_STRICT_FROM" ]]; then
+        missing+=("[역소급 면제 — 생성일 ${created_date}] 개발언어/기술스택 (작성 정보 행)")
+    else
+        blocking_missing+=("개발언어/기술스택 (작성 정보 필수 행, 2026-06-01~)")
     fi
 fi
 

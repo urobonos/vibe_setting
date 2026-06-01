@@ -32,6 +32,7 @@
 |------|------|
 | 작업명 | {kebab-case 작업명} |
 | product | {product 명, 예: claude-harness / hongcafe_global_backend / infra} |
+| 개발언어/기술스택 | {php / lambda / aws / infra 등 관련 기술, 복수 시 쉼표 구분} |
 | 작업 등급 | {S / M / L} |
 | 시작일 | {YYYY-MM-DD} |
 | 완료일 | {YYYY-MM-DD, 진행 중이면 - } |

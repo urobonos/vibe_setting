@@ -31,7 +31,8 @@
   - **`output/` 카테고리 (필수):** 신규 산출물은 7 카테고리 중 하나에 배치. 평면 `output/{제목}/` 직접 배치 금지.
     - `audit` — 자가 점검·정합성 검사 / `verification` — 실제 동작 검증 / `research` — 외부 조사·권고안 / `analysis` — 도메인·영향·아키텍처 분석 / `report` — 정기·일회성 리포트 / `guide` — 가이드 / `archive` — 보관·임시·과거 스냅샷.
     - 분류 모호 시: audit → verification → research → analysis 순 판단.
-    - **공유용 단일 통합 문서 (필수):** `output/report/.../{share,proposal,sharing}*.md` 패턴 = 작성 정보 박스 (6 메타 — 문서 ID / 버전 / 상태 / 작성자 / 작성일 / 대상 독자) + 필수 12 섹션 ((1) 한 줄 요약 (2) 왜/배경 (3) 무엇 (4) 어떻게 (5) 사용 시나리오 (6) 인터페이스 (7) 데이터 (8) 보안·성능·비용 (9) 일정 (10) 결정·권고·리스크 (11) 성공 지표 (12) 합의/참조). 강제: `hooks/output-report-share-guard.sh` PreToolUse exit 2.
+    - **공유용 단일 통합 문서 (필수):** `output/report/.../{share,proposal,sharing}*.md` 패턴 = 작성 정보 박스 (7 메타 — 문서 ID / 버전 / 상태 / 작성자 / 작성일 / 대상 독자 / 개발언어·기술스택) + 필수 12 섹션 ((1) 한 줄 요약 (2) 왜/배경 (3) 무엇 (4) 어떻게 (5) 사용 시나리오 (6) 인터페이스 (7) 데이터 (8) 보안·성능·비용 (9) 일정 (10) 결정·권고·리스크 (11) 성공 지표 (12) 합의/참조). 강제: `hooks/output-report-share-guard.sh` PreToolUse exit 2.
+    - **개발언어·기술스택 메타 (필수, 2026-06-01~):** 작성 정보 박스 보유 문서(`unified-template.md` / `doc-template.md` / 공유용 7메타)에 `개발언어/기술스택` 행 필수 — php / lambda / aws / infra 등 관련 기술 쉼표 나열. 강제: `doc-template-guard.sh` (작성 정보 보유 문서, specs 제외, 생성일 ≥ 2026-06-01 차단 / 미상도 차단) + `output-report-share-guard.sh` (공유 문서). **역소급 면제:** 생성일 < 2026-06-01 = hint 강등, 시점 SSOT = `changelog.md`. analyze/plan/result 템플릿은 `## 작성 정보` 미보유 → 자동 비대상.
   - **폴더·파일명 날짜 표기 (필수):** suffix `-YYYYMMDD` 금지. 항상 ISO-8601 `YYYY-MM-DD-` **prefix**.
     - 파일명: `{yyyy-mm-dd}-{topic-slug}-{type}.md`. 폴더명: `{yyyy-mm-dd}-{topic-slug}/` (단발성) 또는 `{topic-slug}/` (ongoing/누적형 — `daily-report` / `weekly-work-report` / `monthly-report` 등 화이트리스트).
     - 자동 면제: 부모 폴더 직속 자식이 모두 `YYYY-MM-DD-` prefix + 2건 이상 → 부모 폴더 누적형 자동 간주.
