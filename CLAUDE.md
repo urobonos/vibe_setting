@@ -67,7 +67,7 @@
 
 1. 프로젝트 루트 구조 + 현재 브랜치/커밋 확인
 2. `~/.claude/docs/{product}/tasks/history.md` 로드
-3. `.claude/skills/` 전 스킬 SessionStart 훅 (`hooks/skill-preload.sh`) 자동 preload
+3. `.claude/skills/` 전 스킬 frontmatter(메타) SessionStart 훅 (`hooks/skill-preload.sh`) 자동 preload (본문은 Skill 호출 시 on-demand 로드)
 
 → 완료 후 **"Context Loaded."** 보고
 
