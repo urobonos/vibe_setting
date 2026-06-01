@@ -70,6 +70,8 @@ min_claude_md_version: "4.0"
 작업 문서(신규: unified 1개 / 기존: analyze+plan+result 3종)와 일일 요약(summary)을 표준 템플릿으로 생성·관리한다.
 보고용 산출물은 `~/.claude/docs/{product}/output/{category}/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `~/.claude/docs/{product}/specs/` 디렉토리에 생성·관리한다.
 
+**전역 문서 인덱스 (자동):** docs 하위 모든 .md(output/tasks/specs/working 등) 는 `~/.claude/docs/indexing/{product}.md` 전역 인덱스에 `doc-index-maintain.sh` PostToolUse hook 이 자동 등록한다(영역/타이틀/경로/수정일). 본 스킬이 작성하는 산출물도 별도 조치 없이 자동 인덱싱되므로 index 갱신을 수동으로 신경 쓰지 않는다. **직접 편집 금지**(자동 재생성). 정책 SSOT = CLAUDE.md §File Paths "indexing/{product}.md 전역 문서 인덱스".
+
 **`{product}` 결정 규칙:** `basename $CWD`. 단 `.claude` 는 `claude-harness` 로 치환. 구현은 `hooks/lib/product-resolver.sh`. 예:
 - `C:/Works/hongcafe_global_backend` → `hongcafe_global_backend`
 - `C:/Works/infra` → `infra`
