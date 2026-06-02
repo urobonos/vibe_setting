@@ -22,6 +22,8 @@ git worktree remove ~/.claude/worktrees/${SID}-${SLUG}
 git branch -D wip/${SID}-${SLUG}
 ```
 
+4. **정착 후 reachable 해시 기록 (추적성, 2026-06-02~):** ff-only 머지·cherry-pick 후 working/summary 에 기록하는 커밋 해시는 **정착 후 reachable 최종 해시**여야 한다 (`git rev-parse ${FEATURE}` / `git log -1 --format=%h`). 머지 전 wip 해시·rebase 이전 해시를 인용하면 HEAD 에서 도달 불가한 orphan 이 된다 (audit 2026-06-02 — BE summary 6개 해시 전부 orphan 인용, patch-id 로만 작업 확인됨). `/회고` 단계에서 `git merge-base --is-ancestor` 로 재확인.
+
 ## Why
 
 - **기존 feature 수정 = worktree → feature 환원 패턴.** 별 feature 신설 안 함.
