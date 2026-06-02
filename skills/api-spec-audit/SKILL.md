@@ -154,6 +154,8 @@ Claude 본체
 
 ## 6. 산출물 형식
 
+> **참조 출처 필수 (2026-06-02~):** 모든 audit 산출물은 `## 참조 출처 (Reference Location)` 섹션 + `[참조: ...]` ≥ 1건 포함 — 검증 대상 Routes / api-docs / OpenAPI / SRS / SDD / IDD 의 파일:줄 위치를 기재한다. 강제: `reference-location-check.sh` (output/ exit 2). 형식 예: `[참조: app/Modules/{Module}/Config/Routes.php:42]` · `[참조: docs/{product}/specs/{module}-srs.md §FR-12]`. (공식 표준 근거 `[Source: §id]` 타당성 검토와 별개의 내용 provenance.)
+
 ### 6.1. module 모드 — `{date}-{module}-audit.md`
 
 ```markdown
