@@ -65,4 +65,33 @@ if [ "$WT_CLEANED" -gt 0 ]; then
   echo "[working-stale-cleanup] ${WT_CLEANED}건 빈 worktree 폴더 정리" >&2
 fi
 
+# §D) 잔존 worktree 감지 (read-only 보고 — 제거는 §3 비가역 사용자 직접, audit 2026-06-02)
+# 병합완료(merged + ahead 0) wip worktree = 정착 후 git worktree remove 누락 후보.
+# 전부 2>/dev/null 가드 + exit 0 비차단. 크로스-레포(BE production / harness vibe_setting 등)
+# target 분기는 main worktree(worktree list 첫 줄)의 현재 브랜치로 근사 — 보고 전용이라 오라벨 무해.
+LEFTOVER=0
+MERGED_DONE=0
+if [ -d "$WORKTREES_DIR" ]; then
+  for wt_dir in "$WORKTREES_DIR"/*/; do
+    [ -d "$wt_dir" ] || continue
+    git -C "$wt_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || continue
+    wt_branch=$(git -C "$wt_dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    [ -z "$wt_branch" ] && continue
+    main_wt=$(git -C "$wt_dir" worktree list 2>/dev/null | awk 'NR==1{print $1}')
+    [ -z "$main_wt" ] && continue
+    target=$(git -C "$main_wt" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    [ -z "$target" ] && continue
+    ahead=$(git -C "$main_wt" rev-list --count "${target}..${wt_branch}" 2>/dev/null)
+    is_merged=$(git -C "$main_wt" branch --merged "$target" --list "$wt_branch" 2>/dev/null)
+    LEFTOVER=$((LEFTOVER + 1))
+    if [ -n "$is_merged" ] && [ "${ahead:-1}" = "0" ]; then
+      MERGED_DONE=$((MERGED_DONE + 1))
+      echo "[working-stale-cleanup] 정리 후보(병합완료): $(basename "$wt_dir") [$wt_branch] → 사용자 직접(§3): git -C \"$main_wt\" worktree remove \"$wt_dir\" && git -C \"$main_wt\" branch -D \"$wt_branch\"" >&2
+    fi
+  done
+fi
+if [ "$LEFTOVER" -gt 0 ]; then
+  echo "[working-stale-cleanup] 잔존 worktree ${LEFTOVER}건 (병합완료 정리후보 ${MERGED_DONE}건) — 제거는 §3 사용자 직접" >&2
+fi
+
 exit 0

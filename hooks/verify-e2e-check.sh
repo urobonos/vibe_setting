@@ -152,6 +152,22 @@ fi
 
 FAIL_COUNT=${#fail_points[@]}
 
+# === [hint, 비차단] 테스트 통과 주장 ↔ 사용자-체크 가능 증거 (2026-06-02~) ===
+# 산문 단언("phpunit 16/16"·"pipeline #364")만으로는 검증 결과가 재현·확인 불가 (audit 2026-06-02).
+# pipeline URL+빌드번호 / junit .xml 경로 / 러너 원문 코드블록 동반을 권장 — 사용자가 spot-check 가능한 증거.
+# 단 regex 는 claim↔evidence 를 묶지 못하고(문서 어딘가 URL 1개로 전부 통과 가능) fenced 블록도
+# 산문만큼 위조 가능하므로, 차단(exit 2)이 아닌 hint 로만 surface (advisor 권고, §4.4 over-enforce 금지).
+CAPTURE_STRICT_FROM="2026-06-02"
+capture_in_scope="1"
+if [ -n "$created_date" ] && [[ "$created_date" < "$CAPTURE_STRICT_FROM" ]]; then
+    capture_in_scope="0"   # 역소급 면제 — 도입일 이전 문서엔 hint 미발화
+fi
+if [ "$capture_in_scope" = "1" ] \
+   && grep -qiE 'OK \([0-9]+ tests|[0-9]+ tests?,? [0-9]+ assertion|[0-9]+/[0-9]+ ?(통과|passed)|[0-9]+ passed|pipeline ?#?[0-9]+' "$unix_path" \
+   && ! grep -qE '```|\.xml|https?://|junit' "$unix_path"; then
+    echo "[hint] verify-e2e-check: 테스트 통과를 주장하나 사용자-체크 가능 증거 미동반 — pipeline URL+빌드번호 / junit .xml 경로 / 러너 원문 코드블록 권장 (산문 단언은 재현 불가, audit 2026-06-02). 비차단(hint)." >&2
+fi
+
 # 전체 PASS
 if [ "$FAIL_COUNT" -eq 0 ]; then
     exit 0
