@@ -93,6 +93,10 @@ frontmatter `triggers` 매칭 시 즉시 호출. 모호한 경우 한 줄 확인
    aws ssm get-command-invocation --command-id <ID> --instance-id i-XXX
    ```
 
+**진단 순서 (레이어 우선, 2026-06-02~):** 500·전역 오류 진단 시 **라우팅·진입점 레이어를 먼저 확정**한다 — `nginx -T` 또는 진입점 prefix 로 "어느 레이어가 응답했는지" 판별 → **그 다음** app 로그(CI4 / php-fpm / logger). app 로그부터 파면 잘못된 레이어에서 헛돈다.
+- **HongCafe 경로 분리:** 공개 `/api/` = BFF(Next.js) ≠ BE. **BE 직접 진입점 = `/__hongcafe_api__/api/`**. 배포 경로 = `/works/hongcafe-global/{env}/be`.
+- **근거:** 2026-06-01 prd 디버그에서 공개 `/api/` 전역 500 을 BE 다운으로 오진 → CI4로그·php-fpm·env-flip·logger 4 레이어 헛발질 후 `nginx -T` 로 BFF≠BE 발각 (audit 2026-06-02 "진단 효율" 5/10 핵심 감점). SSOT 메모리: `reference_be-bff-routing-layers`.
+
 **audit log 보조:** Claude 가 본 모드 실행 시 `~/.claude/docs/claude-harness/output/audit/prod-debug-log/{yyyy-mm-dd-HHMM}-{slug}/{yyyy-mm-dd}-{slug}-connect.md` 신설 — 인스턴스 ID / 명령 / 결과 요약 / 사용자 결정 추적.
 
 ### 2.2. `verify` — e2e 5점 + 비즈니스 로직 검증
