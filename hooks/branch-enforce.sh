@@ -138,6 +138,46 @@ print('0')
 fi
 
 # ─────────────────────────────────────────────────────────
+# (1.6) master/main HEAD 에서 git cherry-pick 차단 (2026-06-04 신규)
+# Why: §4.3(f) 정착 fallback 으로 cherry-pick 을 Claude 자동 실행 어휘에 편입 → merge 는 §1.5 가 차단하나
+#   cherry-pick 은 통과하는 비대칭 발생. cherry-pick 은 target arg 가 아닌 "현재 HEAD 분기"에 적용되므로
+#   §1.5 (target 토큰 검사) 패턴이 아닌 현재 BRANCH 검사. §(2) retire(2026-05-20)로 "현재 분기 master/main
+#   변경계 차단" 구멍이 열려 있었음 — 본 가드가 cherry-pick 한정으로 그 구멍을 닫는다 (자동 루프 §3 hard-block 계약 정합).
+# 매칭: 현재 BRANCH ∈ {main,master} AND 명령 절 토큰이 [git, cherry-pick, ...]. --abort/--quit/--skip 복구계는 면제
+#   (진행 중 cherry-pick 상태 정리는 master/main 에서도 허용). 정착 happy-path 는 feature/* 체크아웃 후라 무영향.
+# ─────────────────────────────────────────────────────────
+if [ "$TOOL_NAME" = "Bash" ] && { [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; }; then
+  CHERRY_DETECTED="0"
+  hook_python
+  if [ -n "$HOOK_PY" ]; then
+    CHERRY_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" -c "
+import sys, shlex, re
+RECOVERY = {'--abort', '--quit', '--skip'}
+cmd = sys.stdin.read()
+for part in re.split(r'(?:&&|\|\||;)', cmd):
+    try:
+        tokens = shlex.split(part, posix=True)
+    except ValueError:
+        tokens = part.strip().split()
+    if len(tokens) >= 2 and tokens[0] == 'git' and tokens[1] == 'cherry-pick':
+        if any(t in RECOVERY for t in tokens[2:]):
+            continue
+        print('1'); sys.exit(0)
+print('0')
+" 2>/dev/null)
+  fi
+  if [ "$CHERRY_DETECTED" = "1" ]; then
+    command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-cherry-pick branch=$BRANCH"
+    echo "[BRANCH-GUARD] 차단: master/main HEAD 에서 git cherry-pick 금지 (현재 분기 '$BRANCH')" >&2
+    echo "              명령: $COMMAND" >&2
+    echo "              정책: cherry-pick 자동 실행은 정착(feature/* 체크아웃) 한정. master/main 위 적용은 merge 와 동일 차단 (§1.5 미러)." >&2
+    echo "              조치: feature 분기 체크아웃 후 정착하거나, 사용자가 직접 \`! git cherry-pick ...\` 실행" >&2
+    echo "              SSOT: 글로벌 CLAUDE.md §4.3(f) + 본 hook (1.6)" >&2
+    exit 2
+  fi
+fi
+
+# ─────────────────────────────────────────────────────────
 # (2) [retired 2026-05-20] Protected 브랜치 자동 강제 + Edit/Write 차단 영역.
 #     worktree-enforce.sh 로 의미 이관. 본 hook 는 §(1) push 차단 + §(1.5) master/main 금지만 잔존.
 # ─────────────────────────────────────────────────────────
