@@ -200,6 +200,7 @@
   - **추가 도출 내용 → output/:** 과정 중 새로 분석·조사된 내용은 기존 `output/{category}/` 7분류 경로에 문서로 추가 생성 (신규 경로 안 만듦, `output-naming-check.sh` 그대로). → `doc-index-maintain.sh` 가 `indexing/{product}.md` 에 자동 반영.
   - **Why:** 참조 문서·기존 산출물·레거시 맥락을 빠뜨린 분석은 이미 결정된 사항을 재발명하거나 레거시 제약을 위반한다. index 경유 선택 정독으로 "전수 확인"을 토큰 폭발 없이 실현.
   - **등급별 압축:** S = (2) index 스캔만 / M·L = (1)(2)(3) 전수. SSOT: 본 단락 + `commands/{분석,계획,실행,검증,리뷰}.md` §"참조 범위" + `hooks/doc-index-maintain.sh`.
+  - **참조 결과 가시화 (필수, 2026-06-04~):** 위 전수 확인 직후 `## 동작` 단계 진입 전, **실제 참조·정독한 파일 + 위치를 표로 화면 출력**한다 (위치 표기 = 아래 "참조 출처" / `reference-location-check.sh` 재사용: `p.N`·`L줄`·`§"헤딩"`·`#행`·`파일:줄`). 진입 시 sweep 가시화 = working/ 문서 기록과 별개. 등급 비례 (S=②만 / M·L=①②③), 본 게 없는 출처는 `해당 없음` 명시(행 생략 금지). hook 강제 불가(self-report) — SSOT: `commands/{분석,계획,실행,검증,리뷰}.md` §"참조 결과 가시화".
 - **참조 출처(참조위치) 필수 (2026-06-02~):** 문서 생성 시 작성 내용의 **출처 위치**를 무조건 기록 — `## 참조 출처` 섹션 + `[참조: ...]` ≥ 1건 (기획서=페이지 `p.N`·`슬라이드 #N` / docs=`파일 L줄`·`§"헤딩"` / 권고 tsv=`#행` / 코드=`파일:줄` / 웹=`제목 — URL (접속일)` / 원본=`[참조: 없음 — 신규 분석]`). 위 "참조 범위 전수 조사"(읽기) 의 짝 — **읽은 것을 어디서 가져왔는지 기록**. `## 타당성 검토`([Source:§id] 공식 기술표준)와 **별개**의 내용 provenance. 강제 SSOT = `hooks/reference-location-check.sh` (PostToolUse tasks/output/specs exit 2 — 차단 시 stderr 가 형식·예시 전량 출력) + 4 템플릿(unified/analyze/plan/result) §참조 출처 + api-spec-audit·security-audit 산출물 형식. 역소급 면제 = 생성일 < 2026-06-02. research(`output/research/`)는 자체 `## 출처`+`[N]→URL` 형식 허용. report 는 Write 도구 부재(stdout 전용)로 자연 면제.
 
 ### §4.4 응답 형식 + 자동 위임
