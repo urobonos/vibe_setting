@@ -3,7 +3,7 @@
 #
 # 정책: 모든 소스 mutation 작업은 worktree 안에서 수행되어야 한다.
 #   cwd 또는 FILE_PATH 가 worktree (`*/worktrees/*`) 가 아니고
-#   functional exemption 8건 매칭 안 됨 → exit 2 차단.
+#   functional exemption 9건 매칭 안 됨 → exit 2 차단.
 #   단, cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) 면제 — worktree 생성 자체가
 #   불가능하므로 강제 차단이 작업을 막는다 (path-pattern 면제와 별개인 state-condition 면제).
 #
@@ -11,7 +11,7 @@
 #   - 모든 소스 작업 = worktree 격리 (사고 영구 차단)
 #   - feature 분기 = 사용자 요청 시 생성 (자동 강제 폐기)
 #
-# Functional exemption 8건:
+# Functional exemption 11건:
 #   1. */worktrees/*                  (worktree 자체)
 #   2. */state/sessions/*.lock        (session lock)
 #   3. */projects/*/memory/*          (auto memory)
@@ -20,6 +20,9 @@
 #   6. */.claude/settings.json        (git untracked, worktree 동기화 불가능)
 #   7. */.claude/settings.local.json  (git untracked)
 #   8. C:/Works/infra/*               (dev-team 인프라 영역, git 미추적, 2026-05-20)
+#   9. */.claude/hooks/*             (프로젝트 로컬 hook, git 미추적, 2026-05-27)
+#   10. git check-ignore 매칭         (untracked+ignored 로컬 전용 파일, 2026-05-29)
+#   11. */.claude/CLAUDE.md          (루트/프로젝트 글로벌 지침 — 추적 파일이나 정책 변경마다 라이브 발효 필요 = 명시 path 면제, 2026-06-04)
 #
 # SSOT: CLAUDE.md §4.3 "worktree 항상 강제" + 본 hook
 # 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + commands/feature-{create,merge}.md
@@ -53,7 +56,7 @@ case "$TOOL_NAME" in
     ;;
 esac
 
-# Functional exemption 8건 (FILE_PATH 기준)
+# Functional exemption 9건 (FILE_PATH 기준)
 case "$FILE_PATH" in
   */worktrees/*)                   exit 0 ;;
   */state/sessions/*.lock)         exit 0 ;;
@@ -62,8 +65,21 @@ case "$FILE_PATH" in
   */.claude/docs/*)                exit 0 ;;
   */.claude/settings.json)         exit 0 ;;
   */.claude/settings.local.json)   exit 0 ;;
+  */.claude/hooks/*)               exit 0 ;;  # #9: 프로젝트 로컬 hook (git 미추적, 2026-05-27)
+  */.claude/CLAUDE.md)             exit 0 ;;  # #11: 루트/프로젝트 글로벌 지침 (추적 파일이나 라이브 발효 필요 = path 면제, 2026-06-04)
   C:/Works/infra/*|/c/Works/infra/*) exit 0 ;;  # #8: dev-team 인프라 영역 (git 미추적, 2026-05-20 추가)
 esac
+
+# Functional exemption #10 (2026-05-29): git untracked+ignored 파일 면제.
+# git check-ignore 매칭 = .gitignore 로 추적 제외된 로컬 전용 파일 (settings.json #6/#7 의 일반화).
+# worktree 는 git 추적 파일만 체크아웃하므로 untracked+ignored 파일은 worktree 격리 자체가 불가능
+# (해당 파일이 worktree 에 존재하지 않아 "worktree 진입" 조치를 따를 수도 없다 = 차단이 작업을 막음).
+# 예: 루트 CLAUDE.md (mirror-claude-md.sh 가 글로벌 미러본과 양방향 cp 하는 로컬 전용 지침, .gitignore 등재).
+# cwd 가 git work-tree 일 때만 의미 (아니면 아래 git 미연동 cwd 면제가 처리).
+if git -C "$(pwd)" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+   && git -C "$(pwd)" check-ignore -q -- "$FILE_PATH" 2>/dev/null; then
+  exit 0
+fi
 
 # git 미연동 cwd 면제 (2026-05-26): worktree 는 git 기능 — cwd 가 git work-tree 가
 # 아니면 worktree 생성 자체가 불가능하므로 강제 차단 시 모든 작업이 막힌다. pwd 기준 판정
@@ -82,9 +98,9 @@ echo "              cwd: $CWD" >&2
 echo "              조치:" >&2
 echo "                신규 작업 = git worktree add ~/.claude/worktrees/{sid}-{slug} -b wip/{sid}-{slug}" >&2
 echo "                기존 feature 수정 = git worktree add ~/.claude/worktrees/{sid}-{slug} feature/X" >&2
-echo "              면제 8건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
+echo "              면제 11건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
 echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json /" >&2
-echo "                       C:/Works/infra/* (dev-team)" >&2
+echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md" >&2
 echo "              SSOT: CLAUDE.md §4.3 \"worktree 항상 강제\"" >&2
 command -v log_event >/dev/null 2>&1 && log_event "worktree-enforce" "block" "reason=worktree-required"
 exit 2
