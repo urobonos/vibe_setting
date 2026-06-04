@@ -103,17 +103,19 @@ print(last_text)
 [자동진행 worktree-first 정착 안내]
 - 현재 분기 '$CURRENT_BRANCH' = 자동진행 worktree 임시 분기 (wip/*).
 - sentinel 부착으로 작업은 완료됐으나 feature/* 분기로의 정착이 남아있습니다.
-- 다음 명령을 사용자가 직접 (\`! \` prefix) 실행해 정착 완료:
-    SOURCE={원본 source 분기 — production / staging / develop}
+- 정착 = Claude 자동 실행 (2026-06-04~ §4.3 f) — /feature-create (신규) 또는 /feature-merge (기존) 진입.
+  각 명령을 개별 Bash 호출로 수행 (&&/; 결합 금지 — dangerous-ops-guard 의 wip/* 단일 면제 정합):
+    SOURCE={원본 source 분기 — production / staging / develop}   # main/master 면 정착 금지 → PR
     SLUG={작업명 kebab-case}
-    ! cd {원본 repo 경로}
-    ! git checkout \$SOURCE
-    ! git checkout -b feature/\${SOURCE}_\${SLUG}
-    ! git merge --ff-only $CURRENT_BRANCH
-    ! git worktree remove \$(git rev-parse --show-toplevel)
-    ! git branch -D $CURRENT_BRANCH
-- 제약: source = main / master 인 경우 정착 금지 (§"master/main 머지 절대 금지"). 별도 PR 절차 사용.
-- SSOT: commands/자동진행.md §"정착 절차" + CLAUDE.md §4.3 "자동진행 worktree-first 정책".
+    git checkout \$SOURCE
+    git checkout -b feature/\${SOURCE}_\${SLUG}
+    git merge --ff-only $CURRENT_BRANCH
+    git worktree remove \$(git rev-parse --show-toplevel)
+    git branch -D $CURRENT_BRANCH
+- ff-only 실패(divergence) 시: BASE=\$(git merge-base feature/\${SOURCE}_\${SLUG} $CURRENT_BRANCH);
+    git cherry-pick \${BASE}..$CURRENT_BRANCH   (충돌 시 git cherry-pick --abort 후 사용자 보고, auto-resolve 금지)
+- 제약: source = main/master 정착 금지 + master/main HEAD 에서의 cherry-pick = branch-enforce §1.5/§1.6 차단 → PR 절차.
+- SSOT: commands/{feature-create,feature-merge}.md §"절차" + CLAUDE.md §4.3 (f).
 EOF
                 log info "settlement reminder emitted for wip branch=$CURRENT_BRANCH"
                 ;;
