@@ -11,7 +11,7 @@
 #   - 모든 소스 작업 = worktree 격리 (사고 영구 차단)
 #   - feature 분기 = 사용자 요청 시 생성 (자동 강제 폐기)
 #
-# Functional exemption 11건:
+# Functional exemption 12건:
 #   1. */worktrees/*                  (worktree 자체)
 #   2. */state/sessions/*.lock        (session lock)
 #   3. */projects/*/memory/*          (auto memory)
@@ -23,6 +23,7 @@
 #   9. */.claude/hooks/*             (프로젝트 로컬 hook, git 미추적, 2026-05-27)
 #   10. git check-ignore 매칭         (untracked+ignored 로컬 전용 파일, 2026-05-29)
 #   11. */.claude/CLAUDE.md          (루트/프로젝트 글로벌 지침 — 추적 파일이나 정책 변경마다 라이브 발효 필요 = 명시 path 면제, 2026-06-04)
+#   12. */.claude/commands/*         (슬래시 커맨드 정의 — 추적 파일이나 슬래시 호출 시 라이브 발효 필요 = hooks(#9)/CLAUDE.md(#11) 동질 path 면제, 2026-06-04)
 #
 # SSOT: CLAUDE.md §4.3 "worktree 항상 강제" + 본 hook
 # 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + commands/feature-{create,merge}.md
@@ -103,6 +104,7 @@ case "$FILE_PATH" in
   */.claude/settings.local.json)   exit 0 ;;
   */.claude/hooks/*)               exit 0 ;;  # #9: 프로젝트 로컬 hook (git 미추적, 2026-05-27)
   */.claude/CLAUDE.md)             exit 0 ;;  # #11: 루트/프로젝트 글로벌 지침 (추적 파일이나 라이브 발효 필요 = path 면제, 2026-06-04)
+  */.claude/commands/*)            exit 0 ;;  # #12: 슬래시 커맨드 정의 (추적 파일이나 슬래시 호출 시 라이브 발효 필요 = hooks(#9)/CLAUDE.md(#11) 동질, 2026-06-04)
   C:/Works/infra/*|/c/Works/infra/*) exit 0 ;;  # #8: dev-team 인프라 영역 (git 미추적, 2026-05-20 추가)
 esac
 
@@ -134,9 +136,9 @@ echo "              cwd: $CWD" >&2
 echo "              조치:" >&2
 echo "                신규 작업 = git worktree add ~/.claude/worktrees/{sid}-{slug} -b wip/{sid}-{slug}" >&2
 echo "                기존 feature 수정 = git worktree add ~/.claude/worktrees/{sid}-{slug} feature/X" >&2
-echo "              면제 11건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
+echo "              면제 12건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
 echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json /" >&2
-echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md" >&2
+echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md / .claude/commands/*" >&2
 echo "              SSOT: CLAUDE.md §4.3 \"worktree 항상 강제\"" >&2
 command -v log_event >/dev/null 2>&1 && log_event "worktree-enforce" "block" "reason=worktree-required"
 exit 2

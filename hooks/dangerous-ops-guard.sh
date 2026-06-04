@@ -88,8 +88,13 @@ fi
 if echo "$COMMAND" | grep -qE 'git\s+clean\s+.*-f'; then
   block_exit "clean-f" "[BLOCKED] git clean -f 차단 — 추적되지 않는 파일이 삭제됩니다. 사용자 승인 후 수동 실행하세요."
 fi
-if echo "$COMMAND" | grep -qE 'git\s+branch\s+.*-D\b'; then
-  block_exit "branch-D" "[BLOCKED] git branch -D 차단 — 머지되지 않은 브랜치가 삭제됩니다. git branch -d 또는 사용자 승인 후 수동 실행하세요."
+# git branch -D — 머지 안 된 브랜치 강제 삭제 차단.
+# 예외: worktree 정착 정리용 단일 `git branch -D wip/…` 만 면제 (2026-06-04 사용자 명시 승인 — worktree 머지·remove·wip 정리 Claude 자동화).
+#   임의 브랜치(feature/main/master 등) -D 는 차단 유지. command 생성 형태 = 개별 호출 단일 `git branch -D wip/{sid}-{slug}`.
+#   단일 라인 전체 매칭(`^…$`)으로 결합 명령(`&&`/`;`/`|`) 안 임의 -D 우회 차단.
+if echo "$COMMAND" | grep -qE 'git\s+branch\s+.*-D\b' \
+   && ! echo "$COMMAND" | grep -qE '^[[:space:]]*git[[:space:]]+branch[[:space:]]+-D[[:space:]]+wip/[^ ;&|]+[[:space:]]*$'; then
+  block_exit "branch-D" "[BLOCKED] git branch -D 차단 — 머지되지 않은 브랜치가 삭제됩니다. git branch -d 또는 사용자 승인 후 수동 실행하세요. (worktree 정리용 단일 'git branch -D wip/…' 만 면제)"
 fi
 if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.\s*$'; then
   block_exit "checkout-dot" "[BLOCKED] git checkout . 차단 — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요."

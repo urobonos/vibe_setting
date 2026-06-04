@@ -85,6 +85,7 @@ for raw in tokens:
     if re.search(r'\bgit\s+(merge|checkout|switch)\b.*\b(main|master|origin/|upstream/)', cmd): continue
     if re.search(r'\bgit\s+worktree\s+remove\b', cmd): continue
     if re.search(r'\bgit\s+branch\s+-D\b', cmd): continue
+    if re.search(r'\bgit\s+cherry-pick\b', cmd): continue  # master/main HEAD cherry-pick=§3 텍스트안내(branch-enforce §1.6) + 정착 fallback=Claude자동, generous over-exempt(L86-87 동질)
     if re.search(r'\brm\s+-[rfRF]', cmd): continue
     if re.search(r'\b(migrate|rollback)\b', cmd): continue
     if re.search(r'\baws\s+', cmd): continue
@@ -128,8 +129,9 @@ command -v log_event >/dev/null 2>&1 && log_event "script-request-enforce" "bloc
         (shebang + set -euo pipefail + 본문 + 완료 echo + chmod +x) 후
         `! bash ~/.claude/docs/scripts/{file}.sh` 단일 라인으로만 안내.
 - 비-§3 스크립트는 Claude 본체가 먼저 `bash {script}` 직접 호출 시도 (실패 시에만 ! 안내).
-- §3 절대차단(git push / master·main 머지·체크아웃 / git worktree remove / git branch -D /
-  rm -rf / DB 마이그·롤백 / aws 변경계)은 예외 — 텍스트 직접 안내 유지 (스크립트화 불가).
+- §3 절대차단(git push / master·main 머지·체크아웃·master/main HEAD cherry-pick / rm -rf / DB 마이그·롤백 / aws 변경계)은
+  예외 — 텍스트 직접 안내 유지 (스크립트화 불가). worktree 머지·정착 cherry-pick fallback·remove·wip branch -D 는
+  Claude 자동 실행 (2026-06-04~ §4.3 f, dangerous-ops-guard wip/* 면제 + branch-enforce §1.6 master/main cherry-pick 차단).
 - false-positive(예시 토큰 등)면 비-§3 구체 명령을 플레이스홀더(`! <command>`) /
   §3 예시 / 일반 텍스트로 바꿔 재응답.
 - SSOT: CLAUDE.md §4.2 / feedback_script-request-enforce.md.
