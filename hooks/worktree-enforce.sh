@@ -41,15 +41,51 @@ case "$TOOL_NAME" in
     ;;
   Bash)
     COMMAND=$(echo "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('command',''))" 2>/dev/null)
-    # 파일 시스템 mutation 명령만 검사 (git 명령은 branch-enforce 잔존 영역)
-    case "$COMMAND" in
-      *"> "*|*">> "*|*"tee "*|*"cp "*|*"mv "*|*"rm "*|*"mkdir "*|*"touch "*)
-        FILE_PATH=$(pwd | sed 's|\\|/|g')
-        ;;
-      *)
-        exit 0
-        ;;
-    esac
+    # 파일 시스템 mutation 만 검사 (git 명령은 branch-enforce 잔존 영역).
+    # raw glob → shlex 토큰화 (2026-06-04, v5c): 명령 텍스트(echo 문자열·주석) 내 '>'/'rm' false-positive 방지.
+    #   - operator(|/||/&&/;/&/()/|&) 뒤 토큰 = 명령 위치 → mutation 명령 감지 (단일 | 누수 방지, re.split 미사용)
+    #   - newline = 절 분리(';' 치환), env-prefix(VAR=val) skip, subshell '()' 도 명령 위치 복귀
+    #   - wrapper {sudo,xargs,command,exec,nohup,env} = 다음 토큰 command-position 유지 (xargs rm/command rm 차단, command -v rm/which rm 통과)
+    #   - redirect REDIR(>/>>/&>/&>>/>|) target 이 /dev·fd(&) 면 무해 skip, 실제 파일이면 차단 (결합형 &> 단일토큰화 대응, >& 는 fd 모호 제외)
+    #   - 잔여 누수(문서화, 추적 안 함): >& file·xargs -0/-I rm(옵션개재)·backtick·eval·timeout = Claude 미사용 형태 + 다층 방어(dangerous-ops-guard 등)
+    #   - 잔여 FP(문서화): grep ">" 따옴표 단독연산자 = posix shlex 따옴표 제거(재설계 외 해결불가, 마찰·비누수)
+    #   - python 실패 시 IS_MUTATION 빈값 != "0" → 보수적 차단 (false negative 회피)
+    IS_MUTATION=$(printf '%s' "$COMMAND" | python3 -c "
+import sys, shlex, re
+cmd = sys.stdin.read().replace('\n', ' ; ')   # 따옴표 밖 newline = 절 분리 (따옴표 안은 shlex 보존)
+MUT = {'rm','mv','cp','mkdir','touch','tee','dd','truncate'}
+OPS = {'|','||','&&',';','&','(',')','|&'}   # |& = 결합 파이프(2>&1|), punctuation_chars 가 단일토큰화
+WRAP = {'sudo','xargs','command','exec','nohup','env'}   # 다음 토큰 command-position 유지
+REDIR = ('>', '>>', '&>', '&>>', '>|')       # 파일쓰기 redirect (결합형 &>/&>>/>| 포함, >& 는 fd 모호 제외)
+try:
+    lx = shlex.shlex(cmd, posix=True, punctuation_chars=True); lx.whitespace_split = True
+    toks = list(lx)
+except ValueError:
+    toks = cmd.split()
+hit = False; at_cmd = True
+for i, t in enumerate(toks):
+    if t in REDIR:
+        tgt = toks[i+1] if i + 1 < len(toks) else ''
+        if tgt.startswith('/dev/') or tgt.startswith('&'):
+            continue
+        hit = True; break
+    if t in OPS:
+        at_cmd = True; continue
+    if at_cmd:
+        if re.match(r'^\w+=', t):
+            continue
+        if t in MUT:
+            hit = True; break
+        if t in WRAP:
+            continue
+        at_cmd = False
+print('1' if hit else '0')
+" 2>/dev/null)
+    if [ "$IS_MUTATION" != "0" ]; then
+      FILE_PATH=$(pwd | sed 's|\\|/|g')
+    else
+      exit 0
+    fi
     ;;
   *)
     exit 0
