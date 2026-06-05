@@ -52,17 +52,67 @@
 
 ---
 
-## 주요 스킬
+## 스킬 카탈로그
 
-| 분류 | 스킬 |
+스킬 23개(user-invocable 21 + internal 2) + plugin 1. 자동화 등급 — **A** = 완전 자동(1회 트리거로 끝까지) / **B** = 부분 자동(분석 자동, 변경 적용은 사용자 결정) / **C** = 수동 진입점(단계별 결정).
+
+### 오케스트레이션·팀
+
+| 스킬 | 설명 | 등급 |
+|------|------|------|
+| `orchestration` | 3-Team(Analyze → Plan → Execute) 통합 워크플로우 | A |
+| `debate` (`/토론`) | 4 에이전트팀 × 4 = 16 Agent 풀-병렬 spawn 토론 (의견 갈림·트레이드오프) | A |
+| `dev-team` | HongCafe 다레포 개발 팀 (BE/인프라/문서/FE) — Lead 라우팅 1~4 spawn | A |
+| `api-team` | API 추가/디버그 시 FE+BE+인프라 3-멤버 병렬 영향분석 | A |
+
+### 검증·감사
+
+| 스킬 | 설명 | 등급 |
+|------|------|------|
+| `security-audit` | 7개 도메인 통합 보안 감사 (OWASP/CWE 등 14개 프레임워크) | A |
+| `api-spec-audit` | API 명세 ↔ IEEE 산출물(SRS/SDD/IDD) 9축 정합성 audit | A |
+| `skill-validator` | 스킬 풀 검증 (frontmatter + 본문 품질, 4 병렬 에이전트) | B |
+| `workflow-enforcer` | 3-Team Workflow Gate 강제 (Checkpoint 체크리스트) | C |
+
+### 개발 스택
+
+| 스킬 | 설명 | 등급 |
+|------|------|------|
+| `php8` | PHP 8.4+ / CI 4.7+ Modular Monolith API | B |
+| `mysql8` | MySQL 8.x 쿼리·스키마·인덱스 (EXPLAIN 검증, 인덱스 변경은 승인) | B |
+| `aws` | AWS 서비스 (Lambda/SQS/SNS/Aurora/EC2/IAM/보안그룹) | C |
+| `sns-oauth` | SNS OAuth(kakao/naver/google/apple) 표준 패턴 (add/verify/debug) | A·B |
+| `prod-debug` | prd/stg/dev EC2 직접 접속 → 점검·수정 → 검증 → 로컬 반영 | C |
+| `debug-skill` | 다영역 디버깅 (PHP/DB/AWS/보안) | B |
+
+### 산출물·문서·연동
+
+| 스킬 | 설명 | 등급 |
+|------|------|------|
+| `task-docs` | 작업 문서 생명주기 (working → tasks 자동 이동, 표준 템플릿) | A |
+| `report` | 일일·주간·월간 업무 리포트 생성 | A |
+| `mirror-be-claude` | be CLAUDE.md ↔ 글로벌 미러본 + api-docs 3-way 동기화 | A·C |
+| `git-push` | Conventional Commits + git push 즉시 실행 | C |
+| `bitbucket-cli` | Bitbucket Cloud REST API (curl + 토큰) | C |
+| `notion-cli` | Notion API curl 기반 CLI (사용자 명시 요청 시에만) | C |
+| `skill-creator` | 스킬 생성·수정·최적화 강제 진입점 (skill-edit-guard 강제) | C |
+
+### Internal (slash 호출 없음 — 자동 트리거/의존성용)
+
+| 스킬 | 설명 |
 |------|------|
-| 오케스트레이션 | `orchestration` · `debate` · `dev-team` · `api-team` |
-| 검증·감사 | `security-audit` · `api-spec-audit` · `skill-validator` · `workflow-enforcer` |
-| 개발 스택 | `php8` · `mysql8` · `aws` · `sns-oauth` · `prod-debug` |
-| 산출물·문서 | `task-docs` · `report` · `mirror-be-claude` · `docset-ref` |
-| 도구 연동 | `git-push` · `bitbucket-cli` · `notion-cli` · `skill-creator` |
+| `docset-ref` | Dash docset 오프라인 기술 레퍼런스 검색 (`/타당성` 자동 호출) |
+| `global-context` | HongCafe Global 다국가 서비스 컨텍스트 (프로젝트 한정) |
+| `simplify` | 변경 코드 재사용성·가독성·효율성 리뷰 (Claude Code 내장 plugin, `/리뷰` 보조) |
 
-전체 카탈로그와 자동화 등급(A/B/C)은 `CLAUDE.md` §5 "Skill & Slash Inventory" 참조.
+### 한글 워크플로우 슬래시 (thin wrapper)
+
+- **8단계 사이클:** `/분석` · `/타당성` · `/계획` · `/실행` · `/검증` · `/리뷰` · `/배포` · `/회고`
+- **결정·조사:** `/토론`(16 Agent) · `/제안`(경량 단일 권고) · `/조사`(웹 Research) · `/병렬`(Agent 강제 병렬화)
+- **세션·자동화:** `/자동진행` · `/작업저장` · `/작업로드` · `/working-done` · `/프로세스`
+- **worktree 정착:** `/feature-create`(신규 분기) · `/feature-merge`(기존 분기 ff-only)
+
+> 전체 인벤토리·자동화 등급 카운트·동기화 규칙의 SSOT 는 `CLAUDE.md` §5 "Skill & Slash Inventory" 입니다.
 
 ---
 
