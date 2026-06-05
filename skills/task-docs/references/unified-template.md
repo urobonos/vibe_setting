@@ -124,6 +124,17 @@
 |---|------|---------|------|-----------|
 | 1 | {작업} | - | Worker | {S/M/L} |
 
+## Step 분해 (순차 실행 단위)
+
+> WBS 를 step-01~nn 순차 실행 단위로 분해. 각 step 을 working/ 직속 평면 파일 `{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` (DEPTH=1, `output-naming-check.sh` 통과) 로 생성하고 아래 인덱스 표로 추적한다. 양식·파일 골격 SSOT = `commands/계획.md §"step 파일 양식"`. (S = 생략 가능 / M·L = 작업이 순차 단위로 나뉠 때 가치)
+
+| step | 제목 | step 파일 | 의존 | 완료 기준(DoD) | 상태 |
+|------|------|----------|------|---------------|------|
+| 01 | {제목} | `...-step-01-{slug}.md` | - | {DoD} | Pending |
+| 02 | {제목} | `...-step-02-{slug}.md` | 01 | {DoD} | Pending |
+
+> `/실행` 이 이 인덱스를 step-01 부터 의존 순서대로 순차 소비하며 상태를 `Pending → In Progress → Done` 으로 갱신한다. §3 매칭 step 은 `Pending(승인 대기)` 로 표기하고 `/실행` 진입 전 사용자 명시 승인을 받는다.
+
 ## 실행 계획
 - **Team 3 구성:** {Worker Lead + 멤버 목록 — 등급별 plan-template.md §등급별 플랜 구성 참조}
 - **구현 순서:** {레이어별/기능별 순서}
