@@ -2,34 +2,13 @@
 name: api-team
 description: >
   API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석 팀.
-  자동 트리거 (API 추가/엔드포인트 오류 키워드) + `/api-team` 슬래시 커맨드 호출.
+  `/api-team` 슬래시 커맨드로 **명시 호출** 시 실행 (cold opus 3-멤버 spawn 비용 — 자동 트리거 없는 수동 호출 전용).
   add 모드 = 3-레포 반영 체크리스트, debug 모드 = 3-레포 가설 우선순위.
   Lead = Claude 본체, 멤버 3명은 cold context 로 병렬 Agent spawn (opus 모델 고정).
   인프라 멤버는 폴더 read + AWS CLI 실시간 조회 (조회계 즉시, 변경계 사용자 승인).
 triggers:
-  - "API 추가 영향"
-  - "API 추가 반영"
-  - "API 추가 체크"
-  - "API 추가 확인"
-  - "API 추가 점검"
-  - "엔드포인트 추가 영향"
-  - "엔드포인트 추가 반영"
-  - "라우트 추가 영향"
-  - "라우트 추가 반영"
-  - "엔드포인트 오류"
-  - "엔드포인트 에러"
-  - "엔드포인트 500"
-  - "엔드포인트 timeout"
-  - "엔드포인트 디버그"
-  - "API 오류"
-  - "API 에러"
-  - "API 500"
-  - "API 디버그"
-  - "풀스택 영향"
-  - "FE BE 인프라"
-  - "프엔 백 인프라"
   - "/api-team"
-version: 1.0.0
+version: 2.0.0
 user-invocable: true
 depends_on: [orchestration, php8, mysql8, aws, security-audit, task-docs]
 conflicts_with: []
@@ -50,16 +29,16 @@ API 엔드포인트 **추가** 또는 **오류** 발생 시, **프론트엔드 /
 
 ## 1. 호출 방식
 
-### 1.1. 자동 트리거 (우선)
+### 1.1. 수동 호출 전용
 
-위 frontmatter `triggers` 패턴이 사용자 발화에 매칭되면 즉시 호출. 모호한 경우 Lead 가 한 줄 확인 후 진행.
+`/api-team` 슬래시 커맨드로만 진입한다. 자연어 자동 발동 없음 (cold opus 3-멤버 spawn 비용 보호). 풀스택 API 작업이 필요해 보여도 Lead 는 `/api-team` 호출을 *안내*만 하고 자동 spawn 하지 않는다.
 
-**트리거 예시 (호출됨):**
+**호출이 적합한 작업 (사용자가 슬래시로 진입):**
 - "주문 생성 API 추가했는데 풀스택 영향 체크"
 - "/v1/orders POST 엔드포인트가 500 나는데 디버그"
 - "결제 라우트 추가 — FE BE 인프라 반영 사항"
 
-**트리거 안 됨 (의도된 차단):**
+**부적합 (단일 레포 — 호출 불필요):**
 - "이 함수 뭐 함?" → 단일 BE 질문
 - "API 응답 형식 뭐야?" → 단일 BE 조회
 - "프론트엔드 코드 봐줘" → 단일 FE 작업

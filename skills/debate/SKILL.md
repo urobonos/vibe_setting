@@ -1,25 +1,13 @@
 ---
 name: debate
 description: >
-  Multi-Agent Team Debate Protocol. 질문 유형 시 4 에이전트팀 (각 팀 4 Agent = 총 16 Agent) 풀-병렬 spawn 토론을 수행한다.
+  Multi-Agent Team Debate Protocol. `/debate`·`/토론` 슬래시로 **명시 호출** 시에만 4 에이전트팀 (각 팀 4 Agent = 총 16 Agent) 풀-병렬 spawn 토론을 수행한다 (토큰 4× 비용 — 자동 발동 없는 수동 호출 전용).
   각 팀원은 cold context 로 독립 spawn 되어 자기 관점만 발언하고, Lead 가 팀 내 의견을 종합한다.
   토론만 수행하며, 코드 구현·커밋은 별도 3-Team 워크플로우로 처리한다.
 triggers:
-  - "어떻게 할까"
-  - "어떤 방향이 좋을까"
-  - "어떤 게 나아"
-  - "어느 쪽이 나아"
-  - "차이가 뭐야"
-  - "트레이드오프"
-  - "tradeoff"
-  - "의견 갈림"
-  - "양쪽 비교"
-  - "토론 해줘"
-  - "토론해줘"
-  - "debate"
   - "/debate"
   - "/토론"
-version: 3.0.0
+version: 4.0.0
 user-invocable: true
 depends_on: [orchestration]
 conflicts_with: []
@@ -34,7 +22,7 @@ min_claude_md_version: "4.0"
 
 ## 트리거 조건
 
-frontmatter `triggers` 참조. **트리거 제외:** 코드 작성/수정 요청, 플랜 요청, 단순 사실 확인.
+**수동 호출 전용** — `/debate` 또는 `/토론` 슬래시로만 진입한다. 자연어 자동 발동 없음 (16 Agent spawn·토큰 4× 비용 보호). 토론이 필요해 보여도 Lead 는 `/토론` 호출을 *안내*만 하고 자동 spawn 하지 않는다.
 
 ## 그룹 구성 (4 에이전트팀, 각 팀 4 Agent = 16 Agent 풀-병렬)
 

@@ -4,18 +4,12 @@ description: >
   3-Team Orchestration (Analyze→Plan→Execute) 통합 스킬. 9-Core + 3-Consultants 페르소나,
   Effort/Model/Task Sizing, Communication Protocol, Team 상세 구조, Vibe Coding Group을 정의한다.
 triggers:
-  - "바이브코딩"
-  - "바이브 코딩"
-  - "vibe coding"
-  - "에이전트 설정"
   - "Effort 할당"
   - "작업 등급"
   - "3-Team"
   - "Analyze→Plan→Execute"
-  - "오케스트레이션"
-  - "orchestration"
   - "/orchestration"
-version: 2.0.0
+version: 2.1.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
