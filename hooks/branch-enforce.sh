@@ -57,21 +57,12 @@ fi
 # ─────────────────────────────────────────────────────────
 if [ "$TOOL_NAME" = "Bash" ]; then
   hook_parse_command
+  # H-2 wire-in point: push 검출 단일점 — 향후 PUSH_EXCEPTION_ACTIVE 정책 분기를 여기서 (현 behavior 불변)
   PUSH_DETECTED="0"
   hook_python
   if [ -n "$HOOK_PY" ]; then
-    PUSH_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" -c "
-import sys, shlex, re
-cmd = sys.stdin.read()
-for part in re.split(r'(?:&&|\|\||;)', cmd):
-    try:
-        tokens = shlex.split(part, posix=True)
-    except ValueError:
-        tokens = part.strip().split()
-    if len(tokens) >= 2 and tokens[0] == 'git' and tokens[1] == 'push':
-        print('1'); sys.exit(0)
-print('0')
-" 2>/dev/null)
+    # step-01 공유 lib 소비 (git -C/--git-dir·개행·env·subshell·wrapper 정규화 — inline re.split 제거)
+    PUSH_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" push 2>/dev/null)
   fi
   if [ "$PUSH_DETECTED" = "1" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=auto-push branch=$BRANCH"
@@ -98,33 +89,8 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   MASTER_MERGE_DETECTED="0"
   hook_python
   if [ -n "$HOOK_PY" ]; then
-    MASTER_MERGE_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" -c "
-import sys, shlex, re
-TARGETS = {'main', 'master', 'origin/main', 'origin/master',
-           'refs/heads/main', 'refs/heads/master',
-           'upstream/main', 'upstream/master'}
-cmd = sys.stdin.read()
-for part in re.split(r'(?:&&|\|\||;)', cmd):
-    try:
-        tokens = shlex.split(part, posix=True)
-    except ValueError:
-        tokens = part.strip().split()
-    if len(tokens) < 2 or tokens[0] != 'git':
-        continue
-    if tokens[1] == 'merge':
-        for t in tokens[2:]:
-            if t in TARGETS:
-                print('merge-target'); sys.exit(0)
-    elif tokens[1] == 'checkout':
-        for t in tokens[2:]:
-            if t in TARGETS:
-                print('checkout-master'); sys.exit(0)
-    elif tokens[1] == 'switch':
-        for t in tokens[2:]:
-            if t in TARGETS:
-                print('switch-master'); sys.exit(0)
-print('0')
-" 2>/dev/null)
+    # step-01 공유 lib 소비 (전역옵션 정규화 — git -C/--git-dir merge·checkout·switch main/master 우회 차단)
+    MASTER_MERGE_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" master-merge 2>/dev/null)
   fi
   if [ "$MASTER_MERGE_DETECTED" != "0" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-merge pattern=$MASTER_MERGE_DETECTED branch=$BRANCH"
@@ -150,21 +116,8 @@ if [ "$TOOL_NAME" = "Bash" ] && { [ "$BRANCH" = "main" ] || [ "$BRANCH" = "maste
   CHERRY_DETECTED="0"
   hook_python
   if [ -n "$HOOK_PY" ]; then
-    CHERRY_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" -c "
-import sys, shlex, re
-RECOVERY = {'--abort', '--quit', '--skip'}
-cmd = sys.stdin.read()
-for part in re.split(r'(?:&&|\|\||;)', cmd):
-    try:
-        tokens = shlex.split(part, posix=True)
-    except ValueError:
-        tokens = part.strip().split()
-    if len(tokens) >= 2 and tokens[0] == 'git' and tokens[1] == 'cherry-pick':
-        if any(t in RECOVERY for t in tokens[2:]):
-            continue
-        print('1'); sys.exit(0)
-print('0')
-" 2>/dev/null)
+    # step-01 공유 lib 소비 (전역옵션 정규화 — RECOVERY(--abort/--quit/--skip) 면제 내장)
+    CHERRY_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" cherry-pick 2>/dev/null)
   fi
   if [ "$CHERRY_DETECTED" = "1" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-cherry-pick branch=$BRANCH"

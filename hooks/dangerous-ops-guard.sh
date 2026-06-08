@@ -71,36 +71,48 @@ fi
 
 LOWER_CMD=$(echo "$COMMAND" | tr '[:upper:]' '[:lower:]')
 
+# step-01 공유 lib ADD-alongside 판정 (기존 grep 백스톱 위에 OR — git -C/--git-dir·wrapper·개행·force -f 정규화).
+#   lib 실패(python 부재 등) 시 '0' → 기존 grep 백스톱이 단독 작동 (회귀 0). matrix 가 strict superset 증명 전까지 grep 유지.
+GG_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/git-guard.py"
+GG_PY=""
+if command -v python3 >/dev/null 2>&1; then GG_PY=python3
+elif command -v python >/dev/null 2>&1; then GG_PY=python; fi
+gg_detect() {
+  [ -n "$GG_PY" ] || { echo 0; return; }
+  printf '%s' "$COMMAND" | "$GG_PY" "$GG_LIB" "$1" 2>/dev/null || echo 0
+}
+
 # ===== 파괴적 명령 차단 (exit 2) =====
 
 # 1. 파일 삭제 — rm -rf, rm -r, rm -f
-if echo "$COMMAND" | grep -qE '^\s*rm\s+-(r|f|rf|fr)\b'; then
-  block_exit "rm-rf" "[BLOCKED] 파괴적 삭제 명령 차단: rm with -r/-f 플래그 — 삭제 대상을 확인하고 사용자에게 승인을 요청하세요."
+if echo "$COMMAND" | grep -qE '^\s*rm\s+-(r|f|rf|fr)\b' || [ "$(gg_detect rm-destructive)" = "1" ]; then
+  block_exit "rm-rf" "[BLOCKED] 파괴적 삭제 명령 차단: rm with -r/-f 플래그 (sudo/세미콜론/wrapper/롱옵션 포함, plain 'rm file' 제외) — 삭제 대상을 확인하고 사용자에게 승인을 요청하세요."
 fi
 
 # 2. Git 파괴적 명령
-if echo "$COMMAND" | grep -qE 'git\s+push\s+.*--force'; then
-  block_exit "force-push" "[BLOCKED] force push 차단 — 원격 히스토리가 파괴됩니다. 사용자 명시 승인 후 수동 실행하세요."
+if echo "$COMMAND" | grep -qE 'git\s+push\s+.*--force' || [ "$(gg_detect force-push)" = "1" ]; then
+  block_exit "force-push" "[BLOCKED] force push 차단 (--force/-f/git -C 정규화 포함) — 원격 히스토리가 파괴됩니다. 사용자 명시 승인 후 수동 실행하세요."
 fi
-if echo "$COMMAND" | grep -qE 'git\s+reset\s+--hard'; then
-  block_exit "reset-hard" "[BLOCKED] git reset --hard 차단 — 커밋되지 않은 변경이 모두 손실됩니다. 사용자 승인 후 수동 실행하세요."
+if echo "$COMMAND" | grep -qE 'git\s+reset\s+--hard' || [ "$(gg_detect reset-hard)" = "1" ]; then
+  block_exit "reset-hard" "[BLOCKED] git reset --hard 차단 (git -C 정규화 포함) — 커밋되지 않은 변경이 모두 손실됩니다. 사용자 승인 후 수동 실행하세요."
 fi
-if echo "$COMMAND" | grep -qE 'git\s+clean\s+.*-f'; then
-  block_exit "clean-f" "[BLOCKED] git clean -f 차단 — 추적되지 않는 파일이 삭제됩니다. 사용자 승인 후 수동 실행하세요."
+if echo "$COMMAND" | grep -qE 'git\s+clean\s+.*-f' || [ "$(gg_detect clean-f)" = "1" ]; then
+  block_exit "clean-f" "[BLOCKED] git clean -f 차단 (git -C 정규화 포함) — 추적되지 않는 파일이 삭제됩니다. 사용자 승인 후 수동 실행하세요."
 fi
 # git branch -D — 머지 안 된 브랜치 강제 삭제 차단.
 # 예외: worktree 정착 정리용 단일 `git branch -D wip/…` 만 면제 (2026-06-04 사용자 명시 승인 — worktree 머지·remove·wip 정리 Claude 자동화).
 #   임의 브랜치(feature/main/master 등) -D 는 차단 유지. command 생성 형태 = 개별 호출 단일 `git branch -D wip/{sid}-{slug}`.
 #   단일 라인 전체 매칭(`^…$`)으로 결합 명령(`&&`/`;`/`|`) 안 임의 -D 우회 차단.
-if echo "$COMMAND" | grep -qE 'git\s+branch\s+.*-D\b' \
-   && ! echo "$COMMAND" | grep -qE '^[[:space:]]*git[[:space:]]+branch[[:space:]]+-D[[:space:]]+wip/[^ ;&|]+[[:space:]]*$'; then
-  block_exit "branch-D" "[BLOCKED] git branch -D 차단 — 머지되지 않은 브랜치가 삭제됩니다. git branch -d 또는 사용자 승인 후 수동 실행하세요. (worktree 정리용 단일 'git branch -D wip/…' 만 면제)"
+if { echo "$COMMAND" | grep -qE 'git\s+branch\s+.*-D\b' \
+     && ! echo "$COMMAND" | grep -qE '^[[:space:]]*git[[:space:]]+branch[[:space:]]+-D[[:space:]]+wip/[^ ;&|]+[[:space:]]*$'; } \
+   || [ "$(gg_detect branch-D)" = "1" ]; then
+  block_exit "branch-D" "[BLOCKED] git branch -D 차단 — 머지되지 않은 브랜치가 삭제됩니다. git branch -d 또는 사용자 승인 후 수동 실행하세요. (worktree 정리용 단일 'git branch -D wip/…' 만 면제, lib 도 동일 면제 내장)"
 fi
-if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.\s*$'; then
-  block_exit "checkout-dot" "[BLOCKED] git checkout . 차단 — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요."
+if echo "$COMMAND" | grep -qE 'git\s+checkout\s+\.\s*$' || [ "$(gg_detect checkout-dot)" = "1" ]; then
+  block_exit "checkout-dot" "[BLOCKED] git checkout . 차단 (git -C 정규화 포함, '--' 뒤 파일명은 면제) — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요."
 fi
-if echo "$COMMAND" | grep -qE 'git\s+restore\s+\.\s*$'; then
-  block_exit "restore-dot" "[BLOCKED] git restore . 차단 — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요."
+if echo "$COMMAND" | grep -qE 'git\s+restore\s+\.\s*$' || [ "$(gg_detect restore-dot)" = "1" ]; then
+  block_exit "restore-dot" "[BLOCKED] git restore . 차단 (git -C 정규화 포함, '--' 뒤 파일명은 면제) — 모든 수정사항이 되돌려집니다. 사용자 승인 후 수동 실행하세요."
 fi
 
 # 3. DB 파괴적 명령
