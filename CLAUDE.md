@@ -38,6 +38,7 @@
   - **`indexing/{product}.md` 전역 문서 인덱스 (필수, 2026-05-29~):** `~/.claude/docs/{product}/` 하위 전 영역(output/tasks/specs/working) .md 전역 인덱스 — `doc-index-maintain.sh` PostToolUse hook 자동 재생성, **직접 편집 금지**. 용도 = 워크플로우 "참조 범위 전수 조사" 진입점(index 전수 스캔 → 관련 항목만 선택 정독, 토큰 폭발 회피). SSOT: `hooks/doc-index-maintain.sh` + `skills/task-docs/SKILL.md` §"전역 문서 인덱스".
 - **working/ 단일 통합 문서 (필수, 2026-05-12~):** 진행 중 작업 = `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 통합 파일. `## 분석`·`## 계획`·`## 실행` 3 섹션 통합, 각 섹션은 필수 하위섹션 (타당성 검토 / 변경 영향 기록 / Critical~Low 4분류 / Blueprint / WBS / Self-Critique / 장기 영향 / 재발 방지 / SSOT 일관성) 보유.
   - **자동 이동:** `^Status:\s*Done` (시작 라인) + `## Self-Critique` 섹션 동시 존재 시 `working-lifecycle.sh` PostToolUse hook 가 `tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 이동. 사용자 명시 키워드 (`작업 완료` / `tasks 이동` / `working 정리` / `done`) 도 동일 트리거.
+  - **step 평면 파일 분배 (필수, 2026-05-29~):** `/계획` step 분해 시 각 step 을 working/ 직속 평면 파일 `{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` (DEPTH=1 → `output-naming-check.sh` 통과) 로 생성한다. 완료 자동 이동 시 `working-lifecycle.sh` 가 unified 마스터 → `tasks/.../{작업명}/{yyyy-mm-dd}-{작업명}-unified.md`, step 평면 → `tasks/.../{작업명}/steps/NN-{slug}.md` 로 **분배 mv**. `-step-[0-9]+-` 가드 = step 파일의 `상태: Done` 이 lifecycle 마스터 이동을 오트리거하지 않게 + register/heartbeat orphan 미등록 방지. **작업명 자체에 `-step-NN-` 패턴 사용 금지** (glob 충돌 회피). SSOT: `commands/계획.md §"step 파일 양식"` + `hooks/working-lifecycle.sh`.
   - **충돌 처리:** 동명 파일 존재 시 `.bak-{timestamp}` 백업 후 덮어쓰기. 3종 분리 (역소급) 와 공존 가능 (파일명 suffix `-unified` 로 구분).
   - **product 식별:** 글로벌 1개 디렉토리 통합, 파일명 prefix `{product}-` 로 식별.
   - **`tasks/` 산출물 정책 + 역소급 면제:** 신규 (≥ 2026-05-12) = `-unified.md` 1개. 기존 3종 (< 2026-05-12) = 그대로 보존. 4개 hook (doc-template-guard / output-naming-check / checklist-count-check / session-completeness-check) 양쪽 패턴 인식.
@@ -115,6 +116,7 @@
 - **Persistence (필수):** 작업 완료 시 `~/.claude/docs/{product}/tasks/history.md` + `YYYYMMDD/summary.md` 기록. 강제: `session-completeness-check.sh`.
 - **타당성 검토 (필수):** (1) 분석·사전 계획·설계 (SDD/SRS/SDP/IDD), (2) 라이브러리·프레임워크 선택, (3) 아키텍처 결정, (4) API 설계·계약 변경, (5) 보안·인증 패턴 — 예외 없이 "타당성 검토" 섹션 포함. 근거 = `docset-ref` 스킬. "통상적"·"일반적으로" 모호 표현으로 검토 대체 금지. 일반 코드 수정·버그 픽스·리팩토링·명명·주석·typo 는 본 룰 비대상.
 - **변경 영향 기록 (필수):** analyze/preplan 반영 시 **변경되는 사항** + **개선점** + **수행 이유** 필수 기록.
+- **결정 기록 (필수, 2026-06-08~):** Claude 가 사용자에게 결정을 요구하고 그 결정이 완료되면, 결정 내용(질문→선택)을 진행 중 working/ 문서 §공통 **"변경 영향 기록" 표**에 기록한다 (신규 섹션/헤더 신설 금지 — 기존 표 재사용, unified-template.md/doc-template-guard 무수정). **대상 = 명시적 결정 지점만** (단순 실행 승인 "진행" 류 제외). **2 경로:** (a) **AskUserQuestion 도구** = `decision-record-reminder.sh` (PostToolUse) 가 `tool_response.answers` 에서 결정 내용 추출 + registry 로 현재 sid working_file 조회 후 reminder 자동 주입 (진행 중 working 문서 없으면 no-op). (b) **`[AUTO-ITERATE-USER-DECISION]` sentinel 부착 시** = Stop hook(`auto-iterate-stop-guard.sh`)이 exit 0 으로 턴을 종료해 reminder 가 착지할 다음 턴이 없으므로 hook 으로 합성 불가 → Claude 본체가 **같은 턴에** 직접 동일 표에 기록 (self-critique 형, hook 강제 불가). **§3 매칭 결정**이면 사용자 명시 승인 흐름은 그대로 유지 (본 룰은 기록 의무이지 승인 우회 아님). SSOT: 본 룰 + `hooks/decision-record-reminder.sh`.
 - **산출물 유연성:** 신규 (≥ 2026-05-12) = working/ 단일 통합 1개. 한 파일 안 3 섹션 중 필요한 섹션만 채움. 기존 (< 2026-05-12) = 3종 분리 보존.
 - **Before/After 대조 보고 (필수 / 무조건 진행):** 작업 완료 후 최초 실행안 vs 제안 변경분 diff/표 형태 보고. 제안 추가 0건이면 **"제안 추가: 없음 — 사용자 지시 그대로 반영"** 명시. 숨긴 채 최종안만 보고하는 것은 지침 위반.
 - **롤백 가능 상태 (필수):** 제안 반영 코드는 롤백 가능 상태 유지. (1) 최초안/제안안 별도 커밋 분리 또는 (2) 명시적 diff/patch 제공. 단일 커밋에 섞어 분리 롤백 불가능하게 만들면 위반.
@@ -259,7 +261,7 @@
 | mirror-be-claude | be 프로젝트 CLAUDE.md ↔ 글로벌 미러본 동기화 | `/mirror-be-claude` | ✗ (skill 진입) | A (verify·sync-from-be) / C (sync-from-global) |
 | mysql8 | MySQL 8.x 쿼리·스키마·인덱스 | `/mysql8` | ✗ (skill 진입) | B |
 | notion-cli | Notion API curl 기반 CLI | `/notion-cli` | ✗ (skill 진입) | C |
-| orchestration | 3-Team (Analyze → Plan → Execute) 통합 | `/orchestration` | ✗ (skill 진입) | A |
+| orchestration | 3-Team (Analyze → Plan → Execute) 통합 | `/orchestration` | ✓ | A |
 | php8 | PHP 8.4+ / CI 4.7+ Modular Monolith | `/php8` | ✗ (skill 진입) | B |
 | report | 일일·주간·월간 업무 리포트 생성 | `/report` | ✓ | A |
 | security-audit | 7개 도메인 통합 보안 감사 (OWASP/CWE 등) | `/security-audit` | ✓ | A |
@@ -274,8 +276,8 @@
 | 작업로드 | 세션 재개 — working/ Status: Partial 잔존 작업 스캔 + 본문/잔여 표시 + 재진입 안내 (read-only) | `/작업로드` | ✓ | A |
 | 분석 | 작업 분석 단계 진입 — working/ §분석 섹션 채움 (관점별 요약 / Critical~Low / 우선순위 권고) (thin wrapper) | `/분석` | ✓ | A |
 | 타당성 | 타당성 검토 단계 진입 — docset-ref 호출 + 공식 근거 인용 ≥ 1건 (thin wrapper) | `/타당성` | ✓ | A |
-| 계획 | 작업 계획 단계 진입 — working/ §계획 섹션 채움 (수정 대상 / Blueprint / WBS) (thin wrapper) | `/계획` | ✓ | A |
-| 실행 | 작업 실행 단계 진입 — working/ §실행 섹션 + Self-Critique + Status 판정 (thin wrapper) | `/실행` | ✓ | A |
+| 계획 | 작업 계획 단계 진입 — working/ §계획 채움 + step-01~nn 분해 + 재검토 1회 + 전체 점검 + Status: Plan Complete (thin wrapper) | `/계획` | ✓ | A |
+| 실행 | 작업 실행 단계 진입 — step 인덱스 순차 소비 + step별 상태 마킹 + working/ §실행 + Self-Critique + QA 게이트(조건부) + Status 판정 (thin wrapper) | `/실행` | ✓ | A |
 | 검증 | e2e 5점 검증 진입 — env / 함수 / 스키마 / curl / mock (thin wrapper) | `/검증` | ✓ | A |
 | 리뷰 | Self-Critique + simplify 스킬 보조 리뷰 (thin wrapper) | `/리뷰` | ✓ | A |
 | 배포 | git-push + branch-enforce 통합 배포 안내 (사용자 직접 실행) (thin wrapper) | `/배포` | ✓ | C |
