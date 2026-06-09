@@ -32,6 +32,8 @@
 |------|------|
 | 작업명 | {kebab-case 작업명} |
 | product | {product 명, 예: claude-harness / hongcafe_global_backend / infra} |
+| 점유 세션 (sid) | _(자동 — working-heartbeat.sh, REGISTRY.md 동기화)_ |
+| 점유 시작 | _(자동 — working-heartbeat.sh, REGISTRY.md 동기화)_ |
 | 개발언어/기술스택 | {php / lambda / aws / infra 등 관련 기술, 복수 시 쉼표 구분} |
 | 작업 등급 | {S / M / L} |
 | 시작일 | {YYYY-MM-DD} |
