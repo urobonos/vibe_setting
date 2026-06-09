@@ -339,6 +339,42 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 | **Medium** | 권장 수정. 코드 품질, 유지보수성, 성능 | DI 미적용, 중복 코드, N+1 쿼리 |
 | **Low** | 선택적 개선. 네이밍, 문서화, 코드 스타일 | PHPDoc 누락, 미사용 코드 |
 
+> **비필수 사이드이펙트 백로그 격리 (등급 부여 전 사전 필터):** 위 4등급을 부여하기 전에 — 발견 항목이 **① 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급** 3조건을 **모두** 충족하면 Critical~Low 행을 부여하지 말고 backlog 메모리에만 기록한다 (아래 §"backlog 메모리 워크플로우"). 하나라도 불충족 = 정상 등급 부여. **실제 버그는 경미해도 Low 로라도 분류하지 backlog 로 미루지 않는다.** SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
+
+---
+
+## backlog 메모리 워크플로우
+
+> SSOT = CLAUDE.md §4.5 "backlog 메모리 정책" + "비필수 사이드이펙트 백로그 격리" + `hooks/backlog-lifecycle.sh`. 본 섹션은 task-docs 진입점에서의 운영 요약이다 (CLAUDE.md 가 참조하는 SSOT 섹션).
+
+본 세션의 **잔여 후속 / 시간 트리거 / 사용자 결정 보류** 작업, 그리고 **코드 작업 중 발견한 비필수·무해·사이드이펙트급 항목**은 working/ 문서·산출물·코드 TODO 로 끌어올리지 않고 backlog 메모리 단일 파일에 격리 기록한다.
+
+### 파일 양식
+
+- 경로: `~/.claude/projects/C--Users-PV--claude/memory/backlog_{slug}.md` (단일 파일, slug = kebab-case)
+- frontmatter: `name` / `description` (1줄) / `type: backlog` / `status: pending|in_progress|done` / `source` / `target_date` (선택) / `product` (기본 claude-harness) / `created` / `completed` (status=done 시 hook 자동 채움)
+- MEMORY.md `## Backlog` 섹션에 entry 1줄 추가 필수 — `- [slug](backlog_{slug}.md) — 한 줄 요약`
+- **별도 경량 backlog 신설 금지** — 본 양식 외 임시 메모·인라인 TODO 로 대체하지 않는다.
+
+### 비필수 사이드이펙트 격리 판단 (코드 작업 중, CLAUDE.md §4.5)
+
+코드 작업(`/분석`·`/계획`·`/실행`·`/검증`·`/리뷰`) 중 발견한 항목을 다음 표로 판정한다.
+
+| 조건 | 판정 |
+|------|------|
+| **① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급(부수적·경미)** — 3조건 **모두** 충족 | **backlog 에만 기록** 후 현재 작업 계속 (등급 행·step·즉시 수정 금지) |
+| 3조건 중 **하나라도 불충족** | 본 규칙 비대상 — `/분석` Critical~Low 정상 분류·처리 |
+| **실제 버그·문제** (경미해 보여도) | **backlog 금지** — 정상 처리 (②가 안전장치) |
+| **§3 Checkpoint 매칭** | 크기·필수성 무관 사용자 보고 (본 규칙과 무관) |
+
+> **Why:** 비필수·무해 항목을 본 작업에 끌어들이면 스코프 크리프 + 산출물 노이즈 + 집중 분산. backlog 격리 = 추적 보존 + 현재 작업 순도 유지. judgment 룰이라 hook 기계 강제 불가 — 격리 판단은 Claude 본체.
+
+### 완료 → tasks/ 자동 이동
+
+- `status: done` 마커 → `backlog-lifecycle.sh` (PostToolUse) 가 `~/.claude/docs/{product}/tasks/{YYYYMMDD}/backlog/{yyyy-mm-dd}-{slug}.md` 로 자동 이동 + MEMORY.md entry 제거 + history.md / summary.md 갱신
+- 사용자 명시 키워드 (`backlog 완료` / `backlog 정리` / `backlog 이동` / `/backlog-done`) → memory 디렉토리 일괄 스캔 이동
+- §3 Checkpoint 우선 적용
+
 ---
 
 # Part 4. Context Persistence 연동
