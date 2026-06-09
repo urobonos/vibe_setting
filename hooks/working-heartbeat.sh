@@ -78,4 +78,23 @@ SID8="${SESSION_ID:0:8}"
 registry_update "$SLUG" "$SID8" "active" 2>/dev/null
 session_lock_touch "$SLUG" "$SID8" 2>/dev/null
 
+# 작성 정보 박스 점유 세션(sid)·점유 시작 자동 주입 (2026-06-09 사용자 결정)
+# working/ unified 문서 작성 정보 표의 placeholder/기존값을 REGISTRY 의 sid8·started 로 치환.
+# idempotent — 현재값과 동일하면 미기입 (Claude file-tracking 마찰 회피).
+# 행 없는 구 문서는 skip (역소급 면제). SSOT: unified-template.md 작성 정보 placeholder + CLAUDE.md.
+TARGET="$FILE_PATH_NORM"; [ -f "$TARGET" ] || TARGET="$FILE_PATH"
+if [ -f "$TARGET" ] && grep -qE '^\|[[:space:]]*점유 세션' "$TARGET"; then
+  STARTED=$(registry_find "$SLUG" | awk -F"$REGISTRY_FS" -v sid="$SID8" '$4==sid {print $5; exit}')
+  if [ -n "$STARTED" ]; then
+    CUR_SID=$(awk -F'\\|' '/^\|[[:space:]]*점유 세션/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$3);print $3;exit}' "$TARGET")
+    CUR_ST=$(awk -F'\\|' '/^\|[[:space:]]*점유 시작/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$3);print $3;exit}' "$TARGET")
+    if [ "$CUR_SID" != "$SID8" ] || [ "$CUR_ST" != "$STARTED" ]; then
+      sed -i -E \
+        -e "s#^(\|[[:space:]]*점유 세션[^|]*\|)[^|]*\|[[:space:]]*\$#\1 ${SID8} |#" \
+        -e "s#^(\|[[:space:]]*점유 시작[^|]*\|)[^|]*\|[[:space:]]*\$#\1 ${STARTED} |#" \
+        "$TARGET" 2>/dev/null
+    fi
+  fi
+fi
+
 exit 0
