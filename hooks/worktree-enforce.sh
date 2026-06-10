@@ -3,7 +3,7 @@
 #
 # 정책: 모든 소스 mutation 작업은 worktree 안에서 수행되어야 한다.
 #   cwd 또는 FILE_PATH 가 worktree (`*/worktrees/*`) 가 아니고
-#   functional exemption 9건 매칭 안 됨 → exit 2 차단.
+#   functional exemption 12건 매칭 안 됨 → exit 2 차단.
 #   단, cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) 면제 — worktree 생성 자체가
 #   불가능하므로 강제 차단이 작업을 막는다 (path-pattern 면제와 별개인 state-condition 면제).
 #
@@ -93,7 +93,7 @@ print('1' if hit else '0')
     ;;
 esac
 
-# Functional exemption 9건 (FILE_PATH 기준)
+# Functional exemption 12건 (FILE_PATH 기준)
 case "$FILE_PATH" in
   */worktrees/*)                   exit 0 ;;
   */state/sessions/*.lock)         exit 0 ;;

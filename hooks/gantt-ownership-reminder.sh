@@ -5,6 +5,10 @@
 # 목적: 코드 mutation 첫 감지(세션당 1회) 시, 이 작업이 사용자(JY Park) 담당인지
 #       간트차트(jyp_gant.csv)로 대조하도록 환기 reminder 주입. 비차단(exit 0).
 #
+# 발동 2경로:
+#   ① 작업 진입 시 — §4.3 "참조 범위 전수 조사" (1) 참조문서 sweep 에 간트 대조 포함 (Claude 본체 절차).
+#   ② 코드 mutation 첫 감지 시 — 본 hook 이 세션당 1회 백업 환기 (PostToolUse, 비차단).
+#
 # 설계 (reminder 주입형, 비차단 — decision-record-reminder.sh 와 동형):
 #   - 강제 차단 아님: 작업↔WBS 매핑은 의미적 → hook 정규식 강제 부적합(오탐/미탐).
 #     판정은 Claude 본체 책임, hook 은 환기만 (CLAUDE.md §2 / §0 "중복 hook 신설 금지").

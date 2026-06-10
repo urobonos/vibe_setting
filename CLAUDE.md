@@ -7,7 +7,7 @@
 1. **Think Before Coding** — 가정 명시 · 불확실 시 질문 · 트레이드오프 표면화 · 해석 분기 시 선택지 제시 (침묵 선택 금지).
 2. **Simplicity First** — 요청 범위 최소 코드. 투기적 추상 · 미요청 유연성 · 불가능 시나리오 방어 금지. "senior 가 과설계라 할까?" 자문.
 3. **Surgical Changes** — 요청 범위만 수정. 인접 개선·안 깨진 것 리팩터 금지, 기존 스타일 준수. 무관 dead code 는 언급만, 내 변경이 만든 orphan 만 정리. **모든 변경 줄은 사용자 요청으로 직접 추적되어야 한다.**
-4. **Goal-Driven Execution** — 검증 가능한 성공기준 정의 후 통과까지 루프. "동작하게"(약기준) 금지, 다단계는 [단계 → 검증] 계획 명시.
+4. **Goal-Driven Execution** — 검증 가능한 성공기준 정의 후 통과까지 루프. "동작하게"(약기준) 금지·강기준 = "실패 테스트 작성 → 통과", 다단계는 [단계 → 검증] 계획 명시.
 
 ## File Paths
 - **글로벌 설정:** `~/.claude/` (`C:\Users\PV\.claude\`)
@@ -182,7 +182,7 @@
   | "계획 짜줘" / "플랜 작성" | `/계획` | working/ §계획 채움 (수정 대상 / Blueprint / WBS). Status: Plan Complete |
   | "구현" / "실행" / "작업 진행" | `/실행` | working/ §실행 + Self-Critique + Status: Done/Partial. Done + Self-Critique 동시 시 working-lifecycle 자동 이동 |
   | "검증" / "e2e" / "테스트" | `/검증` | env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock 5점 체크. `verify-e2e-check.sh` 강제 |
-  | "리뷰" / "코드 리뷰" / "Self-Critique" | `/리뷰` | Self-Critique 체크리스트 ≥ 20 + `simplify` 보조 (§4.3 L132 SSOT) |
+  | "리뷰" / "코드 리뷰" / "Self-Critique" | `/리뷰` | Self-Critique 체크리스트 ≥ 20 + `simplify` 보조 (§4.3 "checklist-count-check.sh 임계" SSOT) |
   | "머지" / "push" / "배포" | `/배포` | `git-push` + `branch-enforce` 통합 안내. **Claude 자동 push·master 머지 금지**, 사용자 직접 (`! ` prefix) |
   | "회고" / "세션 마감" / "retro" | `/회고` | history.md + summary.md 기록 (Persistence 강제) |
   | "토론" / "의견 갈림" / "트레이드오프" | `/토론` | 4 에이전트팀 × 4 Agent = 16 Agent 풀-병렬 spawn. 비용 4×, 의견 깊이 ↑ |
