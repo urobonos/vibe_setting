@@ -1,5 +1,21 @@
 # Multi-Agent Orchestration: Full Specification (v4.0)
 
+## 0. Operating Philosophy (북극성 — 전 하니스 관통)
+
+> 본 4원칙은 CLAUDE.md·스킬·훅·커맨드 전체의 상위 행동 원칙이다. 신규 룰·스킬·훅·커맨드 작성 시 본 원칙에 위배되지 않아야 한다. **Tradeoff:** 속도보다 신중 — trivial 작업은 judgment. 각 원칙은 이미 아래 지점으로 강제되고 있다 (중복 hook 신설 금지 — §4.4 "신규 룰 작성 관습" 정합).
+
+1. **Think Before Coding** — 가정 명시 · 불확실 시 질문 · 트레이드오프 표면화 · 해석 분기 시 선택지 제시 (침묵 선택 금지).
+   ↳ 강제: §3 Checkpoint / §4.1 타당성 검토 / Echo-Back Confirm (`prompt-echo-confirm.sh`)
+
+2. **Simplicity First** — 요청 범위 최소 코드. 투기적 추상 · 미요청 유연성 · 불가능 시나리오 방어 금지. "senior 가 과설계라 할까?" 자문.
+   ↳ 강제: §4.4 장기 관점 추천 / 신규 룰 작성 관습 (재팽창 방지) / `simplify` 스킬
+
+3. **Surgical Changes** — 요청 범위만 수정. 인접 코드·주석·포맷 개선 금지, 안 깨진 것 리팩터 금지, 기존 스타일 준수. 무관 dead code 는 언급만 (삭제 금지). 내 변경이 만든 orphan 만 정리. **모든 변경 줄은 사용자 요청으로 직접 추적되어야 한다.**
+   ↳ 강제: §4.1 Proactive Correction / Before-After 대조 / §4.5 비필수 사이드이펙트 백로그 격리
+
+4. **Goal-Driven Execution** — 검증 가능한 성공기준 정의 후 통과까지 루프. "동작하게"(약기준) 금지, "실패 테스트 작성 → 통과"(강기준). 다단계는 [단계 → 검증] 계획 명시.
+   ↳ 강제: §4.3 e2e 검증 (No-Test-No-Merge) / 자동 위임 self-critique 루프
+
 ## File Paths
 - **글로벌 설정:** `~/.claude/` (`C:\Users\PV\.claude\`)
 - **글로벌 스킬:** `~/.claude/skills/{skill-name}/SKILL.md`
@@ -63,11 +79,12 @@
 
 ## 1. Session Initialization (자동 실행)
 
-세션 시작 시:
+세션 시작 시 Claude 본체가 확인:
 
-1. 프로젝트 루트 구조 + 현재 브랜치/커밋 확인
+1. 프로젝트 루트 구조 + 현재 브랜치/커밋
 2. `~/.claude/docs/{product}/tasks/history.md` 로드
-3. `.claude/skills/` 전 스킬 frontmatter(메타) SessionStart 훅 (`hooks/skill-preload.sh`) 자동 preload (본문은 Skill 호출 시 on-demand 로드)
+
+> 스킬 frontmatter(메타) preload 는 SessionStart 훅 (`hooks/skill-preload.sh`) 이 자동 수행 — Claude 절차 아님 (본문은 Skill 호출 시 on-demand 로드).
 
 → 완료 후 **"Context Loaded."** 보고
 
@@ -76,6 +93,7 @@
 ## 2. Hierarchy & Authority (Global Constitution)
 
 - **User Sovereignty:** 사용자 명시 승인 없이 행동하지 않는다. 불확실 시 `Checkpoint` 요청.
+- **작업 소유권 확인 (간트 대조, 필수):** 작업(특히 코드 변경·실행)을 진행하기 전, 그 작업이 **사용자(JY Park) 담당인지** 간트차트로 대조한다. **SSOT** = `~/.claude/docs/참조문서/간트/jyp_gant.csv` (담당자 컬럼 `JY Park` = 사용자 / `ahn` = 타 담당자, 작업 식별 = `WBS ID` `MOD-XX-XXX`). **판정:** 작업의 WBS ID 또는 작업명/모듈을 csv 에서 조회 → (a) 담당자 `JY Park` = 사용자 작업 → 진행 / (b) 담당자 `ahn` 등 타인 = **자동 진행 금지 → "이 작업은 {담당자} 담당입니다. 진행할까요?" 사용자 동의 후 진행** / (c) 간트에 없음 (신규·범위 외) = 불명확 → 사용자 확인. **발동:** 작업 진입 시 §4.3 "참조 범위 전수 조사" (1) 참조문서 확인과 통합 + 코드 mutation 첫 감지 시 `gantt-ownership-reminder.sh` (PostToolUse, 세션당 1회, 비차단) 가 환기. **판단형 룰** — 작업↔WBS 매핑이 의미적이라 강제 차단 hook 미신설(오탐/미탐 회피), Claude 본체 책임 (§0 "중복 hook 신설 금지" / §4.4 정합). 불확실 시 진행 전 확인이 기본값. SSOT: 본 룰 + `hooks/gantt-ownership-reminder.sh`.
 - **프로젝트 지침 제안:** 프로젝트 `CLAUDE.md` 추가 필요 판단 시 임의로 추가하지 않고 사용자 확인. 무단 수정은 지침 위반.
 
 ---
@@ -234,6 +252,7 @@
   - **선택 기준:** 정상 종료 = (1), 본문은 완료지만 추가 단계 생략 시 = (2), `/실행` 중 자연 마무리 시 = (3).
   - SSOT: `commands/작업저장.md` + `commands/working-done.md` + `hooks/working-lifecycle.sh`.
 - **backlog 메모리 정책 (필수):** 본 세션 잔여 후속·시간 트리거·사용자 결정 보류 = `~/.claude/projects/.../memory/backlog_{slug}.md` 단일 파일. **양식 (frontmatter):** `name` (kebab-case) / `description` (1줄) / `type: backlog` / `status: pending|in_progress|done` / `source` / `target_date` (선택) / `product` (기본 claude-harness) / `created` / `completed` (status=done 시 hook 자동 채움). MEMORY.md `## Backlog` 섹션 entry 추가 필수. **자동 이동:** (a) `status: done` 마커 → `backlog-lifecycle.sh` PostToolUse hook 가 `tasks/{YYYYMMDD}/backlog/{yyyy-mm-dd}-{slug}.md` 자동 이동 + MEMORY.md entry 제거 + history.md/summary.md 갱신. (b) 사용자 명시 키워드 (`backlog 완료`/`backlog 정리`/`backlog 이동`/`/backlog-done`) = 일괄 스캔 이동. §3 Checkpoint 우선 적용. SSOT: `hooks/backlog-lifecycle.sh` + `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우".
+- **비필수 사이드이펙트 백로그 격리 (필수, 2026-06-09~):** 코드 작업(`/분석`·`/계획`·`/실행`·`/검증`·`/리뷰`) 중 발견한 항목이 **① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급(부수적·경미)** 3조건을 **모두** 충족하면, working/ 문서 본문·산출물·코드 TODO·즉시 수정 대상으로 끌어올리지 말고 **backlog 메모리에만 기록**(위 "backlog 메모리 정책" 양식 — `backlog_{slug}.md` frontmatter + MEMORY.md `## Backlog` entry, **별도 경량 backlog 신설 금지**)하고 현재 작업을 계속한다. **3조건 중 하나라도 불충족**(필수요소이거나 / 실제 문제·버그이거나 / 사이드이펙트급 초과)이면 본 규칙 비대상 — `/분석` Critical~Low 정상 분류·처리. **실제 버그·문제는 경미해 보여도 절대 backlog 로 미루지 않는다 (②가 안전장치).** §3 Checkpoint 매칭 항목은 크기·필수성 무관 사용자 보고 (본 규칙과 무관). **Why:** 비필수·무해 항목을 본 작업에 끌어들이면 스코프 크리프 + 산출물 노이즈 + 집중 분산 — backlog 격리 = 추적 보존 + 현재 작업 순도 유지. judgment 룰이라 hook 기계 강제 불가 (신규 강제 hook 미신설 = graveyard 회피), 본문 prose + 4계층 기록으로 명문화. SSOT: 본 룰 + `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" + `commands/{분석,계획,실행,검증,리뷰}.md` + `hooks/backlog-lifecycle.sh` 헤더.
 
 ---
 
@@ -274,6 +293,7 @@
 | 자동진행 | 묶음 승인 모드 진입 — 잔여 액션 / 인자 작업 자동 진행 | `/자동진행` | ✓ | A |
 | 작업저장 | 세션 마감 — worktree 정착 안내 + working/ 문서 마무리 + 잔여 작업 판정 (Done / Partial 분기) | `/작업저장` | ✓ | A |
 | 작업로드 | 세션 재개 — working/ Status: Partial 잔존 작업 스캔 + 본문/잔여 표시 + 재진입 안내 (read-only) | `/작업로드` | ✓ | A |
+| 작업분석 | 작업 메타분석 — 계획완료(Status: Plan Complete) 작업들을 가로질러 스캔 → 의존·worktree·파일충돌 기준 동시진행 그룹 + 우선진행 순위 도출 → working/ 메타분석 문서 신규 + 기존 계획 문서에 권고 블록 append (다파일 Edit = §3 승인 후). `/분석`(단일 작업)과 구분되는 다작업 진입점. 자립형. 2026-06-09 신설 | `/작업분석` | ✓ | B |
 | 분석 | 작업 분석 단계 진입 — working/ §분석 섹션 채움 (관점별 요약 / Critical~Low / 우선순위 권고) (thin wrapper) | `/분석` | ✓ | A |
 | 타당성 | 타당성 검토 단계 진입 — docset-ref 호출 + 공식 근거 인용 ≥ 1건 (thin wrapper) | `/타당성` | ✓ | A |
 | 계획 | 작업 계획 단계 진입 — working/ §계획 채움 + step-01~nn 분해 + 재검토 1회 + 전체 점검 + Status: Plan Complete (thin wrapper) | `/계획` | ✓ | A |
@@ -288,8 +308,9 @@
 | 프로세스 | Claude Code 프로세스 + 세션 sid 매핑 조회 + REGISTRY/lock orphan 분류·정리. 3 모드 — 기본 (read-only), `cleanup` (orphan 정리), `kill` (좀비 PID 종료 명령 안내, 사용자 직접) | `/프로세스` | ✓ | B |
 | prod-debug | prd/stg/dev EC2 직접 접속 → 점검·수정 → 검증 → 로컬 반영 통합 진입점. 3 모드 — `connect` (aws ssm start-session/send-command), `verify` (e2e 5점), `sync` (서버 → 로컬, 사용자 명시 승인). 환경별 매트릭스 (prd 최후 수단 / stg 검증 우선 / dev 일상). | `/prod-debug` | ✓ | C |
 | 제안 | 결정 권고 — 사용자 결정 영역에 [선택지 + 트레이드오프 + 추천(근거) + §3 매칭]을 단일 Claude 권고로 즉시 구조화 제시 (Agent spawn 0, 가벼움). `/토론`(16 Agent)과 직접답변 사이 경량 결정 진입점. 입력 = backlog slug · 일반 주제 · 직전 맥락. mutation 0 (권고만, 코드 반영은 `/계획`→`/실행` 별도 승인). §4.4 권고 룰의 명시 진입점화. 2026-06-04 신설 | `/제안` | ✓ | A |
+| 드리프트검증 | 문서 드리프트 검증 — 새 문서 생성/직전 문서 기준 작업 이어가기 직전, 불변 원본(SSOT) 대비 파생 문서의 드리프트(원본에 없던 가정·제약·해석 혼입 / 무의식적 변형) 6단계 검증 (기준확정 → load-bearing 제약 도출 → 원본 대조 → diff → 제약 생존 확인 → 컨텍스트 정리). read-only 진단 (mutation 0, Write/Edit 부재), `[DRIFT-OK]`/`[DRIFT-WARN]` 출력. WARN 시 사용자 확인 전까지 진행 보류. `/계획`·`/실행`·`task-docs`·`/작업분석` 의 선행 게이트. 자립형 (본체 스킬 없음). 2026-06-09 신설 | `/드리프트검증` | ✓ | A |
 
-**자동화 분류 카운트:** A = 27 (api-spec-audit · api-team · debate · dev-team · feature-create · feature-merge · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 조사 · 병렬 · 제안 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 6 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 + sns-oauth add·debug) / C = 9 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
+**자동화 분류 카운트:** A = 28 (api-spec-audit · api-team · debate · dev-team · feature-create · feature-merge · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 조사 · 병렬 · 제안 · 드리프트검증 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 7 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 · 작업분석 + sns-oauth add·debug) / C = 9 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 > **혼합 분류 카운트 방식 (필수):** mirror-be-claude (A/C) · sns-oauth (A/B) 처럼 모드별 자동화 강도가 다른 skill 은 **각 모드별로 분리 카운트**. 행 1줄 = 1 표기 (`A (verify·sync-from-be) / C (sync-from-global)`), 카운트는 모드 단위. 표 행 단순 카운트 (skill 단일 count) 와 다름.
 
 ### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)

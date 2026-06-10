@@ -5,6 +5,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #
 # SSOT: CLAUDE.md §4 "backlog 메모리 정책" + skills/task-docs/SKILL.md §"backlog 메모리 워크플로우"
 #
+# 관련 정책 (judgment 룰 — 본 hook 강제 대상 아님, 기록만):
+#   "비필수 사이드이펙트 백로그 격리" (CLAUDE.md §4.5, 2026-06-09~) — 코드 작업 중 발견한 항목이
+#   ① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급 3조건을 모두 충족하면
+#   working/·산출물·코드 TODO 로 끌어올리지 말고 backlog 메모리에만 기록한다 (실제 버그는 경미해도
+#   미루지 않음 = ②가 안전장치). 격리 판단은 Claude 본체 (judgment 룰 → 기계 강제 불가).
+#   본 hook 은 그렇게 기록된 backlog 의 status:done → tasks/ 자동 이동만 담당한다.
+#
 # 진입점 (PostToolUse + UserPromptSubmit 양쪽 등록):
 #   1. PostToolUse:Edit|Write — memory/backlog_*.md 파일 저장 직후 status: done 마커 자동 감지
 #      - 마커: frontmatter `status:[[:space:]]*done` (한 줄, frontmatter 안 위치)

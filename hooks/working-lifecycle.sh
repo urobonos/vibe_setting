@@ -119,6 +119,12 @@ move_working_to_tasks() {
     cp "$target_file" "${target_file}.bak-${ts}" 2>/dev/null
   fi
 
+  # [전파] 작업분석 backlink 캡처 (mv 전 — 이동되면 working_file 이 사라져 grep 불가)
+  #  Phase 4 권고 블록의 '출처: ...작업분석-*.md' 라인을 역추적 키로 사용 (commands/작업분석.md §전파)
+  #  중복 제거 후 전건 보존 — 재실행 누적 시 여러 작업분석 문서를 모두 갱신 (silent cap 금지)
+  local meta_docs_raw=""
+  meta_docs_raw=$(grep -oE '[~/][^ `)]*작업분석[^ `)]*\.md' "$working_file" 2>/dev/null | sort -u)
+
   # 이동
   mv "$working_file" "$target_file" 2>/dev/null || {
     echo "[working-lifecycle] $filename — 이동 실패: $working_file → $target_file" >&2
@@ -224,6 +230,61 @@ PYEOF
   if ! grep -qE "${task_name}/${date_part}-${task_name}-unified" "$summary" 2>/dev/null; then
     printf -- "- [%s](%s/%s-%s-unified.md) — unified 통합 산출물 (working/ 자동 이동)\n" \
       "$task_name" "$task_name" "$date_part" "$task_name" >> "$summary"
+  fi
+
+  # [전파] 작업분석 인덱스 역갱신 (best-effort 비차단, 2026-06-09)
+  #  - Phase 4 backlink 가 plan 문서에 심긴 작업만 추적 (없으면 meta_doc_raw 공백 → skip)
+  #  - 작업분석 문서의 | {task_name} | 행: 상태 ⏳ Plan → ✓ Done + working 링크 → tasks 링크
+  #  - 직접 파일 쓰기(도구 아님) → PostToolUse 재귀 없음. 실패해도 위 이동(기존 동작)엔 무영향.
+  #  SSOT: commands/작업분석.md §전파
+  if [ -n "$meta_docs_raw" ]; then
+    local tasks_link_home="~/.claude/docs/${product}/tasks/${yyyymmdd}/${task_name}/${date_part}-${task_name}-unified.md"
+    # python 스크립트를 임시 파일로 1회 작성 (2026-06-09 수정):
+    #   heredoc-in-$()-in-`while...done <<<` 중첩은 일부 bash 파서에서 syntax error(near `fi`)를
+    #   유발해 hook 전체 파싱이 실패한다(핵심 working→tasks 이동까지 마비). heredoc 을 루프·$() 밖
+    #   파일 리다이렉트(`cat > file <<EOF`, 가장 portable 한 형태)로 분리해 회피.
+    local prop_py_file
+    prop_py_file=$(mktemp 2>/dev/null) || prop_py_file="${TMPDIR:-/tmp}/wl-prop-$$-${RANDOM}.py"
+    cat > "$prop_py_file" <<'PYEOF'
+import sys, re
+doc, task, tasks_link, link_text = sys.argv[1:5]
+try:
+    with open(doc, encoding='utf-8') as f:
+        lines = f.read().split('\n')
+except Exception:
+    sys.exit(0)
+new_link_md = f'[{link_text}]({tasks_link})'
+row_key = re.compile(r'\|\s*`?' + re.escape(task) + r'`?\s*\|')        # | {작업명} | 셀 정확 매칭 (백틱 옵션)
+work_link = re.compile(r'\[[^\]]*\]\((?:~|/|[A-Za-z]:)[^)]*?/working/[^)]*?\.md\)')  # working/ 가리키는 md 링크
+status_pat = re.compile(r'⏳\s*Plan(?:\s*Complete)?')
+changed = False
+for i, l in enumerate(lines):
+    if not l.lstrip().startswith('|'):
+        continue
+    if not row_key.search(l):
+        continue
+    nl = work_link.sub(new_link_md, l)
+    nl = status_pat.sub('✓ Done', nl)
+    if nl != l:
+        lines[i] = nl
+        changed = True
+if changed:
+    with open(doc, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+    print('updated')
+PYEOF
+    while IFS= read -r meta_doc_raw; do
+      [ -n "$meta_doc_raw" ] || continue
+      local meta_doc="${meta_doc_raw/#\~/$HOME}"
+      [ -f "$meta_doc" ] || meta_doc=$(echo "$meta_doc" | sed 's|^C:|/c|')
+      [ -f "$meta_doc" ] || continue
+      local prop_result
+      prop_result=$(python3 "$prop_py_file" "$meta_doc" "$task_name" "$tasks_link_home" "${date_part}-${task_name}-unified.md")
+      if [ "$prop_result" = "updated" ]; then
+        echo "[working-lifecycle] ✓ 전파: $(basename "$meta_doc") 인덱스 '$task_name' 행 → ✓ Done + tasks 링크" >&2
+      fi
+    done <<< "$meta_docs_raw"
+    rm -f "$prop_py_file" 2>/dev/null
   fi
 
   echo "[working-lifecycle] ✓ 이동: $filename → tasks/$yyyymmdd/$task_name/${date_part}-${task_name}-unified.md" >&2
