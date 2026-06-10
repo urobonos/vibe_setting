@@ -18,7 +18,7 @@ triggers:
   - "일일 리포트"
   - "오늘 작업 정리"
   - "이번 주 작업 정리"
-version: 1.0.0
+version: 1.0.1
 user-invocable: true
 depends_on: [task-docs]
 conflicts_with: []
@@ -29,7 +29,7 @@ min_claude_md_version: "4.0"
 
 업무 리포트 생성. 본 skill 은 **자연어 트리거 매칭** 과 **slash 진입점 명세** 만 담당하고, 실제 절차·출력 형식·진행률 판정 룰은 `commands/report.md` 가 SSOT.
 
-> **[SSOT 분담]** `commands/report.md` = 절차 SSOT (수행 단계·출력 형식·정제 룰). 본 skill = 자연어 트리거 + skill-preload 로 SessionStart 시 frontmatter(메타) 사전 로드 (절차 본문은 commands/report.md 호출 시 로드). 두 파일 충돌 시 commands/report.md 우선.
+> **[SSOT 분담]** `commands/report.md` = 절차 SSOT (수행 단계·출력 형식·정제 룰). 본 skill = 자연어 트리거 + frontmatter description 의 세션 카탈로그 자동 등재 (절차 본문은 commands/report.md 호출 시 로드). 두 파일 충돌 시 commands/report.md 우선.
 
 ---
 

@@ -9,7 +9,7 @@ triggers:
   - "3-Team"
   - "Analyze→Plan→Execute"
   - "/orchestration"
-version: 2.1.1
+version: 2.1.2
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -211,7 +211,12 @@ Input/Output Protocol, Status 코드, Decision Request 형식 상세는 [`refere
 
 - **§3.1 Input:** Agent prompt = `Task_Goal` + `Context_Path` (선행 팀 산출물 경로) + `Authority_Level` + `Output_Format`. **§3.1.1 1M Context 예외:** 1M context 지원 모델에서 교차 참조 필수 / Read 불가 환경 / 50K 이하 소용량 시 `Context_Inline` 원문 주입 허용 — `Context_Path` 와 동시 사용 금지.
 - **§3.2 Output:** `[Analyze Report]` / `[Plan Report]` / `[Execute Report]` + `[Status]`. **§3.3 Status:** `Analyze Complete` / `Plan Complete` / `Progress` / `Done` / `Failed`. **§3.4 Decision Request:** 트레이드오프 발생 시 `[Issue Summary]` + `[Pragmatist]` / `[Visionary]` / `[Innovator]` 대안 + `[Request]` 형식으로 사용자 선택 요청.
-- **§3.5 장기 관점 추천 (필수):** Decision Request 대안 제시 시 단기 효율 (Pragmatist 즉시 동작) 만 보지 말고 **장기 누적 비용·복잡도·유지보수성** 가중. (1) "(추천)" 표시는 6~12개월 후 시점 best 옵션에. (2) 단기 OK / 장기 부담 옵션 = "장기 SSOT 분기·hook 복잡도 누적" 명시 경고. (3) 신설 hook / 스킬 / SSOT 권고 = "6개월 후에도 필요한가" 자가 점검. (4) 기존 시스템 폐기 권고 시 = "검증 안 됨 / 사용 빈도 낮음 / 누적 복잡도 vs 가치" 천칭에서 폐기 우선 고려. (5) 임시 우회·hardcode·feature flag = 거의 항상 비추천. SSOT: CLAUDE.md §4.4 "장기 관점 추천".
+- **§3.5 장기 관점 추천 (필수 — CLAUDE.md §4.4 의 전개 본문 carrier):** 제안·추천·옵션 제시 시 단기 효율보다 **장기 누적 비용·복잡도·유지보수성** 우선. **Why:** 단기 OK 옵션 누적 = SSOT 분기·hook 복잡도·기능 graveyard 증가, 6~12개월 후 유지보수 폭증. **방향성 (2026-06-01 16-Agent 패널 정밀화):** 장기 관점 = "복잡도 무조건 최소화·전부 SSOT 강제"가 아니라 방향성 — 실제 부담 = **(변동성 × 읽힘빈도 × 수명 × 경계-핫스팟 정렬)의 곱**이다.
+  - **(a) 비가역** (사라지는 암묵지·미계측 트래픽 상태·폐기 대안의 '왜'·모듈 직접참조) = 사전 투자 **비대칭 집중** 추천.
+  - **(b) 가역** (가독성·정적 복제·일반 부채) = 자동 GC·데이터 가시화로 사후 처리, 선제 강제 비추천.
+  - **(c) 변동성 낮은 사실은 강제 말 것** — "무엇을 강제하지 *말아야* 하는가"가 강제 여부보다 비싼 판단 (정적 SSOT 강제·speculative 추상 = 비용 안 청구될 곳에 유연성 낭비).
+  - **How to apply:** (1) "(추천)" = 장기 관점 best 옵션에 부착. (2) 단기 OK / 장기 부담 큰 옵션 = "단기 OK, 장기 SSOT 분기·복잡도 누적 가능" 명시 경고. (3) 신설 hook/슬래시/SSOT 권고 = "6개월 후에도 필요한가" + "이 사실이 실제로 변하는가(변동성)" 2질문 통과 후 추천 (변동성 낮으면 강제 말고 중복 허용). (4) 기존 시스템 폐기 권고 = "검증 안 됨 / 사용 빈도 낮음 / 누적 복잡도 vs 가치" 천칭에서 폐기 우선 고려. (5) 임시 우회·hardcode·feature flag = 거의 항상 비추천 — 단 자동 만료·GC 동반(가역화) 시 예외 (제거 비용 ≈ 0, `PUSH_EXCEPTION_UNTIL` 패턴). (6) 메모리·hook·skill 추가 = "지금 만들면 유지보수 책임" 인지 후 신설.
+  - SSOT: CLAUDE.md §4.4 "장기 관점 추천" (원칙 요약) + 본 절 (전개 본문).
 
 ---
 
