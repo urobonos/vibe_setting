@@ -47,7 +47,7 @@
 1. 프로젝트 루트 구조 + 현재 브랜치/커밋
 2. `~/.claude/docs/{product}/tasks/history.md` 로드
 
-> 스킬 frontmatter(메타) preload 는 SessionStart 훅 (`hooks/skill-preload.sh`) 이 자동 수행 — Claude 절차 아님 (본문은 Skill 호출 시 on-demand 로드).
+> 스킬 카탈로그(frontmatter description)는 하니스가 세션 시작 시 자동 등재 — Claude 절차 아님 (본문은 Skill 호출 시 on-demand 로드). 보조 preload = `hooks/skill-preload.sh` (네이티브 카탈로그와 중복 확인 — 비활성화는 사용자 결정 대기).
 
 → 완료 후 **"Context Loaded."** 보고
 
@@ -141,7 +141,7 @@
 ### §4.4 응답 형식 + 자동 위임
 
 - **응답 톤 (필수 / 존댓말):** 항상 존댓말. "~함"·"~임"·"~할까"·"~인데" 명사형/평서형 금지. 단답 ("진행") 도 "진행하겠습니다" 풀어 응답. 표·목록 안 짧은 항목 외 모든 서술 문장 적용.
-- **장기 관점 추천 (필수):** 제안·추천·옵션 제시 시 **단기 효율보다 장기 누적 비용·복잡도·유지보수성** 우선 판단. **Why:** 단기 OK 옵션 누적 = SSOT 분기·hook 복잡도·기능 graveyard 증가, 6~12개월 후 유지보수 폭증. **방향성 (필수):** 장기 관점 = "복잡도 무조건 최소화·전부 SSOT 강제"가 아니라 **방향성** — 실제 부담 = (변동성 × 읽힘빈도 × 수명 × 경계-핫스팟 정렬)의 곱이다. **(a) 비가역**(사라지는 암묵지·미계측 트래픽 상태·폐기 대안의 '왜'·모듈 직접참조)에는 사전 투자 **비대칭 집중** 추천. **(b) 가역**(가독성·정적 복제·일반 부채)은 자동 GC·데이터 가시화로 사후 처리, 선제 강제 비추천. **(c) 변동성 낮은 사실은 강제 말 것** — "무엇을 강제하지 *말아야* 하는가"가 강제할까보다 비싼 판단(정적 SSOT 강제·speculative 추상 = 비용 안 청구될 곳에 유연성 낭비). **How to apply:** (1) "(추천)" 표시는 장기 관점 best 옵션에 부착. (2) 단기 OK / 장기 부담 큰 옵션은 "단기 OK, 장기 SSOT 분기·복잡도 누적 가능" 명시 경고. (3) 신설 hook / 슬래시 / SSOT 추가 권고 시 = "6개월 후에도 필요한가" + **"이 사실이 실제로 변하는가(변동성)"** 2질문 통과 후 추천 (변동성 낮으면 강제 말고 중복 허용). (4) 기존 시스템 폐기 권고 시 = "검증 안 된 시스템 / 사용 빈도 낮음 / 누적 복잡도 vs 가치" 천칭에 올려 폐기 우선 고려. (5) 임시 우회·hardcode·feature flag = 장기 부담 누적, 거의 항상 비추천 — **단 자동 만료·GC 동반(가역화) 시 예외**(제거 비용 ≈ 0, push `PUSH_EXCEPTION_UNTIL` 패턴). (6) 메모리·hook·skill 추가 시 = "지금 만들면 유지보수 책임" 인지 후 신설. SSOT: 본 룰 + `orchestration` §"Communication Protocol".
+- **장기 관점 추천 (필수):** 제안·추천·옵션 제시 = 단기 효율보다 **장기 누적 비용·복잡도·유지보수성** 우선 — **(a) 비가역엔 사전 투자 비대칭 집중 / (b) 가역은 자동 GC·데이터 가시화로 사후 처리 (선제 강제 비추천) / (c) 변동성 낮은 사실은 강제 금지.** "(추천)" = 장기 best 옵션에 부착, 신설 hook·슬래시·SSOT 권고 = "6개월 후에도 필요한가" + "실제로 변하는가" 2질문 통과 후. Why·적용 6항 전개 = `orchestration` §3.5 SSOT.
 - **신규 룰 작성 관습 (필수, 재팽창 방지):** 신규 룰 추가 시 강제 hook 이 BLOCK-path(exit 2)로 조치·SSOT·예시를 stderr 전량 출력하면 CLAUDE.md 본문엔 1줄 SSOT 포인터만 둔다 (절차·목록·임계값은 hook/command/skill 본문에 위임). 침묵 carve-out·warning-only·hook 부재 룰은 본문 산문 유지 — **단 이 경우도 본문은 판별식·판정 분기·§3 단서 중심 6줄 이내**, Why·절차·예시·SSOT 나열은 hook 헤더/skill/command 본문에 위임. **단 Claude 학습 prior 가 안전 기본값을 거스르는 룰(보안·파괴적 조작 — Co-Authored-By·master/main 머지·force-push·rm -rf 류)은 BLOCK-path 여도 본문 proactive 산문 유지** — hook 발화 전 prior 가 먼저 작동하고 모든 경로에 hook 이 있지도 않다 (BLOCK-path = cut 의 필요조건이지 충분조건 아님). **Why:** always-on 본문 ↔ hook lockstep 무한 팽창(+2.9K/주) 차단 — cut(가역) 아닌 작성 규율(직교 offset)이 성장 기울기를 꺾는다. SSOT: 본 룰 + `output/analysis/2026-06-01-funnel-improvement`.
 - **응답 간결 (Concise Reporting, 필수):** **사용자 대상 모든 답변** (보고·결과·분석 출력 + 대화형 Q&A 응답) = **결론·핵심 표·diff** 위주 압축. 사족·진행 서술·의례적 도입부 제거. 기본 형태 = 결론 1~2줄 + 표/diff 1개 + 잔여 액션 1줄. **면제 영역:** Before/After 대조 / 타당성 검토 / 변경 영향 기록 / `tasks/` 산출물. **답변 깊이와의 우선순위 (필수):** "답변 깊이" 는 **내용의 깊이** (선제 고려·근거)를 키우는 룰이지 **분량·사족** 을 늘리는 룰이 아니다 — "내용은 깊게, 형식은 사족 0". 두 룰 충돌 시 형식은 항상 본 룰 (간결) 우선. 보조 강제: `agent-first-banner.sh` + `orchestration` §"Concise Reporting". 사용자 개인 선호 SSOT = [[feedback_concise-answers]] 메모리.
 - **답변 깊이 (Anticipatory Depth, 필수):** "이걸 들으면 사용자가 뭘 더 궁금해할까" 선제 고려 후 한 단계 더 깊이 응답. **적용 영역 분리:** 본 룰 = 사용자 질문 답변 우선. 작업 진행/완료 보고 = "응답 간결" 룰 우선. **단 "깊이" = 내용 (근거·맥락) 한정, 분량·사족 증가 아님 — "응답 간결" 룰이 형식을 항상 우선 강제.**
@@ -233,11 +233,4 @@
 | simplify | 변경 코드 재사용성·가독성·효율성 리뷰 후 이슈 픽스 | Claude Code 내장 plugin skill — `~/.claude/skills/` 본체 없음, available-skills 카탈로그 등재. `/리뷰` 보조 호출용 (Skill 도구) | B |
 
 ### 5.4 동기화 규칙
-- skill 신규 추가 → 본 표에 1줄 추가 (자동화 컬럼 A/B/C 분류 + 모드별 분리 필요 시 명시).
-- skill rename → 폴더명 + SKILL.md frontmatter name + 본 표 동시 갱신.
-- skill 삭제 → 본 표에서 제거 + 의존성 grep (`depends_on` 그래프) 후 영향 skill 갱신.
-- skill 자동화 강도 변경 → 분석 산출물 갱신 + 본 표 자동화 컬럼 + §5.1 카운트 행 갱신.
-- **depends_on 방향성 (필수):** A 가 B 의 출력/SSOT/산출물을 소비 시 `A.depends_on = [B]` **단방향** 명시. 양방향 (A↔B) / 순환 (A→B→C→A) 금지. 의존 = 정적 참조, 동적 호출은 워크플로우. 강제 hook = `skill-validator` 강화 후보 (별 작업). 시점 단락 = changelog.md 참조.
-- **version 컨벤션 (필수):** SKILL.md frontmatter `version` = semver 2.0.0. **Major** = 진입점·메인 모드·triggers 의미 변경 / **Minor** = 새 모드·trigger 추가 / **Patch** = 양식 보강·버그 픽스. 신규 스킬 = `1.0.0` 시작. 역소급 면제 — 도입 이전 version 값 보존.
-- **min_claude_md_version 갱신 (필수):** CLAUDE.md 메이저 업그레이드 (v4→v5) 시 일괄 갱신 금지. 영향받는 스킬만 개별 갱신. 기본 동작 = 기존 값 유지.
-- **dual entry slash 정책 (필수):** `/토론` (한글) ↔ `/debate` (영문) 동일 진입점 매핑. 양쪽 모두 §5.1 표 + commands/토론.md 본문에 "동일 (영문 슬래시 호환)" 명문 동기화 필수. **장기 관점:** dual entry 신설 = SSOT 분기 위험 — 영문 진입점 유지 사유 (외부 docs 참조 / 다른 skill 호환 / 기존 사용자 호환) 있을 때만 허용, 임의 다국어 진입점 신설은 비추천 (CLAUDE.md §4.4 장기 관점 추천 정합).
+skill 신규/rename/삭제/자동화 강도 변경 시 = §5.1 표 + frontmatter + commands 동시 갱신. **depends_on = 단방향만** (양방향·순환 금지) / **version = semver** (Major 진입점·triggers 의미 변경 / Minor 새 모드 / Patch 보강) / dual entry slash 신설 비추천 (기존 `/토론`↔`/debate` 만 유지). 절차 세부 = `skills/skill-creator/SKILL.md` §"인벤토리 동기화 규칙" SSOT.
