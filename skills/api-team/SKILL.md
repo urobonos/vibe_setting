@@ -2,13 +2,13 @@
 name: api-team
 description: >
   API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석 팀.
-  `/api-team` 슬래시 커맨드로 **명시 호출** 시 실행 (cold opus 3-멤버 spawn 비용 — 자동 트리거 없는 수동 호출 전용).
+  `/api-team` 슬래시 커맨드로 **명시 호출** 시 실행 (cold fable 3-멤버 spawn 비용 — 자동 트리거 없는 수동 호출 전용).
   add 모드 = 3-레포 반영 체크리스트, debug 모드 = 3-레포 가설 우선순위.
-  Lead = Claude 본체, 멤버 3명은 cold context 로 병렬 Agent spawn (opus 모델 고정).
+  Lead = Claude 본체, 멤버 3명은 cold context 로 병렬 Agent spawn (fable 모델 고정).
   인프라 멤버는 폴더 read + AWS CLI 실시간 조회 (조회계 즉시, 변경계 사용자 승인).
 triggers:
   - "/api-team"
-version: 2.0.0
+version: 2.0.1
 user-invocable: true
 depends_on: [orchestration, php8, mysql8, aws, security-audit, task-docs]
 conflicts_with: []
@@ -22,7 +22,7 @@ API 엔드포인트 **추가** 또는 **오류** 발생 시, **프론트엔드 /
 > **[용도 한정]** 본 스킬은 *풀스택 영향이 의심되는 API 작업* 전용. 단일 레포 작업에는 호출되지 않는다.
 > **Why:** 단일 레포 질문에 3-멤버 병렬 spawn 을 띄우면 cold context 비용·토큰만 낭비되고 결론은 단일 멤버 답변과 동일해져 오케스트레이션 가치가 0 이 됨.
 
-> **[실행 주체]** Lead = Claude 본체. 멤버 3명은 Agent 도구로 병렬 spawn (cold context). 모든 멤버는 `model: opus` 고정 (orchestration §1.1).
+> **[실행 주체]** Lead = Claude 본체. 멤버 3명은 Agent 도구로 병렬 spawn (cold context). 모든 멤버는 `model: fable` 고정 (orchestration §1.1).
 > **Why:** Lead context 와 멤버 context 가 섞이면 Lead 의 사전 가설이 멤버 결론에 오염되어 독립 검증 효과가 사라지고, model 이 mixed 면 멤버별 추론 깊이가 달라져 가설 우선순위 비교가 무의미해짐.
 
 ---
@@ -31,7 +31,7 @@ API 엔드포인트 **추가** 또는 **오류** 발생 시, **프론트엔드 /
 
 ### 1.1. 수동 호출 전용
 
-`/api-team` 슬래시 커맨드로만 진입한다. 자연어 자동 발동 없음 (cold opus 3-멤버 spawn 비용 보호). 풀스택 API 작업이 필요해 보여도 Lead 는 `/api-team` 호출을 *안내*만 하고 자동 spawn 하지 않는다.
+`/api-team` 슬래시 커맨드로만 진입한다. 자연어 자동 발동 없음 (cold fable 3-멤버 spawn 비용 보호). 풀스택 API 작업이 필요해 보여도 Lead 는 `/api-team` 호출을 *안내*만 하고 자동 spawn 하지 않는다.
 
 **호출이 적합한 작업 (사용자가 슬래시로 진입):**
 - "주문 생성 API 추가했는데 풀스택 영향 체크"
@@ -105,9 +105,9 @@ Lead (Claude 본체)
      ~/.claude/docs/$PRODUCT/output/analysis/api-impact/
        └─ {YYYY-MM-DD}-{slug}-{add|debug}.md
   4. 3명 병렬 Agent spawn (run_in_background=true)
-       ├─ FE  멤버: model=opus, subagent_type=general-purpose
-       ├─ BE  멤버: model=opus, subagent_type=general-purpose
-       └─ INF 멤버: model=opus, subagent_type=general-purpose
+       ├─ FE  멤버: model=fable, subagent_type=general-purpose
+       ├─ BE  멤버: model=fable, subagent_type=general-purpose
+       └─ INF 멤버: model=fable, subagent_type=general-purpose
   5. 모든 멤버 완료 대기 (자동 알림)
   6. 결과 종합:
        - 충돌 탐지 (예: BE 라우트 추가 vs FE 호출 부재)
