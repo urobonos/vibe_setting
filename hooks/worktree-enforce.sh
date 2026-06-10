@@ -32,6 +32,32 @@ set -uo pipefail
 
 PAYLOAD=$(cat)
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "worktree-enforce" "enter" "pid=$$"
+
+# --- 면제 판정 단일 함수 (12 path-pattern + #10 check-ignore) ---
+# Edit/Write 모드와 Bash 모드 target 검사가 공유하는 단일 SSOT (v6, 2026-06-10 — 사용자 승인 오탐 픽스).
+is_exempt_path() {
+  local P="$1"
+  case "$P" in *..*) return 1 ;; esac   # traversal (docs/../skills 류) = 무조건 비면제 — Edit/Bash 양 모드 방어 (v6)
+  case "$P" in
+    */worktrees/*)                   return 0 ;;
+    */state/sessions/*.lock)         return 0 ;;
+    */projects/*/memory/*)           return 0 ;;
+    /tmp/claude_*)                   return 0 ;;
+    */.claude/docs/*)                return 0 ;;
+    */.claude/settings.json)         return 0 ;;
+    */.claude/settings.local.json)   return 0 ;;
+    */.claude/hooks/*)               return 0 ;;  # #9
+    */.claude/CLAUDE.md)             return 0 ;;  # #11
+    */.claude/commands/*)            return 0 ;;  # #12
+    C:/Works/infra/*|/c/Works/infra/*) return 0 ;;  # #8
+  esac
+  # #10 (2026-05-29): untracked+ignored 로컬 전용 파일 — worktree 에 존재하지 않아 격리 불가능.
+  if git -C "$(pwd)" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+     && git -C "$(pwd)" check-ignore -q -- "$P" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
 TOOL_NAME=$(echo "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
 
 case "$TOOL_NAME" in
@@ -51,73 +77,95 @@ case "$TOOL_NAME" in
     #   - 잔여 누수(문서화, 추적 안 함): >& file·xargs -0/-I rm(옵션개재)·backtick·eval·timeout = Claude 미사용 형태 + 다층 방어(dangerous-ops-guard 등)
     #   - 잔여 FP(문서화): grep ">" 따옴표 단독연산자 = posix shlex 따옴표 제거(재설계 외 해결불가, 마찰·비누수)
     #   - python 실패 시 IS_MUTATION 빈값 != "0" → 보수적 차단 (false negative 회피)
-    IS_MUTATION=$(printf '%s' "$COMMAND" | python3 -c "
+    # v6 (2026-06-10, 사용자 승인 오탐 픽스): mutation 대상 경로를 수집해 **전 대상이 면제 매칭일 때만 통과**.
+    #   - 미해석 토큰($VAR/명령치환/backtick)·`..` traversal·대상 미추출(dd·옵션만·trailing redirect)·파서 실패
+    #     = __UNRESOLVED__ → 종전대로 pwd 기준 차단 (fail-closed 불변)
+    #   - 출력 양식: 1행 = '1'/'0' (mutation 여부), 2행~ = 대상 경로 (또는 __UNRESOLVED__)
+    PARSE=$(printf '%s' "$COMMAND" | python3 -c "
 import sys, shlex, re
 cmd = sys.stdin.read().replace('\n', ' ; ')   # 따옴표 밖 newline = 절 분리 (따옴표 안은 shlex 보존)
 MUT = {'rm','mv','cp','mkdir','touch','tee','dd','truncate'}
 OPS = {'|','||','&&',';','&','(',')','|&'}   # |& = 결합 파이프(2>&1|), punctuation_chars 가 단일토큰화
 WRAP = {'sudo','xargs','command','exec','nohup','env'}   # 다음 토큰 command-position 유지
 REDIR = ('>', '>>', '&>', '&>>', '>|')       # 파일쓰기 redirect (결합형 &>/&>>/>| 포함, >& 는 fd 모호 제외)
+def out(h, ts, unres):
+    print('1' if h else '0')
+    if unres: print('__UNRESOLVED__')
+    for x in ts: print(x)
+    sys.exit(0)
 try:
     lx = shlex.shlex(cmd, posix=True, punctuation_chars=True); lx.whitespace_split = True
     toks = list(lx)
 except ValueError:
-    toks = cmd.split()
-hit = False; at_cmd = True
+    out(True, [], True)   # 파서 실패 = 보수적 차단
+hit = False; at_cmd = True; cur_mut = False; need_tgt = False; unres = False; skip = False
+targets = []
 for i, t in enumerate(toks):
+    if skip:
+        skip = False; continue
     if t in REDIR:
         tgt = toks[i+1] if i + 1 < len(toks) else ''
         if tgt.startswith('/dev/') or tgt.startswith('&'):
-            continue
-        hit = True; break
+            skip = True; continue
+        hit = True
+        if tgt: targets.append(tgt); skip = True
+        else: unres = True      # trailing redirect — 대상 미상
+        continue
     if t in OPS:
-        at_cmd = True; continue
+        if need_tgt: unres = True   # MUT 절이 대상 0개로 종료 (rm -f 만 등)
+        at_cmd = True; cur_mut = False; need_tgt = False; continue
     if at_cmd:
         if re.match(r'^\w+=', t):
             continue
         if t in MUT:
-            hit = True; break
+            hit = True
+            if t == 'dd': unres = True; cur_mut = False   # of= 인자 미추출 = 보수적 차단
+            else: cur_mut = True; need_tgt = True
+            at_cmd = False; continue
         if t in WRAP:
             continue
-        at_cmd = False
-print('1' if hit else '0')
+        at_cmd = False; continue
+    if cur_mut:
+        if t == '--' or t.startswith('-'):
+            continue
+        targets.append(t); need_tgt = False
+if need_tgt: unres = True
+out(hit, targets, unres)
 " 2>/dev/null)
-    if [ "$IS_MUTATION" != "0" ]; then
-      FILE_PATH=$(pwd | sed 's|\\|/|g')
-    else
-      exit 0
+    IS_MUTATION=$(printf '%s\n' "$PARSE" | sed -n '1p')
+    if [ "$IS_MUTATION" = "0" ]; then exit 0; fi
+    TARGETS=$(printf '%s\n' "$PARSE" | sed -n '2,$p')
+    FILE_PATH=""
+    CWD0=$(pwd | sed 's|\\|/|g')
+    if [ -n "$TARGETS" ] && ! printf '%s\n' "$TARGETS" | grep -q '^__UNRESOLVED__$'; then
+      ALL_EXEMPT=1
+      while IFS= read -r T; do
+        [ -z "$T" ] && continue
+        case "$T" in
+          *'$'*|*'`'*|*..*) ALL_EXEMPT=0; FILE_PATH="$T"; break ;;   # 미해석/traversal = 비면제 (fail-closed)
+        esac
+        case "$T" in "~") T="$HOME" ;; "~/"*) T="$HOME/${T#\~/}" ;; esac
+        T=$(printf '%s' "$T" | sed 's|\\|/|g')
+        case "$T" in
+          /*|[A-Za-z]:/*) : ;;
+          *) T="$CWD0/$T" ;;
+        esac
+        if ! is_exempt_path "$T"; then ALL_EXEMPT=0; FILE_PATH="$T"; break; fi
+      done <<< "$TARGETS"
+      if [ "$ALL_EXEMPT" = "1" ]; then
+        command -v log_event >/dev/null 2>&1 && log_event "worktree-enforce" "pass" "reason=bash-targets-exempt"
+        exit 0
+      fi
     fi
+    [ -z "$FILE_PATH" ] && FILE_PATH="$CWD0"
     ;;
   *)
     exit 0
     ;;
 esac
 
-# Functional exemption 12건 (FILE_PATH 기준)
-case "$FILE_PATH" in
-  */worktrees/*)                   exit 0 ;;
-  */state/sessions/*.lock)         exit 0 ;;
-  */projects/*/memory/*)           exit 0 ;;
-  /tmp/claude_*)                   exit 0 ;;
-  */.claude/docs/*)                exit 0 ;;
-  */.claude/settings.json)         exit 0 ;;
-  */.claude/settings.local.json)   exit 0 ;;
-  */.claude/hooks/*)               exit 0 ;;  # #9: 프로젝트 로컬 hook (git 미추적, 2026-05-27)
-  */.claude/CLAUDE.md)             exit 0 ;;  # #11: 루트/프로젝트 글로벌 지침 (추적 파일이나 라이브 발효 필요 = path 면제, 2026-06-04)
-  */.claude/commands/*)            exit 0 ;;  # #12: 슬래시 커맨드 정의 (추적 파일이나 슬래시 호출 시 라이브 발효 필요 = hooks(#9)/CLAUDE.md(#11) 동질, 2026-06-04)
-  C:/Works/infra/*|/c/Works/infra/*) exit 0 ;;  # #8: dev-team 인프라 영역 (git 미추적, 2026-05-20 추가)
-esac
-
-# Functional exemption #10 (2026-05-29): git untracked+ignored 파일 면제.
-# git check-ignore 매칭 = .gitignore 로 추적 제외된 로컬 전용 파일 (settings.json #6/#7 의 일반화).
-# worktree 는 git 추적 파일만 체크아웃하므로 untracked+ignored 파일은 worktree 격리 자체가 불가능
-# (해당 파일이 worktree 에 존재하지 않아 "worktree 진입" 조치를 따를 수도 없다 = 차단이 작업을 막음).
-# 예: 루트 CLAUDE.md (mirror-claude-md.sh 가 글로벌 미러본과 양방향 cp 하는 로컬 전용 지침, .gitignore 등재).
-# cwd 가 git work-tree 일 때만 의미 (아니면 아래 git 미연동 cwd 면제가 처리).
-if git -C "$(pwd)" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-   && git -C "$(pwd)" check-ignore -q -- "$FILE_PATH" 2>/dev/null; then
-  exit 0
-fi
+# Functional exemption 12건 + #10 check-ignore — is_exempt_path 단일 SSOT (v6)
+if is_exempt_path "$FILE_PATH"; then exit 0; fi
 
 # git 미연동 cwd 면제 (2026-05-26): worktree 는 git 기능 — cwd 가 git work-tree 가
 # 아니면 worktree 생성 자체가 불가능하므로 강제 차단 시 모든 작업이 막힌다. pwd 기준 판정
