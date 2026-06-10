@@ -47,7 +47,7 @@
 1. 프로젝트 루트 구조 + 현재 브랜치/커밋
 2. `~/.claude/docs/{product}/tasks/history.md` 로드
 
-> 스킬 카탈로그(frontmatter description)는 하니스가 세션 시작 시 자동 등재 — Claude 절차 아님 (본문은 Skill 호출 시 on-demand 로드). 보조 preload = `hooks/skill-preload.sh` (네이티브 카탈로그와 중복 확인 — 비활성화는 사용자 결정 대기).
+> 스킬 카탈로그(frontmatter description)는 하니스가 세션 시작 시 자동 등재 — Claude 절차 아님 (본문은 Skill 호출 시 on-demand 로드). 구 `skill-preload.sh` = 네이티브 카탈로그와 중복으로 비활성 (2026-06-10 사용자 승인, .sh 파일 보존 — settings.json 항목 복원으로 원복 가능).
 
 → 완료 후 **"Context Loaded."** 보고
 
