@@ -14,29 +14,8 @@
 - **글로벌 스킬:** `~/.claude/skills/{skill-name}/SKILL.md`
 - **프로젝트 로컬 스킬:** `./.claude/skills/{skill-name}/SKILL.md`
 - **스킬 경로 결정 규칙 (자동):** 프로젝트 로컬 우선 탐색 → 없으면 글로벌. 양쪽 존재 시 프로젝트 로컬 우선. 신규 **생성** 시는 §3 Checkpoint 발동 (대상 경로 사용자 확인).
-- **작업 산출물 경로 (글로벌 통합):** 모든 산출물(`tasks`, `output`, `specs`)은 **`~/.claude/docs/{product}/`** 아래 생성. 프로젝트 레포 내부에 더 이상 생성하지 않는다.
-  - `{product}` = `basename $CWD` (단 `.claude` → `claude-harness`). 구현: `hooks/lib/product-resolver.sh`.
-  - 전체 구조:
-    ```
-    ~/.claude/docs/
-    ├── references/                       (글로벌 공용 docset·KB)
-    ├── indexing/                         (product별 전역 문서 인덱스 — {product}.md, doc-index-maintain.sh 자동 재생성, 직접 편집 금지)
-    │   └── {product}.md                  (해당 product docs 하위 전 영역 .md: 영역 / 타이틀 / 경로 / 수정일)
-    ├── working/                          (진행 중 작업 단일 통합 문서 — product 분리 없음, 글로벌 통합)
-    │   └── YYYYMMDD/
-    │       └── {yyyy-mm-dd}-{product}-{작업명}.md   (단일 통합: 분석 + 계획 + 실행/결과)
-    └── {product}/
-        ├── tasks/
-        │   ├── history.md
-        │   └── YYYYMMDD/
-        │       ├── summary.md
-        │       └── {작업명}/
-        │           ├── {yyyy-mm-dd}-{작업명}-unified.md          (신규 정책 2026-05-12~ : 단일 통합)
-        │           └── {yyyy-mm-dd}-{작업명}-{analyze|plan|result}.md  (기존 3종 분리 — 2026-05-12 이전 보존)
-        ├── output/{category}/{제목}/{yyyy-mm-dd}-{제목}-{type}.md   (카테고리화 필수, 날짜 prefix 필수)
-        │     ↳ category ∈ { audit, verification, research, analysis, report, guide, archive }
-        └── specs/{모듈}-{srs|sdd|idd|sdp|stp|std}.md  (IEEE 산출물)
-    ```
+- **작업 산출물 경로 (글로벌 통합):** 모든 산출물(`tasks`, `output`, `specs`)은 **`~/.claude/docs/{product}/`** 아래 생성. 프로젝트 레포 내부에 생성하지 않는다. `{product}` = `basename $CWD` (단 `.claude` → `claude-harness`), 구현 = `hooks/lib/product-resolver.sh`.
+  - 구조: `docs/working/YYYYMMDD/`(진행 중 통합 문서, product 무분리) · `docs/indexing/{product}.md`(전역 인덱스) · `docs/references/`(공용 KB) · `docs/{product}/{tasks|output/{category}|specs}/`. 전체 트리·파일명 패턴 = `skills/task-docs/SKILL.md` SSOT.
   - **`output/` 카테고리 (필수):** 7분류 audit(자가점검)/verification(실동작검증)/research(외부조사)/analysis(도메인·영향·아키텍처)/report/guide/archive — 분류 모호 시 audit→verification→research→analysis 순. (7이름 강제·날짜 prefix·면제 = `output-naming-check.sh` stderr)
     - **공유용 단일 통합 문서:** `output/report/.../{share,proposal,sharing}*.md` = 7메타+12섹션. 정의·강제·전량출력 SSOT = `hooks/output-report-share-guard.sh` (exit 2 stderr).
     - **개발언어·기술스택 메타 (필수, 2026-06-01~):** 작성 정보 박스 보유 문서에 `개발언어/기술스택` 행 필수 — 강제·양식·예시·역소급(생성일 < 2026-06-01 hint 강등) = `doc-template-guard.sh` + `output-report-share-guard.sh` (exit 2 stderr), 시점 SSOT `changelog.md`.
@@ -45,27 +24,18 @@
     - 자동 면제: 부모 폴더 직속 자식이 모두 `YYYY-MM-DD-` prefix + 2건 이상 → 부모 폴더 누적형 자동 간주.
     - 강제: `output-naming-check.sh` SSOT.
   - **`indexing/{product}.md` 전역 문서 인덱스 (필수, 2026-05-29~):** `~/.claude/docs/{product}/` 하위 전 영역(output/tasks/specs/working) .md 전역 인덱스 — `doc-index-maintain.sh` PostToolUse hook 자동 재생성, **직접 편집 금지**. 용도 = 워크플로우 "참조 범위 전수 조사" 진입점(index 전수 스캔 → 관련 항목만 선택 정독, 토큰 폭발 회피). SSOT: `hooks/doc-index-maintain.sh` + `skills/task-docs/SKILL.md` §"전역 문서 인덱스".
-- **working/ 단일 통합 문서 (필수, 2026-05-12~):** 진행 중 작업 = `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 통합 파일. `## 분석`·`## 계획`·`## 실행` 3 섹션 통합, 각 섹션은 필수 하위섹션 (타당성 검토 / 변경 영향 기록 / Critical~Low 4분류 / Blueprint / WBS / Self-Critique / 장기 영향 / 재발 방지 / SSOT 일관성) 보유.
-  - **자동 이동:** `^Status:\s*Done` (시작 라인) + `## Self-Critique` 섹션 동시 존재 시 `working-lifecycle.sh` PostToolUse hook 가 `tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 이동. 사용자 명시 키워드 (`작업 완료` / `tasks 이동` / `working 정리` / `done`) 도 동일 트리거.
-  - **step 평면 파일 분배 (필수, 2026-05-29~):** `/계획` step 분해 시 각 step 을 working/ 직속 평면 파일 `{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` (DEPTH=1 → `output-naming-check.sh` 통과) 로 생성한다. 완료 자동 이동 시 `working-lifecycle.sh` 가 unified 마스터 → `tasks/.../{작업명}/{yyyy-mm-dd}-{작업명}-unified.md`, step 평면 → `tasks/.../{작업명}/steps/NN-{slug}.md` 로 **분배 mv**. `-step-[0-9]+-` 가드 = step 파일의 `상태: Done` 이 lifecycle 마스터 이동을 오트리거하지 않게 + register/heartbeat orphan 미등록 방지. **작업명 자체에 `-step-NN-` 패턴 사용 금지** (glob 충돌 회피). SSOT: `commands/계획.md §"step 파일 양식"` + `hooks/working-lifecycle.sh`.
-  - **충돌 처리:** 동명 파일 존재 시 `.bak-{timestamp}` 백업 후 덮어쓰기. 3종 분리 (역소급) 와 공존 가능 (파일명 suffix `-unified` 로 구분).
-  - **product 식별:** 글로벌 1개 디렉토리 통합, 파일명 prefix `{product}-` 로 식별.
-  - **`tasks/` 산출물 정책 + 역소급 면제:** 신규 (≥ 2026-05-12) = `-unified.md` 1개. 기존 3종 (< 2026-05-12) = 그대로 보존. 4개 hook (doc-template-guard / output-naming-check / checklist-count-check / session-completeness-check) 양쪽 패턴 인식.
-  - **작성 책임:** `task-docs` 스킬 진입점. `references/unified-template.md` SSOT 골격 prepend 후 의미 채움.
-  - SSOT: 본 룰 + `hooks/working-lifecycle.sh` + `skills/task-docs/SKILL.md` + `skills/task-docs/references/unified-template.md`.
+- **working/ 단일 통합 문서 (필수, 2026-05-12~):** 진행 중 작업 = `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 파일 — `## 분석`·`## 계획`·`## 실행` 3 섹션, 필수 하위섹션 골격 = `skills/task-docs/references/unified-template.md` SSOT.
+  - **자동 이동 트리거:** `^Status:\s*Done` (시작 라인) + `## Self-Critique` 동시 존재 → `working-lifecycle.sh` 가 `tasks/YYYYMMDD/{작업명}/{...}-unified.md` 이동 + step 평면 파일 `steps/NN-{slug}.md` 분배. 사용자 키워드 (`작업 완료`/`tasks 이동`/`working 정리`/`done`) 동일 트리거.
+  - **step 평면 파일 (2026-05-29~):** `/계획` 분해 시 `{...}-step-NN-{slug}.md` 를 working/ 직속 생성. **작업명 자체에 `-step-NN-` 패턴 사용 금지** (glob 충돌). 양식·분배·가드 = `commands/계획.md` §"step 파일 양식" + `hooks/working-lifecycle.sh` SSOT.
+  - 충돌 백업(`.bak-{timestamp}`)·product 식별(파일명 prefix)·역소급(< 2026-05-12 = 3종 분리 보존)·작성 책임 = `skills/task-docs/SKILL.md` SSOT.
 - **Active Task Registry (필수, 2026-05-15~):** `~/.claude/docs/working/REGISTRY.md` 다세션 가시화 인덱스 + `state/sessions/{slug}/{sid}.lock` — 4 hook(working-{register,heartbeat,release,stale-cleanup}.sh) 자동 갱신(비차단, 충돌 시 경고만), `.gitignore` 제외. 조회 진입점 = `/작업로드` ①([active by other]/[paused]/[orphan] 3분류). SSOT: `hooks/lib/registry-utils.sh` + `commands/작업로드.md`.
 - **`tasks/` vs `output/` 용도 구분 (필수):** 혼용은 지침 위반.
   - **`tasks/` → 개발 작업 프롬프트 전용.** 코드/설정 변경 발생 시. 진행 중 = working/ 단일 통합 → 완료 시 자동 이동.
   - **`output/` → 분석·문서 생성 프롬프트 전용.** 코드 변경 없는 결과물만 산출 시. Gate ≥ 1 만으로 충분.
   - 판단 애매: "이 프롬프트가 코드를 바꾸게 하는가?" → 예 = `tasks/`, 아니오 = `output/`.
   - `specs/` = IEEE 공식 산출물 (SRS/SDD/IDD/SDP/STP/STD) 전용. `api-docs/` = API 명세 전용. 별개 경로.
-- **api-docs 3-way 미러링 (필수):** `mirror-be-claude` 스킬이 단일 명시 진입점. 자동 PostToolUse hook (`mirror-docs.sh`) **폐기** — 정책 ↔ 실 사용 어긋남 (be 가 실 SSOT 인데 글로벌 → 외부 단방향이라 IDE / be cwd 편집 미감지). 산출물 = `output/analysis/2026-05-18-mirror-policy-redesign/`.
-  - 동기화 대상: `~/.claude/docs/hongcafe_global_backend/api-docs/` ↔ `C:\Works\hongcafe_global_backend\api-docs\` ↔ `C:\Works\hongcafe_global_docs\be\api-docs\`.
-  - 명시 진입: `/mirror-be-claude verify` (3-way 정합 read-only 검증) → 차이 발견 시 `/mirror-be-claude sync-from-be` (be → 글로벌 + docs) 또는 `/mirror-be-claude sync-from-global` (글로벌 → be, §3 매칭).
-  - 보조 자동: `mirror-sanity-check.sh` SessionStart hook 가 매 세션 시작 시 mtime 경량 drift 감지 → stderr 경고만 (exit 0, 자동 sync 안 함). 사용자에게 `verify` 명시 호출 유도.
-  - **specs/ 미러링 제거됨 (2026-05-04):** 글로벌 `~/.claude/docs/{product}/specs/` 가 SSOT.
-  - SSOT: `skills/mirror-be-claude/SKILL.md` + `hooks/mirror-sanity-check.sh` + 본 단락.
-- **외부 프로젝트 CLAUDE.md 미러링:** `~/.claude/mirrors/{product}/CLAUDE.md` 가 외부 프로젝트 (현재: `hongcafe_global_backend`) CLAUDE.md 양방향 미러본. `mirror-claude-md.sh` PostToolUse hook 가 양쪽 Edit/Write 시 반대편 자동 cp. 단일 작성자 last-write-wins. 글로벌 미러본 = `.gitignore` 추적 제외. 수동 진입점 = `mirror-be-claude` 스킬 (3 모드 — `verify` / `sync-from-be` / `sync-from-global`, 후자 §3 Checkpoint). 다른 프로젝트 확장 = `~/.claude/mirrors/{product}/` 패턴 동일 적용. SSOT: `hooks/mirror-claude-md.sh` + `skills/mirror-be-claude/SKILL.md`.
+- **api-docs 3-way 미러링 (필수):** `mirror-be-claude` 스킬 = 단일 명시 진입점 (`verify` read-only 검증 / `sync-from-be` / `sync-from-global` §3 매칭). 자동 미러 hook 폐기 — `mirror-sanity-check.sh` SessionStart 가 drift 경고만 (자동 sync 안 함). specs/ 미러링 제거 — 글로벌 `specs/` 가 SSOT. 대상 경로·절차 = `skills/mirror-be-claude/SKILL.md` SSOT.
+- **외부 프로젝트 CLAUDE.md 미러링:** `~/.claude/mirrors/{product}/CLAUDE.md` ↔ 외부 프로젝트 CLAUDE.md 양방향 자동 cp (`mirror-claude-md.sh` PostToolUse, last-write-wins). 수동 진입 = `mirror-be-claude` 스킬. SSOT: `hooks/mirror-claude-md.sh` + `skills/mirror-be-claude/SKILL.md`.
 - **Notion 연동 (요청 기반):** `notion-cli` 스킬 단일 진입점. 사용자 명시 요청 ("노션에 반영"·"Notion 동기화") 시에만 실행. 자동 반영 금지.
 
 ---
@@ -141,67 +111,32 @@
 - **Hook 차단 자가 복구 (필수):** hook 이 "파일 미생성 — 차단" 메시지 시 "생성해주세요" 되묻지 말고 Claude 가 직접 작성해서 통과. 조건 = (a) 이미 사용자 승인 받은 진행 맥락 (b) 차단 메시지 명시 경로·역할 정확히 따름. 자가 작성 후 "hook 지적 누락분 채움" 짧게 보고 후 승인 키워드 대기.
 - **Hook 우회 임의 파일 생성 금지 (필수):** hook 차단 회피 목적 파일 생성·커밋 금지. 정당한 누락분 보완과 다름. 무관한 파일/hook 경로 위장 더미 파일 생성 = 위반. 차단 정당하지 않다고 판단 시 사용자 보고.
 - **audit 결과 자동 수정 금지 (필수):** audit (예: `/api-spec-audit`·`/security-audit`) N 판정에 자동 "개선 제안"·"수정 계획" 덧붙이지 않는다. audit = 현황 진단 도구, 무조건 고쳐야 하는 task 아님. 사용자 명시 수정 요청 시에만 개선안 제시.
-- **사용자 직접 실행 명령 스크립트화 (필수):** **사용자에게 직접 실행을 요청하는 명령 중 §3 절대 차단 영역이 아닌 명령** (인터랙티브 로그인 `gcloud auth login` 류 / 환경 점검·빌드·테스트 등 비파괴 다단계 명령) 은 단일 라인 여부·비파괴 여부와 무관하게 **무조건 실행 가능 스크립트 파일을 작성**하고 사용자에게 1줄 실행 명령만 안내한다 (`! <command>` 텍스트 나열 금지 — 구 "단일 라인 비파괴 텍스트 면제" 폐기). **양식:** (1) 파일 경로 = `~/.claude/docs/scripts/{yyyy-mm-dd-HHMM}-{sid8}-{slug}.sh` (functional exemption #5 `*/.claude/docs/*` 매칭, worktree-enforce 자동 통과). (2) shebang `#!/usr/bin/env bash` + `set -euo pipefail` 헤더 + 명령 본문 + 마지막에 echo 완료 보고. (3) `chmod +x` 부착. (4) 사용자 안내 = `! bash ~/.claude/docs/scripts/{file}.sh` 단일 라인. **Why:** 텍스트 안내 복사 오타·multi-line 누락·env var 전개 사고 차단 + .sh 파일 자체 = 명령 audit log + 동일 명령 재실행 가능. **§3 절대 차단 영역은 스크립트화 불가 (필수 — 2026-05-26 확정):** `git push` / master·main 머지·체크아웃 / `rm -rf` / DB 마이그·롤백 / aws cli 변경계 등 §3 절대 차단 명령은 **스크립트 파일로 생성할 수 없다** (단 worktree 머지·정착 cherry-pick fallback(`git cherry-pick {merge-base}..wip/*`)·`git worktree remove ~/.claude/worktrees/*`·`git branch -D wip/*` 는 2026-06-04~ §4.3(f) Claude 자동 실행 전환으로 §3 절대 차단에서 제외 — master/main HEAD cherry-pick 은 branch-enforce §(1.6) 차단 유지) — (a) Bash heredoc(`cat > ... <<EOF`) 작성 = `dangerous-ops-guard.sh` 가 명령 텍스트의 §3 키워드 차단, (b) Write 도구 작성 = auto mode classifier 가 "hook 우회 (Safety-Check Bypass)" 로 차단 (정상 주석으로도 차단됨, 2026-05-26 실증 2회). 이는 의도된 다층 안전 설계이므로 **어떤 도구로도 우회를 시도하지 말 것** (`이 도구로 가면 hook 통과` 류 경로 발견 = classifier 차단 신호). 이 영역은 종전대로 **텍스트 `! <command>` 로 사용자에게 직접 안내**한다 (사용자 직접 실행만 허용). **조회·로컬 명령 구분:** Claude 가 직접 실행 가능한 조회·로컬 명령(`ls` / `git status` / `git log` 등)은 애초에 사용자에게 요청하지 말고 Claude 가 Bash 도구로 직접 실행한다 (§4.2 "실행 책임" 룰). **GC:** `hooks/scripts-cleanup.sh` SessionStart hook 가 `find ~/.claude/docs/scripts -name '*.sh' -mtime +7 -delete` 자동 정리. **§3 우선 적용 + Claude 본체 먼저 실행:** 비-§3 스크립트는 Claude 본체가 작성 후 **먼저 `bash {script}` 직접 호출 시도**하고, hook 차단·권한 오류·기타 실패 시에만 사용자에게 `! bash {script}` 직접 실행을 안내한다. §3 절대 차단 영역은 처음부터 사용자 직접 텍스트 안내 (스크립트화 불가, Claude 자동 호출 시도조차 금지). **Why 범위 축소:** "무조건 스크립트화" 를 §3 절대 차단 영역까지 강제하면 다층 안전장치(hook + classifier)와 충돌해 실현 불가 + 미래 세션이 우회 패턴을 반복 시도 (2026-05-26 사고). 비-§3 영역만 무조건화하면 자동화 가치 확보 + 안전장치 존중 (사용자 2026-05-26 명시 결정 — 범위 축소).
+- **사용자 직접 실행 명령 스크립트화 (필수):** 사용자에게 직접 실행을 요청하는 **비-§3 명령은 무조건 실행 스크립트 파일**(`~/.claude/docs/scripts/{yyyy-mm-dd-HHMM}-{sid8}-{slug}.sh`)로 작성하고, **Claude 본체가 먼저 `bash {script}` 직접 호출 시도** → 차단·실패 시에만 `! bash {script}` 1줄 안내 (`! <command>` 텍스트 나열 금지). 양식(shebang·chmod)·GC = `hooks/script-request-enforce.sh` stderr + `hooks/scripts-cleanup.sh` SSOT. **§3 절대 차단 영역(`git push` / master·main 머지·체크아웃 / `rm -rf` / DB 마이그·롤백 / aws 변경계)은 스크립트화 불가** — heredoc 작성 = `dangerous-ops-guard.sh` 차단, Write 작성 = classifier "Safety-Check Bypass" 차단. 의도된 다층 안전 설계이므로 **어떤 도구로도 우회를 시도하지 말 것** — 이 영역만 텍스트 `! <command>` 로 사용자 직접 안내 (Claude 자동 호출 시도조차 금지. 단 worktree 정착 계열 ff머지·cherry-pick fallback·worktree remove·`git branch -D wip/*` 는 §4.3(f) Claude 자동 실행으로 제외). 조회·로컬 명령(`ls`/`git status` 류)은 애초에 Claude 가 직접 실행 (§4.2 실행 책임).
 
 ### §4.3 게이트·워크플로우
 
-- **묶음 승인 Fast-Track (Gate 0→2):** 사용자 묶음 승인 키워드 입력 시 `gate-approve.sh` 가 Gate 0/1 → 2 점프. **Claude 측 활용:** M/L 코드 작업에서 분석/계획 단일 사이클 압축 가능 시 묶어 보고 → 1회 승인. 단 §3 Checkpoint·아키텍처 결정·트레이드오프가 분석 단계에 걸린 작업은 단계별 보고. **자동 순차 진행:** `gate-init.sh` 가 gate=2 (EXECUTE) 초기화. 단계별 키워드 매번 요구 폐기. §3 Checkpoint 5조건 보호 = `dangerous-ops-guard.sh` / `branch-enforce.sh` / `git-quality-gate.sh` / `output-naming-check.sh` / `author-field-check.sh` 별 hook 담당.
+- **묶음 승인 Fast-Track (Gate 0→2):** 묶음 승인 키워드 = `gate-approve.sh` 가 Gate 0/1→2 점프, `gate-init.sh` 가 gate=2 초기화 (단계별 키워드 매번 요구 폐기). **Claude 측 활용:** M/L 작업 분석/계획 압축 보고 → 1회 승인 — 단 §3·아키텍처 결정·트레이드오프 걸린 작업은 단계별 보고. §3 보호 = 개별 guard hook 담당.
 - **`output/` 경로 Gate-0 직행:** `~/.claude/docs/{product}/output/` 하위 = 면제 경로, Gate-0 즉시 Edit/Write 허용. `settings.local.json` (gitignore, 개인 override) 도 Gate-0 면제. 글로벌 `settings.json` (git 추적, 공유) = Gate ≥ 1 유지.
 - **`checklist-count-check.sh` 임계:** 단계별 체크리스트 최소 개수 강제 — 임계값(unified/analyze/plan/result) = hook BLOCK-path stderr SSOT (`hooks/checklist-count-check.sh`).
 - **브랜치·worktree·push·머지 통합 정책 (필수):** 단일 SSOT = `hooks/worktree-enforce.sh` + `hooks/worktree-prompt-detect.sh` + `commands/{자동진행,feature-create,feature-merge}.md` + `hooks/branch-enforce.sh` (잔존 영역) + `skills/git-push/SKILL.md`.
   - **(a) worktree 항상 강제 (전 영역):** 모든 소스 mutation = worktree 안 수행. 위반 차단·면제(12건)·worktree add 안내 = `worktree-enforce.sh`(exit 2 stderr) + `worktree-prompt-detect.sh` SSOT. claude-harness(`~/.claude/`) 포함 전 영역 강제 (면제 폐기 2026-05-20).
   - **(b) feature 분기 = 사용자 요청 시 생성:** 신규 feature 생성 = `/feature-create` (worktree → 신규 feature 정착). 기존 feature 수정 = `/feature-merge` (worktree → 기존 feature ff-only 머지). 자동 강제 폐기 (구 `branch-enforce.sh` §(2) retire) — 사용자 작업 의도 트리거 시에만.
   - **(c) Functional exemption 12건:** 목록·패턴 = `worktree-enforce.sh` SSOT (차단 stderr 가 12건 전량 출력 — worktrees/·docs/·hooks/·CLAUDE.md·commands/·settings·memory·lock·tmp marker·check-ignore 등).
-  - **(c-2) git 미연동 cwd 면제 (state-condition, 2026-05-26 신설):** cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) `worktree-enforce.sh` 가 면제 (exit 0). **Why:** worktree 는 git 기능 — git 미연동 디렉토리에서는 worktree 생성 자체가 불가능하므로 강제 차단 시 모든 mutation 작업이 막힌다. **판정:** `git -C "$(pwd)" rev-parse --is-inside-work-tree` 실패(비0) = 면제. **FILE_PATH 가 아닌 pwd 기준 판정 (필수):** FILE_PATH 기준은 신규 디렉토리 dirname 미존재 시 git 명령 실패 → git repo 인데 면제되는 우회 구멍 발생. **(c) 12건(path-pattern)과 별개:** (c) 는 path-pattern 면제, 본 항은 작업 디렉토리 git 연동 여부 state-condition 면제. **§3 우선:** git repo 안 신규 디렉토리 경로 mutation 은 본 면제와 무관하게 차단 유지.
-  - **(d) `git push` 전면 금지 — 단, 2026-05-29 ~ 2026-07-31 한시적 전 프로젝트 예외 (사용자 승인):** **기본 규칙** = 어떤 분기·시나리오에서도 Claude 자동 `git push` 금지 (feature/source/personal/relay 모두 포함, `--delete`·`--force-with-lease` 포함). 사용자 직접 (`! git push ...`) 만 허용. 강제: `branch-enforce.sh` §(1) shlex 토큰화 exit 2 (잔존). **[기한부 예외 — 2026-05-29 사용자 결정]** 2026-07-31 까지 출시 전 파이프라인 자동배포 기간 동안 **전 프로젝트에서 Claude 의 `git push` + worktree→production ff-머지 + 파이프라인 배포 자율 수행을 허용**한다. `branch-enforce.sh` 가 `PUSH_EXCEPTION_UNTIL=20260731` 로 날짜 자동 만료 — **2026-08-01 0시부터 전면 금지 자동 복귀** + 본 예외 문구 삭제 대상. **예외 무관 그대로 차단/유지(완화 아님):** `--force` push(dangerous-ops-guard) / master·main 머지·checkout(§(e)) / `rm -rf` / `reset --hard` / DB 마이그·롤백 = §3 절대 차단 / worktree 격리(코드 mutation) / **phpunit 그린-before-push 게이트(No-Test-No-Merge)**. SSOT: `branch-enforce.sh` 기한부 예외 블록 + 프로젝트 `C:\Works\hongcafe_global_backend\CLAUDE.md` "배포 자동화".
+  - **(c-2) git 미연동 cwd 면제:** cwd 가 git work-tree 아니면 면제 (pwd 기준 판정 — FILE_PATH 기준은 우회 구멍). 판정·Why = `worktree-enforce.sh` SSOT. **§3 우선:** git repo 안 신규 디렉토리 mutation 은 면제 무관 차단 유지.
+  - **(d) `git push` 전면 금지 — 한시 예외 (~2026-07-31):** **기본 규칙** = 어떤 분기·시나리오에서도 Claude 자동 `git push` 금지 (`--delete`·`--force-with-lease` 포함), 사용자 직접만 (`branch-enforce.sh` §(1)). **[기한부 예외 — 2026-05-29 사용자 결정]** 출시 전 자동배포 기간 = 전 프로젝트 `git push` + worktree→production ff-머지 + 파이프라인 배포 자율 허용. `PUSH_EXCEPTION_UNTIL=20260731` 자동 만료 — **2026-08-01 전면 금지 자동 복귀 + 본 예외 문구 삭제 대상.** **예외 무관 차단 유지:** `--force` push / master·main 머지·checkout / `rm -rf` / `reset --hard` / DB 마이그·롤백 / worktree 격리 / **phpunit 그린-before-push (No-Test-No-Merge)**. SSOT: `branch-enforce.sh` 기한부 예외 블록 + be 프로젝트 CLAUDE.md "배포 자동화".
   - **(e) master/main 머지·체크아웃 절대 금지:** `git merge {main|master|origin/main|origin/master|refs/heads/main|refs/heads/master|upstream/main|upstream/master}` / `git checkout {위 target}` / `git switch {위 target}` + chained 명령 모두 자동 호출 금지. 사용자 직접만. 강제: `branch-enforce.sh` §(1.5) 잔존. worktree 정착 시 source = main/master 이면 정착 절대 금지 — PR 절차로 대체.
-  - **(f) ff-only 머지 (+ 실패 시 cherry-pick fallback) + worktree 정리 (2026-06-04~ Claude 자동 실행, 사용자 명시 승인):** worktree 정착 명령 (`/feature-create`·`/feature-merge`) = **Claude 자동 실행 허용** — worktree → feature/source 분기 ff-only 머지 + `git worktree remove ~/.claude/worktrees/*` + `git branch -D wip/*` 를 Claude 가 Bash 도구로 직접 수행 (각 명령 개별 호출). **ff-only 실패 시 (feature 분기 divergence) `git cherry-pick {merge-base}..wip/*` fallback 도 Claude 자동 실행 허용** (정착 한정 — tip-only 금지 = `merge-base..wip` 미반영 커밋 범위 전체, 충돌 시 `git cherry-pick --abort` 클린 복구 후 사용자 보고 = auto-resolve 금지). **단 §(e) master/main 머지·checkout·switch + master/main HEAD 에서의 cherry-pick 은 차단 유지** — source 가 main/master 면 정착 절대 금지(PR 절차로 대체). 강제: `dangerous-ops-guard.sh` 가 `git branch -D` 를 단일 `git branch -D wip/…` 한정 면제(결합 `&&`/`;`/`|` 안 임의 -D 우회 차단, 그 외 -D 차단), `branch-enforce.sh §(1.5)` 가 master/main 머지·checkout·switch + §(1.6) 가 master/main HEAD cherry-pick(`--abort/--quit/--skip` 복구계 면제) 잔존 차단.
+  - **(f) worktree 정착 = Claude 자동 실행 (2026-06-04~):** `/feature-create`·`/feature-merge` 의 ff-only 머지 + 실패 시 `git cherry-pick {merge-base}..wip/*` fallback (tip-only 금지, 충돌 = `--abort` 클린 복구 후 보고 — auto-resolve 금지) + `git worktree remove ~/.claude/worktrees/*` + **단일** `git branch -D wip/*` 를 Claude 가 직접 수행 (각 명령 개별 호출 — 결합 명령은 guard 차단). **단 master/main 머지·checkout·switch + master/main HEAD cherry-pick 은 차단 유지 — source 가 main/master 면 정착 절대 금지 (PR 절차로 대체).** 절차·면제 경계 = `commands/{feature-create,feature-merge}.md` + `dangerous-ops-guard.sh` + `branch-enforce.sh` §(1.5)(1.6) SSOT.
   - **Why:** push/머지 사고는 자동화 1회 실수로 즉시 발생, 사용자 직접 1라인 비용은 거의 0. worktree 항상 강제 = 원본 working tree 영구 격리, 사고 영구 차단. claude-harness 면제 폐기 = (A) 통일 강제 — 본 영역도 SSOT 룰 작업 사고 차단. 시점 단락 = changelog.md 참조.
   - **산출물 SSOT:** `~/.claude/docs/working/20260520/2026-05-20-claude-harness-worktree-always-policy.md` + `~/.claude/docs/claude-harness/output/guide/2026-04-30-branch-workflow/` (구 정책 참조).
 - **스킬 생성·수정·최적화 — skill-creator 강제 진입점 (필수):** `.claude/skills/{skill}/` 하위 모든 파일 수정·생성 = `skill-creator` 경유 강제. 진입·락 우회·종료 정리 절차 SSOT = `skill-edit-guard.sh` (exit 2 차단 시 락 절차 전량 출력).
-- **서버 우선 디버그 → 로컬 반영 흐름 (필수):** prd / stg / dev API 오류 발생 시 **EC2 직접 접속 → 서버 점검·수정 → 서버 검증 통과 → 로컬 반영** 강제 흐름. 서버 로그로 원인 파악 후 즉시 로컬 수정·커밋·푸시·머지 = 지침 위반. **5 단계 흐름:**
-  - **(1) EC2 접속:** `aws ssm start-session` 권장 (SSH 비추천 — key 관리 부담 + 22 포트 노출 위험). `aws` skill §"실행 주체" 정합 (조회/변경 분리 패턴).
-  - **(2) 서버 점검·수정:** 자동화 = `aws ssm send-command` (비대화형, 결과 자동 캡처 + 다중 인스턴스). 대화형 디버그 = start-session 안 직접 명령. 사용자 명시 승인 후 Claude 직접 실행 (aws skill §"실행 주체" 정합).
-  - **(3) 서버 검증 통과:** e2e 5점 (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock) — `php8` 스킬 §"e2e 검증" SSOT 매핑. **검증 통과 정의 = curl 200 OK + 비즈니스 로직 정상 + 로그 무오류 + 회귀 매트릭스 PASS** (단순 curl 200 만으로 부족).
-  - **(4) 로컬 반영:** 검증 통과 후에만 진행. (a) 서버에서 git diff / patch 추출 → 로컬 적용 또는 (b) scp / rsync 서버 → 로컬. 사용자 명시 승인 필수.
-  - **(5) audit log:** AWS 측 = CloudTrail 자동 (`aws ssm` API 호출 자동 기록, SSM CloudWatch Logs 통합). 사용자 측 = 본 정책 보조 audit (`~/.claude/docs/claude-harness/output/audit/prod-debug-log/{yyyy-mm-dd-HHMM}-{slug}/`) 신설 — 서버 수정 → 로컬 반영 추적.
-  - **환경별 분기 매트릭스:**
-    - **prd:** **최후 수단** — stg 검증 후 정상 CI/CD 우선. hotfix 필요 시만 본 흐름, 사용자 명시 승인.
-    - **stg:** 서버 우선 검증 가능 (사용자 명시 영역).
-    - **dev:** 일상 작업 가능 (로컬 수정 + 즉시 ssh/scp 동기화 허용).
-  - **SSOT 위임:** 본 흐름 명시 진입점 = `prod-debug` skill (3 모드 `connect` / `verify` / `sync` + 환경별 매트릭스). depends_on = `aws` / `security-audit` / `php8`.
-  - **§3 우선 적용:** SSM 변경 명령 / 서버 직접 수정 / 로컬 반영 모두 사용자 명시 승인 필수 (aws skill §"실행 주체" + 본 §4.3 통합).
-  - **Why:** 서버 수정 후 로컬 미반영 = 다음 정상 배포 시 erasure (배포 사고 / 동일 오류 재발). 서버 우선 = 즉시 hotfix + 검증 후 안전 반영. CloudTrail audit + 본 정책 보조 audit = AWS 측 + 사용자 측 추적 분리, SSOT 분기 X.
-- **e2e 검증 (필수):** 코드 수정 완료 판단 = 유닛 테스트 통과 + 환경/스키마/실 엔드포인트 검증. 5점 체크 (env / 함수·클래스 정의 / DB 스키마 / 프로덕션 curl / mock 검증) 세부는 `php8` 스킬 §"e2e 검증" SSOT.
-- **단계별 슬래시 워크플로우 (필수):** 작업 사이클을 8 단계 슬래시 + `/토론` 으로 명시 진입한다. 자연어 키워드 자동 매칭 + 직접 슬래시 호출 모두 동일 동작. **키워드 → 슬래시 매핑:**
-
-  | 자연어 키워드 | 진입 슬래시 | 동작 / 강제 hook |
-  |--------------|----------|-----------------|
-  | "분석해줘" / "코드 분석" / 작업 진단 | `/분석` | working/ §분석 채움 (관점별 요약 / Critical~Low / 우선순위 권고). `doc-template-guard.sh` unified §분석 헤더 강제 |
-  | "타당성 검토" / "공식 근거 확인" | `/타당성` | `docset-ref` 호출 + working/ §타당성 검토 `[Source:...]` ≥ 1건. `feasibility-section-check.sh` 권고 (hint only, exit 0 + stderr 경고. 행동 룰 = §4.1 "타당성 검토 (필수)" 본문 SSOT) |
-  | "계획 짜줘" / "플랜 작성" | `/계획` | working/ §계획 채움 (수정 대상 / Blueprint / WBS). Status: Plan Complete |
-  | "구현" / "실행" / "작업 진행" | `/실행` | working/ §실행 + Self-Critique + Status: Done/Partial. Done + Self-Critique 동시 시 working-lifecycle 자동 이동 |
-  | "검증" / "e2e" / "테스트" | `/검증` | env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock 5점 체크. `verify-e2e-check.sh` 강제 |
-  | "리뷰" / "코드 리뷰" / "Self-Critique" | `/리뷰` | Self-Critique 체크리스트 ≥ 20 + `simplify` 보조 (§4.3 "checklist-count-check.sh 임계" SSOT) |
-  | "머지" / "push" / "배포" | `/배포` | `git-push` + `branch-enforce` 통합 안내. **Claude 자동 push·master 머지 금지**, 사용자 직접 (`! ` prefix) |
-  | "회고" / "세션 마감" / "retro" | `/회고` | history.md + summary.md 기록 (Persistence 강제) |
-  | "토론" / "의견 갈림" / "트레이드오프" | `/토론` | 4 에이전트팀 × 4 Agent = 16 Agent 풀-병렬 spawn. 비용 4×, 의견 깊이 ↑ |
-
-  **권장 호출 순서:** `/분석` → `/타당성` (병행 가능) → `/계획` → `/실행` → `/검증` → `/리뷰` → `/배포` → `/회고`. `/분석` 과 `/타당성` 은 동시 진행 가능 — 분석 진행 중 공식 근거가 필요해지면 `/타당성` 을 끼워 호출. 작업 등급별 압축:
-  - **S 등급** = `/분석` → `/실행` → `/회고` (3 단계)
-  - **M 등급** = `/분석` → `/계획` → `/실행` → `/검증` → `/회고` (5 단계)
-  - **L 등급** = 8 단계 전체
-
-  의견 갈림 시 어느 단계에서나 `/토론` 끼워 호출 가능. **§3 Checkpoint 우선 적용:** 단계 진입은 hook (`doc-template-guard.sh` / `checklist-count-check.sh` / `verify-e2e-check.sh` / `branch-enforce.sh`) 가 양식 강제. 사용자 명시 승인 룰은 그대로 유지 (특히 `/배포` = §3 비가역 매칭). **SSOT:** `~/.claude/commands/{분석,타당성,계획,실행,검증,리뷰,배포,회고,토론}.md` 9 파일.
-- **참조 범위 전수 조사 (필수, 2026-05-29~):** `/분석`·`/계획`·`/실행`·`/검증`·`/리뷰` **전체 워크플로우** 진입 시, 판단·실행 전에 다음 3 출처를 **전수 확인**한다.
-  - **(1) 참조 문서:** `~/.claude/docs/참조문서/*` (권고안 / 기획안 / 번역본 등 사용자 제공 참조 문서).
-  - **(2) 기존 산출물:** `~/.claude/docs/{product}/` 전 영역(output / tasks / specs 등) — **`~/.claude/docs/indexing/{product}.md` 전수 스캔 → task 관련 항목만 본문 정독** (수백 문서 리터럴 전체 read 아님, 토큰 폭발 회피).
-  - **(3) 현재 레포 레거시 영역:** 있을 시 확인 — 예: php8 `app/Libraries/` 등 마이그레이션 미완료 코드. product 별 자동 판단, 레거시 영역 없으면 skip. (별도 레거시 레포 아님 — 현재 작업 레포 내부 한정.)
-  - **추가 도출 내용 → output/:** 과정 중 새로 분석·조사된 내용은 기존 `output/{category}/` 7분류 경로에 문서로 추가 생성 (신규 경로 안 만듦, `output-naming-check.sh` 그대로). → `doc-index-maintain.sh` 가 `indexing/{product}.md` 에 자동 반영.
-  - **Why:** 참조 문서·기존 산출물·레거시 맥락을 빠뜨린 분석은 이미 결정된 사항을 재발명하거나 레거시 제약을 위반한다. index 경유 선택 정독으로 "전수 확인"을 토큰 폭발 없이 실현.
-  - **등급별 압축:** S = (2) index 스캔만 / M·L = (1)(2)(3) 전수. SSOT: 본 단락 + `commands/{분석,계획,실행,검증,리뷰}.md` §"참조 범위" + `hooks/doc-index-maintain.sh`.
+- **서버 우선 디버그 → 로컬 반영 흐름 (필수):** prd/stg/dev API 오류 = **EC2 직접 접속 → 서버 점검·수정 → 서버 검증 통과 → 로컬 반영** 강제 — **서버 검증 전 즉시 로컬 수정·커밋·푸시·머지 = 지침 위반** (서버 수정 후 로컬 미반영 = 다음 배포가 hotfix 를 erasure). **환경 매트릭스:** prd = **최후 수단** (정상 CI/CD 우선, 사용자 명시 승인) / stg = 서버 우선 검증 가능 / dev = 일상. 5단계 절차(SSM 접속·점검·e2e 5점 검증·로컬 반영·audit log)·검증 통과 정의 = `prod-debug` 스킬 SSOT (3 모드 `connect`/`verify`/`sync`). SSM 변경·서버 수정·로컬 반영 = 전부 사용자 명시 승인 (§3 우선).
+- **e2e 검증 (필수):** 코드 수정 완료 판단 = 유닛 테스트 + 5점 체크 (env/함수·클래스/DB 스키마/프로덕션 curl/mock) — 세부 = `php8` 스킬 §"e2e 검증" SSOT.
+- **단계별 슬래시 워크플로우 (필수):** 작업 사이클 = 8 단계 슬래시 + `/토론` 명시 진입. 자연어 키워드 자동 매칭 동일 동작 — "분석해줘"→`/분석` · "타당성/공식 근거"→`/타당성` · "계획/플랜"→`/계획` · "구현/실행/작업 진행"→`/실행` · "검증/e2e/테스트"→`/검증` · "리뷰/Self-Critique"→`/리뷰` · "머지/push/배포"→`/배포` · "회고/세션 마감"→`/회고` · "토론/의견 갈림/트레이드오프"→`/토론`(16 Agent).
+  - **권장 순서:** `/분석` → `/타당성`(병행 가능) → `/계획` → `/실행` → `/검증` → `/리뷰` → `/배포` → `/회고`. 등급 압축: **S** = 분석→실행→회고 / **M** = 분석→계획→실행→검증→회고 / **L** = 8 단계 전체. `/토론` 은 어느 단계든 삽입 가능.
+  - **§3 우선 적용:** 단계별 양식 강제 = 각 hook 담당, 사용자 명시 승인 룰 유지 (특히 `/배포` = §3 비가역 매칭). 단계별 동작·강제 hook 세부 = `commands/{분석,타당성,계획,실행,검증,리뷰,배포,회고,토론}.md` 9 파일 SSOT.
+- **참조 범위 전수 조사 (필수, 2026-05-29~):** `/분석`·`/계획`·`/실행`·`/검증`·`/리뷰` 진입 시 판단·실행 전 3 출처 전수 확인 — **(1)** `~/.claude/docs/참조문서/*` (사용자 제공 참조 문서) **(2)** `~/.claude/docs/indexing/{product}.md` 전수 스캔 → 관련 항목만 본문 정독 (토큰 폭발 회피) **(3)** 현재 레포 레거시 영역 (있을 시). 등급 압축: S = (2)만 / M·L = 전부. 추가 도출 내용 = `output/{category}/` 문서화. 세부·Why = `commands/{분석,계획,실행,검증,리뷰}.md` §"참조 범위" SSOT.
   - **참조 결과 가시화 (필수):** 전수 확인 직후 실제 참조한 파일+위치를 표로 화면 출력 — 등급 비례 (S=②만 / M·L=①②③), 본 게 없는 출처는 `해당 없음` 명시 (행 생략 금지). 양식 SSOT = `commands/{분석,계획,실행,검증,리뷰}.md` §"참조 결과 가시화".
-- **참조 출처(참조위치) 필수 (2026-06-02~):** 문서 생성 시 `## 참조 출처` + `[참조: ...]` ≥ 1건 — "참조 범위 전수 조사"(읽기)의 짝(읽은 것의 출처 기록), `## 타당성 검토`([Source:§id] 공식 기술표준)와 **별개**의 내용 provenance. 형식·예시·역소급(생성일 < 2026-06-02)·research/report 면제 = `hooks/reference-location-check.sh` (exit 2 stderr) SSOT + 4 템플릿 §참조 출처.
+- **참조 출처 필수 (2026-06-02~):** 문서 생성 시 `## 참조 출처` + `[참조: ...]` ≥ 1건 (`## 타당성 검토` [Source:]와 별개 provenance). 형식·역소급·면제 = `hooks/reference-location-check.sh` (exit 2 stderr) SSOT.
 
 ### §4.4 응답 형식 + 자동 위임
 
@@ -211,14 +146,14 @@
 - **응답 간결 (Concise Reporting, 필수):** **사용자 대상 모든 답변** (보고·결과·분석 출력 + 대화형 Q&A 응답) = **결론·핵심 표·diff** 위주 압축. 사족·진행 서술·의례적 도입부 제거. 기본 형태 = 결론 1~2줄 + 표/diff 1개 + 잔여 액션 1줄. **면제 영역:** Before/After 대조 / 타당성 검토 / 변경 영향 기록 / `tasks/` 산출물. **답변 깊이와의 우선순위 (필수):** "답변 깊이" 는 **내용의 깊이** (선제 고려·근거)를 키우는 룰이지 **분량·사족** 을 늘리는 룰이 아니다 — "내용은 깊게, 형식은 사족 0". 두 룰 충돌 시 형식은 항상 본 룰 (간결) 우선. 보조 강제: `agent-first-banner.sh` + `orchestration` §"Concise Reporting". 사용자 개인 선호 SSOT = [[feedback_concise-answers]] 메모리.
 - **답변 깊이 (Anticipatory Depth, 필수):** "이걸 들으면 사용자가 뭘 더 궁금해할까" 선제 고려 후 한 단계 더 깊이 응답. **적용 영역 분리:** 본 룰 = 사용자 질문 답변 우선. 작업 진행/완료 보고 = "응답 간결" 룰 우선. **단 "깊이" = 내용 (근거·맥락) 한정, 분량·사족 증가 아님 — "응답 간결" 룰이 형식을 항상 우선 강제.**
 - **자동 위임 정책 (Autonomous Iteration, 필수):** 묶음 승인 키워드 (`자동 진행` / `자동으로 진행` / `권장으로 진행` / `auto 진행` 등) 입력 = "Claude 가 알아서 끝까지 진행 + 문제없다고 판단될 때까지 자체 반복" 해석. 본 룰은 Echo-Back Confirm·권고안 자동 채택·우선순위 매트릭스·4축 자동화를 통합 정의한다.
-  - **(1) Echo-Back Confirm (최초 진입):** 코드/분석 mutation 지시 첫 응답 시 = 첫 단락에 사용자 의도 정리 (echo back) + 마지막 줄 승인 요청. 승인 키워드 수신 전 mutation 도구 (Edit/Write/MultiEdit/NotebookEdit/Bash mutation) 호출 금지. read-only 도구 (Read/Glob/Grep/git status·log·diff/aws describe·list·get/SELECT) 1~2건 허용. 펜딩 마커 = `/tmp/claude_echo_pending_${SESSION_ID}`. **트리거:** mutation 키워드 (만들/구현/추가/수정/리팩/디버그/픽스/생성/삭제/변경/제거/통합/분리/적용/연결/리네임/개선/최적화) + 분석 키워드 (분석/조사/비교/검토/점검/audit/리뷰/파악/대조/매핑/추적/영향) + 실행/배포 키워드 (실행/돌려/배포/마이그레이션/롤백). **면제 영역:** (a) 단순 조회·잡담 (b) 단답 10자 미만 (c) 부정 컨텍스트 (취소/보류/no/cancel) (d) 승인 키워드 단독 (e) 펜딩 마커 존재 (정정/추가 지시) (f) 묶음 승인 후 60분 후속 면제 (`/tmp/claude_gate_${SESSION_ID}` = 2, mtime 60분 이내).
+  - **(1) Echo-Back Confirm (최초 진입):** 코드/분석 mutation 지시 첫 응답 = 첫 단락 의도 정리(echo back) + 마지막 줄 승인 요청. 승인 키워드 수신 전 mutation 도구 호출 금지 (read-only 1~2건 허용). 트리거·면제 6종·펜딩 마커 = `hooks/prompt-echo-confirm.sh` SSOT (발동 시 절차 전량 주입).
   - **(2) 권고안 자동 채택:** 묶음 승인 키워드 입력 시 = 직전 응답 권고안 **기본 옵션 (가장 안전한 첫 번째)** 즉시 채택. 옵션 분기 재제시 / "어느 옵션?" 의례적 재확인 금지. 분기 필요 = 사용자 명시 요청 또는 §3 Checkpoint 매칭 시에만. **권고 제시 시 (사전):** 기본 옵션 명확화 + 트레이드오프 1줄 + 비기본 옵션 조건 안내 3가지 포함.
   - **(3) 4축 자동화:**
-    - **(a) 후속 권고 자동 채택** — 직전 응답 후속 권고·잔여 액션·옵션 분기를 다시 묻지 않고 기본 옵션으로 모두 끝까지 진행. **backlog/USER-DECISION 발생 시 = `/자동진행` 진입 시 `/debate` (16 Agent) 1회 spawn 으로 정책 결정 위임 (bounded, 5 안전장치 = pre-filter / budget cap 1회 / 정책 결정 only / 종료 조건 재정의 / 조건부 자동 적용 + 재토론 금지). ≥3팀 합의 시 §3 매칭 재검사 후 자동 적용, 분산 시 USER-DECISION sentinel + 재토론 X. SSOT = `commands/자동진행.md` §"Backlog 토론 spawn 정책 (bounded)".**
-    - **(b) self-critique 루프 (Claude 본체 책임)** — 각 단계 완료 직후 산출물·코드·실행 결과 직접 검증, FAIL/WARN/오류·hook 차단·테스트 실패·양식 누락 0건일 때까지 자동 반복 (개선·재실행). stateless hook 단독 강제 불가 — 판정은 Claude 본체 메모리 기반, hook 은 reminder 주입만. **재시도 5회 한도.** **§3 Checkpoint 매칭 분기:** self-critique 루프 중 §3 5조건 (비가역·광범위·요구사항 상충·외부 시스템·권한 외 접근) 매칭 항목 발견 시 **직접 수정 금지** — 즉시 사용자 보고 + 명시 승인 대기 후 재진입. 본 분기 = §3 우선 적용 룰의 self-critique 영역 명문화.
+    - **(a) 후속 권고 자동 채택** — 직전 응답 후속 권고·잔여 액션·옵션 분기를 다시 묻지 않고 기본 옵션으로 끝까지 진행. backlog/USER-DECISION 발생 시 bounded `/debate` 1회 spawn 정책 = `commands/자동진행.md` §"Backlog 토론 spawn 정책 (bounded)" SSOT.
+    - **(b) self-critique 루프 (Claude 본체 책임)** — 각 단계 완료 직후 직접 검증, FAIL/WARN·hook 차단·양식 누락 0건까지 자동 반복. **재시도 5회 한도.** **§3 매칭 항목 발견 시 직접 수정 금지 — 즉시 사용자 보고 + 명시 승인 대기 후 재진입.**
     - **(c) 종료 sentinel 자동 부착** — 모든 작업 + self-critique 통과 후 응답 **마지막 줄** sentinel 부착: **`[AUTO-ITERATE-DONE]`** (잔여 0건) / **`[AUTO-ITERATE-USER-DECISION]`** (사용자 결정 영역 잔여 — §3 매칭·옵션 분기·외부 시스템 변경). 자연어 표현 ("작업 완료") 만으로는 hook 통과 불가.
-    - **(d) Stop 자동 차단 + 재진입** — gate=2 활성 + 작업 미완료 + sentinel 미부착 시 `auto-iterate-stop-guard.sh` (Stop hook) 가 exit 2 차단 → 자동 재진입. 카운터 (`/tmp/claude_iterate_count_${SESSION_ID}`) **5회 한도.** **§3 매칭 시 차단 우선:** 재진입 시점에 `dangerous-ops-guard.sh` / `sensitive-file-guard.sh` / `branch-enforce.sh` 가 §3 5조건 매칭을 먼저 검사 — 매칭 시 재진입이 별 hook exit 2 로 차단되므로 자동 루프가 §3 보호 우회 통로로 작동하지 않는다.
-  - **(4) 종료 조건:** (a) self-critique 0건 FAIL/WARN + 후속 권고 잔여 0건, (b) 사용자 `중단`/`보류`/`멈춰` 입력 (stop marker `/tmp/claude_stop_requested_${SESSION_ID}` 트리거), (c) §3 Checkpoint 5조건 매칭 (사용자 승인 필수), (d) 재시도 또는 Stop 재진입 5회 초과.
+    - **(d) Stop 자동 차단 + 재진입** — gate=2 + 작업 미완료 + sentinel 미부착 시 `auto-iterate-stop-guard.sh` 가 exit 2 차단 → 자동 재진입 (**5회 한도**). §3 매칭 시 개별 guard hook 이 재진입을 먼저 차단 — 루프가 §3 우회 통로로 작동하지 않는다.
+  - **(4) 종료 조건:** (a) self-critique 0건 + 잔여 0건 / (b) 사용자 `중단`·`보류`·`멈춰` (stop marker) / (c) §3 매칭 (사용자 승인 필수) / (d) 5회 초과.
   - **(5) 우선순위 매트릭스 (deadlock 방지):** **§3 Checkpoint > 실행 책임 > 본 룰 (자동 위임) > Auto mode > Echo-Back Confirm.** Auto mode 활성 신호도 §3 / 실행 책임 / Echo-Back 진입을 위반하지 않는 범위에서만 적용. 사용자 명시 Auto mode 강행 요청해도 §3 발동 시 승인 대기 우선. **§3 우선 적용:** 비가역 (파일 삭제·force push·DB 변경)·광범위 (3파일+ 아키텍처 변경, **본 룰 자체 수정/삭제 포함**)·외부 시스템 변경 = 본 룰 무관하게 사용자 명시 승인 필수. Stop 자동 차단 (3d) 도 §3 매칭 시 별 hook (dangerous-ops-guard / sensitive-file-guard / branch-enforce) 가 차단 — 재진입이 보호 우회 통로로 작동하지 않는다.
   - **승인 키워드 SSOT:** `hooks/gate-approve.sh` 정규식 본문 (단답 승인 / 접미사 흡수 / 묶음 승인 / 부정 컨텍스트 차단 / 위치 제약 모두 hook SSOT). 본문 별도 나열하지 않음.
   - **SSOT:** 본 룰 + `hooks/gate-approve.sh` (키워드 + stop marker 생성) + `hooks/prompt-echo-confirm.sh` (Echo-Back) + `hooks/auto-iterate-reminder.sh` (PostToolUse reminder 주입) + `hooks/auto-iterate-stop-guard.sh` (Stop 차단 + 재진입).
@@ -226,12 +161,7 @@
 
 ### §4.5 산출물 생명주기
 
-- **working/ 자동 이동 3 진입점 (필수):** working/ → tasks/ 이동 트리거 = 3 경로로 명확 분리. 사용 시점·진입점 혼동 방지.
-  - **(1) 정상 마감 — `/작업저장`:** 세션 마감 직전 권장 진입점. worktree 정착 안내 + working/ 본문 마무리 + 잔여 작업 판정 (Done = tasks/ 이동 / Partial = working/ 유지). 짝 슬래시 = `/작업로드`.
-  - **(2) 긴급 단순 이동 — `/working-done`:** 본문 마무리 후 즉시 정리. Self-Critique·잔여 판정 생략, 단순 파일 이동만. `/작업저장` 보다 가볍지만 잔여 추적 책임은 사용자.
-  - **(3) 자동 — `working-lifecycle.sh` PostToolUse:** `Status: Done` (시작 라인) + `## Self-Critique` 섹션 동시 존재 시 hook 가 즉시 이동. `/실행` 진입 후 본문 마무리하면 자연스럽게 트리거.
-  - **선택 기준:** 정상 종료 = (1), 본문은 완료지만 추가 단계 생략 시 = (2), `/실행` 중 자연 마무리 시 = (3).
-  - SSOT: `commands/작업저장.md` + `commands/working-done.md` + `hooks/working-lifecycle.sh`.
+- **working/ 자동 이동 3 진입점 (필수):** (1) 정상 마감 = `/작업저장` (정착 안내 + Done/Partial 잔여 판정) / (2) 긴급 단순 이동 = `/working-done` (판정 생략, 이동만) / (3) 자동 = `working-lifecycle.sh` (`Status: Done` + `## Self-Critique` 동시 존재 시). 선택 기준·절차 = `commands/작업저장.md` + `commands/working-done.md` + `hooks/working-lifecycle.sh` SSOT.
 - **backlog 메모리 정책 (필수):** 본 세션 잔여 후속·시간 트리거·사용자 결정 보류 = `~/.claude/projects/.../memory/backlog_{slug}.md` 단일 파일. **양식 (frontmatter):** `name` (kebab-case) / `description` (1줄) / `type: backlog` / `status: pending|in_progress|done` / `source` / `target_date` (선택) / `product` (기본 claude-harness) / `created` / `completed` (status=done 시 hook 자동 채움). MEMORY.md `## Backlog` 섹션 entry 추가 필수. **자동 이동:** (a) `status: done` 마커 → `backlog-lifecycle.sh` PostToolUse hook 가 `tasks/{YYYYMMDD}/backlog/{yyyy-mm-dd}-{slug}.md` 자동 이동 + MEMORY.md entry 제거 + history.md/summary.md 갱신. (b) 사용자 명시 키워드 (`backlog 완료`/`backlog 정리`/`backlog 이동`/`/backlog-done`) = 일괄 스캔 이동. §3 Checkpoint 우선 적용. SSOT: `hooks/backlog-lifecycle.sh` + `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우".
 - **비필수 사이드이펙트 백로그 격리 (필수):** 코드 작업 중 발견 항목이 **① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급(부수적·경미)** 3조건을 **모두** 충족할 때만 working/ 본문·코드 TODO 로 끌어올리지 않고 **backlog 메모리에만 기록** 후 현재 작업 계속 (별도 경량 backlog 신설 금지). 하나라도 불충족 = Critical~Low 정상 분류. **실제 버그·문제는 경미해 보여도 절대 backlog 로 미루지 않는다 (②가 안전장치).** §3 매칭 항목은 크기 무관 사용자 보고. 세부·Why = `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" SSOT.
 
@@ -254,7 +184,7 @@
 | bitbucket-cli | Bitbucket Cloud REST API (curl + 토큰) | `/bitbucket-cli` | ✗ (skill 진입) | C |
 | debate | Multi-Agent Subagent Debate (4그룹 12 서브에이전트) | `/debate` | ✓ | A |
 | debug-skill | 다영역 디버깅 (PHP / DB / AWS / 보안) | `/debug-skill` | ✗ (skill 진입) | B |
-| dev-team | HongCafe Global 다레포 개발 전용 팀 (BE / 인프라 / 문서 / FE read-only). Lead 라우팅 1~4 spawn. api-team(영향분석)→dev-team(구현) handoff | `/dev-team` | ✗ (skill 진입) | A |
+| dev-team | HongCafe 다레포 개발 팀 — Lead 라우팅 1~4 spawn (api-team 분석 → dev-team 구현 handoff) | `/dev-team` | ✗ (skill 진입) | A |
 | feature-create | worktree → 신규 feature 분기 정착 (Claude 자동 머지, master/main 제외) | `/feature-create` | ✓ | A |
 | feature-merge | worktree → 기존 feature 분기 ff-only 머지 (Claude 자동 머지, master/main 제외) | `/feature-merge` | ✓ | A |
 | git-push | Conventional Commits + git push 즉시 실행 | `/git-push` | ✗ (skill 진입) | C |
@@ -272,24 +202,24 @@
 | workflow-enforcer | 3-Team Workflow Gate 강제 (Checkpoint 체크리스트) | `/workflow-enforcer` | ✗ (skill 진입) | C |
 | working-done | working/ 단일 통합 문서 → tasks/ 자동 이동 트리거 | (사용자 직접 입력) | ✓ | A |
 | 자동진행 | 묶음 승인 모드 진입 — 잔여 액션 / 인자 작업 자동 진행 | `/자동진행` | ✓ | A |
-| 작업저장 | 세션 마감 — worktree 정착 안내 + working/ 문서 마무리 + 잔여 작업 판정 (Done / Partial 분기) | `/작업저장` | ✓ | A |
-| 작업로드 | 세션 재개 — working/ Status: Partial 잔존 작업 스캔 + 본문/잔여 표시 + 재진입 안내 (read-only) | `/작업로드` | ✓ | A |
-| 작업분석 | 작업 메타분석 — 계획완료(Status: Plan Complete) 작업들을 가로질러 스캔 → 의존·worktree·파일충돌 기준 동시진행 그룹 + 우선진행 순위 도출 → working/ 메타분석 문서 신규 + 기존 계획 문서에 권고 블록 append (다파일 Edit = §3 승인 후). `/분석`(단일 작업)과 구분되는 다작업 진입점. 자립형 | `/작업분석` | ✓ | B |
-| 분석 | 작업 분석 단계 진입 — working/ §분석 섹션 채움 (관점별 요약 / Critical~Low / 우선순위 권고) (thin wrapper) | `/분석` | ✓ | A |
-| 타당성 | 타당성 검토 단계 진입 — docset-ref 호출 + 공식 근거 인용 ≥ 1건 (thin wrapper) | `/타당성` | ✓ | A |
-| 계획 | 작업 계획 단계 진입 — working/ §계획 채움 + step-01~nn 분해 + 재검토 1회 + 전체 점검 + Status: Plan Complete (thin wrapper) | `/계획` | ✓ | A |
-| 실행 | 작업 실행 단계 진입 — step 인덱스 순차 소비 + step별 상태 마킹 + working/ §실행 + Self-Critique + QA 게이트(조건부) + Status 판정 (thin wrapper) | `/실행` | ✓ | A |
+| 작업저장 | 세션 마감 — 정착 안내 + working/ 마무리 + Done/Partial 판정 | `/작업저장` | ✓ | A |
+| 작업로드 | 세션 재개 — Partial 잔존 작업 스캔 + 재진입 안내 (read-only) | `/작업로드` | ✓ | A |
+| 작업분석 | 다작업 메타분석 — Plan Complete 작업 동시진행 그룹·우선순위 도출 (자립형, 다파일 Edit = §3 승인 후) | `/작업분석` | ✓ | B |
+| 분석 | working/ §분석 채움 — 관점별/Critical~Low/우선순위 (thin wrapper) | `/분석` | ✓ | A |
+| 타당성 | docset-ref 호출 + 공식 근거 인용 ≥ 1건 (thin wrapper) | `/타당성` | ✓ | A |
+| 계획 | working/ §계획 채움 + step 분해 + Status: Plan Complete (thin wrapper) | `/계획` | ✓ | A |
+| 실행 | step 순차 소비 + §실행 + Self-Critique + QA 게이트 + Status 판정 (thin wrapper) | `/실행` | ✓ | A |
 | 검증 | e2e 5점 검증 진입 — env / 함수 / 스키마 / curl / mock (thin wrapper) | `/검증` | ✓ | A |
 | 리뷰 | Self-Critique + simplify 스킬 보조 리뷰 (thin wrapper) | `/리뷰` | ✓ | A |
 | 배포 | git-push + branch-enforce 통합 배포 안내 (사용자 직접 실행) (thin wrapper) | `/배포` | ✓ | C |
 | 회고 | history.md + summary.md 자동 기록 + 세션 마감 정리 (thin wrapper) | `/회고` | ✓ | A |
 | 토론 | 4 에이전트팀 × 4 Agent = 16 Agent 풀-병렬 spawn 토론 진입 (한글 진입점, `/debate` 호환) (thin wrapper) | `/토론` | ✓ | A |
-| 조사 | claude.ai 웹 Research 재현 — 질문 하위 주제 분해 → 주제별 general-purpose Agent 병렬 spawn (WebSearch + WebFetch 자율 검색) → Lead 종합 → 인용 포함 보고서 (`output/research/`). 자립형 커맨드 | `/조사` | ✓ | A |
-| 병렬 | Modifier 슬래시 — `/병렬 /{인자 슬래시}` 형식으로 단일 응답 내 Agent spawn 강제 병렬화. 매 응답마다 명시 입력 필요 (60분 활성 marker 폐기). hook 의존 0 | `/병렬` | ✓ | A |
-| 프로세스 | Claude Code 프로세스 + 세션 sid 매핑 조회 + REGISTRY/lock orphan 분류·정리. 3 모드 — 기본 (read-only), `cleanup` (orphan 정리), `kill` (좀비 PID 종료 명령 안내, 사용자 직접) | `/프로세스` | ✓ | B |
-| prod-debug | prd/stg/dev EC2 직접 접속 → 점검·수정 → 검증 → 로컬 반영 통합 진입점. 3 모드 — `connect` (aws ssm start-session/send-command), `verify` (e2e 5점), `sync` (서버 → 로컬, 사용자 명시 승인). 환경별 매트릭스 (prd 최후 수단 / stg 검증 우선 / dev 일상). | `/prod-debug` | ✓ | C |
-| 제안 | 결정 권고 — 사용자 결정 영역에 [선택지 + 트레이드오프 + 추천(근거) + §3 매칭]을 단일 Claude 권고로 즉시 구조화 제시 (Agent spawn 0, 가벼움). `/토론`(16 Agent)과 직접답변 사이 경량 결정 진입점. 입력 = backlog slug · 일반 주제 · 직전 맥락. mutation 0 (권고만, 코드 반영은 `/계획`→`/실행` 별도 승인). §4.4 권고 룰의 명시 진입점화 | `/제안` | ✓ | A |
-| 드리프트검증 | 문서 드리프트 검증 — 새 문서 생성/직전 문서 기준 작업 이어가기 직전, 불변 원본(SSOT) 대비 파생 문서의 드리프트(원본에 없던 가정·제약·해석 혼입 / 무의식적 변형) 6단계 검증 (기준확정 → load-bearing 제약 도출 → 원본 대조 → diff → 제약 생존 확인 → 컨텍스트 정리). read-only 진단 (mutation 0, Write/Edit 부재), `[DRIFT-OK]`/`[DRIFT-WARN]` 출력. WARN 시 사용자 확인 전까지 진행 보류. `/계획`·`/실행`·`task-docs`·`/작업분석` 의 선행 게이트. 자립형 (본체 스킬 없음) | `/드리프트검증` | ✓ | A |
+| 조사 | 웹 Research 재현 — 주제 분해 → Agent 병렬 검색 → 인용 보고서 (`output/research/`, 자립형) | `/조사` | ✓ | A |
+| 병렬 | Modifier — `/병렬 /{슬래시}` 단일 응답 내 Agent spawn 강제 병렬화 (매 응답 명시 입력) | `/병렬` | ✓ | A |
+| 프로세스 | 프로세스·sid 매핑 조회 + REGISTRY/lock orphan 정리 (기본/cleanup/kill 3 모드) | `/프로세스` | ✓ | B |
+| prod-debug | 서버 우선 디버그 → 로컬 반영 (connect/verify/sync 3 모드, prd 최후 수단) | `/prod-debug` | ✓ | C |
+| 제안 | 경량 결정 권고 — 선택지+트레이드오프+추천+§3 매칭 단일 제시 (Agent spawn 0, mutation 0) | `/제안` | ✓ | A |
+| 드리프트검증 | 문서 드리프트 6단계 검증 (read-only, [DRIFT-OK]/[DRIFT-WARN]) — `/계획`·`/실행` 선행 게이트 (자립형) | `/드리프트검증` | ✓ | A |
 
 **자동화 분류 카운트:** A = 28 (api-spec-audit · api-team · debate · dev-team · feature-create · feature-merge · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 조사 · 병렬 · 제안 · 드리프트검증 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 7 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 · 작업분석 + sns-oauth add·debug) / C = 9 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 > **혼합 분류 카운트 방식 (필수):** mirror-be-claude (A/C) · sns-oauth (A/B) 처럼 모드별 자동화 강도가 다른 skill 은 **각 모드별로 분리 카운트**. 행 1줄 = 1 표기 (`A (verify·sync-from-be) / C (sync-from-global)`), 카운트는 모드 단위. 표 행 단순 카운트 (skill 단일 count) 와 다름.
