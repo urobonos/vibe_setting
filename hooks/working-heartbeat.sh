@@ -3,7 +3,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-heartbeat" "enter" "pid=$$"
 # working-heartbeat.sh — PostToolUse Edit/Write working/*.md 직후 last_update 갱신 + lock mtime touch
 #
-# SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md
+# SSOT: ~/.claude/docs/claude-harness/tasks/20260515/active-task-registry/2026-05-15-active-task-registry-unified.md
 # 짝 hook: working-register.sh (PreToolUse) / working-release.sh (Stop)
 
 # shellcheck disable=SC1091

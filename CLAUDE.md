@@ -127,7 +127,7 @@
   - **(e) master/main 머지·체크아웃 절대 금지:** `git merge {main|master|origin/main|origin/master|refs/heads/main|refs/heads/master|upstream/main|upstream/master}` / `git checkout {위 target}` / `git switch {위 target}` + chained 명령 모두 자동 호출 금지. 사용자 직접만. 강제: `branch-enforce.sh` §(1.5) 잔존. worktree 정착 시 source = main/master 이면 정착 절대 금지 — PR 절차로 대체.
   - **(f) worktree 정착 = Claude 자동 실행 (2026-06-04~):** `/feature-create`·`/feature-merge` 의 ff-only 머지 + 실패 시 `git cherry-pick {merge-base}..wip/*` fallback (tip-only 금지, 충돌 = `--abort` 클린 복구 후 보고 — auto-resolve 금지) + `git worktree remove ~/.claude/worktrees/*` + **단일** `git branch -D wip/*` 를 Claude 가 직접 수행 (각 명령 개별 호출 — 결합 명령은 guard 차단). **단 master/main 머지·checkout·switch + master/main HEAD cherry-pick 은 차단 유지 — source 가 main/master 면 정착 절대 금지 (PR 절차로 대체).** 절차·면제 경계 = `commands/{feature-create,feature-merge}.md` + `dangerous-ops-guard.sh` + `branch-enforce.sh` §(1.5)(1.6) SSOT.
   - **Why:** push/머지 사고는 자동화 1회 실수로 즉시 발생, 사용자 직접 1라인 비용은 거의 0. worktree 항상 강제 = 원본 working tree 영구 격리, 사고 영구 차단. claude-harness 면제 폐기 = (A) 통일 강제 — 본 영역도 SSOT 룰 작업 사고 차단. 시점 단락 = changelog.md 참조.
-  - **산출물 SSOT:** `~/.claude/docs/working/20260520/2026-05-20-claude-harness-worktree-always-policy.md` + `~/.claude/docs/claude-harness/output/guide/2026-04-30-branch-workflow/` (구 정책 참조).
+  - **산출물 SSOT:** `~/.claude/docs/claude-harness/tasks/20260520/worktree-always-policy/2026-05-20-worktree-always-policy-unified.md` + `~/.claude/docs/claude-harness/output/guide/2026-04-30-branch-workflow/` (구 정책 참조).
 - **스킬 생성·수정·최적화 — skill-creator 강제 진입점 (필수):** `.claude/skills/{skill}/` 하위 모든 파일 수정·생성 = `skill-creator` 경유 강제. 진입·락 우회·종료 정리 절차 SSOT = `skill-edit-guard.sh` (exit 2 차단 시 락 절차 전량 출력).
 - **서버 우선 디버그 → 로컬 반영 흐름 (필수):** prd/stg/dev API 오류 = **EC2 직접 접속 → 서버 점검·수정 → 서버 검증 통과 → 로컬 반영** 강제 — **서버 검증 전 즉시 로컬 수정·커밋·푸시·머지 = 지침 위반** (서버 수정 후 로컬 미반영 = 다음 배포가 hotfix 를 erasure). **환경 매트릭스:** prd = **최후 수단** (정상 CI/CD 우선, 사용자 명시 승인) / stg = 서버 우선 검증 가능 / dev = 일상. 5단계 절차(SSM 접속·점검·e2e 5점 검증·로컬 반영·audit log)·검증 통과 정의 = `prod-debug` 스킬 SSOT (3 모드 `connect`/`verify`/`sync`). SSM 변경·서버 수정·로컬 반영 = 전부 사용자 명시 승인 (§3 우선).
 - **e2e 검증 (필수):** 코드 수정 완료 판단 = 유닛 테스트 + 5점 체크 (env/함수·클래스/DB 스키마/프로덕션 curl/mock) — 세부 = `php8` 스킬 §"e2e 검증" SSOT.
@@ -200,7 +200,7 @@
 | sns-oauth | SNS OAuth (kakao/naver/google/apple) 표준 패턴 | `/sns-oauth` | ✗ (skill 진입) | A (verify) / B (add·debug) |
 | task-docs | 작업 문서 생명주기 (analyze → plan → result) | `/task-docs` | ✗ (skill 진입) | A |
 | workflow-enforcer | 3-Team Workflow Gate 강제 (Checkpoint 체크리스트) | `/workflow-enforcer` | ✗ (skill 진입) | C |
-| working-done | working/ 단일 통합 문서 → tasks/ 자동 이동 트리거 | (사용자 직접 입력) | ✓ | A |
+| working-done | working/ 단일 통합 문서 → tasks/ 자동 이동 트리거 | `/working-done` | ✓ | A |
 | 자동진행 | 묶음 승인 모드 진입 — 잔여 액션 / 인자 작업 자동 진행 | `/자동진행` | ✓ | A |
 | 작업저장 | 세션 마감 — 정착 안내 + working/ 마무리 + Done/Partial 판정 | `/작업저장` | ✓ | A |
 | 작업로드 | 세션 재개 — Partial 잔존 작업 스캔 + 재진입 안내 (read-only) | `/작업로드` | ✓ | A |

@@ -34,7 +34,7 @@ argument-hint: "[작업명]  # 생략 시 working/ 전체 일괄 이동"
 6. **history/summary 갱신** — `tasks/history.md` (오늘 항목 + 작업 링크) + `tasks/YYYYMMDD/summary.md` (작업 링크)
 7. **사후 hook 검증** — 이동 후 1회 발동:
    - `doc-template-guard.sh` — `*-unified.md` 패턴, analyze + plan + result 합집합 필수 헤더 (exit 2)
-   - `checklist-count-check.sh` — 체크리스트 ≥ 50 (exit 2)
+   - `checklist-count-check.sh` — 체크리스트 ≥ 30 (exit 2)
    - `change-impact-section-check.sh` — 변경 영향 3열 표 (exit 0 경고)
    - `feasibility-section-check.sh` — 타당성 검토 + [Source:...] 인용 (exit 0 경고)
 

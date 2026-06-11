@@ -3,7 +3,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-release" "enter" "pid=$$"
 # working-release.sh — Stop hook 진입 시 본인 세션 active entry 를 status=paused 로 변경 + lock 정리
 #
-# SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md
+# SSOT: ~/.claude/docs/claude-harness/tasks/20260515/active-task-registry/2026-05-15-active-task-registry-unified.md
 # 트리거: 세션 종료 시 (Claude Code Stop event)
 #
 # 동작:

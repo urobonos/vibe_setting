@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   - §(2) Protected 브랜치 자동 강제 + Edit/Write 차단 = **retire (2026-05-20)**
 #     → `worktree-enforce.sh` 로 의미 이관 (worktree 항상 강제 + feature 분기 요청 시 생성)
 #
-# 산출물 SSOT: ~/.claude/docs/working/20260520/2026-05-20-claude-harness-worktree-always-policy.md
+# 산출물 SSOT: ~/.claude/docs/claude-harness/tasks/20260520/worktree-always-policy/2026-05-20-worktree-always-policy-unified.md
 #             + ~/.claude/docs/claude-harness/output/guide/2026-04-30-branch-workflow/ (구 정책 참조)
 
 source "$(dirname "$0")/lib/hook-input.sh"
@@ -70,7 +70,7 @@ if [ "$TOOL_NAME" = "Bash" ]; then
     echo "              명령: $COMMAND" >&2
     echo "              정책: Claude 는 Bash 도구로 git push 를 직접 호출하지 않습니다 (모든 분기 / 모든 옵션 예외 0)." >&2
     echo "              조치: 사용자가 직접 \`! git push ...\` (Bash prefix) 또는 PowerShell 셸에서 실행" >&2
-    echo "              SSOT: 글로벌 CLAUDE.md §\"자동 원격 push 전면 금지\" + skills/git-push/SKILL.md" >&2
+    echo "              SSOT: 글로벌 CLAUDE.md §4.3(d) \"git push 전면 금지\" + skills/git-push/SKILL.md" >&2
     exit 2
   fi
 fi

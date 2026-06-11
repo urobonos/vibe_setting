@@ -128,7 +128,7 @@ CLAUDE.md §4 Guardrails "Flexible Deliverables" 와 정합. 신규 정책 (2026
 **완료 시 자동 이동:**
 - working/ 단일 통합 문서에 `^Status:\s*Done` + `## Self-Critique` 마커 동시 존재 → `working-lifecycle.sh` PostToolUse hook 자동으로 `tasks/` 이동
 - 사용자 명시 키워드 (`/working-done` / `작업 완료` / `tasks 이동` 자연어) → 동일 이동 발동
-- 이동 후 `doc-template-guard.sh` (`*-unified.md` 패턴) / `checklist-count-check.sh` (≥ 50) / `change-impact-section-check.sh` / `feasibility-section-check.sh` 사후 검증 1회
+- 이동 후 `doc-template-guard.sh` (`*-unified.md` 패턴) / `checklist-count-check.sh` (≥ 30) / `change-impact-section-check.sh` / `feasibility-section-check.sh` 사후 검증 1회
 
 > **Why:** 단일 통합 정책은 파일 분리로 인한 컨텍스트 스왑·중복 메타데이터·summary 매핑 복잡도를 제거하면서, 단일 파일 안에서 필요한 섹션만 채우는 유연성은 그대로 보장한다. Gate 적용은 작업 규모 기준 (M/L 은 분석+계획 양쪽 승인, S 는 통합 1회 승인) 그대로 유지한다.
 

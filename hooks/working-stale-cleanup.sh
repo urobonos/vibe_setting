@@ -3,7 +3,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-stale-cleanup" "enter" "pid=$$"
 # working-stale-cleanup.sh — SessionStart hook 진입 시 잔여 자원 정리 (lock + 빈 worktree 폴더)
 #
-# SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md
+# SSOT: ~/.claude/docs/claude-harness/tasks/20260515/active-task-registry/2026-05-15-active-task-registry-unified.md
 #
 # 동작:
 #   §A) stale lock 정리 (24h 초과)

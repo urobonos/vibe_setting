@@ -17,7 +17,7 @@ GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 
 # 자동 순차 진행 정책 (2026-05-12): 세션 시작 시 gate = 2 (EXECUTE) 초기화
 # 단계별 차단 폐기 — §3 Checkpoint 5조건 보호는 별 hook (dangerous-ops-guard / branch-enforce / git-quality-gate 등)
-# SSOT: ~/.claude/CLAUDE.md §"자동 순차 진행 정책"
+# SSOT: ~/.claude/CLAUDE.md §4.3 "묶음 승인 Fast-Track (Gate 0→2)"
 echo "2" > "$GATE_FILE"
 
 # stale claude_* 마커 정리 (7일 이상 미수정 — 활성 세션 마커는 mtime 갱신되어 보존)

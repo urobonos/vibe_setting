@@ -3,7 +3,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-register" "enter" "pid=$$"
 # working-register.sh — PreToolUse Edit/Write working/*.md 진입 시 REGISTRY entry 등록 + lock 생성
 #
-# SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md
+# SSOT: ~/.claude/docs/claude-harness/tasks/20260515/active-task-registry/2026-05-15-active-task-registry-unified.md
 # 짝 hook: working-heartbeat.sh (PostToolUse) / working-release.sh (Stop) / working-stale-cleanup.sh (SessionStart)
 #
 # 충돌 정책: 동일 slug 다른 session_id 점유 시 stderr 경고 (exit 0, 차단 X — 사용자 결정 우선)

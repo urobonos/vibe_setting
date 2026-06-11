@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # registry-utils.sh — Active Task Registry CRUD lib
-# SSOT: ~/.claude/docs/working/20260515/2026-05-15-claude-harness-active-task-registry.md
+# SSOT: ~/.claude/docs/claude-harness/tasks/20260515/active-task-registry/2026-05-15-active-task-registry-unified.md
 #
 # 사용:
 #   source "$(dirname "$0")/lib/registry-utils.sh"

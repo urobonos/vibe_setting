@@ -272,7 +272,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 이동 후 `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` 에 대해:
 - `doc-template-guard.sh` — `*-unified.md` 패턴 검증, 합집합 ≈ 20개 필수 헤더 (analyze 11 + plan 5 + result 4 — 통합 변경 영향 / 타당성 검토는 합쳐서 1회) 누락 시 `[BLOCKED]` exit 2
-- `checklist-count-check.sh` — 체크리스트 `- [ ]` + `- [x]` 합산 ≥ 50 (analyze 30 + plan 20 + result 20 의 의미적 절충, 통합 문서라 중복 제거 허용)
+- `checklist-count-check.sh` — 체크리스트 `- [ ]` + `- [x]` 합산 ≥ 30 (통합 문서 강제 하한 — 2026-05-13 ≥50 완화, 통합 문서라 중복 제거 허용)
 - `change-impact-section-check.sh` — `## 변경 영향` 섹션 + 3열 표(변경/개선/이유) 존재
 - `feasibility-section-check.sh` — `## 타당성 검토` 헤더 + `[Source: <name> §<id>]` 인용 ≥ 1건
 - 모두 통과 시 `tasks/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 가 영구 보존 산출물로 확정

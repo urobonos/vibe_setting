@@ -451,6 +451,6 @@ Status: Done
 | Hook | 검증 항목 | 차단 강도 |
 |------|---------|----------|
 | `doc-template-guard.sh` | `*-unified.md` 패턴 분기 — analyze + plan + result 합집합 ≈ 20 헤더 | exit 2 |
-| `checklist-count-check.sh` | 체크리스트 ≥ 50 | exit 2 |
+| `checklist-count-check.sh` | 체크리스트 ≥ 30 | exit 2 |
 | `change-impact-section-check.sh` | `## 변경 영향` + 3열 표 | exit 0 (경고) |
 | `feasibility-section-check.sh` | `## 타당성 검토` + `[Source:...]` ≥ 1 | exit 0 (경고) |
