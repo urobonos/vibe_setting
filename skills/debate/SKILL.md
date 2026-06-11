@@ -7,7 +7,7 @@ description: >
 triggers:
   - "/debate"
   - "/토론"
-version: 4.0.1
+version: 4.0.2
 user-invocable: true
 depends_on: [orchestration]
 conflicts_with: []
@@ -109,8 +109,8 @@ Length_Limit:        "500 자 이내"
 ```
 
 **Effort/Model:**
-- Lead 4개 = `Max/fable` 고정
-- 멤버 12개 = `Max/fable` 기본, 경량 질문 (1~2 문장) 은 `High/sonnet` 하향 가능
+- Lead 4개 = `Max/opus` 고정
+- 멤버 12개 = `Max/opus` 기본, 경량 질문 (1~2 문장) 은 `High/sonnet` 하향 가능
 
 ## 비용 안내 (트레이드오프 명시)
 

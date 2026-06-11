@@ -9,7 +9,7 @@ triggers:
   - "3-Team"
   - "Analyze→Plan→Execute"
   - "/orchestration"
-version: 2.1.2
+version: 2.1.3
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -35,8 +35,8 @@ min_claude_md_version: "4.0"
 | 코드베이스 탐색 (3쿼리+) | `Explore` agent | 시스템 기본 | 메인 컨텍스트 오염 방지 |
 | 다파일 영향 분석 | Team 1 (Analyze) | Lead+멤버 페르소나별 | 다각적 검증 |
 | 다단계 구현 (M/L 등급) | 3-Team 전체 (Analyze→Plan→Execute) | Part 1 표 준수 | Worktree 격리 |
-| 설계 결정 (아키텍처·스키마·API) | `Plan` agent + Architect 페르소나 | Max/fable | 근거 기반 판단 |
-| 단일 도메인 깊은 조사 | `general-purpose` agent | High/fable | 답변 1회 분리 |
+| 설계 결정 (아키텍처·스키마·API) | `Plan` agent + Architect 페르소나 | Max/opus | 근거 기반 판단 |
+| 단일 도메인 깊은 조사 | `general-purpose` agent | High/opus | 답변 1회 분리 |
 | API 추가·엔드포인트 디버깅 | `api-team` 스킬 (FE/BE/인프라 3-멤버) | api-team SSOT | 풀스택 병렬 |
 | 의견 갈림·트레이드오프 | `debate` 스킬 | debate SSOT | 다관점 비교 |
 | 보안 검토·OWASP 매핑 | `security-audit` 스킬 | security-audit SSOT | 전문 도메인 분리 |
@@ -89,16 +89,16 @@ Lead 가 사용자에게 보고할 때 **결론 + 표/diff 위주**로 압축한
 
 | Effort | Model | 용도 |
 |--------|-------|------|
-| **Max** | `fable` | 깊은 추론·정확성 필수 (구현, 설계, 보안, 분석, 토론) |
-| **High** | `fable` | 전문 도메인 검증, 범위 한정적 |
+| **Max** | `opus` | 깊은 추론·정확성 필수 (구현, 설계, 보안, 분석, 토론) |
+| **High** | `opus` | 전문 도메인 검증, 범위 한정적 |
 | **High** | `sonnet` | 패턴 매칭·검증·정보 수집, 속도/효율 우선 |
-| **Medium** | `fable` | 넓은 범위 빠른 처리 |
+| **Medium** | `opus` | 넓은 범위 빠른 처리 |
 | **Medium** | `sonnet` | 단순 탐색·경량 작업 |
 
 - Agent spawn 시 `Effort`/`Model` 필수 명시. 생략은 지침 위반.
 - **Why:** Effort/Model 미명시 시 시스템 기본값으로 폴백되어 작업 난이도와 무관한 모델이 배정되며, 비용·정확성·응답 시간이 모두 통제 불능 상태가 된다.
 - Explore 에이전트는 `subagent_type: "Explore"` 사용, 시스템 기본값.
-- **현재 기준 모델 (2026-06 기준):** `fable` = Fable 5 (1M context, knowledge cutoff 2026-01), `sonnet` = Sonnet 4.6, `haiku` = Haiku 4.5. `opus` = Opus 4.8 (이전 최상위 티어 — fallback 가용). 모델군이 교체되면 본 항목을 갱신한다.
+- **현재 기준 모델 (2026-06 기준):** `opus` = Opus 4.8 (1M context, knowledge cutoff 2026-01), `sonnet` = Sonnet 4.6, `haiku` = Haiku 4.5. 모델군이 교체되면 본 항목을 갱신한다.
 
 ## 1.2. Task Sizing
 
@@ -230,10 +230,10 @@ Input/Output Protocol, Status 코드, Decision Request 형식 상세는 [`refere
 **권한:** Read-only (`Read`, `Grep`, `Glob` 만 허용)
 
 ```
-Orchestrator → Analyst Lead spawn (Max/fable)
+Orchestrator → Analyst Lead spawn (Max/opus)
   Analyst Lead 내부:
-    ├── Architect (High/fable)    ─── 아키텍처 정합성, 기존 패턴 위반
-    ├── Security (High/fable)     ─── 보안 위험, 인증/인가 영향
+    ├── Architect (High/opus)    ─── 아키텍처 정합성, 기존 패턴 위반
+    ├── Security (High/opus)     ─── 보안 위험, 인증/인가 영향
     ├── Reviewer (High/sonnet)   ─── 코드 품질, 기술부채
     ├── Tester (High/sonnet)     ─── 엣지케이스, 테스트 가능성
     ├── Performance (High/sonnet)─── N+1, 병목, 캐시 전략
@@ -267,10 +267,10 @@ Orchestrator → Analyst Lead spawn (Max/fable)
 **권한:** Read-only
 
 ```
-Orchestrator → Analyst Lead spawn (Max/fable, Context_Path: analyze.md 경로)
+Orchestrator → Analyst Lead spawn (Max/opus, Context_Path: analyze.md 경로)
   Analyst Lead 내부:
-    ├── Architect (Max/fable)     ─── Blueprint, 디렉토리/클래스/메서드 구조
-    ├── Worker (High/fable)       ─── 구현 실현 가능성, 작업량 추정
+    ├── Architect (Max/opus)     ─── Blueprint, 디렉토리/클래스/메서드 구조
+    ├── Worker (High/opus)       ─── 구현 실현 가능성, 작업량 추정
     ├── Security (High/sonnet)   ─── 보안 요구사항 반영 여부
     │
     ├── [트레이드오프 감지 시]
@@ -324,11 +324,11 @@ Team 3의 Worker Lead는 반드시 `isolation: "worktree"`로 spawn한다. workt
 - Vibe Coding Group 모드에는 적용하지 않는다 (병렬 worktree 간 merge 충돌 방지).
 
 ```
-Orchestrator → Worker Lead spawn (Max/fable, Context_Path: plan.md 경로, isolation: "worktree")
+Orchestrator → Worker Lead spawn (Max/opus, Context_Path: plan.md 경로, isolation: "worktree")
   Worker Lead 내부 (격리된 worktree에서 작업):
-    ├── Worker 멤버 (Max/fable)   ─── 레이어별 구현 (Model/Service/Controller)
-    ├── Reviewer (High/fable)     ─── 코드 리뷰
-    ├── Tester (High/fable)       ─── 테스트 작성/실행
+    ├── Worker 멤버 (Max/opus)   ─── 레이어별 구현 (Model/Service/Controller)
+    ├── Reviewer (High/opus)     ─── 코드 리뷰
+    ├── Tester (High/opus)       ─── 테스트 작성/실행
     ├── Security (High/sonnet)   ─── 보안 검증 (L등급)
     ├── Performance (High/sonnet)─── 성능 검증 (L등급)
     ├── Ops (High/sonnet)        ─── 배포·운영 검증 (L등급)
