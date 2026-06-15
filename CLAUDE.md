@@ -2,12 +2,13 @@
 
 ## 0. Operating Philosophy (북극성 — 전 하니스 관통)
 
-> 본 4원칙은 CLAUDE.md·스킬·훅·커맨드 전체의 상위 행동 원칙이다. 신규 룰·스킬·훅·커맨드 작성 시 본 원칙에 위배되지 않아야 한다 (각 원칙의 강제 지점은 §3·§4 해당 룰에 존재 — 중복 hook 신설 금지).
+> 본 5원칙은 CLAUDE.md·스킬·훅·커맨드 전체의 상위 행동 원칙이다 (1~4 = 작업 행동, 5 = 답변 행동 — 매 답변 always-on). 신규 룰·스킬·훅·커맨드 작성 시 본 원칙에 위배되지 않아야 한다 (각 원칙의 강제 지점은 §3·§4 해당 룰에 존재 — 중복 hook 신설 금지).
 
 1. **Think Before Coding** — 가정 명시 · 불확실 시 질문 · 트레이드오프 표면화 · 해석 분기 시 선택지 제시 (침묵 선택 금지).
 2. **Simplicity First** — 요청 범위 최소 코드. 투기적 추상 · 미요청 유연성 · 불가능 시나리오 방어 금지. "senior 가 과설계라 할까?" 자문.
 3. **Surgical Changes** — 요청 범위만 수정. 인접 개선·안 깨진 것 리팩터 금지, 기존 스타일 준수. 무관 dead code 는 언급만, 내 변경이 만든 orphan 만 정리. **모든 변경 줄은 사용자 요청으로 직접 추적되어야 한다.**
 4. **Goal-Driven Execution** — 검증 가능한 성공기준 정의 후 통과까지 루프. "동작하게"(약기준) 금지·강기준 = "실패 테스트 작성 → 통과", 다단계는 [단계 → 검증] 계획 명시.
+5. **Concise Reporting (답변 행동, always-on)** — 모든 답변 = 결론 먼저(1~2줄) → 표/diff 1개 → 잔여 1줄. 도입 인사·"먼저 ~하겠습니다" 진행 서술·끝 요약 반복 금지. 깊이 = 내용(근거) 한정이지 분량 아님, 형식은 항상 간결 우선. 면제(타당성·Before/After·변경영향기록·tasks 산출물)·강제 = §4.4 "응답 간결".
 
 ## File Paths
 - **글로벌 설정:** `~/.claude/` (`C:\Users\PV\.claude\`)
@@ -204,6 +205,8 @@
 | 자동진행 | 묶음 승인 모드 진입 — 잔여 액션 / 인자 작업 자동 진행 | `/자동진행` | ✓ | A |
 | 작업저장 | 세션 마감 — 정착 안내 + working/ 마무리 + Done/Partial 판정 | `/작업저장` | ✓ | A |
 | 작업로드 | 세션 재개 — Partial 잔존 작업 스캔 + 재진입 안내 (read-only) | `/작업로드` | ✓ | A |
+| 작업분배 | 작업 분배 — 현재 작업을 독립 청크로 분해·태깅 → DISPATCH 풀 등록 (타 세션 `/작업시작` claim 용) | `/작업분배` | ✓ | A |
+| 작업시작 | 작업 시작 — DISPATCH `#tag` 배타적 claim(lock) + 분배 문서 로드 (짝 = `/작업분배`) | `/작업시작` | ✓ | A |
 | 작업분석 | 다작업 메타분석 — Plan Complete 작업 동시진행 그룹·우선순위 도출 (자립형, 다파일 Edit = §3 승인 후) | `/작업분석` | ✓ | B |
 | 분석 | working/ §분석 채움 — 관점별/Critical~Low/우선순위 (thin wrapper) | `/분석` | ✓ | A |
 | 타당성 | docset-ref 호출 + 공식 근거 인용 ≥ 1건 (thin wrapper) | `/타당성` | ✓ | A |
@@ -221,7 +224,7 @@
 | 제안 | 경량 결정 권고 — 선택지+트레이드오프+추천+§3 매칭 단일 제시 (Agent spawn 0, mutation 0) | `/제안` | ✓ | A |
 | 드리프트검증 | 문서 드리프트 6단계 검증 (read-only, [DRIFT-OK]/[DRIFT-WARN]) — `/계획`·`/실행` 선행 게이트 (자립형) | `/드리프트검증` | ✓ | A |
 
-**자동화 분류 카운트:** A = 28 (api-spec-audit · api-team · debate · dev-team · feature-create · feature-merge · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 조사 · 병렬 · 제안 · 드리프트검증 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 7 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 · 작업분석 + sns-oauth add·debug) / C = 9 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
+**자동화 분류 카운트:** A = 30 (api-spec-audit · api-team · debate · dev-team · feature-create · feature-merge · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 작업분배 · 작업시작 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 조사 · 병렬 · 제안 · 드리프트검증 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 7 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 · 작업분석 + sns-oauth add·debug) / C = 9 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 > **혼합 분류 카운트 방식 (필수):** mirror-be-claude (A/C) · sns-oauth (A/B) 처럼 모드별 자동화 강도가 다른 skill 은 **각 모드별로 분리 카운트**. 행 1줄 = 1 표기 (`A (verify·sync-from-be) / C (sync-from-global)`), 카운트는 모드 단위. 표 행 단순 카운트 (skill 단일 count) 와 다름.
 
 ### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)
