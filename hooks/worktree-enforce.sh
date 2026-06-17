@@ -58,11 +58,23 @@ is_exempt_path() {
   fi
   return 1
 }
-TOOL_NAME=$(echo "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
+# tool_name 추출 — python3→python fallback + grep 백스톱 (fail-open 차단, H1 2026-06-16)
+#   python3 부재·JSON 파싱 실패 시 TOOL_NAME="" → case *) exit 0 으로 모든 mutation 이 무검사 통과하던 구멍 차단.
+_WT_PY=""
+command -v python3 >/dev/null 2>&1 && _WT_PY=python3
+[ -z "$_WT_PY" ] && command -v python >/dev/null 2>&1 && _WT_PY=python
+TOOL_NAME=""
+[ -n "$_WT_PY" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
+[ -z "$TOOL_NAME" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
 
 case "$TOOL_NAME" in
   Edit|Write|MultiEdit)
-    FILE_PATH=$(echo "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); ti=d.get('tool_input',{}); print(ti.get('file_path') or ti.get('notebook_path') or '')" 2>/dev/null)
+    FILE_PATH=""
+    [ -n "$_WT_PY" ] && FILE_PATH=$(printf '%s' "$PAYLOAD" | "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); ti=d.get('tool_input',{}); print(ti.get('file_path') or ti.get('notebook_path') or '')" 2>/dev/null)
+    # python 파싱 실패 시 grep 백스톱 (fail-open 차단, H1 2026-06-16)
+    if [ -z "$FILE_PATH" ]; then
+      FILE_PATH=$(printf '%s' "$PAYLOAD" | grep -oE '"(file_path|notebook_path)"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
+    fi
     if [ -z "$FILE_PATH" ]; then exit 0; fi
     FILE_PATH=$(echo "$FILE_PATH" | sed 's|\\|/|g')
     ;;

@@ -65,6 +65,12 @@ except:
     print('')
 " 2>/dev/null)
 
+# python 부재·JSON 파싱 실패 시 grep+sed fallback (fail-open → fail-soft, H1 2026-06-16)
+#   COMMAND 미추출로 파괴 명령이 무검사 통과하던 구멍 차단. hook-input.sh hook_parse_command 와 동일 백스톱.
+if [ -z "$COMMAND" ]; then
+  COMMAND=$(echo "$STDIN_DATA" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
+fi
+
 if [ -z "$COMMAND" ]; then
   exit 0
 fi

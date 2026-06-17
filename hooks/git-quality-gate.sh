@@ -14,24 +14,32 @@ if [[ "$TOOL_NAME" != "Bash" ]]; then
   exit 0
 fi
 
-# JSON 파싱: session_id, command, cwd
-eval "$(echo "$STDIN_DATA" | python -c "
+# JSON 파싱: session_id, command, cwd (eval 제거 — 값 인젝션 차단, C1 2026-06-16)
+#   python 이 3개 값을 개행 구분 출력 → mapfile 적재. 미이스케이프 SESSION_ID eval 경로 제거.
+_GQ_PY=""
+command -v python3 >/dev/null 2>&1 && _GQ_PY=python3
+[ -z "$_GQ_PY" ] && command -v python >/dev/null 2>&1 && _GQ_PY=python
+_GQ=()
+if [ -n "$_GQ_PY" ]; then
+  mapfile -t _GQ < <(printf '%s' "$STDIN_DATA" | "$_GQ_PY" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
-    sid = data.get('session_id', 'default')
-    cmd = data.get('tool_input', {}).get('command', '')
-    cwd = data.get('cwd', '.')
-    print(f'SESSION_ID=\"{sid}\"')
-    safe = cmd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"').replace('\n', ' ')
-    print(f'COMMAND=\"{safe}\"')
-    safe_cwd = cwd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    print(f'CWD=\"{safe_cwd}\"')
-except:
-    print('SESSION_ID=\"default\"')
-    print('COMMAND=\"\"')
-    print('CWD=\".\"')
-" 2>/dev/null)"
+    sid = data.get('session_id', 'default') or 'default'
+    cmd = (data.get('tool_input', {}) or {}).get('command', '') or ''
+    cwd = data.get('cwd', '.') or '.'
+except Exception:
+    sid, cmd, cwd = 'default', '', '.'
+print(sid.replace('\n', ' ').replace('\r', ' '))
+print(cmd.replace('\n', ' ').replace('\r', ' '))
+print(cwd.replace('\n', ' ').replace('\r', ' '))
+" 2>/dev/null)
+fi
+SESSION_ID="${_GQ[0]:-default}"
+COMMAND="${_GQ[1]:-}"
+CWD="${_GQ[2]:-.}"
+[ -z "$SESSION_ID" ] && SESSION_ID="default"
+[ -z "$CWD" ] && CWD="."
 
 if [ -z "$COMMAND" ]; then
   exit 0

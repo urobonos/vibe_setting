@@ -64,6 +64,13 @@ if [ "$TOOL_NAME" = "Bash" ]; then
     # step-01 공유 lib 소비 (git -C/--git-dir·개행·env·subshell·wrapper 정규화 — inline re.split 제거)
     PUSH_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" push 2>/dev/null)
   fi
+  # python 부재 시 grep 백스톱 (fail-open → fail-closed, H1 2026-06-16): 절(;/&&/||/|/&) 분리 후
+  #   첫 git 토큰이 push 인 절 차단. python 가용 시엔 git-guard.py(정확) 단독 — FP(commit 메시지 등) 회귀 0.
+  if [ -z "$HOOK_PY" ] && [ "$PUSH_DETECTED" != "1" ]; then
+    if printf '%s' "$COMMAND" | grep -qE '(^|[;&|])[[:space:]]*((sudo|env|nohup|timeout|command|exec)[[:space:]]+[^;&|]*)?git[[:space:]]+push([[:space:]]|$)'; then
+      PUSH_DETECTED="1"
+    fi
+  fi
   if [ "$PUSH_DETECTED" = "1" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=auto-push branch=$BRANCH"
     echo "[BRANCH-GUARD] 차단: 자동 원격 push 전면 금지 (현재 분기 '$BRANCH')" >&2

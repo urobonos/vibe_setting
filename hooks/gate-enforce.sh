@@ -22,29 +22,37 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 STDIN_DATA=$(cat)
 
-# 기본 필드 일괄 추출
-eval "$(echo "$STDIN_DATA" | python -c "
+# 기본 필드 일괄 추출 (eval 제거 — tool_input 값이 셸로 재해석되는 코드 인젝션 차단, C1 2026-06-16)
+#   python 이 5개 값을 개행 구분 1줄씩 출력 → mapfile 로 배열에 데이터로만 적재 (eval 경유 X).
+#   값 내 개행/CR 은 python 단에서 공백 치환 (배열 인덱스 어긋남 방지). python 부재 시 빈 배열 → 기본값.
+_GATE_PY=""
+command -v python3 >/dev/null 2>&1 && _GATE_PY=python3
+[ -z "$_GATE_PY" ] && command -v python >/dev/null 2>&1 && _GATE_PY=python
+_GF=()
+if [ -n "$_GATE_PY" ]; then
+  mapfile -t _GF < <(printf '%s' "$STDIN_DATA" | "$_GATE_PY" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
-    sid = data.get('session_id', 'default')
-    tn = data.get('tool_name', '')
-    ti = data.get('tool_input', {})
-    model = ti.get('model', '')
-    sat = ti.get('subagent_type', '')
-    iso = ti.get('isolation', '')
-    print(f'SESSION_ID=\"{sid}\"')
-    print(f'TOOL_NAME=\"{tn}\"')
-    print(f'MODEL=\"{model}\"')
-    print(f'SUBAGENT_TYPE=\"{sat}\"')
-    print(f'ISOLATION=\"{iso}\"')
-except:
-    print('SESSION_ID=\"default\"')
-    print('TOOL_NAME=\"\"')
-    print('MODEL=\"\"')
-    print('SUBAGENT_TYPE=\"\"')
-    print('ISOLATION=\"\"')
-" 2>/dev/null)"
+    ti = data.get('tool_input', {}) or {}
+    out = [
+        data.get('session_id', 'default') or 'default',
+        data.get('tool_name', '') or '',
+        ti.get('model', '') or '',
+        ti.get('subagent_type', '') or '',
+        ti.get('isolation', '') or '',
+    ]
+except Exception:
+    out = ['default', '', '', '', '']
+print('\n'.join(str(x).replace('\n', ' ').replace('\r', ' ') for x in out))
+" 2>/dev/null)
+fi
+SESSION_ID="${_GF[0]:-default}"
+TOOL_NAME="${_GF[1]:-}"
+MODEL="${_GF[2]:-}"
+SUBAGENT_TYPE="${_GF[3]:-}"
+ISOLATION="${_GF[4]:-}"
+[ -z "$SESSION_ID" ] && SESSION_ID="default"
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 

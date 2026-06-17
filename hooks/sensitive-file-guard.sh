@@ -39,6 +39,8 @@ fi
 
 # --- 이하 Edit/Write 차단 ---
 
+# trailing/leading 공백 strip (Windows 가 쓰기 시 후행 공백 strip → ".env " 우회 차단, M 2026-06-16)
+FILE="$(printf '%s' "$FILE" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 BASENAME=$(basename "$FILE")
 LOWER_BASENAME=$(echo "$BASENAME" | tr '[:upper:]' '[:lower:]')
 LOWER_FILE=$(echo "$FILE" | tr '[:upper:]' '[:lower:]' | tr '\\' '/' | sed 's|//*|/|g')
