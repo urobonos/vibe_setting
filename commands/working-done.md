@@ -1,5 +1,5 @@
 ---
-description: working/ 단일 통합 문서 → tasks/ 자동 이동 트리거 (CLAUDE.md §File Paths "working/ 단일 통합 문서" SSOT, 2026-05-12 시행)
+description: working/ 단일 통합 문서 → tasks/ 이동 + dispatch done 문서 정리 트리거 (CLAUDE.md §File Paths SSOT, 2026-05-12 시행 / dispatch 통합 2026-06-15)
 allowed-tools: Bash, Read, Glob
 argument-hint: "[작업명]  # 생략 시 working/ 전체 일괄 이동"
 ---
@@ -38,6 +38,23 @@ argument-hint: "[작업명]  # 생략 시 working/ 전체 일괄 이동"
    - `change-impact-section-check.sh` — 변경 영향 3열 표 (exit 0 경고)
    - `feasibility-section-check.sh` — 타당성 검토 + [Source:...] 인용 (exit 0 경고)
 
+## dispatch done 문서 정리 (2026-06-15 통합)
+
+본 슬래시 (UserPromptSubmit 키워드 경로) 는 working/ 이동에 이어 **DISPATCH 풀의 완료(done) 분배 문서도 함께 정리**한다.
+
+| 항목 | 동작 |
+|------|------|
+| 정리 기준 | DISPATCH.md `status=done` 행만 (orphan 문서 · claimed · available 비대상) |
+| 행 처리 | done 행을 DISPATCH.md 에서 제거 |
+| 문서 처리 | `dispatch_doc` 을 `~/.claude/docs/{product}/tasks/{today}/dispatch-archive/` 로 이동 |
+| lock 처리 | 해당 태그 claim lock (`state/dispatch/{tag}`) 정리 |
+| 본 세션 release | `session_id` 가용 시 본 sid 의 DISPATCH claim → `available` + REGISTRY entry → paused + 각 lock 제거 (`dispatch_release_session` + `registry_release_session`, 2026-06-15) |
+| race 보호 | `dispatch_purge_done` 이 **lock 안에서 추출→이동→제거 원자 처리** (다중 세션 동시 done 안전) |
+
+> **PostToolUse 경로 제외:** working 파일 저장마다 발동하는 자동 마커 경로에는 dispatch 정리를 넣지 않는다 (매 저장 시 dispatch 전체 스캔 = 과부하). 명시 `/working-done` · 키워드 트리거 (UserPromptSubmit) 에서만 동작.
+>
+> **orphan 문서 비대상:** DISPATCH.md 에 행이 없는 dispatch/ 문서는 정리하지 않는다 — `/작업분배` 가 '문서 생성 → 행 등록' 순으로 동작하므로 그 사이 순간을 오인 정리하면 신규 분배가 유실된다.
+
 ## 사용자 사전 확인 (이동 전)
 
 - [ ] working/ 문서 `## 실행` 섹션 + 변경 내역 작성 완료
@@ -59,6 +76,8 @@ argument-hint: "[작업명]  # 생략 시 working/ 전체 일괄 이동"
 | `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" | 정책 SSOT |
 | `~/.claude/skills/task-docs/SKILL.md` §"working/ 단일 통합 워크플로우" | 작성 절차 SSOT |
 | `~/.claude/hooks/working-lifecycle.sh` | 실행 본체 (PostToolUse + UserPromptSubmit 양쪽 등록) |
+| `~/.claude/hooks/lib/dispatch-utils.sh` | `dispatch_purge_done` (done 정리) + `dispatch_release_session` (본 세션 claim release) — UserPromptSubmit 경로 호출 (2026-06-15) |
+| `~/.claude/hooks/lib/registry-utils.sh` | `registry_release_session` — 본 세션 REGISTRY entry + session lock release (2026-06-15) |
 | `~/.claude/skills/task-docs/references/unified-template.md` | 양식 SSOT |
 | `~/.claude/commands/working-done.md` (본 파일) | 수동 진입점 슬래시 thin wrapper |
 

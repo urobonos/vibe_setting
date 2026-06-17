@@ -207,6 +207,7 @@
 | 작업로드 | 세션 재개 — Partial 잔존 작업 스캔 + 재진입 안내 (read-only) | `/작업로드` | ✓ | A |
 | 작업분배 | 작업 분배 — 현재 작업을 독립 청크로 분해·태깅 → DISPATCH 풀 등록 (타 세션 `/작업시작` claim 용) | `/작업분배` | ✓ | A |
 | 작업시작 | 작업 시작 — DISPATCH `#tag` 배타적 claim(lock) + 분배 문서 로드 (짝 = `/작업분배`) | `/작업시작` | ✓ | A |
+| 작업대기 | 작업 대기 — DISPATCH available 자동 폴링·claim 연속 소비 consumer 루프 (`/작업시작` 자동화 버전, `/loop` 결합 무인 소비) | `/작업대기` | ✓ | A |
 | 작업분석 | 다작업 메타분석 — Plan Complete 작업 동시진행 그룹·우선순위 도출 (자립형, 다파일 Edit = §3 승인 후) | `/작업분석` | ✓ | B |
 | 분석 | working/ §분석 채움 — 관점별/Critical~Low/우선순위 (thin wrapper) | `/분석` | ✓ | A |
 | 타당성 | docset-ref 호출 + 공식 근거 인용 ≥ 1건 (thin wrapper) | `/타당성` | ✓ | A |
@@ -223,8 +224,9 @@
 | prod-debug | 서버 우선 디버그 → 로컬 반영 (connect/verify/sync 3 모드, prd 최후 수단) | `/prod-debug` | ✓ | C |
 | 제안 | 경량 결정 권고 — 선택지+트레이드오프+추천+§3 매칭 단일 제시 (Agent spawn 0, mutation 0) | `/제안` | ✓ | A |
 | 드리프트검증 | 문서 드리프트 6단계 검증 (read-only, [DRIFT-OK]/[DRIFT-WARN]) — `/계획`·`/실행` 선행 게이트 (자립형) | `/드리프트검증` | ✓ | A |
+| 진행률갱신 | be 12모듈 git 실측 → 간트 진행률 주차별 추세(레이어1)·변경로그(레이어2) 자동 갱신 (자립형) | `/진행률갱신` | ✓ | A |
 
-**자동화 분류 카운트:** A = 30 (api-spec-audit · api-team · debate · dev-team · feature-create · feature-merge · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 작업분배 · 작업시작 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 조사 · 병렬 · 제안 · 드리프트검증 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 7 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 · 작업분석 + sns-oauth add·debug) / C = 9 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
+**자동화 분류 카운트:** A = 33 (api-spec-audit · api-team · debate · dev-team · feature-create · feature-merge · orchestration · report · security-audit · task-docs · working-done · 자동진행 · 작업저장 · 작업로드 · 작업분배 · 작업시작 · 작업대기 · 분석 · 타당성 · 계획 · 실행 · 검증 · 리뷰 · 회고 · 토론 · 조사 · 병렬 · 제안 · 드리프트검증 · 진행률갱신 + mirror-be-claude verify·sync-from-be + sns-oauth verify) / B = 8 (debug-skill · mysql8 · php8 · skill-validator · 프로세스 · 작업분석 + sns-oauth add·debug) / C = 9 (aws · bitbucket-cli · git-push · notion-cli · skill-creator · workflow-enforcer · 배포 · prod-debug + mirror-be-claude sync-from-global). **A 그룹만 `/loop` · `/schedule` 결합 권장** (SSOT = `output/guide/2026-05-13-loop-schedule-combination/`).
 > **혼합 분류 카운트 방식 (필수):** mirror-be-claude (A/C) · sns-oauth (A/B) 처럼 모드별 자동화 강도가 다른 skill 은 **각 모드별로 분리 카운트**. 행 1줄 = 1 표기 (`A (verify·sync-from-be) / C (sync-from-global)`), 카운트는 모드 단위. 표 행 단순 카운트 (skill 단일 count) 와 다름.
 
 ### 5.2 Internal Skills (자동 트리거 / 의존성용, slash 호출 없음)

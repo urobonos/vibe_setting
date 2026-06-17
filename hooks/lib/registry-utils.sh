@@ -18,10 +18,20 @@ REGISTRY_PATH="${REGISTRY_PATH:-$HOME/.claude/docs/working/REGISTRY.md}"
 REGISTRY_LOCK="${REGISTRY_LOCK:-/tmp/claude-registry.lock.d}"
 REGISTRY_LOCK_RETRIES="${REGISTRY_LOCK_RETRIES:-50}"
 REGISTRY_LOCK_SLEEP="${REGISTRY_LOCK_SLEEP:-0.1}"
+# stale lock 회수 임계 (분): 정상 lock 은 ms~초 단위 보유 → TTL 초과 = 소유 프로세스 즉사 후 미해제 orphan.
+REGISTRY_LOCK_TTL_MIN="${REGISTRY_LOCK_TTL_MIN:-2}"
 
 registry_lock_acquire() {
   local i=0
   while ! mkdir "$REGISTRY_LOCK" 2>/dev/null; do
+    # stale steal (M/§3 2026-06-16, backlog registry-lock-stale-leak): acquire 후 rmdir 전 프로세스 즉사 시
+    #   lock 영구 잔존 → 모든 CRUD 가 retry 소진 후 silent 실패(REGISTRY 동결)하던 문제 차단. mtime 기반 회수
+    #   (Git Bash kill -0 PID liveness 불확실 → dispatch-utils 의 TTL 방식과 정합). mkdir atomic 으로 회수 race 안전.
+    if [ -d "$REGISTRY_LOCK" ] && find "$REGISTRY_LOCK" -maxdepth 0 -mmin "+$REGISTRY_LOCK_TTL_MIN" 2>/dev/null | grep -q .; then
+      rmdir "$REGISTRY_LOCK" 2>/dev/null
+      echo "[registry-utils] stale lock 회수 (>${REGISTRY_LOCK_TTL_MIN}min orphan): $REGISTRY_LOCK" >&2
+      continue
+    fi
     i=$((i + 1))
     if [ "$i" -ge "$REGISTRY_LOCK_RETRIES" ]; then
       echo "[registry-utils] lock timeout: $REGISTRY_LOCK" >&2
@@ -201,4 +211,38 @@ session_lock_list_stale() {
   local stale_minutes=$((stale_hours * 60))
   [ -d "$SESSIONS_DIR" ] || return 0
   find "$SESSIONS_DIR" -name '*.lock' -type f -mmin "+$stale_minutes" 2>/dev/null
+}
+
+# 본 세션 sid 의 모든 active entry 를 status(기본 paused) 로 변경 + session lock 제거.
+# working-release.sh(Stop) 인라인 로직의 함수화 — /working-done·/작업저장 슬래시 경로
+# 에서도 본 세션 점유 entry/lock 을 일괄 release 하기 위한 재사용 진입점.
+# 각 registry_update 가 자체 lock acquire/release (slug 추출은 lock 밖). stdout = 결과 1줄.
+registry_release_session() {
+  local sid status slugs slug released=0
+  sid="$(registry_sanitize "$1")"
+  status="${2:-paused}"
+  status="$(registry_sanitize "$status")"
+  [ -z "$sid" ] && { echo "[registry-utils] release_session: sid empty"; return 1; }
+
+  registry_init_if_missing
+
+  # 본 sid 의 active entry slug 목록 (sid = $4, status = $7)
+  slugs="$(awk -F"$REGISTRY_FS" -v sid="$sid" '
+    /^\|/ && $2!="slug" && $2!~/^-+$/ && $4==sid && $7=="active" { print $2 }
+  ' "$REGISTRY_PATH" 2>/dev/null)"
+
+  if [ -z "$slugs" ]; then
+    echo "[registry-utils] release_session: 본 세션($sid) active entry 0건"
+    return 0
+  fi
+
+  while IFS= read -r slug; do
+    [ -n "$slug" ] || continue
+    registry_update "$slug" "$sid" "$status" 2>/dev/null
+    session_lock_remove "$slug" "$sid" 2>/dev/null
+    released=$((released + 1))
+  done <<< "$slugs"
+
+  echo "[registry-utils] release_session: 본 세션($sid) entry ${released}건 → $status"
+  return 0
 }

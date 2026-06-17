@@ -378,6 +378,31 @@ except:
     if [ "$moved_count" -gt 0 ] || [ "$skipped_count" -gt 0 ]; then
       echo "[working-lifecycle] 명시 키워드 트리거 — 이동 ${moved_count}건 / 스킵 ${skipped_count}건 (Partial 보존)" >&2
     fi
+
+    # dispatch done 문서 정리 (2026-06-15 — /working-done 통합)
+    #  working/ 이동과 대칭: 완료된 분배 문서를 {product}/tasks/{today}/dispatch-archive/ 로 이동.
+    #  dispatch_purge_done 이 lock 안 원자 처리 → 다중 세션 race 차단. 미가용 시 비차단 skip.
+    #  SSOT: hooks/lib/dispatch-utils.sh::dispatch_purge_done
+    if source "$(dirname "${BASH_SOURCE[0]}")/lib/dispatch-utils.sh" 2>/dev/null; then
+      purge_result="$(dispatch_purge_done 2>/dev/null)"
+      [ -n "$purge_result" ] && echo "[working-lifecycle] $purge_result" >&2
+
+      # 본 세션 점유 release (2026-06-15 — /working-done 세션 마무리 시 orphan 방지)
+      #  session_id 가용 시 본 sid 의 DISPATCH claim(available 복귀) + REGISTRY entry(paused) 를
+      #  함께 release. Stop hook(working-release.sh) 안전망과 중복이나, 슬래시 명시 시 즉시 정리.
+      WL_SID=$(echo "$STDIN_DATA" | python3 -c "
+import json,sys
+try: print(json.load(sys.stdin).get('session_id',''))
+except: print('')
+" 2>/dev/null)
+      if [ -n "$WL_SID" ]; then
+        WL_SID8="${WL_SID:0:8}"
+        rel_d="$(dispatch_release_session "$WL_SID8" 2>/dev/null)"
+        [ -n "$rel_d" ] && echo "[working-lifecycle] $rel_d" >&2
+        rel_r="$(registry_release_session "$WL_SID8" paused 2>/dev/null)"
+        [ -n "$rel_r" ] && echo "[working-lifecycle] $rel_r" >&2
+      fi
+    fi
   fi
 
   exit 0

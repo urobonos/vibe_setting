@@ -43,4 +43,11 @@ if [ -n "$ACTIVE_SLUGS" ]; then
   done <<<"$ACTIVE_SLUGS"
 fi
 
+# DISPATCH 본 세션 claim 태그 release (2026-06-15 — orphan claim 원천 차단)
+#  기존 working-release 는 REGISTRY/session-lock 만 정리하고 DISPATCH claim 은 잔존시켜
+#  세션 종료 후 orphan claim/lock 을 유발했다(다중 세션 race 의 근본 원인). dispatch_release_session
+#  으로 본 sid claim 태그를 available 복귀 + dispatch lock 정리. ACTIVE_SLUGS 유무와 무관하게 실행.
+source "$(dirname "${BASH_SOURCE[0]}")/lib/dispatch-utils.sh" 2>/dev/null \
+  && dispatch_release_session "$SID8" >/dev/null 2>&1
+
 exit 0
