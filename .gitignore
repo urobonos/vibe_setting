@@ -27,6 +27,8 @@ history.jsonl
 settings.json
 settings.json.bak-*
 .last-cleanup
+.last-update-result.json
+daemon/
 
 # Monitoring & task data
 monitoring/
@@ -56,6 +58,7 @@ skills/.workspace/
 stats-cache.json
 mcp-needs-auth-cache.json
 .claude/worktrees/
+worktrees/
 
 # Hook runtime logs
 *.log
