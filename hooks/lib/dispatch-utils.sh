@@ -378,3 +378,53 @@ dispatch_release_session() {
   echo "[dispatch-utils] release_session: 본 세션($sid) claim ${released}건 → available"
   return 0
 }
+
+# 특정 태그 1건 폐기(discard) — done(완료)과 구분. 진행 안 하기로 한 작업을 풀에서 제거.
+#   DISPATCH 행 삭제 + dispatch_doc 을 {product}/tasks/{today}/dispatch-archive/discarded/ 이동
+#   (폐기 사유 주석 append) + claim lock 정리. done 마킹을 안 쓰는 이유 = 진행률 0% 작업을
+#   "완료"로 오기록하면 진척 통계가 오염되기 때문 (폐기 ≠ 완료).
+# race-safe: 추출→이동→행삭제를 한 lock 구간 원자 처리 (dispatch_purge_done 과 동일 패턴).
+# stdout = 결과 1줄. return 0 정상 / 1 lock 실패 / 2 태그 없음.
+dispatch_discard() {
+  local tag reason today line product doc archive_dir
+  tag="$(dispatch_tag_sanitize "$1")"
+  reason="$(dispatch_sanitize "$2")"
+  today="$(date +%Y%m%d)"
+  [ -z "$tag" ] && { echo "[dispatch-utils] discard: tag empty" >&2; return 1; }
+
+  dispatch_init_if_missing
+  dispatch_lock_acquire || { echo "[dispatch-utils] discard: lock timeout" >&2; return 1; }
+
+  line="$(awk -v t="$tag" -F"$DISPATCH_FS" '
+    /^\|/ && $2!="tag" && $2!~/^-+$/ && $2==t { print; exit }
+  ' "$DISPATCH_PATH" 2>/dev/null)"
+  if [ -z "$line" ]; then
+    dispatch_lock_release
+    echo "[dispatch-utils] discard: tag '$tag' 없음 (이미 제거/미존재)"
+    return 2
+  fi
+  product="$(echo "$line" | awk -F"$DISPATCH_FS" '{print $4}')"
+  doc="$(echo "$line" | awk -F"$DISPATCH_FS" '{print $9}')"
+
+  # 1) 문서 폐기 보관 이동 + 사유 주석 append
+  if [ -n "$doc" ] && [ -f "$doc" ]; then
+    archive_dir="$HOME/.claude/docs/$product/tasks/$today/dispatch-archive/discarded"
+    mkdir -p "$archive_dir" 2>/dev/null
+    printf '\n---\n> **폐기(discarded) %s** — 사유: %s\n' "$(date +'%Y-%m-%d %H:%M')" "$reason" >>"$doc"
+    mv "$doc" "$archive_dir/" 2>/dev/null
+  fi
+  # 2) claim lock 정리
+  if [ -d "$DISPATCH_CLAIMS_DIR/$tag" ]; then
+    find "$DISPATCH_CLAIMS_DIR/$tag" -maxdepth 1 -name '*.lock' -type f -delete 2>/dev/null
+    rmdir "$DISPATCH_CLAIMS_DIR/$tag" 2>/dev/null || true
+  fi
+  # 3) DISPATCH 행 제거 (동일 lock 구간)
+  awk -v t="$tag" -F"$DISPATCH_FS" '
+    /^\|/ && $2!="tag" && $2!~/^-+$/ && $2==t { next }
+    { print }
+  ' "$DISPATCH_PATH" >"$DISPATCH_PATH.tmp" && mv "$DISPATCH_PATH.tmp" "$DISPATCH_PATH"
+
+  dispatch_lock_release
+  echo "[dispatch-utils] discard: '$tag' 폐기 — 행 제거 + 문서 → dispatch-archive/discarded/ (사유: $reason)"
+  return 0
+}
