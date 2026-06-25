@@ -100,6 +100,7 @@ MUT = {'rm','mv','cp','mkdir','touch','tee','dd','truncate'}
 OPS = {'|','||','&&',';','&','(',')','|&'}   # |& = 결합 파이프(2>&1|), punctuation_chars 가 단일토큰화
 WRAP = {'sudo','xargs','command','exec','nohup','env'}   # 다음 토큰 command-position 유지
 REDIR = ('>', '>>', '&>', '&>>', '>|')       # 파일쓰기 redirect (결합형 &>/&>>/>| 포함, >& 는 fd 모호 제외)
+FDDUP = ('>&', '<&')                         # fd 복제(2>&1) — 대상도 fd, 통째 skip (결함3 잔여 fd 오인 픽스, 2026-06-11 발견)
 def out(h, ts, unres):
     print('1' if h else '0')
     if unres: print('__UNRESOLVED__')
@@ -115,6 +116,11 @@ targets = []
 for i, t in enumerate(toks):
     if skip:
         skip = False; continue
+    if t.isdigit() and i + 1 < len(toks) and (toks[i+1] in REDIR or toks[i+1] in FDDUP):
+        continue                    # fd 지정자(2>/dev/null·2>&1 의 '2') — redirect 앞 정수 = fd 번호, 경로 아님
+    if t in FDDUP:                  # fd 복제(>&) — 대상(fd 번호) 함께 skip, 파일쓰기 아님
+        if i + 1 < len(toks): skip = True
+        continue
     if t in REDIR:
         tgt = toks[i+1] if i + 1 < len(toks) else ''
         if tgt.startswith('/dev/') or tgt.startswith('&'):

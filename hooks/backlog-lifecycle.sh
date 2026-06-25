@@ -71,7 +71,7 @@ try:
     if not m:
         sys.exit(1)
     fm = m.group(1)
-    if re.search(r'^status:\s*done\s*$', fm, re.MULTILINE | re.IGNORECASE):
+    if re.search(r'^\s*status:\s*done\s*$', fm, re.MULTILINE | re.IGNORECASE):
         sys.exit(0)
     sys.exit(1)
 except Exception:
@@ -108,7 +108,7 @@ try:
     m = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
     if m:
         fm = m.group(1)
-        pm = re.search(r'^product:\s*(\S+)\s*$', fm, re.MULTILINE)
+        pm = re.search(r'^\s*product:\s*(\S+)\s*$', fm, re.MULTILINE)
         if pm:
             print(pm.group(1).strip('"\''))
             sys.exit(0)
@@ -152,7 +152,7 @@ try:
     m = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
     if m:
         fm = m.group(1)
-        if not re.search(r'^completed:', fm, re.MULTILINE):
+        if not re.search(r'^\s*completed:', fm, re.MULTILINE):
             new_fm = fm.rstrip() + f"\ncompleted: {date_str}"
             content = content.replace(m.group(0), f"---\n{new_fm}\n---\n", 1)
             with open(file_path, 'w', encoding='utf-8') as f:
