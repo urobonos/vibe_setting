@@ -2,14 +2,14 @@
 name: orchestration
 description: >
   3-Team Orchestration (Analyze→Plan→Execute) 통합 스킬. 9-Core + 3-Consultants 페르소나,
-  Effort/Model/Task Sizing, Communication Protocol, Team 상세 구조, Vibe Coding Group을 정의한다.
+  Model 통일 정책/Task Sizing, Communication Protocol, Team 상세 구조, Vibe Coding Group을 정의한다.
 triggers:
-  - "Effort 할당"
+  - "Model 할당"
   - "작업 등급"
   - "3-Team"
   - "Analyze→Plan→Execute"
   - "/orchestration"
-version: 2.1.3
+version: 2.1.4
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -30,13 +30,13 @@ min_claude_md_version: "4.0"
 
 ## 0.1. 자동 위임 트리거 (위임 default)
 
-| 작업 유형 | 진입 모드 | Effort/Model | 사유 |
-|-----------|-----------|--------------|------|
+| 작업 유형 | 진입 모드 | Model | 사유 |
+|-----------|-----------|-------|------|
 | 코드베이스 탐색 (3쿼리+) | `Explore` agent | 시스템 기본 | 메인 컨텍스트 오염 방지 |
-| 다파일 영향 분석 | Team 1 (Analyze) | Lead+멤버 페르소나별 | 다각적 검증 |
-| 다단계 구현 (M/L 등급) | 3-Team 전체 (Analyze→Plan→Execute) | Part 1 표 준수 | Worktree 격리 |
-| 설계 결정 (아키텍처·스키마·API) | `Plan` agent + Architect 페르소나 | Max/opus | 근거 기반 판단 |
-| 단일 도메인 깊은 조사 | `general-purpose` agent | High/opus | 답변 1회 분리 |
+| 다파일 영향 분석 | Team 1 (Analyze) | opus | 다각적 검증 |
+| 다단계 구현 (M/L 등급) | 3-Team 전체 (Analyze→Plan→Execute) | opus 통일 (Part 1.1) | Worktree 격리 |
+| 설계 결정 (아키텍처·스키마·API) | `Plan` agent + Architect 페르소나 | opus | 근거 기반 판단 |
+| 단일 도메인 깊은 조사 | `general-purpose` agent | opus | 답변 1회 분리 |
 | API 추가·엔드포인트 디버깅 | `api-team` 스킬 (FE/BE/인프라 3-멤버) | api-team SSOT | 풀스택 병렬 |
 | 의견 갈림·트레이드오프 | `debate` 스킬 | debate SSOT | 다관점 비교 |
 | 보안 검토·OWASP 매핑 | `security-audit` 스킬 | security-audit SSOT | 전문 도메인 분리 |
@@ -85,18 +85,18 @@ Lead 가 사용자에게 보고할 때 **결론 + 표/diff 위주**로 압축한
 
 # Part 1. Agent Configuration
 
-## 1.1. Reasoning Effort 할당
+## 1.1. Model 할당 정책
 
-| Effort | Model | 용도 |
-|--------|-------|------|
-| **Max** | `opus` | 깊은 추론·정확성 필수 (구현, 설계, 보안, 분석, 토론) |
-| **High** | `opus` | 전문 도메인 검증, 범위 한정적 |
-| **High** | `sonnet` | 패턴 매칭·검증·정보 수집, 속도/효율 우선 |
-| **Medium** | `opus` | 넓은 범위 빠른 처리 |
-| **Medium** | `sonnet` | 단순 탐색·경량 작업 |
+**기본값 = opus 통일.** 한 오케스트레이션 단위(팀) 안의 모든 멤버는 동일하게 `opus` 로 spawn 한다. Agent 도구에서 `model` 을 생략하면 부모(opus) 를 상속하므로, 기본 케이스는 별도 명시 없이 통일이 보장된다.
 
-- Agent spawn 시 `Effort`/`Model` 필수 명시. 생략은 지침 위반.
-- **Why:** Effort/Model 미명시 시 시스템 기본값으로 폴백되어 작업 난이도와 무관한 모델이 배정되며, 비용·정확성·응답 시간이 모두 통제 불능 상태가 된다.
+| 멤버 성격 | Model | 비고 |
+|----------|-------|------|
+| 추론·검증·구현·분석 (대부분) | `opus` | 기본값. 생략 시 부모(opus) 상속과 동일 |
+| 단발 조회·기계적 패턴 매칭 (경량) | `sonnet` (선택) | Lead 재량 — 추론 깊이가 결과에 영향 없을 때만 |
+
+- **팀 내 모델 통일 (핵심):** 한 팀 멤버 간 모델을 섞지 않는다. 멤버별 추론 깊이가 다르면 가설·우선순위 비교가 무의미해지기 때문이다 (`api-team` SKILL §[실행 주체] 근거 정합).
+- **effort 파라미터 없음:** Agent 도구는 `model` 만 지정한다 — reasoning effort 파라미터가 없다. effort 차등이 필요하면 Workflow `agent()` 경로에서만 가능하다.
+- **sonnet 예외는 강제 아님:** 경량 멤버에 sonnet 을 쓸지는 Lead 판단. 정확성 우선이면 opus 유지가 안전한 기본값이다.
 - Explore 에이전트는 `subagent_type: "Explore"` 사용, 시스템 기본값.
 - **현재 기준 모델 (2026-06 기준):** `opus` = Opus 4.8 (1M context, knowledge cutoff 2026-01), `sonnet` = Sonnet 4.6, `haiku` = Haiku 4.5. 모델군이 교체되면 본 항목을 갱신한다.
 
@@ -185,7 +185,7 @@ Team Lead로 spawn되는 에이전트의 prompt에 주입:
 | **병렬/순차 판단** | Lead가 멤버 간 의존관계를 분석하여 병렬/순차를 자율 결정한다. 기본은 병렬 우선. |
 | **페르소나 주입** | 각 멤버 spawn prompt에 Part 2의 해당 페르소나 + Checklist를 포함한다. |
 | **결과 종합** | 모든 멤버 반환 후 Lead가 종합. 멤버의 raw 결과를 요약하여 Orchestrator에 전달한다. |
-| **Effort/Model 할당** | Lead가 각 멤버의 Effort/Model을 Part 1 기준에 따라 결정한다. |
+| **Model 할당** | 기본 opus 통일 (Part 1.1). 경량 멤버 sonnet 은 Lead 재량. |
 
 **Why:** Lead가 멤버 결과를 raw 그대로 패스하면 Orchestrator가 다시 종합해야 해 2-depth 위계가 무너지고, 종합 책임이 분산되어 후행 팀이 어떤 결론을 신뢰해야 할지 판단할 수 없게 된다.
 
@@ -230,15 +230,15 @@ Input/Output Protocol, Status 코드, Decision Request 형식 상세는 [`refere
 **권한:** Read-only (`Read`, `Grep`, `Glob` 만 허용)
 
 ```
-Orchestrator → Analyst Lead spawn (Max/opus)
+Orchestrator → Analyst Lead spawn (opus)
   Analyst Lead 내부:
-    ├── Architect (High/opus)    ─── 아키텍처 정합성, 기존 패턴 위반
-    ├── Security (High/opus)     ─── 보안 위험, 인증/인가 영향
-    ├── Reviewer (High/sonnet)   ─── 코드 품질, 기술부채
-    ├── Tester (High/sonnet)     ─── 엣지케이스, 테스트 가능성
-    ├── Performance (High/sonnet)─── N+1, 병목, 캐시 전략
-    ├── Data (High/sonnet)       ─── 스키마 영향, 데이터 무결성
-    ├── Ops (High/sonnet)        ─── 배포 영향, 운영 안정성 (L등급)
+    ├── Architect (opus)    ─── 아키텍처 정합성, 기존 패턴 위반
+    ├── Security (opus)     ─── 보안 위험, 인증/인가 영향
+    ├── Reviewer (opus)     ─── 코드 품질, 기술부채
+    ├── Tester (opus)       ─── 엣지케이스, 테스트 가능성
+    ├── Performance (opus)  ─── N+1, 병목, 캐시 전략
+    ├── Data (opus)         ─── 스키마 영향, 데이터 무결성
+    ├── Ops (opus)          ─── 배포 영향, 운영 안정성 (L등급)
     │
     ├── [트레이드오프 감지 시]
     │   └── Pragmatist + Visionary + Innovator 추가 spawn
@@ -267,11 +267,11 @@ Orchestrator → Analyst Lead spawn (Max/opus)
 **권한:** Read-only
 
 ```
-Orchestrator → Analyst Lead spawn (Max/opus, Context_Path: analyze.md 경로)
+Orchestrator → Analyst Lead spawn (opus, Context_Path: analyze.md 경로)
   Analyst Lead 내부:
-    ├── Architect (Max/opus)     ─── Blueprint, 디렉토리/클래스/메서드 구조
-    ├── Worker (High/opus)       ─── 구현 실현 가능성, 작업량 추정
-    ├── Security (High/sonnet)   ─── 보안 요구사항 반영 여부
+    ├── Architect (opus)     ─── Blueprint, 디렉토리/클래스/메서드 구조
+    ├── Worker (opus)        ─── 구현 실현 가능성, 작업량 추정
+    ├── Security (opus)      ─── 보안 요구사항 반영 여부
     │
     ├── [트레이드오프 감지 시]
     │   └── Pragmatist + Visionary + Innovator 추가 spawn
@@ -324,14 +324,14 @@ Team 3의 Worker Lead는 반드시 `isolation: "worktree"`로 spawn한다. workt
 - Vibe Coding Group 모드에는 적용하지 않는다 (병렬 worktree 간 merge 충돌 방지).
 
 ```
-Orchestrator → Worker Lead spawn (Max/opus, Context_Path: plan.md 경로, isolation: "worktree")
+Orchestrator → Worker Lead spawn (opus, Context_Path: plan.md 경로, isolation: "worktree")
   Worker Lead 내부 (격리된 worktree에서 작업):
-    ├── Worker 멤버 (Max/opus)   ─── 레이어별 구현 (Model/Service/Controller)
-    ├── Reviewer (High/opus)     ─── 코드 리뷰
-    ├── Tester (High/opus)       ─── 테스트 작성/실행
-    ├── Security (High/sonnet)   ─── 보안 검증 (L등급)
-    ├── Performance (High/sonnet)─── 성능 검증 (L등급)
-    ├── Ops (High/sonnet)        ─── 배포·운영 검증 (L등급)
+    ├── Worker 멤버 (opus)   ─── 레이어별 구현 (Model/Service/Controller)
+    ├── Reviewer (opus)      ─── 코드 리뷰
+    ├── Tester (opus)        ─── 테스트 작성/실행
+    ├── Security (opus)      ─── 보안 검증 (L등급)
+    ├── Performance (opus)   ─── 성능 검증 (L등급)
+    ├── Ops (opus)           ─── 배포·운영 검증 (L등급)
     │
     ├── [Feedback Loop]
     │   Critical/High 이슈 → Worker가 수정 → Reviewer/Tester 재검증 (최대 3회)
