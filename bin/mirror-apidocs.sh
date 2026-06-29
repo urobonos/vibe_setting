@@ -23,7 +23,7 @@ else
   mapfile -t files < <(cd "$BE" && find . -type f \( -name '*.md' -o -name '*.yaml' \) | sed 's|^\./||')
 fi
 
-sha() { tr -d '\r' < "$1" 2>/dev/null | sha256sum | awk '{print $1}'; }
+sha() { [ -f "$1" ] || { echo MISSING; return; }; tr -d '\r' < "$1" 2>/dev/null | sha256sum | awk '{print $1}'; }
 
 G_N=0; D_N=0
 for f in "${files[@]}"; do
