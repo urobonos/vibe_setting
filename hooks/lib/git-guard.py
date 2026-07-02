@@ -334,6 +334,14 @@ def main(argv):
         return 2
     name = argv[1]
     cmd = sys.stdin.read()
+    if name == 'all':
+        # dangerous-ops-guard 배칭용: 모든 detector 를 단일 프로세스로 판정 (python 起動 7회→1회).
+        # 출력 = 'detector=1/0' 라인들 + 'master-merge=<패턴명|0>'. 소비자는 라인 매칭으로 조회.
+        out = ['%s=%s' % (k, '1' if f(cmd) else '0') for k, f in _DETECTORS.items()]
+        mm = detect_master_merge(cmd)
+        out.append('master-merge=%s' % (mm if mm else '0'))
+        sys.stdout.write('\n'.join(out) + '\n')
+        return 0
     if name == 'master-merge':
         r = detect_master_merge(cmd)
         sys.stdout.write((r if r else '0') + '\n')

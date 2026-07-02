@@ -24,8 +24,10 @@ block_exit() {
 
 STDIN_DATA=$(cat)
 
-TOOL_NAME=$(echo "$STDIN_DATA" | grep -o '"tool_name" *: *"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/')
-FILE=$(echo "$STDIN_DATA" | grep -o '"file_path" *: *"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/')
+# JSON 추출 — bash 내장 정규식 (fork 제거: echo|grep|head|sed 8개 → 0개, grep -o|head -1 첫 매치 취득과 동일)
+TOOL_NAME=""; FILE=""
+[[ "$STDIN_DATA" =~ \"tool_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && TOOL_NAME="${BASH_REMATCH[1]}"
+[[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE="${BASH_REMATCH[1]}"
 
 # file_path가 없으면 통과
 if [ -z "$FILE" ]; then
@@ -40,10 +42,11 @@ fi
 # --- 이하 Edit/Write 차단 ---
 
 # trailing/leading 공백 strip (Windows 가 쓰기 시 후행 공백 strip → ".env " 우회 차단, M 2026-06-16)
-FILE="$(printf '%s' "$FILE" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
-BASENAME=$(basename "$FILE")
-LOWER_BASENAME=$(echo "$BASENAME" | tr '[:upper:]' '[:lower:]')
-LOWER_FILE=$(echo "$FILE" | tr '[:upper:]' '[:lower:]' | tr '\\' '/' | sed 's|//*|/|g')
+FILE="${FILE#"${FILE%%[![:space:]]*}"}"; FILE="${FILE%"${FILE##*[![:space:]]}"}"
+BASENAME="${FILE##*/}"
+LOWER_BASENAME="${BASENAME,,}"
+LOWER_FILE="${FILE,,}"; LOWER_FILE="${LOWER_FILE//\\//}"
+while [[ "$LOWER_FILE" == *//* ]]; do LOWER_FILE="${LOWER_FILE//\/\///}"; done
 
 # 프로젝트별 예외 경로는 프로젝트 로컬 .claude/hooks/ 에서 처리한다.
 # 글로벌 훅은 공통 정책만 유지 (프로젝트 특정 bypass 하드코딩 금지).

@@ -9,14 +9,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 STDIN_DATA=$(cat)
 
-FILE=$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('tool_input', {}).get('file_path', ''))
-except:
-    print('')
-" 2>/dev/null)
+# file_path 추출 — bash 내장 (python 起動 제거; .php 아니면 즉시 exit 하므로 대부분 파일에서 회피)
+FILE=""
+[[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE="${BASH_REMATCH[1]}"
 
 # PHP 파일만 검사
 if [[ "$FILE" != *.php ]]; then

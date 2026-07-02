@@ -13,30 +13,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || exit 0
 
 STDIN_DATA=$(cat)
 
-PARSED=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    if d.get('hook_event_name', '') != 'PostToolUse':
-        sys.exit(0)
-    tool = d.get('tool_name', '')
-    if tool not in ('Edit', 'Write', 'MultiEdit', 'NotebookEdit'):
-        sys.exit(0)
-    fp = d.get('tool_response', {}).get('filePath', '') if isinstance(d.get('tool_response'), dict) else ''
-    if not fp:
-        fp = d.get('tool_input', {}).get('file_path', '')
-    sid = d.get('session_id', '')
-    print(fp + '|' + sid)
-except SystemExit:
-    raise
-except:
-    pass
-" 2>/dev/null)
-
-[ -z "$PARSED" ] && exit 0
-
-FILE_PATH="${PARSED%%|*}"
-SESSION_ID="${PARSED#*|}"
+# 파싱 — bash 내장 (python 起動 제거). PostToolUse + Edit/Write 계열만 (원본 조건 보존).
+[[ "$STDIN_DATA" =~ \"hook_event_name\"[[:space:]]*:[[:space:]]*\"PostToolUse\" ]] || exit 0
+TOOL_NAME=""; [[ "$STDIN_DATA" =~ \"tool_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && TOOL_NAME="${BASH_REMATCH[1]}"
+case "$TOOL_NAME" in Edit|Write|MultiEdit|NotebookEdit) ;; *) exit 0 ;; esac
+FILE_PATH=""
+[[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE_PATH="${BASH_REMATCH[1]}"
+[ -z "$FILE_PATH" ] && [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE_PATH="${BASH_REMATCH[1]}"
+SESSION_ID=""; [[ "$STDIN_DATA" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && SESSION_ID="${BASH_REMATCH[1]}"
 
 [ -z "$FILE_PATH" ] && exit 0
 [ -z "$SESSION_ID" ] && exit 0

@@ -17,14 +17,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/registry-utils.sh" 2>/dev/null || exi
 
 STDIN_DATA=$(cat)
 
-SESSION_ID=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    print(d.get('session_id', ''))
-except:
-    print('')
-" 2>/dev/null)
+# session_id 추출 — bash 내장 (python 起動 제거)
+SESSION_ID=""
+[[ "$STDIN_DATA" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && SESSION_ID="${BASH_REMATCH[1]}"
 
 [ -z "$SESSION_ID" ] && exit 0
 

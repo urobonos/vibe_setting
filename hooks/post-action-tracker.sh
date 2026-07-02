@@ -9,42 +9,29 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 STDIN_DATA=$(cat)
 
-# 2026-05-20 F3-P3: fast-path — .md/.txt/.json/.yaml/.yml file_path 면 python eval 회피
-#   본 hook = (a) Edit/Write edit_flag 기록 + secrets 감지 (.env/.md/tests 등 제외) (b) Bash 테스트 감지
-#   secrets 감지는 L41 에서 .md 등 제외하지만 python eval 가 그 전에 실행됨 (~40ms)
-#   fast-path = stdin 직접 grep 으로 file_path 추출 후 docs 파일이면 edit_flag 만 기록 + 즉시 exit
-#   (효과: 본 세션 작업 대부분 .md = python eval 회피, 평균 ~20ms 절감)
-_QUICK_PATH=$(echo "$STDIN_DATA" | grep -o '"file_path":[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-if [ -n "$_QUICK_PATH" ] && echo "$_QUICK_PATH" | grep -qiE '\.(md|txt|json|yaml|yml)$'; then
-  _QUICK_SID=$(echo "$STDIN_DATA" | grep -o '"session_id":[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-  _QUICK_TN=$(echo "$STDIN_DATA" | grep -o '"tool_name":[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
-  if [[ "$_QUICK_TN" == "Edit" || "$_QUICK_TN" == "Write" ]] && [ -n "$_QUICK_SID" ]; then
-    touch "/tmp/claude_edit_flag_${_QUICK_SID}"
+# 파싱 — bash 내장 (기존 fast-path grep 다수 + python eval fork 제거). file_path/session_id/tool_name 은 escape 드묾.
+FILE_PATH=""; [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE_PATH="${BASH_REMATCH[1]}"
+SESSION_ID=""; [[ "$STDIN_DATA" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && SESSION_ID="${BASH_REMATCH[1]}"
+TOOL_NAME=""; [[ "$STDIN_DATA" =~ \"tool_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && TOOL_NAME="${BASH_REMATCH[1]}"
+
+# fast-path: docs 계열 파일이면 edit_flag 만 기록 후 즉시 종료 (기존 로직 보존)
+if [ -n "$FILE_PATH" ] && [[ "${FILE_PATH,,}" =~ \.(md|txt|json|yaml|yml)$ ]]; then
+  if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]] && [ -n "$SESSION_ID" ]; then
+    touch "/tmp/claude_edit_flag_${SESSION_ID}"
   fi
   exit 0
 fi
 
-eval "$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    sid = data.get('session_id', 'default')
-    ti = data.get('tool_input', {})
-    fp = ti.get('file_path', '')
-    cmd = ti.get('command', '')
-    tn = data.get('tool_name', '')
-    print(f'SESSION_ID=\"{sid}\"')
-    safe_fp = fp.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    print(f'FILE_PATH=\"{safe_fp}\"')
-    safe_cmd = cmd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"').replace('\n', ' ')
-    print(f'COMMAND=\"{safe_cmd}\"')
-    print(f'TOOL_NAME=\"{tn}\"')
-except:
-    print('SESSION_ID=\"default\"')
-    print('FILE_PATH=\"\"')
-    print('COMMAND=\"\"')
-    print('TOOL_NAME=\"\"')
-" 2>/dev/null)"
+# 비-docs: SESSION_ID 기본값 + COMMAND 추출 (escape 된 따옴표 있으면 python fallback — secrets/test 감지 정확도)
+[ -z "$SESSION_ID" ] && SESSION_ID="default"
+COMMAND=""; [[ "$STDIN_DATA" =~ \"command\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && COMMAND="${BASH_REMATCH[1]}"
+if [[ "$STDIN_DATA" == *'\"'* ]] && command -v python3 >/dev/null 2>&1; then
+  _pc=$(echo "$STDIN_DATA" | python3 -c "import json,sys
+try: print(json.load(sys.stdin).get('tool_input',{}).get('command','') or '')
+except: print('')" 2>/dev/null)
+  [ -n "$_pc" ] && COMMAND="$_pc"
+fi
+COMMAND="${COMMAND//$'\r'/}"; COMMAND="${COMMAND//$'\n'/ }"
 
 # === Edit/Write context: 수정 플래그 + 시크릿 감지 ===
 if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then

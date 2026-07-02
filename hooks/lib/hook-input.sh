@@ -69,9 +69,15 @@ hook_parse_field() {
     echo ""
     return 0
   fi
-  hook_python
-  if [ -n "$HOOK_PY" ]; then
-    result=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
+  # bash 내장 정규식 primary (fork/python 0) — 문자열 필드, 대부분 세션에서 python 起動(~367ms) 회피
+  if [[ "$STDIN_DATA" =~ \"$field\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+    result="${BASH_REMATCH[1]}"
+  fi
+  # bash 로 안 잡히면(비문자열 bool·중첩·escape) python → grep fallback
+  if [ -z "$result" ]; then
+    hook_python
+    if [ -n "$HOOK_PY" ]; then
+      result=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
@@ -85,6 +91,7 @@ try:
 except Exception:
     print('')
 " 2>/dev/null)
+    fi
   fi
   if [ -z "$result" ]; then
     result=$(echo "$STDIN_DATA" | grep -o "\"$field\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
@@ -123,9 +130,15 @@ hook_parse_command() {
   if [ -z "$STDIN_DATA" ]; then
     return 0
   fi
-  hook_python
-  if [ -n "$HOOK_PY" ]; then
-    COMMAND=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
+  # bash 내장 primary. command 는 escape 된 따옴표 가능 → STDIN 에 \" 흔적 있으면 python 재파싱(정확성 우선)
+  if [[ "$STDIN_DATA" =~ \"command\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+    COMMAND="${BASH_REMATCH[1]}"
+  fi
+  if [ -z "$COMMAND" ] || [[ "$STDIN_DATA" == *'\"'* ]]; then
+    hook_python
+    if [ -n "$HOOK_PY" ]; then
+      local _pycmd
+      _pycmd=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
@@ -134,6 +147,8 @@ try:
 except Exception:
     print('')
 " 2>/dev/null)
+      [ -n "$_pycmd" ] && COMMAND="$_pycmd"
+    fi
   fi
   if [ -z "$COMMAND" ]; then
     COMMAND=$(echo "$STDIN_DATA" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
@@ -149,9 +164,16 @@ hook_parse_file_path() {
   if [ -z "$STDIN_DATA" ]; then
     return 0
   fi
-  hook_python
-  if [ -n "$HOOK_PY" ]; then
-    FILE_PATH=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
+  # bash 내장 정규식 primary (fork/python 0) — file_path 는 escape 드묾, 대부분 python 起動 회피
+  if [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+    FILE_PATH="${BASH_REMATCH[1]}"
+  elif [[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
+    FILE_PATH="${BASH_REMATCH[1]}"
+  fi
+  if [ -z "$FILE_PATH" ]; then
+    hook_python
+    if [ -n "$HOOK_PY" ]; then
+      FILE_PATH=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
 import json, sys
 try:
     data = json.load(sys.stdin)
@@ -162,6 +184,7 @@ try:
 except Exception:
     print('')
 " 2>/dev/null)
+    fi
   fi
   if [ -z "$FILE_PATH" ]; then
     FILE_PATH=$(echo "$STDIN_DATA" | grep -o '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
@@ -180,24 +203,8 @@ hook_parse_stop_active() {
   if [ -z "$STDIN_DATA" ]; then
     return 0
   fi
-  hook_python
-  if [ -n "$HOOK_PY" ]; then
-    local result
-    result=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    val = data.get('stop_hook_active', False)
-    print('true' if val else 'false')
-except Exception:
-    print('false')
-" 2>/dev/null)
-    if [ -n "$result" ]; then
-      STOP_HOOK_ACTIVE="$result"
-    fi
-  else
-    if echo "$STDIN_DATA" | grep -q '"stop_hook_active"[[:space:]]*:[[:space:]]*true'; then
-      STOP_HOOK_ACTIVE="true"
-    fi
+  # bash 내장 primary (bool 단순 패턴 — python 불필요, 원본 fallback 도 grep 이었음)
+  if [[ "$STDIN_DATA" =~ \"stop_hook_active\"[[:space:]]*:[[:space:]]*true ]]; then
+    STOP_HOOK_ACTIVE="true"
   fi
 }

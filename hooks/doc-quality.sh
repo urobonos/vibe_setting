@@ -11,33 +11,20 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 STDIN_DATA=$(cat)
 
-eval "$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    ti = data.get('tool_input', {})
-    fp = ti.get('file_path', '')
-    sid = data.get('session_id', 'default')
-    cwd = data.get('cwd', '.')
-    safe_fp = fp.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    safe_cwd = cwd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    print(f'FILE_PATH=\"{safe_fp}\"')
-    print(f'SESSION_ID=\"{sid}\"')
-    print(f'CWD=\"{safe_cwd}\"')
-except:
-    print('FILE_PATH=\"\"')
-    print('SESSION_ID=\"default\"')
-    print('CWD=\".\"')
-" 2>/dev/null)"
+# 파싱 — bash 내장 (python eval fork 제거)
+FILE_PATH=""; [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE_PATH="${BASH_REMATCH[1]}"
 
 if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
+SESSION_ID="default"; [[ "$STDIN_DATA" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && SESSION_ID="${BASH_REMATCH[1]}"
+CWD="."; [[ "$STDIN_DATA" =~ \"cwd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && CWD="${BASH_REMATCH[1]}"
+
 # Windows 백슬래시 → 슬래시
-FILE_PATH_UNIX=$(echo "$FILE_PATH" | sed 's|\\|/|g')
-BASENAME=$(basename "$FILE_PATH_UNIX")
-LOWER_BASENAME=$(echo "$BASENAME" | tr '[:upper:]' '[:lower:]')
+FILE_PATH_UNIX="${FILE_PATH//\\//}"
+BASENAME="${FILE_PATH_UNIX##*/}"
+LOWER_BASENAME="${BASENAME,,}"
 
 # ===== 1. 문서 체크리스트 검증 — checklist-count-check.sh 로 위임 (SSOT 일원화) =====
 # 정합성 정책: 동일 검증을 doc-quality(exit 2) + checklist-count-check(exit 0) 두 hook 이 중복 수행해

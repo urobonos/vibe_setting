@@ -26,14 +26,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 
-HOOK_EVENT=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('hook_event_name', ''))
-except:
-    print('')
-" 2>/dev/null)
+# hook_event_name — bash 내장 (python 起動 제거)
+HOOK_EVENT=""
+[[ "$STDIN_DATA" =~ \"hook_event_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && HOOK_EVENT="${BASH_REMATCH[1]}"
 
 # ============= 헬퍼: 완료 마커 검사 =============
 # 정규식 SSOT = lib/template-patterns.sh (2026-05-13 도입, audit S-3/H-2/H-3 묶음).

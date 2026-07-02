@@ -45,14 +45,9 @@ to_win_path() {
   esac
 }
 
-HOOK_EVENT=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('hook_event_name', ''))
-except:
-    print('')
-" 2>/dev/null)
+# hook_event_name — bash 내장 (python 起動 제거)
+HOOK_EVENT=""
+[[ "$STDIN_DATA" =~ \"hook_event_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && HOOK_EVENT="${BASH_REMATCH[1]}"
 
 # ============= 헬퍼: backlog 완료 마커 검사 =============
 # frontmatter 안에서 `status: done` 매칭 (frontmatter 종료 라인 `---` 이전)
@@ -262,17 +257,10 @@ PYEOF
 
 # ============= PostToolUse 진입 =============
 if [ "$HOOK_EVENT" = "PostToolUse" ]; then
-  FILE_PATH=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    fp = data.get('tool_response', {}).get('filePath', '') if isinstance(data.get('tool_response'), dict) else ''
-    if not fp:
-        fp = data.get('tool_input', {}).get('file_path', '')
-    print(fp)
-except:
-    print('')
-" 2>/dev/null)
+  # file_path 추출 — bash 내장 (python 起動 제거). tool_response.filePath 우선.
+  FILE_PATH=""
+  [[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE_PATH="${BASH_REMATCH[1]}"
+  [ -z "$FILE_PATH" ] && [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && FILE_PATH="${BASH_REMATCH[1]}"
 
   [ -z "$FILE_PATH" ] && exit 0
 

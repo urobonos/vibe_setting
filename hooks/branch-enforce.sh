@@ -60,9 +60,19 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   # H-2 wire-in point: push 검출 단일점 — 향후 PUSH_EXCEPTION_ACTIVE 정책 분기를 여기서 (현 behavior 불변)
   PUSH_DETECTED="0"
   hook_python
+  # 배칭: git detector 를 all 모드로 1회 호출 후 캐시 (push/master-merge/cherry-pick python 3회→1회).
+  GG_ALL=""
+  [ -n "$HOOK_PY" ] && GG_ALL=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" all 2>/dev/null)
+  GG_ALL="${GG_ALL//$'\r'/}"   # Windows python CRLF 제거 (라인 매칭 정확성)
+  gg() {
+    local w=$'\n'"$GG_ALL"$'\n' r
+    case "$w" in
+      *$'\n'"$1="*) r="${w##*$'\n'"$1="}"; printf '%s' "${r%%$'\n'*}" ;;
+      *) printf '0' ;;
+    esac
+  }
   if [ -n "$HOOK_PY" ]; then
-    # step-01 공유 lib 소비 (git -C/--git-dir·개행·env·subshell·wrapper 정규화 — inline re.split 제거)
-    PUSH_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" push 2>/dev/null)
+    PUSH_DETECTED=$(gg push)
   fi
   # python 부재 시 grep 백스톱 (fail-open → fail-closed, H1 2026-06-16): 절(;/&&/||/|/&) 분리 후
   #   첫 git 토큰이 push 인 절 차단. python 가용 시엔 git-guard.py(정확) 단독 — FP(commit 메시지 등) 회귀 0.
@@ -94,10 +104,9 @@ fi
 # ─────────────────────────────────────────────────────────
 if [ "$TOOL_NAME" = "Bash" ]; then
   MASTER_MERGE_DETECTED="0"
-  hook_python
+  # 배칭 GG_ALL 재사용 (push 섹션에서 1회 계산) — master-merge 값은 패턴명 또는 '0'
   if [ -n "$HOOK_PY" ]; then
-    # step-01 공유 lib 소비 (전역옵션 정규화 — git -C/--git-dir merge·checkout·switch main/master 우회 차단)
-    MASTER_MERGE_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" master-merge 2>/dev/null)
+    MASTER_MERGE_DETECTED=$(gg master-merge)
   fi
   if [ "$MASTER_MERGE_DETECTED" != "0" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-merge pattern=$MASTER_MERGE_DETECTED branch=$BRANCH"
@@ -121,10 +130,9 @@ fi
 # ─────────────────────────────────────────────────────────
 if [ "$TOOL_NAME" = "Bash" ] && { [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; }; then
   CHERRY_DETECTED="0"
-  hook_python
+  # 배칭 GG_ALL 재사용 (push 섹션에서 1회 계산)
   if [ -n "$HOOK_PY" ]; then
-    # step-01 공유 lib 소비 (전역옵션 정규화 — RECOVERY(--abort/--quit/--skip) 면제 내장)
-    CHERRY_DETECTED=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" cherry-pick 2>/dev/null)
+    CHERRY_DETECTED=$(gg cherry-pick)
   fi
   if [ "$CHERRY_DETECTED" = "1" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-cherry-pick branch=$BRANCH"

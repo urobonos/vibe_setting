@@ -7,19 +7,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 input=$(cat)
 
 # 파일 경로 추출 (PostToolUse: tool_response.filePath 우선, fallback tool_input.file_path)
-file_path=$(echo "$input" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-fp = data.get('tool_response', {}).get('filePath', '') if isinstance(data.get('tool_response'), dict) else ''
-if not fp:
-    fp = data.get('tool_input', {}).get('file_path', '')
-print(fp)
-" 2>/dev/null)
+# 파일 경로 추출 — bash 내장 (python 起動 제거). tool_response.filePath 우선.
+file_path=""
+[[ "$input" =~ \"filePath\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && file_path="${BASH_REMATCH[1]}"
+[ -z "$file_path" ] && [[ "$input" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && file_path="${BASH_REMATCH[1]}"
 
 # .md 파일만 검증
 [[ "$file_path" != *.md ]] && exit 0
 
-basename=$(basename "$file_path")
+basename="${file_path##*/}"
 
 # 제외 대상: 시스템/설정/요약 파일
 case "$basename" in
