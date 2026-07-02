@@ -92,3 +92,4 @@ docs-backup-*.zip
 .DS_Store
 Thumbs.db
 Desktop.ini
+custom-plugin/
