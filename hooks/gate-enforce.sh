@@ -30,6 +30,9 @@ command -v python3 >/dev/null 2>&1 && _GATE_PY=python3
 [ -z "$_GATE_PY" ] && command -v python >/dev/null 2>&1 && _GATE_PY=python
 _GF=()
 if [ -n "$_GATE_PY" ]; then
+  # 배칭: 필요한 8개 값을 python 1회로 일괄 추출.
+  #   기존엔 cwd(L73)·file_path(L89,L119)·prompt(L227) 를 지점마다 python 재기동(최대 4회) → 콜드 스타트 시 수 초 손실.
+  #   file_path 는 여기서 역슬래시→슬래시 정규화 (기존 각 지점 replace(chr(92),'/') 와 동일 동작 보존).
   mapfile -t _GF < <(printf '%s' "$STDIN_DATA" | "$_GATE_PY" -c "
 import json, sys
 try:
@@ -41,17 +44,25 @@ try:
         ti.get('model', '') or '',
         ti.get('subagent_type', '') or '',
         ti.get('isolation', '') or '',
+        data.get('cwd', '') or '',
+        (ti.get('file_path', '') or '').replace(chr(92), '/'),
+        ti.get('prompt', '') or '',
     ]
 except Exception:
-    out = ['default', '', '', '', '']
+    out = ['default', '', '', '', '', '', '', '']
 print('\n'.join(str(x).replace('\n', ' ').replace('\r', ' ') for x in out))
-" 2>/dev/null)
+" 2>/dev/null | tr -d '\r')
 fi
+# Windows python stdout 은 \n→\r\n 변환 → mapfile -t 가 줄끝 \r 잔류 → TOOL_NAME='Edit\r' 등 값 오염(gate 무력화).
+# 파이프 단계 tr -d 로 CR 제거 (bash 5.2 의 배열 ${arr[@]//$'\r'/} 치환은 CR 미제거 확인됨 — 단일 문자열용 문법이 배열엔 무효).
 SESSION_ID="${_GF[0]:-default}"
 TOOL_NAME="${_GF[1]:-}"
 MODEL="${_GF[2]:-}"
 SUBAGENT_TYPE="${_GF[3]:-}"
 ISOLATION="${_GF[4]:-}"
+CWD="${_GF[5]:-}"
+FILE_PATH="${_GF[6]:-}"
+PROMPT_TEXT="${_GF[7]:-}"
 [ -z "$SESSION_ID" ] && SESSION_ID="default"
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
@@ -70,31 +81,15 @@ CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
 #   skills/**, hooks/**, commands/**, docs/**, agents/**, agent-memory/**, lib/**
 # 외 파일(예: scripts/*.py, plugins/*.py)은 일반 gate 검증 적용 (공격면 축소).
 # Edit/Write 외 도구(Read, Bash 등)는 종전과 동일하게 즉시 면제.
-CWD=$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('cwd', ''))
-except:
-    print('')
-" 2>/dev/null)
-
+# (CWD 는 상단 배치 추출에서 이미 확보 — python 재기동 제거)
 if echo "$CWD" | grep -qE '[\\/]\.claude$'; then
   # Edit/Write 가 아니면 종전대로 면제
   if [[ "$TOOL_NAME" != "Edit" && "$TOOL_NAME" != "Write" ]]; then
     exit 0
   fi
 
-  # Edit/Write — file_path 화이트리스트 검사
-  CLAUDE_FILE_PATH=$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    fp = data.get('tool_input', {}).get('file_path', '')
-    print(fp.replace(chr(92), '/'))
-except:
-    print('')
-" 2>/dev/null)
+  # Edit/Write — file_path 화이트리스트 검사 (file_path 는 상단 배치에서 정규화 완료)
+  CLAUDE_FILE_PATH="$FILE_PATH"
 
   # 화이트리스트 매칭: 운영 영역 → 면제
   # 1) 루트 레벨 단일 파일: CLAUDE.md, MEMORY.md, settings*.json, keybindings.json
@@ -115,16 +110,7 @@ fi
 
 # --- Edit/Write Gate ---
 if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
-  # file_path 추출 + 경로 정규화 (Windows 역슬래시 → 슬래시)
-  FILE_PATH=$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    fp = data.get('tool_input', {}).get('file_path', '')
-    print(fp.replace(chr(92), '/'))
-except:
-    print('')
-" 2>/dev/null)
+  # file_path 는 상단 배치에서 추출·정규화 완료 (python 재기동 제거)
 
   # docs/specs/ — IEEE 산출물 경로 (게이트 면제)
   # 글로벌 `~/.claude/docs/{product}/specs/` 포함, 과거 프로젝트 로컬 `docs/specs/` 도 호환.
@@ -224,14 +210,7 @@ if [[ "$TOOL_NAME" == "Task" || "$TOOL_NAME" == "SubagentSpawn" ]]; then
   fi
 
   # --- Team 3 Worktree 격리 강제 ---
-  PROMPT_TEXT=$(echo "$STDIN_DATA" | python -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('tool_input', {}).get('prompt', ''))
-except:
-    print('')
-" 2>/dev/null)
+  # PROMPT_TEXT 는 상단 배치에서 추출 완료 (python 재기동 제거)
 
   # prompt에 Team 3 / Execute / Worker Lead 키워드 + isolation 미지정 → 차단
   if echo "$PROMPT_TEXT" | grep -qiE '(team\s*3|execute|worker\s*lead)'; then
