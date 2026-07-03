@@ -48,7 +48,7 @@ try:
 except Exception as e:
     print(f'# parse_error: {e}', file=sys.stderr)
     sys.exit(1)
-" 2>/dev/null)
+" 2>/dev/null | tr -d '\r')
 if [ -n "$PARSED" ]; then
   SESSION_ID=$(printf '%s\n' "$PARSED" | sed -n '1p')
   PROMPT=$(printf '%s\n' "$PARSED" | sed -n '2,$p' | tr '\n' ' ')
@@ -212,7 +212,7 @@ try:
     print(data.get('cwd', '.'))
 except:
     print('.')
-" 2>/dev/null)
+" 2>/dev/null | tr -d '\r')
     # Fallback: python3 실패 시 grep/sed
     if [ -z "$CWD" ] || [ "$CWD" = "." ]; then
       CWD_FB=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
