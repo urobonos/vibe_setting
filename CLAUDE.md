@@ -23,7 +23,7 @@
 - **Active Task Registry** (2026-05-15~): `~/.claude/docs/working/REGISTRY.md` + `state/sessions/{slug}/{sid}.lock` 다세션 가시화, 4 hook 자동 갱신(비차단). 조회 = `/작업로드`. SSOT: `hooks/lib/registry-utils.sh` + `commands/작업로드.md`.
 - **`tasks/` vs `output/`** (혼용 = 위반): `tasks/` = 코드/설정 변경(진행 중 working/ → 완료 시 자동 이동) / `output/` = 코드 변경 없는 결과물(Gate ≥ 1). 판단 = "이 프롬프트가 코드를 바꾸는가?". `specs/` = IEEE 산출물 / `api-docs/` = API 명세 (별개 경로).
 - **미러링:** api-docs 3-way = `mirror-be-claude` 스킬 단일 진입점 (자동 hook 폐기, `mirror-sanity-check.sh` drift 경고만). 외부 CLAUDE.md = `mirror-claude-md.sh` 양방향 자동 cp. SSOT = 각 스킬/hook.
-- **Notion 연동:** `notion-cli` 스킬, 사용자 명시 요청 시에만 (자동 반영 금지).
+- **Notion 연동:** `tools:cli-notion` 스킬 (custom-plugin), 사용자 명시 요청 시에만 (자동 반영 금지).
 
 ---
 
@@ -72,7 +72,7 @@
 - **Readability:** 주석 없이 읽히는 명시적 코드. 전체 단어 (fullName, index) 사용.
 - **Validation ("No Test, No Merge"):** 수정 = 테스트/실행 증빙 동반 — 강제·면제 = `git-quality-gate.sh` SSOT.
 - **Persistence (필수):** 작업 완료 시 `~/.claude/docs/{product}/tasks/history.md` + `YYYYMMDD/summary.md` 기록. 강제: `session-completeness-check.sh`.
-- **타당성 검토 (필수):** (1) 분석·사전 계획·설계 (SDD/SRS/SDP/IDD), (2) 라이브러리·프레임워크 선택, (3) 아키텍처 결정, (4) API 설계·계약 변경, (5) 보안·인증 패턴 — 예외 없이 "타당성 검토" 섹션 포함. 근거 = `docset-ref` 스킬. "통상적"·"일반적으로" 모호 표현으로 검토 대체 금지. 일반 코드 수정·버그 픽스·리팩토링·명명·주석·typo 는 본 룰 비대상.
+- **타당성 검토 (필수):** (1) 분석·사전 계획·설계 (SDD/SRS/SDP/IDD), (2) 라이브러리·프레임워크 선택, (3) 아키텍처 결정, (4) API 설계·계약 변경, (5) 보안·인증 패턴 — 예외 없이 "타당성 검토" 섹션 포함. 근거 = `tools:search-docset` 스킬 (custom-plugin). "통상적"·"일반적으로" 모호 표현으로 검토 대체 금지. 일반 코드 수정·버그 픽스·리팩토링·명명·주석·typo 는 본 룰 비대상.
 - **변경 영향 기록 (필수):** analyze/preplan 반영 시 **변경되는 사항** + **개선점** + **수행 이유** 필수 기록.
 - **결정 기록 (필수):** 사용자에게 결정을 요구해 완료되면 결정 내용(질문→선택)을 진행 중 working/ 문서 §공통 **"변경 영향 기록" 표**에 기록한다 (명시적 결정 지점만 — 단순 실행 승인 제외, 신규 섹션 신설 금지). (a) AskUserQuestion 경로 = `hooks/decision-record-reminder.sh` reminder 자동 주입 SSOT. (b) **`[AUTO-ITERATE-USER-DECISION]` sentinel 턴 = hook 합성 불가 → Claude 본체가 같은 턴에 직접 기록.** §3 매칭 결정의 명시 승인 흐름은 유지 (기록 의무 ≠ 승인 우회).
 - **산출물 유연성:** 신규 (≥ 2026-05-12) = working/ 단일 통합 1개. 한 파일 안 3 섹션 중 필요한 섹션만 채움. 기존 (< 2026-05-12) = 3종 분리 보존.

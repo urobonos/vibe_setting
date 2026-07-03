@@ -85,13 +85,10 @@
 - **`report`** `A` — 일일·주간·월간 업무 리포트 생성. tasks/ 작업 이력을 product별로 스캔해 주제별 그룹화 + 진행률 판정.
 - **`mirror-be-claude`** `A·C` — be 프로젝트 CLAUDE.md ↔ 글로벌 미러본 양방향 + api-docs 3-way(글로벌 ↔ be ↔ docs) 정합. verify(검증) / sync-from-be / sync-from-global 3모드.
 - **`git-push`** `C` — Conventional Commits(`type(scope): 제목`) 포맷 정의 + 현재 브랜치 git push 즉시 실행. 커밋 메시지 포맷의 SSOT.
-- **`bitbucket-cli`** `C` — Bitbucket Cloud REST API(curl + API 토큰). 파이프라인 / PR / 브랜치 / 커밋 조회·관리.
-- **`notion-cli`** `C` — Notion API curl 기반 CLI. 페이지 조회/생성/수정, DB 검색, 블록 조작. 사용자 명시 요청 시에만 실행(자동 반영 금지).
 - **`skill-creator`** `C` — 스킬 생성·수정·최적화의 강제 진입점. skills/ 하위 모든 파일 수정은 본 스킬 경유(skill-edit-guard.sh가 락으로 강제).
 
 ### Internal (slash 호출 없음 — 자동 트리거/의존성용)
 
-- **`docset-ref`** — Dash docset 기반 오프라인 기술 레퍼런스 검색(docSet.dsidx SQLite 인덱스 + HTML 원문 추출). `/타당성`의 공식 근거 자동 호출용.
 - **`global-context`** — HongCafe Global 다국가 서비스 컨텍스트(국가코드·Country Resolver·Feature Flag·i18n·타임존·환경 분리). 프로젝트 한정.
 - **`simplify`** — 변경 코드의 재사용성·가독성·효율성 리뷰 후 이슈 픽스. Claude Code 내장 plugin(본체 파일 없음), `/리뷰` 보조 호출.
 
