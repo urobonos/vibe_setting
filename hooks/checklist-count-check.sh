@@ -1,6 +1,5 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "checklist-count-check" "enter" "pid=$$"
 # PostToolUse:Edit|Write Hook — 체크리스트 최소 개수 검증 (G6)
 #
 # 대상:
@@ -24,10 +23,25 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #
 # 출처: task-docs §TD-4
 
+# early-exit 최적화 (2026-07-03): docs/ 경로 여부를 lib source 전 bash 내장으로 판정.
+#   본 hook 은 tasks/YYYYMMDD/ (전부 /docs/ 하위) 전용 → docs 무관 편집은 즉시 exit.
+#   lib 2개 source + normalize fork 세금을 대부분 편집에서 회피.
+STDIN_DATA=$(cat 2>/dev/null)
+_fp=""
+[[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && _fp="${BASH_REMATCH[1]}"
+[ -z "$_fp" ] && [[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && _fp="${BASH_REMATCH[1]}"
+case "$_fp" in
+  *docs*) ;;
+  "") ;;          # file_path 추출 실패(드묾) → early-exit 하지 않고 lib 재파싱에 위임 (원본 견고성 보존)
+  *) exit 0 ;;
+esac
+
+# docs 포함/미상 (드문 경로) → lib source + telemetry + 정밀 판정
+source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "checklist-count-check" "enter" "pid=$$"
 source "$(dirname "$0")/lib/hook-input.sh"
 source "$(dirname "$0")/lib/path-utils.sh"
-hook_read_stdin
-hook_parse_file_path
+# 추출 성공분은 재사용, 실패분만 python fallback 포함 lib 로 재파싱
+[ -n "$_fp" ] && FILE_PATH="$_fp" || hook_parse_file_path
 # Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT)
 FILE_PATH=$(normalize_path "$FILE_PATH")
 
