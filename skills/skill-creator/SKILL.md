@@ -220,7 +220,7 @@ Full guidance in `references/claude-ai-cowork.md`.
 - **depends_on 방향성:** A 가 B 의 출력/SSOT/산출물을 소비할 때만 `A.depends_on = [B]` **단방향** 명시. 양방향(A↔B)·순환(A→B→C→A) 금지. 의존 = 정적 참조 (동적 호출은 워크플로우).
 - **version 컨벤션 (semver):** **Major** = 진입점·메인 모드·triggers 의미 변경 / **Minor** = 새 모드·trigger 추가 / **Patch** = 양식 보강·버그 픽스. 신규 스킬 = `1.0.0`. 역소급 면제 — 도입 이전 version 값 보존.
 - **min_claude_md_version:** CLAUDE.md 메이저 업그레이드 시 일괄 갱신 금지 — 영향받는 스킬만 개별 갱신, 기본 = 기존 값 유지.
-- **dual entry slash:** 동일 진입점 한·영 병행 신설 = SSOT 분기 위험으로 비추천 (외부 docs 참조·타 skill 호환 사유 있을 때만 허용). 기존 허용분 = `/토론` ↔ `/debate` — 양쪽 §5.1 표 + `commands/토론.md` 에 "동일 (영문 슬래시 호환)" 명문 동기화 필수.
+- **dual entry slash:** 동일 진입점 한·영 병행 신설 = SSOT 분기 위험으로 비추천 (외부 docs 참조·타 skill 호환 사유 있을 때만 허용). 과거 허용분 `/토론` ↔ `/debate` 는 `/taskflow:debate` 단일 진입점으로 통합됨 (2026-07-06 taskflow 흡수) — dual entry 현재 0건.
 
 ## Reference files
 

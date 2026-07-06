@@ -128,14 +128,14 @@
 
 ## Step 분해 (순차 실행 단위)
 
-> WBS 를 step-01~nn 순차 실행 단위로 분해. 각 step 을 working/ 직속 평면 파일 `{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` (DEPTH=1, `output-naming-check.sh` 통과) 로 생성하고 아래 인덱스 표로 추적한다. 양식·파일 골격 SSOT = `commands/계획.md §"step 파일 양식"`. (S = 생략 가능 / M·L = 작업이 순차 단위로 나뉠 때 가치)
+> WBS 를 step-01~nn 순차 실행 단위로 분해. 각 step 을 working/ 직속 평면 파일 `{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` (DEPTH=1, `output-naming-check.sh` 통과) 로 생성하고 아래 인덱스 표로 추적한다. 양식·파일 골격 SSOT = `custom-plugin/taskflow/commands/plan.md §"step 파일 양식"`. (S = 생략 가능 / M·L = 작업이 순차 단위로 나뉠 때 가치)
 
 | step | 제목 | step 파일 | 의존 | 완료 기준(DoD) | 상태 |
 |------|------|----------|------|---------------|------|
 | 01 | {제목} | `...-step-01-{slug}.md` | - | {DoD} | Pending |
 | 02 | {제목} | `...-step-02-{slug}.md` | 01 | {DoD} | Pending |
 
-> `/실행` 이 이 인덱스를 step-01 부터 의존 순서대로 순차 소비하며 상태를 `Pending → In Progress → Done` 으로 갱신한다. §3 매칭 step 은 `Pending(승인 대기)` 로 표기하고 `/실행` 진입 전 사용자 명시 승인을 받는다.
+> `/taskflow:execute` 이 이 인덱스를 step-01 부터 의존 순서대로 순차 소비하며 상태를 `Pending → In Progress → Done` 으로 갱신한다. §3 매칭 step 은 `Pending(승인 대기)` 로 표기하고 `/taskflow:execute` 진입 전 사용자 명시 승인을 받는다.
 
 ## 실행 계획
 - **Team 3 구성:** {Worker Lead + 멤버 목록 — 등급별 plan-template.md §등급별 플랜 구성 참조}
@@ -234,7 +234,7 @@
 
 ---
 
-# § 타당성 검토 (Feasibility — 선택, /타당성 진입 시)
+# § 타당성 검토 (Feasibility — 선택, /taskflow:feasibility 진입 시)
 
 ## 공식 근거 인용
 | # | 권고/설계 항목 | 공식 근거 | 출처 |
@@ -246,7 +246,7 @@
 
 ---
 
-# § 검증 (Verify — 선택, /검증 진입 시)
+# § 검증 (Verify — 선택, /taskflow:verify 진입 시)
 
 ## e2e 5점 체크
 | # | 점검 항목 | 결과 (PASS/FAIL) | 근거 |
@@ -262,7 +262,7 @@
 
 ---
 
-# § 리뷰 (Review — 선택, /리뷰 진입 시)
+# § 리뷰 (Review — 선택, /taskflow:review 진입 시)
 
 ## simplify 스킬 결과
 - 코드 재사용성 / 가독성 / 효율성 리뷰 결과 요약.
@@ -270,11 +270,11 @@
 ## Self-Critique 보강
 (§ 실행 §Self-Critique 체크리스트와 동일 — 미체크 항목 채움)
 
-> 진입점: `/리뷰` (~/.claude/commands/리뷰.md) + `simplify` 스킬 보조.
+> 진입점: `/taskflow:review` (~/.claude/custom-plugin/taskflow/commands/review.md) + `simplify` 스킬 보조.
 
 ---
 
-# § 회고 (Retrospective — 선택, /회고 진입 시)
+# § 회고 (Retrospective — 선택, /taskflow:retro 진입 시)
 
 ## 본 세션 변경 내역 요약
 | # | 변경 사항 | 영향 영역 |
@@ -289,7 +289,7 @@
 - 잘된 점: {1~2줄}
 - 개선점: {1~2줄}
 
-> 진입점: `/회고` (~/.claude/commands/회고.md). CLAUDE.md §4.1 "Persistence (필수)" 정합.
+> 진입점: `/taskflow:retro` (~/.claude/custom-plugin/taskflow/commands/retro.md). CLAUDE.md §4.1 "Persistence (필수)" 정합.
 
 ---
 
@@ -444,7 +444,7 @@ Status: Done
 | 트리거 | 조건 | 발동 시점 |
 |--------|------|---------|
 | 본문 마커 자동 | `^Status:\s*Done` + `## Self-Critique` 동시 존재 | PostToolUse (Edit/Write 직후) |
-| 사용자 명시 | `/working-done` 슬래시 또는 `작업 완료` / `tasks 이동` / `done` 자연어 | UserPromptSubmit |
+| 사용자 명시 | `/taskflow:done` 슬래시 또는 `작업 완료` / `tasks 이동` / `done` 자연어 | UserPromptSubmit |
 
 ## 사후 hook 검증 (tasks/ 이동 후 1회)
 

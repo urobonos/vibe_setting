@@ -66,7 +66,7 @@ DOC_COUNT=$(find "$PRODUCT_DIR" -type f -name '*.md' 2>/dev/null | wc -l | tr -d
   echo ""
   echo "> \`~/.claude/docs/${PRODUCT}/\` 하위 전체 문서 자동 추적 인덱스 (영역 / 타이틀 / 경로 / 수정일)."
   echo "> 갱신 주체: \`doc-index-maintain.sh\` (PostToolUse). **직접 편집 금지** — docs/${PRODUCT}/ 하위 .md write 시 자동 재생성."
-  echo "> 용도: \`/분석\`·\`/계획\` 등 워크플로우의 \"참조 범위 전수 조사\" 진입점 (index 전수 스캔 → 관련 항목 선택 정독)."
+  echo "> 용도: \`/taskflow:analyze\`·\`/taskflow:plan\` 등 워크플로우의 \"참조 범위 전수 조사\" 진입점 (index 전수 스캔 → 관련 항목 선택 정독)."
   echo "> 문서 수: ${DOC_COUNT} · 마지막 갱신: ${GEN_TS}"
   echo ""
   echo "| 영역 | 타이틀 | 경로 | 수정일 |"

@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   1. PostToolUse:Edit|Write — working/ 파일 저장 직후 완료 마커 자동 감지
 #      - 마커: ^Status:\s*Done (시작 라인) + ## Self-Critique 섹션 동시 존재
 #   2. UserPromptSubmit — 사용자 명시 키워드 매칭 시 working/ 전체 스캔
-#      - 키워드: "작업 완료" / "tasks 이동" / "working 정리" / "/working-done" / "done" / "완료 저장"
+#      - 키워드: "작업 완료" / "tasks 이동" / "working 정리" / "/taskflow:done" / "done" / "완료 저장"
 #
 # 이동 절차:
 #   1. 파일명 파싱 — {yyyy-mm-dd}-{product}-{작업명}.md → date / product / 작업명 추출
@@ -115,7 +115,7 @@ move_working_to_tasks() {
   fi
 
   # [전파] 작업분석 backlink 캡처 (mv 전 — 이동되면 working_file 이 사라져 grep 불가)
-  #  Phase 4 권고 블록의 '출처: ...작업분석-*.md' 라인을 역추적 키로 사용 (commands/작업분석.md §전파)
+  #  Phase 4 권고 블록의 '출처: ...작업분석-*.md' 라인을 역추적 키로 사용 (custom-plugin/taskflow/commands/survey.md §전파)
   #  중복 제거 후 전건 보존 — 재실행 누적 시 여러 작업분석 문서를 모두 갱신 (silent cap 금지)
   local meta_docs_raw=""
   meta_docs_raw=$(grep -oE '[~/][^ `)]*작업분석[^ `)]*\.md' "$working_file" 2>/dev/null | sort -u)
@@ -231,7 +231,7 @@ PYEOF
   #  - Phase 4 backlink 가 plan 문서에 심긴 작업만 추적 (없으면 meta_doc_raw 공백 → skip)
   #  - 작업분석 문서의 | {task_name} | 행: 상태 ⏳ Plan → ✓ Done + working 링크 → tasks 링크
   #  - 직접 파일 쓰기(도구 아님) → PostToolUse 재귀 없음. 실패해도 위 이동(기존 동작)엔 무영향.
-  #  SSOT: commands/작업분석.md §전파
+  #  SSOT: custom-plugin/taskflow/commands/survey.md §전파
   if [ -n "$meta_docs_raw" ]; then
     local tasks_link_home="~/.claude/docs/${product}/tasks/${yyyymmdd}/${task_name}/${date_part}-${task_name}-unified.md"
     # python 스크립트를 임시 파일로 1회 작성 (2026-06-09 수정):
@@ -347,7 +347,7 @@ except:
 " 2>/dev/null)
 
   # 명시 키워드 매칭 (case-insensitive 일부 + Korean)
-  if echo "$PROMPT" | grep -qE '(작업[[:space:]]*완료|tasks[[:space:]]*이동|working[[:space:]]*정리|/working-done|완료[[:space:]]*저장)' \
+  if echo "$PROMPT" | grep -qE '(작업[[:space:]]*완료|tasks[[:space:]]*이동|working[[:space:]]*정리|/taskflow:done|완료[[:space:]]*저장)' \
      || echo "$PROMPT" | grep -qiE '(^|[[:space:]])done([[:space:]]|$|\.|,|!)' ; then
 
     moved_count=0
@@ -374,7 +374,7 @@ except:
       echo "[working-lifecycle] 명시 키워드 트리거 — 이동 ${moved_count}건 / 스킵 ${skipped_count}건 (Partial 보존)" >&2
     fi
 
-    # dispatch done 문서 정리 (2026-06-15 — /working-done 통합)
+    # dispatch done 문서 정리 (2026-06-15 — /taskflow:done 통합)
     #  working/ 이동과 대칭: 완료된 분배 문서를 {product}/tasks/{today}/dispatch-archive/ 로 이동.
     #  dispatch_purge_done 이 lock 안 원자 처리 → 다중 세션 race 차단. 미가용 시 비차단 skip.
     #  SSOT: hooks/lib/dispatch-utils.sh::dispatch_purge_done
@@ -382,7 +382,7 @@ except:
       purge_result="$(dispatch_purge_done 2>/dev/null)"
       [ -n "$purge_result" ] && echo "[working-lifecycle] $purge_result" >&2
 
-      # 본 세션 점유 release (2026-06-15 — /working-done 세션 마무리 시 orphan 방지)
+      # 본 세션 점유 release (2026-06-15 — /taskflow:done 세션 마무리 시 orphan 방지)
       #  session_id 가용 시 본 sid 의 DISPATCH claim(available 복귀) + REGISTRY entry(paused) 를
       #  함께 release. Stop hook(working-release.sh) 안전망과 중복이나, 슬래시 명시 시 즉시 정리.
       WL_SID=$(echo "$STDIN_DATA" | python3 -c "

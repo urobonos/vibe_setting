@@ -214,7 +214,7 @@ session_lock_list_stale() {
 }
 
 # 본 세션 sid 의 모든 active entry 를 status(기본 paused) 로 변경 + session lock 제거.
-# working-release.sh(Stop) 인라인 로직의 함수화 — /working-done·/작업저장 슬래시 경로
+# working-release.sh(Stop) 인라인 로직의 함수화 — /taskflow:done·/taskflow:save 슬래시 경로
 # 에서도 본 세션 점유 entry/lock 을 일괄 release 하기 위한 재사용 진입점.
 # 각 registry_update 가 자체 lock acquire/release (slug 추출은 lock 밖). stdout = 결과 1줄.
 registry_release_session() {

@@ -10,8 +10,6 @@ description: >
   {product}는 basename $CWD (.claude→claude-harness 예외). 규칙은 글로벌 CLAUDE.md §File Paths 참조.
   **backlog 메모리 (2026-05-13~)** = 잔여 후속·시간 트리거·사용자 결정 보류 작업은 `~/.claude/projects/C--Users-PV--claude/memory/backlog_{slug}.md` 단일 파일로 보관. frontmatter `status: done` 시 `backlog-lifecycle.sh` hook 가 `~/.claude/docs/{product}/tasks/{YYYYMMDD}/backlog/{yyyy-mm-dd}-{slug}.md` 자동 이동. SSOT = CLAUDE.md §4 "backlog 메모리 정책".
 triggers:
-  - "/plan"
-  - "/research"
   - "/task-docs"
   - "/task-docs specs"
   - "플랜 작성"
@@ -42,15 +40,15 @@ triggers:
   - "IDD 작성"
   - "STP 작성"
   - "STD 작성"
-  - "/분석"
-  - "/타당성"
-  - "/계획"
-  - "/실행"
-  - "/검증"
-  - "/리뷰"
-  - "/배포"
-  - "/회고"
-version: 5.1.0
+  - "/taskflow:analyze"
+  - "/taskflow:feasibility"
+  - "/taskflow:plan"
+  - "/taskflow:execute"
+  - "/taskflow:verify"
+  - "/taskflow:review"
+  - "/taskflow:deploy"
+  - "/taskflow:retro"
+version: 5.1.1
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -59,7 +57,7 @@ min_claude_md_version: "4.0"
 
 # Task Docs Skill
 
-> **호출 방식:** 슬래시 — `/plan` (계획 문서) / `/research` (리서치 문서) / `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물) / `/working-done` (working/ 완료 → tasks/ 이동). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `작업 시작`, `작업 완료`, `working 정리`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"working/ 단일 통합 워크플로우" 절차를 동일하게 따른다.
+> **호출 방식:** 슬래시 — `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물) / `/taskflow:done` (working/ 완료 → tasks/ 이동). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `작업 시작`, `작업 완료`, `working 정리`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"working/ 단일 통합 워크플로우" 절차를 동일하게 따른다.
 
 > **[신규 정책 2026-05-12 시행]** 코드 작업 산출물은 **단일 통합 문서 1개**로 작성·보존된다 (이전 3종 분리 정책 종료, 역소급 면제 적용).
 > - **진행 중:** `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` (글로벌 통합, product 분리 없음)
@@ -231,7 +229,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 ## working/ 단일 통합 워크플로우 (2026-05-12 시행, 필수)
 
-> **SSOT:** 본 섹션 + `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + `~/.claude/hooks/working-lifecycle.sh` (자동 이동 강제) + `~/.claude/commands/working-done.md` (수동 진입점) + `~/.claude/skills/task-docs/references/unified-template.md` (양식 SSOT).
+> **SSOT:** 본 섹션 + `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + `~/.claude/hooks/working-lifecycle.sh` (자동 이동 강제) + `~/.claude/custom-plugin/taskflow/commands/done.md` (수동 진입점) + `~/.claude/skills/task-docs/references/unified-template.md` (양식 SSOT).
 
 ### 1. 작업 시작 — working/ 단일 통합 문서 생성
 
@@ -257,7 +255,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 - 둘 다 매칭 시 즉시 이동 절차 발동
 
 **트리거 2 — 사용자 명시 키워드 (UserPromptSubmit / 슬래시):**
-- 슬래시 `/working-done` 직접 호출
+- 슬래시 `/taskflow:done` 직접 호출
 - 자연어 키워드 — `작업 완료` / `tasks 이동` / `working 정리` / `done` / `완료 저장`
 
 **이동 절차:**
@@ -308,7 +306,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 [Edit: ## 분석 채움 → ## 계획 채움 → ## 실행 채움]
     ↓
 [완료 마커: Status: Done + ## Self-Critique 작성]
-    ↓ (또는 사용자 "작업 완료" 키워드 / /working-done 호출)
+    ↓ (또는 사용자 "작업 완료" 키워드 / /taskflow:done 호출)
 [working-lifecycle.sh PostToolUse hook 자동 발동]
     ↓
 [tasks/YYYYMMDD/{작업명}/ 폴더 생성 → mv → working/ 원본 제거]
@@ -358,12 +356,12 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 
 ### 비필수 사이드이펙트 격리 판단 (코드 작업 중, CLAUDE.md §4.5)
 
-코드 작업(`/분석`·`/계획`·`/실행`·`/검증`·`/리뷰`) 중 발견한 항목을 다음 표로 판정한다.
+코드 작업(`/taskflow:analyze`·`/taskflow:plan`·`/taskflow:execute`·`/taskflow:verify`·`/taskflow:review`) 중 발견한 항목을 다음 표로 판정한다.
 
 | 조건 | 판정 |
 |------|------|
 | **① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급(부수적·경미)** — 3조건 **모두** 충족 | **backlog 에만 기록** 후 현재 작업 계속 (등급 행·step·즉시 수정 금지) |
-| 3조건 중 **하나라도 불충족** | 본 규칙 비대상 — `/분석` Critical~Low 정상 분류·처리 |
+| 3조건 중 **하나라도 불충족** | 본 규칙 비대상 — `/taskflow:analyze` Critical~Low 정상 분류·처리 |
 | **실제 버그·문제** (경미해 보여도) | **backlog 금지** — 정상 처리 (②가 안전장치) |
 | **§3 Checkpoint 매칭** | 크기·필수성 무관 사용자 보고 (본 규칙과 무관) |
 

@@ -103,9 +103,9 @@ argument-hint: "[connect|verify|sync] [env] [args]"
 
 | 슬래시 | 시점 | 범위 |
 |--------|------|------|
-| `/검증` | 로컬 코드 e2e 5점 검증 | 로컬 환경 |
+| `/taskflow:verify` | 로컬 코드 e2e 5점 검증 | 로컬 환경 |
 | **`/prod-debug verify`** | **서버 환경 e2e 5점 + 회귀 매트릭스** | **prd/stg/dev EC2** |
-| `/배포` | git push / 머지 안내 (사용자 직접) | 로컬 → 원격 |
+| `/taskflow:deploy` | git push / 머지 안내 (사용자 직접) | 로컬 → 원격 |
 | **`/prod-debug sync`** | **서버 → 로컬 반영 (역방향)** | **EC2 → 로컬 commit** |
 
 ## 자동화 분류

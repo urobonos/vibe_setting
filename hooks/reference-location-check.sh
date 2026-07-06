@@ -91,7 +91,7 @@ REF_COUNT=$(grep -oE '\[(참조|Ref):[^]]+\]' "$unix_path" | wc -l)
 REF_COUNT=${REF_COUNT:-0}
 
 # output/research/ 완화 — 조사(research) 커맨드 산출물은 자체 인용 체계(## 출처 + [N]→URL) 보유.
-# 면제가 아니라 네이티브 형식 허용 (출처 섹션 + 웹 인용 강제 유지). SSOT: commands/조사.md.
+# 면제가 아니라 네이티브 형식 허용 (출처 섹션 + 웹 인용 강제 유지). SSOT: custom-plugin/taskflow/commands/research.md.
 case "$file_path" in
     */output/research/*|*/docs/*/output/research/*)
         if [[ "$HAS_SECTION" -eq 0 ]] && grep -qE "^##[[:space:]]+.*(출처|References|참고 자료|참고자료)" "$unix_path"; then

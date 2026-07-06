@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # dispatch-utils.sh — 작업 분배 풀(DISPATCH) CRUD + 배타적 claim lib
-# SSOT: ~/.claude/commands/작업분배.md + ~/.claude/commands/작업시작.md
+# SSOT: ~/.claude/custom-plugin/taskflow/commands/dispatch.md + ~/.claude/custom-plugin/taskflow/commands/claim.md
 #
 # 사용:
 #   source "$(dirname "$0")/lib/dispatch-utils.sh"
@@ -83,8 +83,8 @@ dispatch_init_if_missing() {
     cat >"$DISPATCH_PATH" <<'EOF'
 # Dispatch Pool (작업 분배 풀)
 
-> SSOT: `/작업분배` 가 등록, `/작업시작 #tag` 가 배타적 claim 하는 분배 작업 인덱스.
-> 갱신 주체: dispatch-utils.sh (commands/작업분배.md + 작업시작.md 경유). 직접 편집 금지 (race 보호 — mkdir lock).
+> SSOT: `/taskflow:dispatch` 가 등록, `/taskflow:claim #tag` 가 배타적 claim 하는 분배 작업 인덱스.
+> 갱신 주체: dispatch-utils.sh (custom-plugin/taskflow/commands/dispatch.md + claim.md 경유). 직접 편집 금지 (race 보호 — mkdir lock).
 > 정리·release 는 lib 함수만: done 정리=dispatch_purge_done / 세션 점유 해제=dispatch_release_session. 수동 awk·mv 금지 (lock 밖 읽기 = orphan race).
 > status: available (대기) / claimed (점유 중) / done (완료)
 
@@ -334,7 +334,7 @@ dispatch_purge_done() {
 }
 
 # 본 세션 sid 가 claim 한 모든 태그를 release (available 복귀) + claim lock 정리.
-# 세션 종료(working-release.sh Stop / /working-done / /작업저장) 시 orphan claim 방지.
+# 세션 종료(working-release.sh Stop / /taskflow:done / /taskflow:save) 시 orphan claim 방지.
 # done 은 비대상 — claimed 로 남은 것 = 미완료이므로 다음·타 세션이 이어받도록 푼다.
 #   (완료분은 이미 dispatch_done 으로 빠진 상태.)
 # race-safe: lock 안에서 추출→available 갱신→lock 제거 원자. stdout = 결과 1줄. return 0/1.

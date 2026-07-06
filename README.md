@@ -40,13 +40,13 @@
 작업 사이클을 슬래시 커맨드로 명시 진입합니다 (자연어 키워드 자동 매칭 + 직접 호출 동일 동작).
 
 ```
-/분석 → /타당성 → /계획 → /실행 → /검증 → /리뷰 → /배포 → /회고
+/taskflow:analyze → /taskflow:feasibility → /taskflow:plan → /taskflow:execute → /taskflow:verify → /taskflow:review → /taskflow:deploy → /taskflow:retro
 ```
 
-- **S 등급:** `/분석` → `/실행` → `/회고`
-- **M 등급:** `/분석` → `/계획` → `/실행` → `/검증` → `/회고`
+- **S 등급:** `/taskflow:analyze` → `/taskflow:execute` → `/taskflow:retro`
+- **M 등급:** `/taskflow:analyze` → `/taskflow:plan` → `/taskflow:execute` → `/taskflow:verify` → `/taskflow:retro`
 - **L 등급:** 8단계 전체
-- 의견이 갈리면 어느 단계에서나 `/토론`(16 Agent) 또는 `/제안`(경량 단일 권고)을 끼워 호출합니다.
+- 의견이 갈리면 어느 단계에서나 `/taskflow:debate`(16 Agent) 또는 `/taskflow:suggest`(경량 단일 권고)을 끼워 호출합니다.
 
 세션 관리: `/작업저장`(마감 저장) · `/작업로드`(재개) · `/working-done`(즉시 정리).
 
@@ -59,7 +59,7 @@
 ### 오케스트레이션·팀
 
 - **`orchestration`** `A` — 3-Team(Analyze → Plan → Execute) 통합 오케스트레이션. 9-Core + 3-Consultants 페르소나, Effort/Model/Task Sizing 기준, Communication Protocol, Vibe Coding Group을 정의한다. 다단계 구현(M·L 등급)의 기본 진입점.
-- **`debate`** `A` (`/토론`) — 질문·트레이드오프·의견 갈림 시 4 에이전트팀(각 4 Agent = 총 16) 풀-병렬 spawn 토론. 각 팀원은 cold context로 독립 spawn돼 자기 관점만 발언하고 Lead가 종합한다. 토론만 수행하며 구현·커밋은 별도 워크플로우로 처리.
+- **`debate`** `A` (`/taskflow:debate`) — 질문·트레이드오프·의견 갈림 시 4 에이전트팀(각 4 Agent = 총 16) 풀-병렬 spawn 토론. 각 팀원은 cold context로 독립 spawn돼 자기 관점만 발언하고 Lead가 종합한다. 토론만 수행하며 구현·커밋은 별도 워크플로우로 처리.
 - **`dev-team`** `A` — HongCafe Global 다레포 개발 전용 팀(BE / 인프라 / 문서 / FE read-only). Lead가 task를 분석해 필요한 도메인 멤버만 1~4 spawn(api-team이 항상 3 spawn하는 것과 분리). api-team(영향분석) → dev-team(구현) handoff 패턴.
 - **`api-team`** `A` — API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석. `add` 모드는 3-레포 반영 체크리스트, `debug` 모드는 가설 우선순위. 인프라 멤버는 AWS CLI 실시간 조회(조회계 즉시, 변경계 승인).
 
@@ -90,15 +90,15 @@
 ### Internal (slash 호출 없음 — 자동 트리거/의존성용)
 
 - **`global-context`** — HongCafe Global 다국가 서비스 컨텍스트(국가코드·Country Resolver·Feature Flag·i18n·타임존·환경 분리). 프로젝트 한정.
-- **`simplify`** — 변경 코드의 재사용성·가독성·효율성 리뷰 후 이슈 픽스. Claude Code 내장 plugin(본체 파일 없음), `/리뷰` 보조 호출.
+- **`simplify`** — 변경 코드의 재사용성·가독성·효율성 리뷰 후 이슈 픽스. Claude Code 내장 plugin(본체 파일 없음), `/taskflow:review` 보조 호출.
 
 ### 한글 워크플로우 슬래시 (thin wrapper)
 
 8단계 작업 사이클을 슬래시로 명시 진입한다(자연어 키워드 자동 매칭도 동일 동작).
 
-- **8단계 사이클:** `/분석`(진단) → `/타당성`(공식 근거) → `/계획`(step 분해) → `/실행`(구현) → `/검증`(e2e 5점) → `/리뷰`(Self-Critique) → `/배포`(push 안내) → `/회고`(이력 기록)
-- **결정·조사:** `/토론`(16 Agent 토론) · `/제안`(경량 단일 권고) · `/조사`(웹 Research) · `/병렬`(Agent spawn 강제 병렬화)
-- **세션·자동화:** `/자동진행`(묶음 승인 자동 진행) · `/작업저장`(마감 저장) · `/작업로드`(재개) · `/working-done`(즉시 정리) · `/프로세스`(세션 orphan 정리)
+- **8단계 사이클:** `/taskflow:analyze`(진단) → `/taskflow:feasibility`(공식 근거) → `/taskflow:plan`(step 분해) → `/taskflow:execute`(구현) → `/taskflow:verify`(e2e 5점) → `/taskflow:review`(Self-Critique) → `/taskflow:deploy`(push 안내) → `/taskflow:retro`(이력 기록)
+- **결정·조사:** `/taskflow:debate`(16 Agent 토론) · `/taskflow:suggest`(경량 단일 권고) · `/taskflow:research`(웹 Research) · `/taskflow:parallel`(Agent spawn 강제 병렬화)
+- **세션·자동화:** `/taskflow:auto`(묶음 승인 자동 진행) · `/작업저장`(마감 저장) · `/작업로드`(재개) · `/working-done`(즉시 정리) · `/프로세스`(세션 orphan 정리)
 - **worktree 정착:** `/git:create`(신규 분기) · `/git:merge`(기존 분기 ff-only 머지) — `custom-plugin/git` 플러그인
 
 > 전체 인벤토리·자동화 등급 카운트·동기화 규칙의 SSOT 는 `CLAUDE.md` §5 "Skill & Slash Inventory" 입니다.

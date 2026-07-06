@@ -29,7 +29,7 @@ min_claude_md_version: "4.0"
 
 prd / stg / dev API 오류 발생 시 **서버 우선 디버그 → 로컬 반영** 절차 통합 진입점. CLAUDE.md §4.3 "서버 우선 디버그 → 로컬 반영 흐름" SSOT 의 실 실행 wrapper.
 
-> **[용도 한정]** 서버 우선 디버그·hotfix·검증 후 로컬 반영 전용. 로컬에서 새 기능 구현·리팩토링은 본 스킬 대상 아님 (`php8` / `api-team` / `/실행` 영역).
+> **[용도 한정]** 서버 우선 디버그·hotfix·검증 후 로컬 반영 전용. 로컬에서 새 기능 구현·리팩토링은 본 스킬 대상 아님 (`php8` / `api-team` / `/taskflow:execute` 영역).
 > **Why:** 서버 수정 후 로컬 미반영 = 다음 정상 배포 시 erasure (배포 사고). 서버 우선 = 즉시 hotfix + 검증 후 안전 반영. CloudTrail audit + 본 정책 보조 audit = AWS 측 + 사용자 측 추적 분리.
 
 > **[실행 주체]** Claude 본체 단독. SSM 변경 명령 / 서버 직접 수정 / 로컬 반영 모두 사용자 명시 승인 후 Claude 직접 실행 (aws skill §"실행 주체" 정합).
@@ -48,7 +48,7 @@ frontmatter `triggers` 매칭 시 즉시 호출. 모호한 경우 한 줄 확인
 - "SSM start-session 으로 i-12345 접속"
 
 **트리거 안 됨 (의도된 차단):**
-- "이 기능 새로 만들어줘" → `php8` / `api-team` / `/실행`
+- "이 기능 새로 만들어줘" → `php8` / `api-team` / `/taskflow:execute`
 - "로컬에서 디버그" → 일반 작업
 - "Lambda 함수 작성" → `aws` 스킬
 
@@ -124,7 +124,7 @@ frontmatter `triggers` 매칭 시 즉시 호출. 모호한 경우 한 줄 확인
 
 ### 2.3. `sync` — 서버 → 로컬 반영 (사용자 명시 승인 필수)
 
-**진입 조건:** `verify` 5점 모두 PASS + 사용자 명시 승인 (`/자동진행 sync` 또는 명시 입력).
+**진입 조건:** `verify` 5점 모두 PASS + 사용자 명시 승인 (`/taskflow:auto sync` 또는 명시 입력).
 
 **자동화 절차:**
 

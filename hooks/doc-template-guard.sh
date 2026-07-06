@@ -138,16 +138,16 @@ if [[ "$IS_OUTPUT" == "0" ]]; then
                 || missing+=("## Before/After 대조 (§4 필수, unified §실행)")
             grep -qE "^##[[:space:]]+.*(롤백|Rollback)" "$unix_path" \
                 || missing+=("## 롤백 (§4 필수, unified §실행)")
-            # /타당성·/검증·/리뷰·/회고 선택 진입 — hint 수준 (2026-05-15 신설 8 슬래시 정합)
+            # /taskflow:feasibility·/taskflow:verify·/taskflow:review·/taskflow:retro 선택 진입 — hint 수준 (2026-05-15 신설 8 슬래시 정합)
             # 선택 섹션이므로 blocking 아님, 진입 시 권장
             grep -qE "^#[[:space:]]+§[[:space:]]*타당성 검토" "$unix_path" \
-                || missing+=("# § 타당성 검토 (선택, /타당성 진입 시)")
+                || missing+=("# § 타당성 검토 (선택, /taskflow:feasibility 진입 시)")
             grep -qE "^#[[:space:]]+§[[:space:]]*검증" "$unix_path" \
-                || missing+=("# § 검증 (선택, /검증 진입 시)")
+                || missing+=("# § 검증 (선택, /taskflow:verify 진입 시)")
             grep -qE "^#[[:space:]]+§[[:space:]]*리뷰" "$unix_path" \
-                || missing+=("# § 리뷰 (선택, /리뷰 진입 시)")
+                || missing+=("# § 리뷰 (선택, /taskflow:review 진입 시)")
             grep -qE "^#[[:space:]]+§[[:space:]]*회고" "$unix_path" \
-                || missing+=("# § 회고 (선택, /회고 진입 시)")
+                || missing+=("# § 회고 (선택, /taskflow:retro 진입 시)")
             # hongcafe_global_backend 한정 — 참조 문서 검토 결과
             if echo "$file_path" | grep -q "/hongcafe_global_backend/"; then
                 grep -qE "^##[[:space:]]+.*(참조 문서 검토 결과|Reference Doc Review)" "$unix_path" \
