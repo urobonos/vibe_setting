@@ -78,7 +78,7 @@ S등급 작업은 다음 두 가지 경로 중 하나를 선택한다:
 | Gate-1 | `orchestration` 스킬 §4.1 | Team 1(Analyze) 완료 → analyze.md 보고 후 승인 대기 | "진행", "ok", "yes", "ㄱㄱ" 등 |
 | Gate-2 | `orchestration` 스킬 §4.2 | Team 2(Plan) 완료 → plan.md 보고 후 승인 대기 | 동일 |
 | Gate-3 | CLAUDE.md §3 | Checkpoint — 비가역적 작업, 광범위 영향, 요구사항 상충, 외부 연동 | 즉시 중단 + 승인 |
-| Gate-4 | `debate` 스킬 | 질문 유형 입력 → 토론 진행 여부 확인 | 사용자 확인 |
+| Gate-4 | `taskflow:debate` 스킬 | 질문 유형 입력 → 토론 진행 여부 확인 | 사용자 확인 |
 | Gate-5 | `orchestration` 스킬 §2.2 | 트레이드오프 감지 → 3-Consultants 온디맨드 소환 (팀 내부) | Lead가 판단 |
 | Gate-6 | `orchestration` 스킬 §4.3 | Team 3 Feedback Loop — Medium/Low ≥ 6건 → 추가 수정 여부 확인 | 사용자 확인 |
 | Gate-7 | `orchestration` 스킬 §4.3 | Team 3 완료 → result.md 보고 후 사용자 확인 | 사용자 확인 |

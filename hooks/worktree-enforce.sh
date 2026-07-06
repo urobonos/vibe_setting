@@ -3,7 +3,7 @@
 #
 # 정책: 모든 소스 mutation 작업은 worktree 안에서 수행되어야 한다.
 #   cwd 또는 FILE_PATH 가 worktree (`*/worktrees/*`) 가 아니고
-#   functional exemption 13건 매칭 안 됨 → exit 2 차단.
+#   functional exemption 14건 매칭 안 됨 → exit 2 차단.
 #   단, cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) 면제 — worktree 생성 자체가
 #   불가능하므로 강제 차단이 작업을 막는다 (path-pattern 면제와 별개인 state-condition 면제).
 #
@@ -28,14 +28,14 @@
 #   14. */.claude/README.md          (하니스 카탈로그 문서 — CLAUDE.md(#11) 동질, 라이브/문서 성격, 2026-07-06)
 #
 # SSOT: CLAUDE.md §4.3 "worktree 항상 강제" + 본 hook
-# 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + commands/feature-{create,merge}.md
+# 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + custom-plugin/git/commands/{create,merge}.md
 
 set -uo pipefail
 
 PAYLOAD=$(cat)
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "worktree-enforce" "enter" "pid=$$"
 
-# --- 면제 판정 단일 함수 (12 path-pattern + #10 check-ignore) ---
+# --- 면제 판정 단일 함수 (13 path-pattern + #10 check-ignore) ---
 # Edit/Write 모드와 Bash 모드 target 검사가 공유하는 단일 SSOT (v6, 2026-06-10 — 사용자 승인 오탐 픽스).
 is_exempt_path() {
   local P="$1"
@@ -186,7 +186,7 @@ out(hit, targets, unres)
     ;;
 esac
 
-# Functional exemption 13건 + #10 check-ignore — is_exempt_path 단일 SSOT (v6)
+# Functional exemption 13 path-pattern + #10 check-ignore — is_exempt_path 단일 SSOT (v6)
 if is_exempt_path "$FILE_PATH"; then exit 0; fi
 
 # git 미연동 cwd 면제 (2026-05-26): worktree 는 git 기능 — cwd 가 git work-tree 가

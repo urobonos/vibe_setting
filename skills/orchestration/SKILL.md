@@ -38,7 +38,7 @@ min_claude_md_version: "4.0"
 | 설계 결정 (아키텍처·스키마·API) | `Plan` agent + Architect 페르소나 | opus | 근거 기반 판단 |
 | 단일 도메인 깊은 조사 | `general-purpose` agent | opus | 답변 1회 분리 |
 | API 추가·엔드포인트 디버깅 | `api-team` 스킬 (FE/BE/인프라 3-멤버) | api-team SSOT | 풀스택 병렬 |
-| 의견 갈림·트레이드오프 | `debate` 스킬 | debate SSOT | 다관점 비교 |
+| 의견 갈림·트레이드오프 | `taskflow:debate` 스킬 | taskflow:debate SSOT | 다관점 비교 |
 | 보안 검토·OWASP 매핑 | `security-audit` 스킬 | security-audit SSOT | 전문 도메인 분리 |
 | 스킬 생성·수정·최적화 | `skill-creator` 스킬 | skill-creator SSOT | 강제 진입점 (CLAUDE.md §4) |
 
