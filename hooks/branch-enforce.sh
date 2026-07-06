@@ -87,7 +87,7 @@ if [ "$TOOL_NAME" = "Bash" ]; then
     echo "              명령: $COMMAND" >&2
     echo "              정책: Claude 는 Bash 도구로 git push 를 직접 호출하지 않습니다 (모든 분기 / 모든 옵션 예외 0)." >&2
     echo "              조치: 사용자가 직접 \`! git push ...\` (Bash prefix) 또는 PowerShell 셸에서 실행" >&2
-    echo "              SSOT: 글로벌 CLAUDE.md §4.3(d) \"git push 전면 금지\" + skills/git-push/SKILL.md" >&2
+    echo "              SSOT: 글로벌 CLAUDE.md §4.3(d) \"git push 전면 금지\" + custom-plugin/git/skills/push/SKILL.md" >&2
     exit 2
   fi
 fi

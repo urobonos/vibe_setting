@@ -113,7 +113,7 @@ multi-repo 4 worktree 풀운영 = 머지 4× 마찰. 권고 패턴:
 - dev-team 1회 호출 = **primary repo 1개** (task 주 도메인) 으로 worktree 1개
 - 보조 도메인 멤버 = primary worktree 안에서 read-only 분석 (다른 repo Read 도구로 참조)
 - cross-cutting 명백 시에만 별 worktree 추가 (예외)
-- 정착 = primary worktree 1개 사용자 직접 머지 (`/feature-create` 또는 `/feature-merge`)
+- 정착 = primary worktree 1개 사용자 직접 머지 (`/git:create` 또는 `/git:merge`)
 
 ---
 

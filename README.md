@@ -84,7 +84,7 @@
 - **`task-docs`** `A` — 작업 문서 생명주기(분석 → 계획 → 결과). working/ 단일 통합 문서로 진행하다 완료 시 tasks/로 자동 이동(hook). history.md / summary.md 기록, 표준 템플릿 강제.
 - **`report`** `A` — 일일·주간·월간 업무 리포트 생성. tasks/ 작업 이력을 product별로 스캔해 주제별 그룹화 + 진행률 판정.
 - **`mirror-be-claude`** `A·C` — be 프로젝트 CLAUDE.md ↔ 글로벌 미러본 양방향 + api-docs 3-way(글로벌 ↔ be ↔ docs) 정합. verify(검증) / sync-from-be / sync-from-global 3모드.
-- **`git-push`** `C` — Conventional Commits(`type(scope): 제목`) 포맷 정의 + 현재 브랜치 git push 즉시 실행. 커밋 메시지 포맷의 SSOT.
+- **`git:push`** `C` — Conventional Commits(`type(scope): 제목`) 포맷 정의 + 현재 브랜치 git push 즉시 실행. 커밋 메시지 포맷의 SSOT. (`custom-plugin/git` 플러그인)
 - **`skill-creator`** `C` — 스킬 생성·수정·최적화의 강제 진입점. skills/ 하위 모든 파일 수정은 본 스킬 경유(skill-edit-guard.sh가 락으로 강제).
 
 ### Internal (slash 호출 없음 — 자동 트리거/의존성용)
@@ -99,7 +99,7 @@
 - **8단계 사이클:** `/분석`(진단) → `/타당성`(공식 근거) → `/계획`(step 분해) → `/실행`(구현) → `/검증`(e2e 5점) → `/리뷰`(Self-Critique) → `/배포`(push 안내) → `/회고`(이력 기록)
 - **결정·조사:** `/토론`(16 Agent 토론) · `/제안`(경량 단일 권고) · `/조사`(웹 Research) · `/병렬`(Agent spawn 강제 병렬화)
 - **세션·자동화:** `/자동진행`(묶음 승인 자동 진행) · `/작업저장`(마감 저장) · `/작업로드`(재개) · `/working-done`(즉시 정리) · `/프로세스`(세션 orphan 정리)
-- **worktree 정착:** `/feature-create`(신규 분기) · `/feature-merge`(기존 분기 ff-only 머지)
+- **worktree 정착:** `/git:create`(신규 분기) · `/git:merge`(기존 분기 ff-only 머지) — `custom-plugin/git` 플러그인
 
 > 전체 인벤토리·자동화 등급 카운트·동기화 규칙의 SSOT 는 `CLAUDE.md` §5 "Skill & Slash Inventory" 입니다.
 

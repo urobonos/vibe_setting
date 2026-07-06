@@ -49,8 +49,8 @@ cat >&2 <<'EOF'
   기존 feature 수정 시: feature/X 를 base 로 worktree 분기
     git worktree add ~/.claude/worktrees/${SID}-${SLUG} feature/X
   완료 시 진입점:
-    /feature-create  (신규 feature 정착)
-    /feature-merge   (기존 feature 머지)
+    /git:create  (신규 feature 정착)
+    /git:merge   (기존 feature 머지)
   SSOT: CLAUDE.md §4.3 "worktree 항상 강제"
 EOF
 
