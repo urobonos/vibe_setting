@@ -12,9 +12,9 @@
 | 경로 | 역할 |
 |------|------|
 | `CLAUDE.md` | **헌법** — 모든 프로젝트에 적용되는 글로벌 지침 (Checkpoint·Guardrails·워크플로우·스킬 인벤토리) |
-| `skills/` | 글로벌 스킬 정의 (`{skill}/SKILL.md`) — 현재 23개 |
-| `commands/` | 슬래시 커맨드 정의 (`{name}.md`) — 현재 25개 |
-| `hooks/` | 라이프사이클 훅 (`*.sh`) — 현재 53개. Gate·Checkpoint·산출물 강제 |
+| `skills/` | 글로벌 스킬 정의 (`{skill}/SKILL.md`) — 현재 19개 |
+| `commands/` | 슬래시 커맨드 정의 (`{name}.md`) — 현재 6개 (워크플로우·git 슬래시는 `custom-plugin/` 플러그인 편입) |
+| `hooks/` | 라이프사이클 훅 (`*.sh`) — 현재 54개. Gate·Checkpoint·산출물 강제 |
 | `docs/` | 작업 산출물 통합 루트 (`{product}/tasks·output·specs`, `working/`, `indexing/`, `references/`) |
 | `agents/` | 에이전트 정의 |
 | `plugins/` | 플러그인 |
@@ -48,13 +48,13 @@
 - **L 등급:** 8단계 전체
 - 의견이 갈리면 어느 단계에서나 `/taskflow:debate`(16 Agent) 또는 `/taskflow:suggest`(경량 단일 권고)을 끼워 호출합니다.
 
-세션 관리: `/작업저장`(마감 저장) · `/작업로드`(재개) · `/working-done`(즉시 정리).
+세션 관리: `/taskflow:save`(마감 저장) · `/taskflow:load`(재개) · `/taskflow:done`(즉시 정리).
 
 ---
 
 ## 스킬 카탈로그
 
-스킬 23개(user-invocable 21 + internal 2) + plugin 1. 자동화 등급 — **A** = 완전 자동(1회 트리거로 끝까지) / **B** = 부분 자동(분석 자동, 변경 적용은 사용자 결정) / **C** = 수동 진입점(단계별 결정).
+글로벌 스킬 21개(user-invocable 19 + internal 2) + 플러그인(`git`·`taskflow`·`tools`) 스킬 9. 자동화 등급 — **A** = 완전 자동(1회 트리거로 끝까지) / **B** = 부분 자동(분석 자동, 변경 적용은 사용자 결정) / **C** = 수동 진입점(단계별 결정).
 
 ### 오케스트레이션·팀
 
@@ -82,7 +82,7 @@
 ### 산출물·문서·연동
 
 - **`task-docs`** `A` — 작업 문서 생명주기(분석 → 계획 → 결과). working/ 단일 통합 문서로 진행하다 완료 시 tasks/로 자동 이동(hook). history.md / summary.md 기록, 표준 템플릿 강제.
-- **`report`** `A` — 일일·주간·월간 업무 리포트 생성. tasks/ 작업 이력을 product별로 스캔해 주제별 그룹화 + 진행률 판정.
+- **`tools:report-work`** `A` (플러그인 · `custom-plugin/tools`) — 일일·주간·월간 업무 리포트 생성. tasks/ 작업 이력을 product별로 스캔해 주제별 그룹화 + 진행률 판정. (인사평가 `tools:report-competency`·`tools:report-kpi` 동거)
 - **`mirror-be-claude`** `A·C` — be 프로젝트 CLAUDE.md ↔ 글로벌 미러본 양방향 + api-docs 3-way(글로벌 ↔ be ↔ docs) 정합. verify(검증) / sync-from-be / sync-from-global 3모드.
 - **`git:push`** `C` — Conventional Commits(`type(scope): 제목`) 포맷 정의 + 현재 브랜치 git push 즉시 실행. 커밋 메시지 포맷의 SSOT. (`custom-plugin/git` 플러그인)
 - **`skill-creator`** `C` — 스킬 생성·수정·최적화의 강제 진입점. skills/ 하위 모든 파일 수정은 본 스킬 경유(skill-edit-guard.sh가 락으로 강제).
@@ -98,7 +98,7 @@
 
 - **8단계 사이클:** `/taskflow:analyze`(진단) → `/taskflow:feasibility`(공식 근거) → `/taskflow:plan`(step 분해) → `/taskflow:execute`(구현) → `/taskflow:verify`(e2e 5점) → `/taskflow:review`(Self-Critique) → `/taskflow:deploy`(push 안내) → `/taskflow:retro`(이력 기록)
 - **결정·조사:** `/taskflow:debate`(16 Agent 토론) · `/taskflow:suggest`(경량 단일 권고) · `/taskflow:research`(웹 Research) · `/taskflow:parallel`(Agent spawn 강제 병렬화)
-- **세션·자동화:** `/taskflow:auto`(묶음 승인 자동 진행) · `/작업저장`(마감 저장) · `/작업로드`(재개) · `/working-done`(즉시 정리) · `/프로세스`(세션 orphan 정리)
+- **세션·자동화:** `/taskflow:auto`(묶음 승인 자동 진행) · `/taskflow:save`(마감 저장) · `/taskflow:load`(재개) · `/taskflow:done`(즉시 정리) · `/taskflow:ps`(세션 orphan 정리)
 - **worktree 정착:** `/git:create`(신규 분기) · `/git:merge`(기존 분기 ff-only 머지) — `custom-plugin/git` 플러그인
 
 > 전체 인벤토리·자동화 등급 카운트·동기화 규칙의 SSOT 는 `CLAUDE.md` §5 "Skill & Slash Inventory" 입니다.
