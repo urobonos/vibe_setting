@@ -9,11 +9,21 @@ description: >
   run evals to test a skill, benchmark skill performance with variance analysis,
   or optimize a skill's description for better triggering accuracy.
 triggers:
-  - "스킬 만들기", "스킬 만들어줘", "스킬 생성"
-  - "스킬 수정", "스킬 개선", "스킬 업데이트"
-  - "스킬 평가", "skill eval", "스킬 테스트"
-  - "트리거 최적화", "description 최적화", "skill description"
-  - "스킬 패키징", "skill package", ".skill 파일"
+  - "스킬 만들기"
+  - "스킬 만들어줘"
+  - "스킬 생성"
+  - "스킬 수정"
+  - "스킬 개선"
+  - "스킬 업데이트"
+  - "스킬 평가"
+  - "skill eval"
+  - "스킬 테스트"
+  - "트리거 최적화"
+  - "description 최적화"
+  - "skill description"
+  - "스킬 패키징"
+  - "skill package"
+  - ".skill 파일"
   - "/skill-creator"
 version: 1.0.1
 user-invocable: true
