@@ -29,6 +29,16 @@ STDIN_DATA=$(cat)
 # hook_event_name — bash 내장 (python 起動 제거)
 HOOK_EVENT=""
 [[ "$STDIN_DATA" =~ \"hook_event_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && HOOK_EVENT="${BASH_REMATCH[1]}"
+# fallback (2026-07-08): hook_event_name 필드 부재/형태불일치 시 payload 필드로 이벤트 판별.
+#   근본원인 = perf 커밋(20d9c84) python→bash 전환 후 이 필드 의존 hook 만 PostToolUse 스킵.
+#   post-action-tracker(hook_event_name 미사용)는 정상 → 대조로 확정.
+if [ -z "$HOOK_EVENT" ]; then
+  if [[ "$STDIN_DATA" =~ \"tool_name\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*: ]]; then
+    HOOK_EVENT="PostToolUse"
+  elif [[ "$STDIN_DATA" =~ \"prompt\"[[:space:]]*: ]]; then
+    HOOK_EVENT="UserPromptSubmit"
+  fi
+fi
 
 # ============= 헬퍼: 완료 마커 검사 =============
 # 정규식 SSOT = lib/template-patterns.sh (2026-05-13 도입, audit S-3/H-2/H-3 묶음).
