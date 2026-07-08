@@ -189,9 +189,21 @@ esac
 # Functional exemption 13 path-pattern + #10 check-ignore — is_exempt_path 단일 SSOT (v6)
 if is_exempt_path "$FILE_PATH"; then exit 0; fi
 
+# target repo 검증 (2026-07-08, step-04): FILE_PATH 의 실제 git 소속 판정.
+#   cwd 가 repo 여도 target 이 repo 밖이면 통과 — cwd-only 과잉차단 해소 (worktree 안 파일·
+#   repo 밖 임시경로 오차단 3회 실증). 신규 디렉토리는 **존재하는 최근접 조상**으로 판정하여
+#   dirname 미존재 → repo 밖 오판 통과(우회 구멍)를 회피한다.
+_wt_tdir=$(dirname "$FILE_PATH")
+while [ ! -d "$_wt_tdir" ] && [ "$_wt_tdir" != "/" ] && [ "$_wt_tdir" != "." ] && [ -n "$_wt_tdir" ]; do
+  _wt_tdir=$(dirname "$_wt_tdir")
+done
+if [ -d "$_wt_tdir" ] && ! git -C "$_wt_tdir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  exit 0
+fi
+
 # git 미연동 cwd 면제 (2026-05-26): worktree 는 git 기능 — cwd 가 git work-tree 가
 # 아니면 worktree 생성 자체가 불가능하므로 강제 차단 시 모든 작업이 막힌다. pwd 기준 판정
-# (FILE_PATH 기준은 신규 디렉토리 dirname 미존재 → git repo 인데 면제되는 우회 구멍).
+# (신규 디렉토리 우회 구멍은 위 target 최근접 조상 판정으로 해소).
 if ! git -C "$(pwd)" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 0
 fi
