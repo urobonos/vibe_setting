@@ -33,7 +33,7 @@ except Exception:
 print(sid.replace('\n', ' ').replace('\r', ' '))
 print(cmd.replace('\n', ' ').replace('\r', ' '))
 print(cwd.replace('\n', ' ').replace('\r', ' '))
-" 2>/dev/null)
+" 2>/dev/null | tr -d '\r')
 fi
 SESSION_ID="${_GQ[0]:-default}"
 COMMAND="${_GQ[1]:-}"
