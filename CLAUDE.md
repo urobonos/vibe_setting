@@ -96,7 +96,7 @@
   - **(b) feature 분기 = 사용자 요청 시:** 신규 = `/git:create` / 기존 수정 = `/git:merge` (자동 강제 폐기). 절차 = command SSOT.
   - **(c) Functional exemption:** 목록·패턴·건수 = `worktree-enforce.sh` SSOT (차단 stderr 가 전량 출력 — 카운트는 hook 헤더가 SSOT, 본문 미기재로 drift 방지).
   - **(c-2) git 미연동 cwd 면제:** cwd ∉ git work-tree 면 면제 (pwd 기준). **§3 우선:** git repo 내 신규 디렉토리 mutation 은 면제 무관 차단. 판정 = `worktree-enforce.sh` SSOT.
-  - **(d) `git push` 전면 금지 (핵심):** 어떤 분기·시나리오·옵션(`--delete`·`--force-with-lease` 포함)에서도 Claude 자동 push 금지 — 사용자 직접만. **[기한부 예외 ~2026-07-31]** 출시 전 자동배포 한정 자율 허용, `PUSH_EXCEPTION_UNTIL=20260731` 자동 만료 → 2026-08-01 전면 금지 복귀 + 본 문구 삭제. 예외·force-push·phpunit 그린 게이트 상세 = `branch-enforce.sh` §(1) SSOT.
+  - **(d) `git push` 전면 금지 (핵심):** 어떤 분기·시나리오·옵션(`--delete`·`--force-with-lease` 포함)에서도 Claude 자동 push 금지 — 사용자 직접만. **[기한부 예외 ~2026-07-31 — 단 현재 미배선]** 출시 전 자동배포 예외는 `PUSH_EXCEPTION_ACTIVE` 계산만 존재(`branch-enforce.sh` L45-49)하고 **차단 분기(L84)가 미참조 = push 항상 차단**(2026-07-08 실측, fail-closed). 자동배포 실현 시 L84 wire-in + 사용자 §3 명시 결정 필요. force-push·phpunit 게이트 = `branch-enforce.sh` §(1) SSOT.
   - **(e) master/main 머지·체크아웃·switch 절대 금지 (핵심):** 8 target ref + chained 우회 모두 Claude 자동 호출 금지 — 사용자 직접만. ref 목록·패턴 = `git-guard.py` `MASTER_TARGETS` + `branch-enforce.sh` §(1.5) SSOT.
   - **(f) worktree 정착 = Claude 자동:** ff머지 / cherry-pick fallback / worktree remove / `branch -D wip/*` 자동 수행. **단 master/main 머지·checkout·switch·cherry-pick 은 정착에서도 차단 — source = main/master 면 정착 금지 (PR 절차로 대체, 핵심).** 절차·면제 경계 = `custom-plugin/git/commands/{create,merge}.md` + `branch-enforce.sh` §(1.5)(1.6) SSOT.
   - **산출물 SSOT:** `tasks/20260520/worktree-always-policy/` + `output/guide/2026-04-30-branch-workflow/`. Why = hook 헤더 참조.
