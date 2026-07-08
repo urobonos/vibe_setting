@@ -56,12 +56,8 @@
 
 ## 4. Guardrails & Quality
 
-> **카테고리 인덱스:**
-> - **§4.1 코드 품질·산출물:** 장기 관점 / Proactive Correction / Readability / Validation / Persistence / 타당성 검토 / 변경 영향 기록 / 산출물 유연성 / Before-After 대조 / 롤백 / 세션 내 commit 수정 / Co-Authored-By 금지
-> - **§4.2 실행·위임·자동화:** 에이전트 우선 위임 / 실행 책임 / Hook 차단 자가 복구 / Hook 우회 금지 / audit 자동 수정 금지
-> - **§4.3 게이트·워크플로우:** 묶음 승인 Fast-Track / output Gate-0 / 브랜치·worktree·push·머지 통합 정책 / skill-creator 진입점 / 로컬 수정 사전 승인 / e2e 검증 / 단계별 슬래시 워크플로우 (8 단계 + 토론)
-> - **§4.4 응답 형식 + 자동 위임:** 응답 톤 / 응답 간결 / 답변 깊이 / 자동 위임 정책 (Echo-Back / 우선순위 / 4축 자동화) / 경로 안내 형식
-> - **§4.5 산출물 생명주기:** working/ 자동 이동 / backlog 메모리 정책
+> **카테고리 인덱스** (세부 룰 = 각 §4.x 본문 헤더가 SSOT — 룰 추가·삭제 시 본 인덱스 갱신 불요, drift 방지):
+> - **§4.1** 코드 품질·산출물 · **§4.2** 실행·위임·자동화 · **§4.3** 게이트·워크플로우 · **§4.4** 응답 형식 + 자동 위임 · **§4.5** 산출물 생명주기
 >
 > **역소급 면제 (필수):** 신규/강화 강제 룰은 도입 이전 산출물에 역소급 적용하지 않는다. 시점 단락 SSOT = `~/.claude/docs/claude-harness/changelog.md`. **검증 hook (`verify-e2e-check.sh` 2026-05-15 도입 / `feasibility-section-check.sh` / `checklist-count-check.sh` 등) = 신규 산출물 전용, 도입 이전 working/·tasks/ 에 역소급 적용 안 함.**
 
@@ -98,7 +94,7 @@
 - **브랜치·worktree·push·머지 통합 정책 (필수):** 핵심 안전 선언만 본문, 면제·시나리오·8ref·절차·Why = hook/command SSOT 위임 (3 hook 모두 PreToolUse exit 2 + stderr 전량 출력). SSOT = `hooks/{worktree-enforce,branch-enforce}.sh` + `hooks/lib/git-guard.py` + `custom-plugin/git/commands/{create,merge}.md` + `custom-plugin/git/skills/push/SKILL.md`.
   - **(a) worktree 항상 강제:** 모든 소스 mutation = worktree 안 (claude-harness 포함 전 영역). 위반 차단·worktree add 안내 = `worktree-enforce.sh` (exit 2 stderr) SSOT.
   - **(b) feature 분기 = 사용자 요청 시:** 신규 = `/git:create` / 기존 수정 = `/git:merge` (자동 강제 폐기). 절차 = command SSOT.
-  - **(c) Functional exemption 12건:** 목록·패턴 = `worktree-enforce.sh` SSOT (차단 stderr 가 12건 전량 출력).
+  - **(c) Functional exemption:** 목록·패턴·건수 = `worktree-enforce.sh` SSOT (차단 stderr 가 전량 출력 — 카운트는 hook 헤더가 SSOT, 본문 미기재로 drift 방지).
   - **(c-2) git 미연동 cwd 면제:** cwd ∉ git work-tree 면 면제 (pwd 기준). **§3 우선:** git repo 내 신규 디렉토리 mutation 은 면제 무관 차단. 판정 = `worktree-enforce.sh` SSOT.
   - **(d) `git push` 전면 금지 (핵심):** 어떤 분기·시나리오·옵션(`--delete`·`--force-with-lease` 포함)에서도 Claude 자동 push 금지 — 사용자 직접만. **[기한부 예외 ~2026-07-31]** 출시 전 자동배포 한정 자율 허용, `PUSH_EXCEPTION_UNTIL=20260731` 자동 만료 → 2026-08-01 전면 금지 복귀 + 본 문구 삭제. 예외·force-push·phpunit 그린 게이트 상세 = `branch-enforce.sh` §(1) SSOT.
   - **(e) master/main 머지·체크아웃·switch 절대 금지 (핵심):** 8 target ref + chained 우회 모두 Claude 자동 호출 금지 — 사용자 직접만. ref 목록·패턴 = `git-guard.py` `MASTER_TARGETS` + `branch-enforce.sh` §(1.5) SSOT.
@@ -123,7 +119,7 @@
 - **응답 간결 (Concise Reporting, 필수):** **사용자 대상 모든 답변** (보고·결과·분석 출력 + 대화형 Q&A 응답) = **결론·핵심 표·diff** 위주 압축. 사족·진행 서술·의례적 도입부 제거. 기본 형태 = 결론 1~2줄 + 표/diff 1개 + 잔여 액션 1줄. **면제 영역:** Before/After 대조 / 타당성 검토 / 변경 영향 기록 / `tasks/` 산출물. **답변 깊이와의 우선순위 (필수):** "답변 깊이" 는 **내용의 깊이** (선제 고려·근거)를 키우는 룰이지 **분량·사족** 을 늘리는 룰이 아니다 — "내용은 깊게, 형식은 사족 0". 두 룰 충돌 시 형식은 항상 본 룰 (간결) 우선. 보조 강제: `agent-first-banner.sh` + `orchestration` §"Concise Reporting". 사용자 개인 선호 SSOT = [[feedback_concise-answers]] 메모리.
 - **답변 깊이 (Anticipatory Depth, 필수):** "이걸 들으면 사용자가 뭘 더 궁금해할까" 선제 고려 후 한 단계 더 깊이 응답. **적용 영역 분리:** 본 룰 = 사용자 질문 답변 우선. 작업 진행/완료 보고 = "응답 간결" 룰 우선. **단 "깊이" = 내용 (근거·맥락) 한정, 분량·사족 증가 아님 — "응답 간결" 룰이 형식을 항상 우선 강제.**
 - **자동 위임 정책 (Autonomous Iteration, 필수):** 묶음 승인 키워드 (`자동 진행` / `자동으로 진행` / `권장으로 진행` / `auto 진행` 등) 입력 = "Claude 가 알아서 끝까지 진행 + 문제없다고 판단될 때까지 자체 반복" 해석. 본 룰은 Echo-Back Confirm·권고안 자동 채택·우선순위 매트릭스·4축 자동화를 통합 정의한다.
-  - **(1) Echo-Back Confirm (최초 진입):** 코드/분석 mutation 지시 첫 응답 = 첫 단락 직전 요청 재출력(echo back, 표 등 긴 입력 축약) + 마지막 줄 승인 요청. 승인 키워드 수신 전 mutation 도구 호출 금지 (read-only 1~2건 허용). 트리거·면제 6종·펜딩 마커 = `hooks/prompt-echo-confirm.sh` SSOT (발동 시 절차 전량 주입).
+  - **(1) Echo-Back Confirm (최초 진입):** 코드/분석 mutation 지시 첫 응답 = 첫 단락 = 요청 해석(간결 1~2줄) + 진행 계획(동원할 스킬·커맨드·플러그인·에이전트를 실행 순서대로) + 마지막 줄 승인 요청. 등급별 깊이 = S(오타·단발) 직접 처리 1줄 / M·L 도구+순서 전개. 승인 키워드 수신 전 mutation 도구 호출 금지 (read-only 1~2건 허용). 트리거·면제 6종·펜딩 마커·계획 양식 = `hooks/prompt-echo-confirm.sh` SSOT (발동 시 절차 전량 주입).
   - **(2) 권고안 자동 채택:** 묶음 승인 키워드 입력 시 = 직전 응답 권고안 **기본 옵션 (가장 안전한 첫 번째)** 즉시 채택. 옵션 분기 재제시 / "어느 옵션?" 의례적 재확인 금지. 분기 필요 = 사용자 명시 요청 또는 §3 Checkpoint 매칭 시에만. **권고 제시 시 (사전):** 기본 옵션 명확화 + 트레이드오프 1줄 + 비기본 옵션 조건 안내 3가지 포함.
   - **(3) 4축 자동화:**
     - **(a) 후속 권고 자동 채택** — 직전 응답 후속 권고·잔여 액션·옵션 분기를 다시 묻지 않고 기본 옵션으로 끝까지 진행. backlog/USER-DECISION 발생 시 bounded `/taskflow:debate` 1회 spawn 정책 = `custom-plugin/taskflow/commands/auto.md` §"Backlog 토론 spawn 정책 (bounded)" SSOT.
