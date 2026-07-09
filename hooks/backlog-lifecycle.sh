@@ -274,7 +274,7 @@ if [ "$HOOK_EVENT" = "PostToolUse" ]; then
 
   [ -z "$FILE_PATH" ] && exit 0
 
-  # Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT)
+  # Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT — 더블슬래시 붕괴 포함, 2026-07-09)
   FILE_PATH_NORM=$(normalize_path "$FILE_PATH")
 
   # memory/backlog_*.md 패턴만 처리

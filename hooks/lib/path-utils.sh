@@ -27,6 +27,9 @@ normalize_path() {
   fi
   # 백슬래시 → 슬래시
   input="${input//\\//}"
+  # 중복 슬래시 붕괴 — JSON-escaped 백슬래시(\\)가 bash 정규식 추출 경로에서 //(더블슬래시)로 남는 문제 정합
+  # (working-lifecycle 는 python json.load 로 회피, 본 SSOT 는 fork-free bash 붕괴로 전 hook 정합, 2026-07-09).
+  while [[ "$input" == *//* ]]; do input="${input//\/\//\/}"; done
   # trailing slash 제거 (단 단일 '/' 루트는 보존)
   if [ "${#input}" -gt 1 ]; then
     input="${input%/}"
