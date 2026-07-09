@@ -89,6 +89,7 @@
 ### §4.3 게이트·워크플로우
 
 - **묶음 승인 Fast-Track (Gate 0→2):** 묶음 승인 키워드 = `gate-approve.sh` 가 Gate 0/1→2 점프, `gate-init.sh` 가 gate=2 초기화 (단계별 키워드 매번 요구 폐기). **Claude 측 활용:** M/L 작업 분석/계획 압축 보고 → 1회 승인 — 단 §3·아키텍처 결정·트레이드오프 걸린 작업은 단계별 보고. §3 보호 = 개별 guard hook 담당.
+- **코드 라이프사이클 게이트 (필수, 2026-07-08):** 코드 파일(php/js/ts/py/sql) 변경 = **전** 세션 §계획 문서(`Status: Plan Complete`/`In Progress`/`Done`) 필수(`gate-enforce.sh` PreToolUse **hard 차단** / `핫픽스`·`hotfix`·`trivial` 키워드 30분 override / REGISTRY 부재 fail-open) + **후** `/taskflow:verify`(e2e 5점)·`/taskflow:review` 필수 체인(**규율** — QA-after 천장, hook 은 §검증 표 artifact 만 검사). 하니스 자기수정·worktree 외 비코드 면제. SSOT = `hooks/{gate-enforce,gate-approve}.sh` + `hooks/lib/path-utils.sh::is_hard_code_file` + `custom-plugin/taskflow/commands/execute.md` §"코드 변경 = verify+review 필수 체인" + `output/analysis/2026-07-08-code-lifecycle-enforcement`.
 - **`output/` 경로 Gate-0 직행:** `~/.claude/docs/{product}/output/` 하위 = 면제 경로, Gate-0 즉시 Edit/Write 허용. `settings.local.json` (gitignore, 개인 override) 도 Gate-0 면제. 글로벌 `settings.json` (git 추적, 공유) = Gate ≥ 1 유지.
 - **`checklist-count-check.sh` 임계:** 단계별 체크리스트 최소 개수 강제 — 임계값(unified/analyze/plan/result) = hook BLOCK-path stderr SSOT (`hooks/checklist-count-check.sh`).
 - **브랜치·worktree·push·머지 통합 정책 (필수):** 핵심 안전 선언만 본문, 면제·시나리오·8ref·절차·Why = hook/command SSOT 위임 (3 hook 모두 PreToolUse exit 2 + stderr 전량 출력). SSOT = `hooks/{worktree-enforce,branch-enforce}.sh` + `hooks/lib/git-guard.py` + `custom-plugin/git/commands/{create,merge}.md` + `custom-plugin/git/skills/push/SKILL.md`.
