@@ -78,6 +78,16 @@ if [ -z "$PROMPT" ]; then
   exit 0
 fi
 
+# --- trivial 핫픽스 override 마커 (2026-07-08, plan-before 게이트 우회) ---
+# '핫픽스'/'hotfix'/'trivial' 키워드 감지 → /tmp/claude_trivial_${SID} touch (mtime 갱신).
+# gate-enforce.sh plan-before 게이트가 이 마커를 30분 시간창 내에서만 통과 신호로 사용(self-expiry).
+# 길이 게이트 이전 배치 — "…핫픽스로 1줄만 고쳐줘"(50자 초과) 도 감지되도록.
+_lower_hotfix=$(echo "$PROMPT" | tr '[:upper:]' '[:lower:]')
+if echo "$_lower_hotfix" | grep -qE '(핫픽스|핫 픽스|hotfix|hot-fix|trivial|트리비얼)'; then
+  touch "/tmp/claude_trivial_${SESSION_ID}" 2>/dev/null
+  log info "trivial override marker set (hotfix) sid=$SESSION_ID"
+fi
+
 # 메시지 길이 체크 (50자 초과면 새 작업 가능성 — 단, 승인 키워드 포함 시 리셋하지 않음)
 PROMPT_LEN=${#PROMPT}
 if [ "$PROMPT_LEN" -gt 50 ]; then

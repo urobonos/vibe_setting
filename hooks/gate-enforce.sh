@@ -1,6 +1,7 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "gate-enforce" "enter" "pid=$$"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null  # is_hard_code_file (plan-before 게이트, 2026-07-08)
 # PreToolUse Hook: Gate 미통과 시 Edit/Write 차단 + Agent 검증
 # Phase 3 Harness — v2 (비코드 경로 완화)
 #
@@ -132,6 +133,38 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
   # 완료 시 working-lifecycle.sh hook 이 tasks/ 폴더로 자동 이동. 작성 시점 Gate 없음.
   if echo "$FILE_PATH" | grep -qE '(^|/)docs/working/'; then
     exit 0
+  fi
+
+  # --- plan-before 게이트 (2026-07-08, 독립 검사 / 숫자 게이트 무관) ---
+  # hard-code 파일(php/js/ts/py/sql)은 세션 §계획 문서 존재 시에만 수정 허용.
+  # 신호 = REGISTRY(SID8) → working_file → `^Status: (Plan Complete|In Progress|Done)` (execute 단계 In Progress 포함).
+  # override 마커(/tmp/claude_trivial_${SESSION_ID}, 핫픽스) 존재 시 통과.
+  # 판정 원재료(REGISTRY) 부재 시 fail-open(통과) — 전역 게이트라 미상 시 차단 금지.
+  # SSOT: docs/claude-harness/output/analysis/2026-07-08-code-lifecycle-enforcement.
+  if command -v is_hard_code_file >/dev/null 2>&1 && is_hard_code_file "$FILE_PATH"; then
+    # trivial override 마커 = 30분 시간창 내(find -mmin -30)만 유효 (self-expiry, 스테일 우회 차단).
+    _trivial_marker="/tmp/claude_trivial_${SESSION_ID}"
+    _trivial_active=0
+    [ -f "$_trivial_marker" ] && [ -n "$(find "$_trivial_marker" -mmin -30 2>/dev/null)" ] && _trivial_active=1
+    if [ "$_trivial_active" -eq 0 ]; then
+      _plan_registry="$HOME/.claude/docs/working/REGISTRY.md"
+      if [ -f "$_plan_registry" ]; then
+        _plan_sid8="${SESSION_ID:0:8}"
+        _plan_ok=0
+        while IFS= read -r _plan_wf; do
+          [ -z "$_plan_wf" ] && continue
+          if [ -f "$_plan_wf" ] && grep -qE '^Status:[[:space:]]*(Plan Complete|In Progress|Done)' "$_plan_wf" 2>/dev/null; then
+            _plan_ok=1; break
+          fi
+        done < <(awk -F'|' -v s="$_plan_sid8" '{gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$9); if ($4==s) print $9}' "$_plan_registry" 2>/dev/null)
+        if [ "$_plan_ok" -ne 1 ]; then
+          echo "[GATE BLOCKED] 코드 변경 전 계획 필요 — /taskflow:plan 으로 §계획을 세우고 'Status: Plan Complete' 부착 후 수정하세요. trivial 핫픽스면 '핫픽스' 키워드로 override 하세요. [$FILE_PATH]" >&2
+          command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=plan-before"
+          exit 2
+        fi
+      fi
+      # REGISTRY 부재 = 판정 원재료 없음 → fail-open (통과)
+    fi
   fi
 
   # 비코드 경로 판별

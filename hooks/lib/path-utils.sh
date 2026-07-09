@@ -33,3 +33,37 @@ normalize_path() {
   fi
   printf '%s\n' "$input"
 }
+
+# ─────────────────────────────────────────────────────────
+# is_hard_code_file [path] — hard-code 파일 판정 (2026-07-08, plan-before 게이트용)
+# ─────────────────────────────────────────────────────────
+# 반환: 0 = hard-code (계획 게이트 대상) / 1 = 아님(면제)
+# 대상 확장자: .php .js .ts .py .sql (대소문자 무시)
+# 면제(확장자 무관): 하니스 운영 영역(.claude/hooks·docs·commands·skills·agents·lib·memory·bin)·
+#   CLAUDE.md/README.md/MEMORY.md·문서(docs/). worktree(~/.claude/worktrees/)는 제품 코드
+#   작업공간이라 면제 아님 — 확장자만으로 판정.
+# SSOT: 코드 라이프사이클 게이트 (docs/claude-harness/output/analysis/2026-07-08-code-lifecycle-enforcement).
+is_hard_code_file() {
+  local path lower
+  path=$(normalize_path "$1")
+  # worktree = 제품 코드 작업공간 → 하니스 면제 로직 건너뛰고 확장자만 판정
+  case "$path" in
+    */.claude/worktrees/*)
+      lower="${path,,}"
+      case "$lower" in *.php|*.js|*.ts|*.py|*.sql) return 0 ;; esac
+      return 1
+      ;;
+  esac
+  # 하니스 운영 영역·문서 면제 (확장자 무관)
+  case "$path" in
+    */.claude/hooks/*|*/.claude/docs/*|*/.claude/commands/*|*/.claude/skills/*|*/.claude/agents/*|*/.claude/lib/*|*/.claude/memory/*|*/.claude/bin/*) return 1 ;;
+    */CLAUDE.md|*/README.md|*/MEMORY.md) return 1 ;;
+    */docs/*) return 1 ;;
+  esac
+  # 확장자 allowlist
+  lower="${path,,}"
+  case "$lower" in
+    *.php|*.js|*.ts|*.py|*.sql) return 0 ;;
+  esac
+  return 1
+}
