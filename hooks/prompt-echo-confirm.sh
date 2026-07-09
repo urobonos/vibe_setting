@@ -143,11 +143,14 @@ cat <<'EOF'
 
 본 프롬프트는 코드/분석 지시로 판정되었습니다. 응답 절차 (필수):
 
-1. **첫 단락 = 직전 요청 재출력 (echo back)** — 사용자가 직전에 요청한 내용을 원문에 가깝게 재출력. 단, 표·코드블록·대량 텍스트 등 긴 입력은 핵심만 줄여서(축약) 재출력.
-2. **마지막 줄 = 승인 요청** — "위 정리가 맞으면 '진행/ok/맞아' 중 하나로 응답해주세요. 다르면 정정 부탁드립니다." 형태.
-3. **승인 키워드 수신 전 mutation 도구 호출 금지** — Edit/Write/MultiEdit/NotebookEdit/Bash mutation(rm/mv/cp 변경계/git commit/git push/aws *변경계*/DB 변경 등) 모두 차단. 단 read-only 도구 (Read/Glob/Grep/git status/git log/git diff/aws *describe*/SELECT 등) 는 의도 정리 정확성을 위해 1~2건 허용.
-4. **사용자 정정 시** = 의도 재정리 + 다시 승인 요청. 펜딩 마커는 유지.
-5. **펜딩 마커 자동 정리** — `/tmp/claude_echo_pending_${SESSION_ID}` 가 마커. 본 hook 가 승인 키워드 단독 수신 시 자동 제거.
+1. **요청 해석 (간결, 1~2줄)** — 원문 재출력이 아니라 "무엇을 하는 작업인지" 압축 해석 + 작업 등급(S/M/L) 판정.
+2. **진행 계획 = 동원할 도구 + 순서** — 이 작업에 쓸 스킬·커맨드·플러그인·에이전트를 실행 순서대로 번호 목록으로 제시 (§4.2 위임 판단을 착수 전 노출). 등급별 깊이:
+   - **S** (오타·1~3줄 패치·단발 조회) = 도구 없이 "직접 처리" 1줄, 스텝 전개 생략.
+   - **M·L** (다단계·다파일) = 각 스텝 = [도구 + 그 도구로 할 일] 순서대로 전개, 사족 없이 간결하게.
+3. **마지막 줄 = 승인 요청** — "위 순서로 진행할까요? (진행 / 정정)" 형태.
+4. **승인 키워드 수신 전 mutation 도구 호출 금지** — Edit/Write/MultiEdit/NotebookEdit/Bash mutation(rm/mv/cp 변경계/git commit/git push/aws *변경계*/DB 변경 등) 모두 차단. 단 read-only 도구 (Read/Glob/Grep/git status/git log/git diff/aws *describe*/SELECT 등) 는 계획 정확성을 위해 1~2건 허용.
+5. **사용자 정정 시** = 계획 재정리 + 다시 승인 요청. 펜딩 마커는 유지.
+6. **펜딩 마커 자동 정리** — `/tmp/claude_echo_pending_${SESSION_ID}` 가 마커. 본 hook 가 승인 키워드 단독 수신 시 자동 제거.
 
 §3 Checkpoint 발동 작업은 본 룰 위에 추가 승인 절차 적용 (Checkpoint 가 우선).
 
