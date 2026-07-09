@@ -90,7 +90,7 @@ try:
         print(val)
 except Exception:
     print('')
-" 2>/dev/null)
+" 2>/dev/null | tr -d '\r')
     fi
   fi
   if [ -z "$result" ]; then
@@ -146,7 +146,7 @@ try:
     print(cmd if cmd is not None else '')
 except Exception:
     print('')
-" 2>/dev/null)
+" 2>/dev/null | tr -d '\r')
       [ -n "$_pycmd" ] && COMMAND="$_pycmd"
     fi
   fi
@@ -183,7 +183,7 @@ try:
     print(fp if fp is not None else '')
 except Exception:
     print('')
-" 2>/dev/null)
+" 2>/dev/null | tr -d '\r')
     fi
   fi
   if [ -z "$FILE_PATH" ]; then
