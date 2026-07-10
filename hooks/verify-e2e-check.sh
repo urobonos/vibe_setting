@@ -2,6 +2,11 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "verify-e2e-check" "enter" "pid=$$"
 # verify-e2e-check.sh
+#
+# DEAD — settings.json 에 등록되어 있지 않다 (2026-07-08 PostToolUse 체인 통합 시
+#   doc-unified-check.sh 의 v_verify_e2e() 로 흡수). 본 파일 수정은 런타임 효과가 없으므로
+#   로직 변경은 doc-unified-check.sh 에만 가한다. 삭제는 §3 매칭 → backlog orphan-verify-e2e-hook.
+#
 # PostToolUse:Edit|Write Hook — e2e 5점 검증 (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock 분리) 강제
 #
 # SSOT:

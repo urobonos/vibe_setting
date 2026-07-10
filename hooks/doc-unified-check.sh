@@ -373,6 +373,11 @@ v_checklist_count() {
 v_verify_e2e() {
   case "$BN" in
     summary.md|history.md|MEMORY.md|CLAUDE.md|README.md|SKILL.md|CHANGELOG.md) return 0 ;;
+    # step 평면 파일 — e2e 5점은 전 step 완료 후 부모 unified 에서 1회만 수행한다.
+    # (execute.md §"step 순차 소비" — step 은 부분기능이라 통합 e2e 가 성립하지 않음)
+    # 본 면제 = **합성 축** (fragment 이라 부모에서 1회). backlog code-touched 마커의
+    # **코드 존재 축** 과 직교하므로 통합 금지 — code-touching step 도 면제 대상이다.
+    *-step-[0-9][0-9]-*.md) return 0 ;;
   esac
   case "$FP" in
     */docs/working/*|*/docs/*/tasks/*-unified.md|*/docs/*/tasks/*/*-unified.md) ;;
