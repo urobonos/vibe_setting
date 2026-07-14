@@ -68,7 +68,6 @@
 - **`security-audit`** `A` — 7개 도메인(공통 / PHP·CI4 / MySQL / Lambda / CI·CD·공급망 / Docker / 프로세스) 통합 보안 감사. OWASP Top 10·CWE Top 25·ASVS L1 등 14개 프레임워크 적용. 취약점 발견 시 즉시 Checkpoint 발동.
 - **`api-spec-audit`** `A` — API 명세(Routes / api-docs / OpenAPI) ↔ IEEE 산출물(SRS/SDD/IDD) 9축 정합성 audit. EP 수·인증·응답 스키마·환경별 URL·에러 코드·페이지네이션·키 케이스·API 버전을 교차 검증. module / endpoint / full 3모드.
 - **`skill-validator`** `B` — 글로벌 + 프로젝트 로컬 스킬의 경로 정합성·구조 완전성·CLAUDE.md 규칙 정합·스킬 간 미스매치를 4 병렬 에이전트로 검증.
-- **`workflow-enforcer`** `C` — orchestration 3-Team 승인 규칙 + §3 Checkpoint / §4 Guardrails를 체크리스트로 강제하는 게이트. 사용자 승인 없이 다음 팀으로 진입하는 것을 방지.
 
 ### 개발 스택
 
