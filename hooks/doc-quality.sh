@@ -26,10 +26,9 @@ FILE_PATH_UNIX="${FILE_PATH//\\//}"
 BASENAME="${FILE_PATH_UNIX##*/}"
 LOWER_BASENAME="${BASENAME,,}"
 
-# ===== 1. 문서 체크리스트 검증 — checklist-count-check.sh 로 위임 (SSOT 일원화) =====
-# 정합성 정책: 동일 검증을 doc-quality(exit 2) + checklist-count-check(exit 0) 두 hook 이 중복 수행해
-# checklist-count-check 의 stderr 경고가 doc-quality 차단으로 무력화되던 비대칭 해소.
-# 체크리스트 개수 검증은 checklist-count-check.sh SSOT (PostToolUse Edit|Write 매처 동일).
+# ===== 1. 문서 체크리스트 검증 — doc-unified-check.sh V4 (v_checklist_count) 가 수행 =====
+# 체크리스트 개수 검증(analyze/unified≥30, plan/result≥20)은 doc-unified-check.sh SSOT.
+# (구 checklist-count-check.sh 는 doc-unified 로 통합되어 2026-07-14 삭제됨)
 
 # ===== 2. 테스트 동반 확인 (warning) =====
 if [[ "$FILE_PATH" == *.php ]] && echo "$FILE_PATH" | grep -qE 'app/Modules/[A-Za-z]+/Services/[A-Za-z]+\.php'; then
