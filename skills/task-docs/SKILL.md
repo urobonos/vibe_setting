@@ -166,7 +166,7 @@ min_claude_md_version: "4.0"
     - **작성자 기본값:** 프로젝트 소유자는 `jypark`(박재영)이다. 별도 지정 없으면 작성자는 `jypark`으로 기입한다.
     - **기존 문서 수정 시:** `최종 수정일`을 갱신하고, specs 문서는 `버전`도 함께 올린다.
     - **상태 전이:** 초안 → 검토중 → 승인됨. 상태 변경 시 변경 로그(규칙 9)에도 기록한다.
-11. **산출물 작성 첫 단계 = SSOT 헤더 골격 prepend 의무 (필수, 2026-05-11):** Write 도구로 `analyze.md` / `plan.md` / `result.md` 파일을 생성할 때 첫 단계로 `references/{analyze,plan,result}-template.md` 의 SSOT 헤더 골격을 그대로 복사·prepend 한 뒤 의미를 채운다. 자체 번호 헤더 (`## 2. 변경 범위`, `## 6. 변경 영향 기록` 등) 로 의미만 통합하는 자유 형식 작성은 hook 검증 우회로 간주되어 `doc-template-guard.sh` / `checklist-count-check.sh` 두 hook 가 PostToolUse exit 2 로 hard 차단한다.
+11. **산출물 작성 첫 단계 = SSOT 헤더 골격 prepend 의무 (필수, 2026-05-11):** Write 도구로 `analyze.md` / `plan.md` / `result.md` 파일을 생성할 때 첫 단계로 `references/{analyze,plan,result}-template.md` 의 SSOT 헤더 골격을 그대로 복사·prepend 한 뒤 의미를 채운다. 자체 번호 헤더 (`## 2. 변경 범위`, `## 6. 변경 영향 기록` 등) 로 의미만 통합하는 자유 형식 작성은 hook 검증 우회로 간주되어 `doc-unified-check.sh V1` / `doc-unified-check.sh V4` 두 hook 가 PostToolUse exit 2 로 hard 차단한다.
     > **Why:** 2026-05-11 audit (claude-harness / hongcafe_global_backend / infra 일주일치 79건) 결과 비면제 산출물의 plan 100% 가 SSOT 정확 헤더 (`## 수정 대상`·`## Blueprint`·`## 작업 분해 (WBS)`·`## 실행 계획`) 를 우회한 자유 형식으로 작성되어 의미 일관성은 부분 보존되었으나 hook·grep·자동 검증 정합이 깨졌다. checklist hook 이 exit 0 (경고) 에 머물러 체크리스트 0건 plan 22건 누적 발생. SSOT 골격 우선 prepend 로 작성 시점 비용을 1회 들이고, 의미 채우기는 그 위에 올린다.
     > **위반 사례 (2026-05-11 audit):**
     > - `hongcafe_global_backend/tasks/20260511/mod-02-* batch (16건)/...-plan.md` — SSOT 헤더 무시, 자체 번호 헤더로 자유 작성
@@ -174,9 +174,9 @@ min_claude_md_version: "4.0"
     > - `claude-harness/tasks/20260511/harness-cleanup/...-plan.md` — 압축형 자유 작성, 7개 섹션 헤더 미사용
     > - `infra/tasks/20260511/fe-cleanup-bugfix/...-{analyze,plan,result}.md` — 모든 강제 헤더 + 체크리스트 0건
     > **강제 hook (PostToolUse):**
-    > - `doc-template-guard.sh` — analyze 12 헤더 / plan 11 헤더 / result 6 헤더 + Status 그룹 grep, 미충족 시 `[BLOCKED]` + exit 2
-    > - `checklist-count-check.sh` — analyze≥30 / plan≥20 / result≥20, 미달 시 `[BLOCKED]` + exit 2 (역소급 면제: 생성일 < 2026-05-07 산출물은 hint 강등)
-    > - `change-impact-section-check.sh` / `feasibility-section-check.sh` — 변경 영향 / 타당성 검토 섹션 추가 강제
+    > - `doc-unified-check.sh V1` — analyze 12 헤더 / plan 11 헤더 / result 6 헤더 + Status 그룹 grep, 미충족 시 `[BLOCKED]` + exit 2
+    > - `doc-unified-check.sh V4` — analyze≥30 / plan≥20 / result≥20, 미달 시 `[BLOCKED]` + exit 2 (역소급 면제: 생성일 < 2026-05-07 산출물은 hint 강등)
+    > - `doc-unified-check.sh V3` / `doc-unified-check.sh V6` — 변경 영향 / 타당성 검토 섹션 추가 강제
 
 ## 파일 경로
 
@@ -237,13 +237,13 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 1. **작업명 결정** — kebab-case 영문 (예: `auth-refactor`, `working-folder-intro`)
 2. **product 결정** — `basename $CWD` (`.claude` → `claude-harness` 치환)
 3. **working 파일 생성** — `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 파일 (하위 폴더 금지)
-4. **SSOT 골격 prepend (필수)** — `references/unified-template.md` 전체를 그대로 복사·prepend 후 의미만 채움. 자체 번호 헤더로 자유 작성 = hook 차단 (`doc-template-guard.sh` exit 2)
+4. **SSOT 골격 prepend (필수)** — `references/unified-template.md` 전체를 그대로 복사·prepend 후 의미만 채움. 자체 번호 헤더로 자유 작성 = hook 차단 (`doc-unified-check.sh V1` exit 2)
 5. **섹션 작성 순서** — `## 분석` → `## 계획` → `## 실행` (필요한 섹션만 채움 허용, 단일 파일 구조는 유지)
 
 ### 2. 진행 중 작성 — Gate / 양식 면제
 
 - **Gate 면제:** working/ 경로는 `gate-enforce.sh` Gate-0 직행 면제 (`output/` 와 동일 정책 — CLAUDE.md §"output/ 경로 Gate-0 직행" 정합)
-- **양식 면제 (진행 중):** `doc-template-guard.sh` working/ 경로 자체 면제 — 자유 양식 작성 허용. 양식 검증은 tasks/ 이동 후 `*-unified.md` 패턴으로 1회 발동
+- **양식 면제 (진행 중):** `doc-unified-check.sh V1` working/ 경로 자체 면제 — 자유 양식 작성 허용. 양식 검증은 tasks/ 이동 후 `*-unified.md` 패턴으로 1회 발동
 - **강제 (진행 중):** `output-naming-check.sh` — 파일명 prefix `{yyyy-mm-dd}-{product}-` 강제 + working/YYYYMMDD/ 직속 단일 파일 (하위 폴더 금지)
 
 ### 3. 작업 완료 — tasks/ 자동 이동 (OR 조건 트리거)
@@ -269,10 +269,10 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 ### 4. 사후 hook 검증 (tasks/ 이동 후 1회 발동)
 
 이동 후 `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` 에 대해:
-- `doc-template-guard.sh` — `*-unified.md` 패턴 검증, 합집합 ≈ 20개 필수 헤더 (analyze 11 + plan 5 + result 4 — 통합 변경 영향 / 타당성 검토는 합쳐서 1회) 누락 시 `[BLOCKED]` exit 2
-- `checklist-count-check.sh` — 체크리스트 `- [ ]` + `- [x]` 합산 ≥ 30 (통합 문서 강제 하한 — 2026-05-13 ≥50 완화, 통합 문서라 중복 제거 허용)
-- `change-impact-section-check.sh` — `## 변경 영향` 섹션 + 3열 표(변경/개선/이유) 존재
-- `feasibility-section-check.sh` — `## 타당성 검토` 헤더 + `[Source: <name> §<id>]` 인용 ≥ 1건
+- `doc-unified-check.sh V1` — `*-unified.md` 패턴 검증, 합집합 ≈ 20개 필수 헤더 (analyze 11 + plan 5 + result 4 — 통합 변경 영향 / 타당성 검토는 합쳐서 1회) 누락 시 `[BLOCKED]` exit 2
+- `doc-unified-check.sh V4` — 체크리스트 `- [ ]` + `- [x]` 합산 ≥ 30 (통합 문서 강제 하한 — 2026-05-13 ≥50 완화, 통합 문서라 중복 제거 허용)
+- `doc-unified-check.sh V3` — `## 변경 영향` 섹션 + 3열 표(변경/개선/이유) 존재
+- `doc-unified-check.sh V6` — `## 타당성 검토` 헤더 + `[Source: <name> §<id>]` 인용 ≥ 1건
 - 모두 통과 시 `tasks/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 가 영구 보존 산출물로 확정
 
 ### 5. 역소급 호환 (생성일 < 2026-05-12)
@@ -313,7 +313,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
     ↓
 [history.md + summary.md 자동 갱신]
     ↓
-[doc-template-guard / checklist-count / change-impact / feasibility 사후 검증 1회]
+[doc-unified-check.sh V1/V4/V3/V6 사후 검증 1회]
     ↓
 [영구 보존: tasks/.../{yyyy-mm-dd}-{작업명}-unified.md]
 ```

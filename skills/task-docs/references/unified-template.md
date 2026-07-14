@@ -4,7 +4,7 @@
 
 ## 규칙
 - working/ 단계 (진행 중) — `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 파일 (하위 폴더 금지).
-- 작성 시 본 템플릿 골격을 그대로 prepend 후 의미만 채운다 (자체 번호 헤더 자유 작성 금지 — `doc-template-guard.sh` exit 2 차단).
+- 작성 시 본 템플릿 골격을 그대로 prepend 후 의미만 채운다 (자체 번호 헤더 자유 작성 금지 — `doc-unified-check.sh V1` exit 2 차단).
 - 필요한 섹션만 채울 수 있으나 헤더 자체는 SSOT 골격 그대로 유지 (분석 단독 = `## 계획` / `## 실행` 는 "해당 없음" 1행 허용).
 - 체크리스트 ≥ 50개 (분석 ≥ 20 + 계획 ≥ 15 + 실행 Self-Critique ≥ 15).
 - 완료 마커 = `Status: Done` (시작 라인) + `## Self-Critique` 섹션 동시 존재 → `working-lifecycle.sh` 자동 이동.
@@ -191,11 +191,11 @@
 |---|------------|----------|------|
 | 1 | {권고 내용} | {공식 문서/RFC/IEEE/OWASP 등} | [Source: {name} §{id}] |
 
-> CLAUDE.md §4 — 라이브러리/아키텍처/API/보안/설계 작업 공식 문서 근거 필수. `[Source: <name> §<id>]` 형식 인용 ≥ 1건 강제 (`feasibility-section-check.sh`).
+> CLAUDE.md §4 — 라이브러리/아키텍처/API/보안/설계 작업 공식 문서 근거 필수. `[Source: <name> §<id>]` 형식 인용 ≥ 1건 강제 (`doc-unified-check.sh V6`).
 
 ## 참조 출처 (Reference Location)
 
-> **무조건 필수 (2026-06-02~)** — 작성 내용의 **출처 위치**를 기록한다 (기획서 = 페이지, docs = 파일:줄). `## 타당성 검토`([Source: §id] 공식 기술표준) 와 **별개**의 내용 provenance. 강제: `reference-location-check.sh` (exit 2 — `## 참조 출처` 섹션 + `[참조: ...]` ≥ 1건).
+> **무조건 필수 (2026-06-02~)** — 작성 내용의 **출처 위치**를 기록한다 (기획서 = 페이지, docs = 파일:줄). `## 타당성 검토`([Source: §id] 공식 기술표준) 와 **별개**의 내용 provenance. 강제: `doc-unified-check.sh V2` (exit 2 — `## 참조 출처` 섹션 + `[참조: ...]` ≥ 1건).
 
 | # | 내용/섹션 | 출처 유형 | 참조위치 |
 |---|----------|----------|---------|
@@ -210,7 +210,7 @@
 |---|----------|--------|----------------|
 | 1 | {무엇이 변경되는가} | {어떤 개선이 있는가} | {왜 해야 하는가} |
 
-> CLAUDE.md §4 — 변경/개선/이유 3열 필수, 이유 생략 금지 (`change-impact-section-check.sh`).
+> CLAUDE.md §4 — 변경/개선/이유 3열 필수, 이유 생략 금지 (`doc-unified-check.sh V3`).
 
 ## 장기 영향 (Long-term Impact)
 
@@ -241,7 +241,7 @@
 |---|------------|----------|------|
 | 1 | {권고 내용} | {공식 문서/RFC/IEEE/OWASP} | [Source: {name} §{id}] |
 
-> `feasibility-section-check.sh` — `[Source: <name> §<id>]` ≥ 1건 강제 (헤더 존재 시).
+> `doc-unified-check.sh V6` — `[Source: <name> §<id>]` ≥ 1건 강제 (헤더 존재 시).
 > CLAUDE.md §4.1 5영역 (분석·설계 / 라이브러리·프레임워크 / 아키텍처 / API 설계 / 보안·인증) 진입 시 필수.
 
 ---
@@ -257,7 +257,7 @@
 | 4 | 프로덕션 curl | - | - |
 | 5 | mock 검증 분리 | - | - |
 
-> `verify-e2e-check.sh` — 5건 모두 PASS 시 통과, 일부 FAIL 시 exit 2.
+> `doc-unified-check.sh V5` — 5건 모두 PASS 시 통과, 일부 FAIL 시 exit 2.
 > SSOT: php8 §"e2e 검증" + CLAUDE.md §4.3 "e2e 검증 (필수)".
 
 ---
@@ -450,7 +450,7 @@ Status: Done
 
 | Hook | 검증 항목 | 차단 강도 |
 |------|---------|----------|
-| `doc-template-guard.sh` | `*-unified.md` 패턴 분기 — analyze + plan + result 합집합 ≈ 20 헤더 | exit 2 |
-| `checklist-count-check.sh` | 체크리스트 ≥ 30 | exit 2 |
-| `change-impact-section-check.sh` | `## 변경 영향` + 3열 표 | exit 0 (경고) |
-| `feasibility-section-check.sh` | `## 타당성 검토` + `[Source:...]` ≥ 1 | exit 0 (경고) |
+| `doc-unified-check.sh V1` | `*-unified.md` 패턴 분기 — analyze + plan + result 합집합 ≈ 20 헤더 | exit 2 |
+| `doc-unified-check.sh V4` | 체크리스트 ≥ 30 | exit 2 |
+| `doc-unified-check.sh V3` | `## 변경 영향` + 3열 표 | exit 0 (경고) |
+| `doc-unified-check.sh V6` | `## 타당성 검토` + `[Source:...]` ≥ 1 | exit 0 (경고) |
