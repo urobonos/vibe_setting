@@ -23,6 +23,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || true
+# stdin JSON 파싱 lib (bash-primary + python/grep fallback + CR 제거) — FILE_PATH/PROMPT 추출용
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/hook-input.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 
@@ -32,6 +35,7 @@ HOOK_EVENT=""
 # fallback (2026-07-08): hook_event_name 필드 부재/형태불일치 시 payload 필드로 이벤트 판별.
 #   근본원인 = perf 커밋(20d9c84) python→bash 전환 후 이 필드 의존 hook 만 PostToolUse 스킵.
 #   post-action-tracker(hook_event_name 미사용)는 정상 → 대조로 확정.
+#   동일 클래스 잔존이던 FILE_PATH/PROMPT bare python3 추출도 hook-input.sh 경유로 전환 (2026-07-14).
 if [ -z "$HOOK_EVENT" ]; then
   if [[ "$STDIN_DATA" =~ \"tool_name\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*: ]]; then
     HOOK_EVENT="PostToolUse"
@@ -298,17 +302,10 @@ PYEOF
 
 # ============= PostToolUse 진입 =============
 if [ "$HOOK_EVENT" = "PostToolUse" ]; then
-  FILE_PATH=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    fp = data.get('tool_response', {}).get('filePath', '') if isinstance(data.get('tool_response'), dict) else ''
-    if not fp:
-        fp = data.get('tool_input', {}).get('file_path', '')
-    print(fp)
-except:
-    print('')
-" 2>/dev/null)
+  # FILE_PATH 추출 = hook-input.sh (tool_input.file_path 우선 / filePath fallback — Edit·Write 양 필드 동일 경로).
+  # lib 부재 시 기존 침묵 exit 0 유지 (fail-open 정책 보존).
+  type -t hook_parse_file_path >/dev/null 2>&1 || exit 0
+  hook_parse_file_path
 
   [ -z "$FILE_PATH" ] && exit 0
 
@@ -347,14 +344,9 @@ fi
 
 # ============= UserPromptSubmit 진입 =============
 if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
-  PROMPT=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('prompt', ''))
-except:
-    print('')
-" 2>/dev/null)
+  # PROMPT 추출 = hook-input.sh (키워드 grep 용도 — bash-primary 의 escape 따옴표 절단은 허용 한계로 기록).
+  PROMPT=""
+  type -t hook_parse_field >/dev/null 2>&1 && PROMPT=$(hook_parse_field "prompt")
 
   # 명시 키워드 매칭 (case-insensitive 일부 + Korean)
   if echo "$PROMPT" | grep -qE '(작업[[:space:]]*완료|tasks[[:space:]]*이동|working[[:space:]]*정리|/taskflow:done|완료[[:space:]]*저장)' \
