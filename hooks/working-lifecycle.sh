@@ -352,6 +352,43 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
   if echo "$PROMPT" | grep -qE '(작업[[:space:]]*완료|tasks[[:space:]]*이동|working[[:space:]]*정리|/taskflow:done|완료[[:space:]]*저장)' \
      || echo "$PROMPT" | grep -qiE '(^|[[:space:]])done([[:space:]]|$|\.|,|!)' ; then
 
+    # ===== 경로 판별: 슬래시 명시(/taskflow:done·/done) vs 자연어 키워드 (오발동 가드, 2026-07-14) =====
+    # 슬래시 명시 호출과 본문 마커 자동(PostToolUse)은 기존대로 확인 없이 즉시 이동. 자연어 경로에만 가드 적용.
+    IS_SLASH_DONE=0
+    echo "$PROMPT" | grep -qE '/(taskflow:)?done' && IS_SLASH_DONE=1
+
+    if [ "$IS_SLASH_DONE" -eq 0 ]; then
+      # [가드 1] 부정문 동반 시 발동 안 함 — "아직 done 처리 하지 마" 류 오발동 차단
+      if echo "$PROMPT" | grep -qE '(하지[[:space:]]*마|말고|아직|안[[:space:]]|않|금지|보류)'; then
+        echo "[working-lifecycle] done 키워드 매칭 but 부정 표현 동반 → 자동 이동 발동 안 함 (오발동 가드)" >&2
+        exit 0
+      fi
+      # [가드 2] 확인 스텝 — 자연어 경로는 즉시 이동하지 않고 대상 개수만 계산해 확인을 요청한다.
+      #   실제 이동은 사용자 확인 후 /taskflow:done (슬래시 경로) 로 수행. stdout = UserPromptSubmit 컨텍스트 주입.
+      working_root="$HOME/.claude/docs/working"
+      [ -d "$working_root" ] || exit 0
+      pending_count=0
+      pending_names=""
+      for dir in "$working_root"/*/; do
+        [ -d "$dir" ] || continue
+        for f in "$dir"*.md; do
+          [ -f "$f" ] || continue
+          basename "$f" | grep -qE -- '-step-[0-9]+-' && continue   # step 평면 파일 제외
+          if has_completion_markers "$f"; then
+            pending_count=$((pending_count + 1))
+            pending_names="${pending_names}${pending_names:+, }$(basename "$f")"
+          fi
+        done
+      done
+      if [ "$pending_count" -gt 0 ]; then
+        echo "[working-lifecycle 확인 요청] 자연어 'done' 키워드 감지 — working/ → tasks/ 이동 대상 ${pending_count}건: ${pending_names}. 사용자에게 \"working/ 문서를 tasks/ 로 이동할까요? (대상 ${pending_count}건)\" 을 1회 확인한 뒤 승인 시 /taskflow:done 을 실행하라. 미승인 시 이동하지 말 것."
+      else
+        echo "[working-lifecycle] 자연어 'done' 키워드 감지 but 완료 마커(Status:Done + ## Self-Critique) 충족 파일 0건 — 이동 대상 없음" >&2
+      fi
+      exit 0
+    fi
+
+    # ===== 슬래시 명시 경로(/taskflow:done) — 기존대로 확인 없이 즉시 이동 (변경 금지) =====
     moved_count=0
     working_root="$HOME/.claude/docs/working"
     [ -d "$working_root" ] || exit 0
