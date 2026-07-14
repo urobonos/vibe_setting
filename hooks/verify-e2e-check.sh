@@ -62,6 +62,10 @@ fi
 
 input=$(cat)
 
+# session_id 추출 (code-touched 마커 조회용, backlog verify-e2e-check-doc-exempt — doc-unified-check.sh 정합)
+session_id=""
+[[ "$input" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && session_id="${BASH_REMATCH[1]}"
+
 # 파일 경로 추출 — bash 내장 (python 起動 제거). tool_response.filePath 우선, 없으면 tool_input.file_path (원본 우선순위 보존).
 file_path=""
 [[ "$input" =~ \"filePath\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && file_path="${BASH_REMATCH[1]}"
@@ -119,6 +123,12 @@ if [ -n "$created_date" ]; then
     fi
 fi
 
+# code-touched 마커 부재 = 이 세션 hard-code(php/js/ts/py/sql) 미변경 → 문서 작업 → e2e hint 강등.
+# (backlog verify-e2e-check-doc-exempt) doc-unified-check.sh v_verify_e2e 와 동일 로직 (orphan-verify-e2e-hook 정합).
+# session_id 미상이면 기존대로 강제(fail-safe).
+CODE_TOUCHED="1"
+[ -n "$session_id" ] && [ "$session_id" != "default" ] && [ ! -f "/tmp/claude_code_touched_${session_id}" ] && CODE_TOUCHED="0"
+
 # === 5점 검증 ===
 fail_points=()
 
@@ -170,10 +180,15 @@ if [ "$FAIL_COUNT" -eq 0 ]; then
     exit 0
 fi
 
-# === 역소급 면제 시 hint 강등 ===
-if [ "$GRANDFATHER" = "1" ]; then
+# === 역소급 면제 / 코드 미동반 시 hint 강등 ===
+if [ "$GRANDFATHER" = "1" ] || [ "$CODE_TOUCHED" = "0" ]; then
+    if [ "$GRANDFATHER" = "1" ]; then
+        _reason="역소급 면제 — 생성일 $created_date"
+    else
+        _reason="코드 미동반 문서 — code-touched 마커 부재(이 세션 php/js/ts/py/sql 미변경)"
+    fi
     {
-        echo "[hint] verify-e2e-check: e2e 5점 중 $FAIL_COUNT 점 누락 (역소급 면제 — 생성일 $created_date)"
+        echo "[hint] verify-e2e-check: e2e 5점 중 $FAIL_COUNT 점 누락 ($_reason)"
         for p in "${fail_points[@]}"; do
             echo "  · $p"
         done

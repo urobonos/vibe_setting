@@ -29,6 +29,7 @@ source "$(dirname "$0")/lib/path-utils.sh"
 
 hook_read_stdin
 hook_parse_file_path                        # R6: 단일 파싱 SSOT (file_path 우선, filePath fallback)
+hook_parse_session_id                       # V5 code-touched 마커 조회용 (backlog verify-e2e-check-doc-exempt)
 FP=$(normalize_path "$FILE_PATH")
 
 # ── 전역 early-exit (파싱 1회 후) ──────────────────────────────
@@ -387,6 +388,12 @@ v_verify_e2e() {
   local GRANDFATHER=0
   [ -n "$CREATED" ] && [[ "$CREATED" < "2026-05-15" ]] && GRANDFATHER=1
 
+  # code-touched 마커 부재 = 이 세션이 hard-code(php/js/ts/py/sql) 미변경 → 문서/설계 작업 → e2e hint 강등.
+  # (backlog verify-e2e-check-doc-exempt) gate-enforce.sh 가 hard-code edit 통과 시 마커 touch.
+  # 위 step 면제(합성 축)와 직교 = 코드 존재 축. SESSION_ID 미상(default)이면 기존대로 강제(fail-safe).
+  local CODE_TOUCHED=1
+  [ -n "$SESSION_ID" ] && [ "$SESSION_ID" != "default" ] && [ ! -f "/tmp/claude_code_touched_${SESSION_ID}" ] && CODE_TOUCHED=0
+
   local fail_points=()
   _gie '(env\(|\.env|DOTENV|APP_ENV|환경 ?변수|환경 ?설정)' || fail_points+=("1. env/설정 키워드 누락 (env\\(|.env|DOTENV|APP_ENV|환경 변수)")
   _gie '(\bfunction\b|\bclass\b|public function|메서드|시그니처|signature)' || fail_points+=("2. 함수/클래스 시그니처 누락 (function|class|메서드)")
@@ -406,8 +413,14 @@ v_verify_e2e() {
 
   [ "$FAIL_COUNT" -eq 0 ] && return 0
 
-  if [ "$GRANDFATHER" = "1" ]; then
-    local msg="[hint] verify-e2e-check: e2e 5점 중 $FAIL_COUNT 점 누락 (역소급 면제 — 생성일 $CREATED)"
+  if [ "$GRANDFATHER" = "1" ] || [ "$CODE_TOUCHED" = "0" ]; then
+    local _reason
+    if [ "$GRANDFATHER" = "1" ]; then
+      _reason="역소급 면제 — 생성일 $CREATED"
+    else
+      _reason="코드 미동반 문서 — code-touched 마커 부재(이 세션 php/js/ts/py/sql 미변경)"
+    fi
+    local msg="[hint] verify-e2e-check: e2e 5점 중 $FAIL_COUNT 점 누락 ($_reason)"
     local p; for p in "${fail_points[@]}"; do msg+=$'\n'"  · $p"; done
     add_warn "$msg"
     return 0

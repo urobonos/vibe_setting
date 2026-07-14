@@ -165,6 +165,10 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
       fi
       # REGISTRY 부재 = 판정 원재료 없음 → fail-open (통과)
     fi
+    # code-touched 마커 (backlog verify-e2e-check-doc-exempt) — hard-code(php/js/ts/py/sql) 파일이
+    # 차단 없이 이 지점에 도달 = 이 세션이 실제 코드를 변경했다. doc-unified-check.sh 의 v_verify_e2e 가
+    # 마커 부재 시 문서 e2e 5점을 hint 로 강등(코드 미동반 문서 면제). trivial/plan_ok/fail-open 통과 경로 수렴점.
+    touch "/tmp/claude_code_touched_${SESSION_ID}" 2>/dev/null
   fi
 
   # 비코드 경로 판별
