@@ -5,11 +5,11 @@
 # 대상:
 #   ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-{analyze|plan|result|unified}.md
 #
-# 검증:
-#   - analyze.md → `- [ ]` + `- [x]` 카운트 ≥ 30
-#   - plan.md    → ≥ 20
-#   - result.md  → ≥ 20
-#   - unified.md → ≥ 30 (analyze+plan+result 통합, 2026-05-12 시행 / 2026-05-13 ≥ 50→30 완화)
+# 검증 (작업 등급 비례 — 2026-07-14~, 기존 stage 고정 20/30 대체):
+#   - analyze / plan / unified → 작업 등급 비례 S≥8 / M≥14 / L≥20
+#       등급 소스 = unified `## 작성 정보` 표 셀 `| 작업 등급 | S/M/L |` (doc-template-guard 가 존재만 검사하는 필드의 값 파싱)
+#       등급 미검출(placeholder `{S / M / L}`·누락) → fallback 20 (기존값 유지, fail-safe)
+#   - result.md → ≥ 20 고정 (§실행 Self-Critique — 등급 비례 대상 아님)
 #
 # 예외:
 #   - summary.md, history.md → 검증 비활성
@@ -63,12 +63,22 @@ STAGE=$(echo "$FILE_NAME" | grep -oE '\-(analyze|plan|result|unified)\.md$' | se
 unix_path=$(echo "$FILE_PATH" | sed 's|\\|/|g' | sed 's|^C:|/c|')
 [ -f "$unix_path" ] || unix_path="$FILE_PATH"
 
-# 임계 결정
+# 임계 결정 — 작업 등급 비례 (S≥8 / M≥14 / L≥20), 미검출 시 fallback 20.
+#   등급 소스: unified `## 작성 정보` 표 셀 `| 작업 등급 | S/M/L |` (sweep 등급 비례 S/M/L 과 동일 판정선 — 문서 등급 표기 재사용).
+#   placeholder `{S / M / L}` 는 `|` 로 종결되지 않아 정규식에 미매칭 → fallback 20 (fail-safe).
+#   result 는 §실행 Self-Critique → 등급 비례 대상 아님, 20 고정.
+GRADE=""
 case "$STAGE" in
-  analyze) MIN=30 ;;
-  plan)    MIN=20 ;;
+  analyze|plan|unified)
+    GRADE=$(grep -oiE '작업[[:space:]]*등급[[:space:]]*\|[[:space:]]*[SML][[:space:]]*\|' "$unix_path" | grep -oiE '[SML]' | head -1 | tr '[:lower:]' '[:upper:]')
+    case "$GRADE" in
+      S) MIN=8 ;;
+      M) MIN=14 ;;
+      L) MIN=20 ;;
+      *) MIN=20 ;;   # 등급 미검출 → fallback (기존값 유지)
+    esac
+    ;;
   result)  MIN=20 ;;
-  unified) MIN=30 ;;  # 단일 통합 — P 단계별 working 자연 분량 정합 (2026-05-12 완화, 기존 50)
   *)       exit 0 ;;
 esac
 
@@ -96,13 +106,13 @@ if [ -z "$created_date" ]; then
 fi
 TEMPLATE_STRICT_FROM="2026-05-07"
 if [ -n "$created_date" ] && [ "$created_date" \< "$TEMPLATE_STRICT_FROM" ]; then
-    echo "[CHECKLIST hint — 역소급 면제 ${created_date}] $FILE_PATH: 체크리스트 ${COUNT}개 (필요: ${MIN}개)" >&2
-    echo "                  task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20." >&2
+    echo "[CHECKLIST hint — 역소급 면제 ${created_date}] $FILE_PATH: 체크리스트 ${COUNT}개 (필요: ${MIN}개, 등급=${GRADE:-미검출→20})" >&2
+    echo "                  작업 등급 비례 — S≥8 / M≥14 / L≥20 (analyze/plan/unified), result≥20." >&2
     exit 0
 fi
 
-echo "[BLOCKED] $FILE_PATH: 체크리스트 ${COUNT}개 부족 (필요: ${MIN}개)" >&2
-echo "          task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20 / unified≥30." >&2
+echo "[BLOCKED] $FILE_PATH: 체크리스트 ${COUNT}개 부족 (필요: ${MIN}개, 등급=${GRADE:-미검출→20})" >&2
+echo "          작업 등급 비례 — S≥8 / M≥14 / L≥20 (analyze/plan/unified) · result≥20. 등급 = unified §작성 정보 '작업 등급' 셀 파싱." >&2
 echo "          references/{analyze,plan,result,unified}-template.md SSOT 골격 prepend 후 보강하세요." >&2
 command -v log_event >/dev/null 2>&1 && log_event "checklist-count-check" "block" "reason=checklist-short"
 exit 2
