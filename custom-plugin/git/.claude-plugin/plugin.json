@@ -1,0 +1,8 @@
+{
+  "name": "git",
+  "description": "git 워크플로우 통합 — worktree 정착 (create 신규 feature 분기 / merge 기존 feature 분기 ff-only) + 커밋 포맷 SSOT·push 안내 (push)",
+  "version": "0.1.0",
+  "author": {
+    "name": "박재영"
+  }
+}

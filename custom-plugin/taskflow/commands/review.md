@@ -1,0 +1,96 @@
+---
+description: 리뷰 단계 진입 — Self-Critique 체크리스트 ≥ 20 채움 + simplify 스킬 보조 호출 (CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" SSOT). 코드 재사용성·가독성·효율성 검토.
+allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent
+argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
+---
+
+리뷰 단계 진입 — working/ §실행 §Self-Critique 체크리스트를 채우고 `simplify` 스킬로 코드 품질 리뷰를 수행한다.
+
+## 인자
+
+- `$ARGUMENTS` = (선택) 작업명 kebab-case. 생략 시 가장 최근 working/ 파일 자동 식별.
+
+## 참조 범위 (사전 전수 조사, 필수)
+
+진입 즉시 CLAUDE.md §4.3 "참조 범위 전수 조사" 절차(3 출처 전수 조사)를 수행하고, §4.4 위치 표기로 참조 결과 표를 화면 출력한 뒤 다음 단계로 진입한다. 3 출처 표·가시화 표 양식·`해당 없음` 행 생략 금지·직전 단계 sweep 재사용 규칙 = 모두 §4.3 SSOT.
+
+- **등급 비례:** S = ② index 스캔만 / M·L = ①②③ 전수.
+
+## 동작 3단계
+
+| 단계 | 동작 | 결과 |
+|------|------|------|
+| ① Self-Critique 채움 | working/ §실행 §Self-Critique 체크리스트 ≥ 20 채움 (보안 / 로직 / 코드 품질 / 테스트 커버리지 / 이전 단계 검증). SSOT: CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" + doc-unified-check.sh V4 L54 (result Self-Critique ≥ 20) | 미체크 항목 처리 또는 잔여 이슈 기록 |
+| ② simplify 스킬 호출 | 변경 파일에 대해 simplify 스킬 실행 (재사용성·가독성·효율성 리뷰) | 리뷰 결과 요약 |
+| ③ working/ § 리뷰 섹션 기록 | simplify 결과 + Self-Critique 보강 항목 § 리뷰 (Review) 섹션에 기록 | 표 + 본문 |
+
+> **비필수 사이드이펙트 백로그 격리:** Self-Critique·simplify 가 짚은 항목이 (① 필수요소 아님 + ② 문제·버그 아님 + ③ 사이드이펙트급) 3조건을 모두 충족하면 즉시 픽스하지 말고 backlog 메모리에만 기록. **보안·로직 결함 등 실제 문제는 경미해도 backlog 가 아니라 정상 처리** (②가 안전장치). SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
+
+## 직병렬 실행 지침
+
+**원칙:** 할당된 하위 태스크는 의존성을 먼저 판단 → 독립 태스크는 단일 응답 내 병렬(multi tool_use / Agent spawn), 의존 태스크는 직렬. 동일 파일 mutation·순서 의존 시 직렬 fallback (race 방지). 강제 병렬 modifier = `/taskflow:parallel`.
+
+| 태스크 | 직렬·병렬 | 방법 |
+|--------|----------|-----|
+| ① Self-Critique 채움 + ② simplify 호출 | **병렬 가능** | 체크리스트 작성과 simplify 스킬 호출은 독립 → 동시 진행 |
+| ③ § 리뷰 기록 | **직렬** | ①② 결과 종합 후 기록 (양쪽 출력에 의존) |
+
+## 자연어 trigger
+
+- `리뷰해줘` / `Self-Critique` / `코드 리뷰` / `code review`
+
+## 보조 스킬 호출
+
+| 스킬 | 역할 |
+|------|------|
+| `simplify` | 변경된 코드의 재사용·품질·효율성 리뷰 후 이슈 픽스 |
+
+## Self-Critique 영역 (≥ 20 체크리스트 — CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" + doc-unified-check.sh V4 L54 SSOT)
+
+| 영역 | 항목 |
+|------|------|
+| 보안 | 민감 정보 노출 / 인증·인가 / 입력값 검증 / SQL Injection·XSS |
+| 로직 | 엣지 케이스 / 예외 흐름 / 사이드 이펙트 / 회귀 / NULL·빈값·기본값 / 동시성 |
+| 코드 품질 | 컨벤션 / 불필요한 코드 / 네이밍 / 하드코딩 |
+| 테스트 커버리지 | 신규 코드 단위 테스트 / 전체 스위트 통과 |
+| 이전 단계 검증 | 분석·계획 체크리스트 전체 체크 완료 / 미체크 항목 잔여 이슈 기록 |
+
+## 호출 예
+
+```
+/taskflow:review                                  ← 진행 중 working/ Self-Critique + simplify
+/taskflow:review auth-refactor                    ← 특정 작업 리뷰
+```
+
+## SSOT
+
+| SSOT | 역할 |
+|------|------|
+| `~/.claude/CLAUDE.md` §4.1 "Validation (No Test, No Merge)" | 정책 SSOT |
+| `simplify` skill (Anthropic plugin, 글로벌 카탈로그 등재 — `~/.claude/skills/` 본체 없음) | 코드 품질 리뷰 진입점 (Skill 도구로 호출) |
+| `~/.claude/skills/task-docs/references/unified-template.md` § 실행 §Self-Critique + § 리뷰 | 양식 SSOT |
+
+## §3 Checkpoint 우선 적용
+
+본 슬래시는 분석·검토 위주 (read-only 우선). simplify 가 제안하는 코드 변경이 §3 5조건 매칭 시 사용자 명시 승인 후 적용.
+
+**worktree 적용 (CLAUDE.md §4.3 (a)):** Self-Critique·simplify 진단 = read-only. simplify 권고 적용 시 코드 mutation 발생 → worktree 강제 (§실행 단계로 위임).
+
+## Skip 조건
+
+| 등급 | 진행 여부 |
+|------|----------|
+| S (단순 1~3줄 패치 / typo / 명명 변경) | 면제 — Self-Critique 인라인 1~2줄로 충분 |
+| M / L | **권장** — Self-Critique 체크리스트 ≥ 20 + simplify 호출 |
+
+## 차별점 (다른 슬래시와)
+
+| 슬래시 | 시점 | 범위 |
+|--------|------|------|
+| `/taskflow:verify` | §실행 도중/직후 | e2e 5점 (외부 환경 검증) |
+| **`/taskflow:review`** | §검증 후 | Self-Critique 체크리스트 + simplify (내부 품질 검증) |
+| `/taskflow:deploy` | §리뷰 통과 후 | git-push + branch-enforce 안내 |
+
+## Changelog
+
+- 2026-05-15: 신설

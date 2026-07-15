@@ -1,0 +1,112 @@
+---
+description: 작업 대기 — DISPATCH 풀의 available 청크를 자동 폴링·claim 하여 풀이 빌 때까지 연속 소비하는 consumer 루프. `/taskflow:claim`(수동 claim 1건)의 자동화 버전. 각 worker 세션에 `/loop /taskflow:consume` 1회 입력 → 무인 소비. 짝 = `/taskflow:dispatch`·`/taskflow:claim`
+allowed-tools: Bash, Read, Glob, Grep, Edit, Agent, PowerShell
+argument-hint: "[작업명필터]  # 생략 시 available 전체에서 FIFO 자동 소비"
+---
+
+`/taskflow:dispatch` 가 등록한 분배 풀(`DISPATCH.md`)의 `available` 청크를 **자동으로 폴링·claim 해 풀이 빌 때까지 연속 소비**한다. `/taskflow:claim`(사람이 `#tag` 하나를 골라 수동 claim)의 **자동 폴링 루프 버전** — worker 세션에 한 번 입력하면 알아서 청크를 집어 작업하고, 다 비면 대기하다 새 청크가 올라오면 다시 집어간다.
+
+> **용법:** 메인 세션은 `/taskflow:dispatch` 로 producer, worker 세션 N개는 각각 `/loop /taskflow:consume` 로 consumer. claim 충돌·죽은 worker·세션 종료 정리는 `dispatch-utils.sh` lock 이 이미 보장 — 본 슬래시는 그 위에 **폴링 루프**만 얹는다.
+
+## 경계 — claim + 작업 + done 을 **연속 반복**
+
+`/taskflow:claim` = claim·로드까지(1건, 실행 아님). **`/taskflow:consume` = claim → 작업(`/taskflow:auto` 위임) → done → 다음 claim 을 풀이 빌 때까지 반복.** 즉 `/taskflow:claim` + `/taskflow:auto` + 폴링 루프의 합성이다.
+
+| 슬래시 | claim | 작업 실행 | 반복 | 점유 |
+|--------|-------|----------|------|------|
+| `/taskflow:claim #tag` | 1건 수동 | ✗ (위임) | ✗ | lock |
+| **`/taskflow:consume`** | **available 자동** | **✓ (`/taskflow:auto`)** | **✓ 풀 소진까지** | **lock (건별)** |
+
+## §0 점유 선확인 — 자동 집행
+
+각 claim 은 `dispatch_claim` 의 mkdir lock 으로 배타 보장된다 (`/taskflow:claim` §0 과 동일 SSOT). **15세션이 동시에 같은 청크를 노려도 1개만 `CLAIMED`, 나머지는 `TAKEN` → 자동으로 다음 available 로 넘어간다.** 별도 사전 조회 불필요 — claim 거부가 곧 점유 선확인.
+
+## 세션 식별자 (sid)
+
+```bash
+SID8="${CLAUDE_SESSION_ID:0:8}"
+[ -z "$SID8" ] && SID8="<현재 세션 sid 8자 — Claude 본체 기입>"
+```
+
+> 같은 worker 세션이 일관된 sid 를 써야 `ALREADY_YOURS`·`dispatch_release_session`(종료 정리)이 성립한다.
+
+## 동작 루프 (①~⑤)
+
+```bash
+source ~/.claude/hooks/lib/dispatch-utils.sh
+SID8="${CLAUDE_SESSION_ID:0:8}"; [ -z "$SID8" ] && SID8="<현재 세션 sid 8자>"
+FILTER="$ARGUMENTS"          # 작업명 필터 (선택) — 빈 값이면 available 전체
+
+# ① 폴링 — available 목록 (필터 있으면 작업명=$4 부분일치)
+dispatch_list available | awk -F"$DISPATCH_FS" -v f="$FILTER" '
+  f=="" || index($3,f) { print $2 }      # $2=tag, $3=작업명
+'
+```
+
+| 단계 | 동작 | 처리 |
+|------|------|------|
+| ① 폴링 | `dispatch_list available` (필터 적용) | FIFO(등록순) 첫 태그 선택 |
+| ② claim | `dispatch_claim "$tag" "$SID8"` | `CLAIMED`/`ALREADY_YOURS`/`STOLEN` → ③ / `TAKEN`(race 패배) → ① 다음 태그 / `NOTFOUND`·`DONE` → ① |
+| ③ §3 선별 | 분배 문서(`$DOC`) 로드 → `## 참고` 에 **§3 마킹** 스캔 | **§3 청크면 `dispatch_release` + 보고 후 skip** (무인 worker 는 §3 자동 실행 금지) / 아니면 ④ |
+| ④ 작업 | 분배 문서 DoD 기준 worktree 안 작업 → `/taskflow:auto` 위임 | self-critique 0건까지 (§4.4 자동 위임) |
+| ⑤ 완료 | `dispatch_done "$tag" "$SID8"` → **① 로 복귀** | 연속 소비 |
+
+claim·done 분기는 `/taskflow:claim` §② §③ 와 동일 (`dispatch-utils.sh` SSOT).
+
+> **터미널 제목 설정 (② claim 성공 직후):** 각 청크 claim 성공 시 PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = "#{tag}"` 설정 — 연속 소비 중 현재 처리 청크를 창 제목으로 식별 (다음 청크 claim 시 자동 갱신). available 0건 폴링 대기 진입 시 `#대기중` 으로 표시. 방식·전제 = `custom-plugin/taskflow/commands/claim.md` §"터미널 제목 설정 (SSOT)".
+
+## available 0건 — 폴링 대기 (`/loop` dynamic 전제)
+
+available 이 0건이면 종료하지 않고 **`ScheduleWakeup` 으로 재폴링 대기**한다 (producer 가 새 청크를 올리면 다시 ① 로 진입).
+
+| 상황 | 간격 | 근거 |
+|------|------|------|
+| 방금 청크 처리 직후 0건 (producer 활발) | **270s** | cache TTL(300s) 내 유지 — 빠른 재집입 |
+| 연속 0건 누적 (유휴) | **backoff → 최대 1200s** | 불필요한 깨어남·노이즈 억제 |
+| 사용자 `중단`/`멈춰`/`보류` | 루프 종료 | stop marker |
+
+> **`/loop` 결합 권장:** ⑤ 폴링 대기는 `/loop /taskflow:consume`(간격 없이 = dynamic mode)에서 `ScheduleWakeup` 이 self-pace 하는 구조가 가장 견고하다. 단독 `/taskflow:consume` 도 available 을 연속 소비하나, **`ScheduleWakeup` 의 `/loop` 밖 단독 동작은 환경 확인 필요** — 무인 상시 대기는 `/loop /taskflow:consume` 를 사용한다. `ScheduleWakeup` 의 `prompt` 에 `/taskflow:consume` 를 그대로 넘겨 다음 firing 이 루프를 재개한다.
+
+## 종료 조건
+
+1. **사용자 중단** — `중단`/`멈춰`/`보류` (stop marker) → 즉시 루프 종료
+2. **§3 매칭 청크** — claim 후 §3 마킹 발견 시 자동 실행 않고 `dispatch_release` + 보고 (해당 청크만 skip, 루프는 계속)
+3. **풀 영구 소진** — backoff 가 최대(1200s)에 수회 도달 + 사용자 무응답 → 1회 요약 보고 후 대기 유지 (또는 사용자 종료)
+4. **재시도 한도** — 단일 청크 작업이 self-critique 5회 초과 실패 → 해당 청크 `dispatch_release` + 보고, 다음 청크 진행
+
+## §3 Checkpoint 우선 적용
+
+- **claim 자체** = DISPATCH.md 인덱스 + lock mutation (회복 가능 — `dispatch_release`). 사용자 승인 없이 진행 가능.
+- **claim 후 작업이 §3 매칭**(비가역·광범위·외부 시스템)이면 **무인 worker 라도 자동 실행 금지.** 분배 문서 `## 참고` §3 마킹을 ③ 에서 선별해 skip·보고하고, 마킹이 없어도 작업 중 각 guard hook(dangerous-ops-guard·branch-enforce·sensitive-file-guard)이 exit 2 로 차단한다. **자동 폴링 루프가 §3 우회 통로로 작동하지 않는다.**
+- worker 세션 종료 시 미완 claim 은 `dispatch_release_session`(working-release.sh Stop)이 available 복귀 → 다른 worker 가 이어받음.
+
+## SSOT
+
+| SSOT | 역할 |
+|------|------|
+| `~/.claude/hooks/lib/dispatch-utils.sh` | 폴링·claim·done lib (`dispatch_list`/`dispatch_claim`/`dispatch_done`/`dispatch_release`) |
+| `~/.claude/docs/working/DISPATCH.md` | 분배 풀 인덱스 (read + lib 경유 갱신) |
+| **`~/.claude/custom-plugin/taskflow/commands/claim.md`** | **수동 claim 1건판 — 본 슬래시의 단건 버전 (§0·claim 분기 SSOT)** |
+| **`~/.claude/custom-plugin/taskflow/commands/dispatch.md`** | **producer — 청크 분해·등록 (§3 마킹 부착 지점)** |
+| `~/.claude/custom-plugin/taskflow/commands/auto.md` | ④ 작업 실행 위임 대상 (묶음 승인 자동 위임) |
+| `~/.claude/hooks/working-release.sh` | 세션 종료 시 `dispatch_release_session` 호출 (미완 claim 회수) |
+
+## 호출 예
+
+```
+/loop /taskflow:consume              ← worker 세션 무인 상시 소비 (권장)
+/taskflow:consume                    ← available 전체 FIFO 1회 연속 소비
+/taskflow:consume jyp-p0p1           ← 작업명 'jyp-p0p1' 필터 청크만 소비
+```
+
+## 차별점 (분배 3-슬래시)
+
+| 슬래시 | 역할 | 주체 | 단위 |
+|--------|------|------|------|
+| `/taskflow:dispatch` | producer — 청크 분해·등록 | 메인 1세션 | 청크 N개 → available |
+| `/taskflow:claim` | consumer 수동 — 1건 claim·로드 | worker (사람 선택) | `#tag` 1건 |
+| **`/taskflow:consume`** | **consumer 자동 — 폴링·claim·작업·done 연속** | **worker N세션 (`/loop`)** | **available 전체 소진** |
+
+## Changelog
+
+- 2026-06-16: 신설

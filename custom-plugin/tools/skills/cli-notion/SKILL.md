@@ -1,0 +1,271 @@
+---
+name: cli-notion
+description: >
+  Notion API curl 기반 CLI 스킬.
+  페이지 조회/생성/수정, 데이터베이스 검색, 블록 조작을 수행한다.
+triggers:
+  - "노션에 반영"
+  - "노션 동기화"
+  - "Notion 동기화"
+  - "notion 업데이트"
+  - "노션 페이지 조회"
+  - "노션 페이지 생성"
+  - "노션 페이지 수정"
+  - "노션 검색"
+  - "노션 데이터베이스"
+  - "/tools:cli-notion"
+version: 1.0.1
+user-invocable: true
+depends_on: []
+conflicts_with: []
+min_claude_md_version: "4.0"
+---
+
+# Notion CLI Skill
+
+## 실행 조건 (필수)
+
+> **[요청 기반 동작]** 본 스킬의 모든 명령(조회/검색 포함)은 **사용자가 명시적으로 요청할 때만** 실행한다. 글로벌/프로젝트 CLAUDE.md, 스킬 문서, 기타 지침 파일을 수정했더라도 자동으로 Notion에 반영하지 않는다.
+>
+> **허용 트리거:** 사용자가 "노션에 반영", "Notion 동기화", "notion 업데이트", "노션 페이지 조회", "노션 검색" 등 명시적으로 요청한 경우.
+>
+> **금지:** 사용자 요청 없이 Notion API 호출(curl `api.notion.com`) 선제 실행. 지침 수정에 대한 자동 동기화.
+>
+> **MCP 도구 폐기:** `mcp__notion*` / `notion-fetch` / `replace_content` / `update_content` 계열 MCP 도구는 글로벌 CLAUDE.md §File Paths 에서 제거됨. 본 스킬(curl + Bearer Token)이 단일 진입점이다.
+>
+> **애매한 경우:** Checkpoint로 사용자 승인을 먼저 받는다. 승인 없는 Notion 쓰기는 지침 위반.
+
+## 인증
+
+- **방식:** Bearer Token
+- **토큰 파일:** `${CLAUDE_PLUGIN_ROOT}/.token/cli-notion.token`
+- **토큰 읽기:** `TOKEN=$(cat ${CLAUDE_PLUGIN_ROOT}/.token/cli-notion.token)`
+
+### 인증 헤더 구성
+```bash
+TOKEN=$(cat ${CLAUDE_PLUGIN_ROOT}/.token/cli-notion.token)
+```
+
+## 기본 설정
+
+| 항목 | 값 |
+|------|-----|
+| API Base URL | `https://api.notion.com/v1` |
+| API Version | 2022-06-28 |
+
+### 단축 변수
+```bash
+TOKEN=$(cat ${CLAUDE_PLUGIN_ROOT}/.token/cli-notion.token)
+BASE="https://api.notion.com/v1"
+AUTH="Authorization: Bearer $TOKEN"
+VER="Notion-Version: 2022-06-28"
+CT="Content-Type: application/json"
+```
+
+## API 명령 템플릿
+
+### 1. 검색
+
+#### 전체 검색
+```bash
+curl -s -X POST "$BASE/search" \
+  -H "$AUTH" -H "$VER" -H "$CT" \
+  -d '{"query": "검색어", "page_size": 10}' | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+for r in data.get('results',[]):
+    obj=r.get('object','')
+    title=''
+    if obj=='page':
+        props=r.get('properties',{})
+        for k,v in props.items():
+            if v.get('type')=='title':
+                title=''.join([t.get('plain_text','') for t in v.get('title',[])])
+                break
+    elif obj=='database':
+        title=''.join([t.get('plain_text','') for t in r.get('title',[])])
+    print(f'[{obj}] {r[\"id\"]}  {title}')
+"
+```
+
+#### 데이터베이스 필터 검색
+```bash
+curl -s -X POST "$BASE/databases/{database_id}/query" \
+  -H "$AUTH" -H "$VER" -H "$CT" \
+  -d '{"page_size": 10}' | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+for r in data.get('results',[]):
+    props=r.get('properties',{})
+    title=''
+    for k,v in props.items():
+        if v.get('type')=='title':
+            title=''.join([t.get('plain_text','') for t in v.get('title',[])])
+            break
+    print(f'{r[\"id\"]}  {title}')
+"
+```
+
+### 2. 페이지
+
+#### 페이지 조회
+```bash
+curl -s "$BASE/pages/{page_id}" \
+  -H "$AUTH" -H "$VER" | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+props=data.get('properties',{})
+for k,v in props.items():
+    vtype=v.get('type','')
+    if vtype=='title':
+        val=''.join([t.get('plain_text','') for t in v.get('title',[])])
+    elif vtype=='rich_text':
+        val=''.join([t.get('plain_text','') for t in v.get('rich_text',[])])
+    elif vtype in ('number','checkbox','url','email','phone_number'):
+        val=str(v.get(vtype,''))
+    elif vtype=='select':
+        val=v.get('select',{}).get('name','') if v.get('select') else ''
+    elif vtype=='multi_select':
+        val=', '.join([s.get('name','') for s in v.get('multi_select',[])])
+    elif vtype=='date':
+        val=str(v.get('date',{}).get('start','')) if v.get('date') else ''
+    elif vtype=='status':
+        val=v.get('status',{}).get('name','') if v.get('status') else ''
+    else:
+        val=f'({vtype})'
+    print(f'{k}: {val}')
+"
+```
+
+#### 페이지 블록 내용 조회
+```bash
+curl -s "$BASE/blocks/{page_id}/children?page_size=100" \
+  -H "$AUTH" -H "$VER" | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+for b in data.get('results',[]):
+    btype=b.get('type','')
+    content=b.get(btype,{})
+    if 'rich_text' in content:
+        text=''.join([t.get('plain_text','') for t in content.get('rich_text',[])])
+        print(f'[{btype}] {text}')
+    elif btype=='child_database':
+        print(f'[{btype}] {content.get(\"title\",\"\")}')
+    else:
+        print(f'[{btype}]')
+"
+```
+
+#### 페이지 생성
+```bash
+curl -s -X POST "$BASE/pages" \
+  -H "$AUTH" -H "$VER" -H "$CT" \
+  -d '{
+    "parent": {"page_id": "부모페이지ID"},
+    "properties": {
+      "title": {"title": [{"text": {"content": "페이지 제목"}}]}
+    },
+    "children": [
+      {
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [{"type": "text", "text": {"content": "본문 내용"}}]
+        }
+      }
+    ]
+  }'
+```
+
+#### 페이지 내용 덮어쓰기 (블록 전체 교체)
+```bash
+# 1단계: 기존 블록 삭제
+curl -s "$BASE/blocks/{page_id}/children?page_size=100" \
+  -H "$AUTH" -H "$VER" | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+for b in data.get('results',[]):
+    print(b['id'])
+" | while read block_id; do
+  curl -s -X DELETE "$BASE/blocks/$block_id" -H "$AUTH" -H "$VER" > /dev/null
+done
+
+# 2단계: 새 블록 추가
+curl -s -X PATCH "$BASE/blocks/{page_id}/children" \
+  -H "$AUTH" -H "$VER" -H "$CT" \
+  -d '{
+    "children": [
+      {
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [{"type": "text", "text": {"content": "새 내용"}}]
+        }
+      }
+    ]
+  }'
+```
+
+### 3. 블록
+
+#### 블록 추가 (append)
+```bash
+curl -s -X PATCH "$BASE/blocks/{page_id}/children" \
+  -H "$AUTH" -H "$VER" -H "$CT" \
+  -d '{
+    "children": [
+      {
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [{"type": "text", "text": {"content": "추가할 내용"}}]
+        }
+      }
+    ]
+  }'
+```
+
+#### 블록 삭제
+```bash
+curl -s -X DELETE "$BASE/blocks/{block_id}" \
+  -H "$AUTH" -H "$VER"
+```
+
+### 4. 데이터베이스
+
+#### 데이터베이스 조회
+```bash
+curl -s "$BASE/databases/{database_id}" \
+  -H "$AUTH" -H "$VER" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+title=''.join([t.get('plain_text','') for t in d.get('title',[])])
+print(f'Title: {title}')
+print(f'Properties:')
+for k,v in d.get('properties',{}).items():
+    print(f'  {k}: {v[\"type\"]}')
+"
+```
+
+### 5. 유저
+
+#### 현재 봇 정보
+```bash
+curl -s "$BASE/users/me" \
+  -H "$AUTH" -H "$VER" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print(f'Name: {d.get(\"name\",\"?\")}')
+print(f'Type: {d.get(\"type\",\"?\")}')
+print(f'ID: {d.get(\"id\",\"?\")}')
+"
+```
+
+## 주의사항
+
+- **블록 제한:** children append 시 한 번에 최대 100개 블록
+- **페이지 사이즈:** 기본 100, 최대 100 (page_size 파라미터)
+- **페이지네이션:** 응답에 `has_more: true`와 `next_cursor`가 있으면 `start_cursor` 파라미터로 다음 페이지 요청
+- **Rich Text 제한:** 단일 rich_text 블록 최대 2000자
+- **Rate Limit:** 초당 3요청 (Integration 기본)
+- **ID 형식:** UUID (하이픈 포함/미포함 모두 가능)

@@ -3,7 +3,7 @@
 #
 # 정책: 모든 소스 mutation 작업은 worktree 안에서 수행되어야 한다.
 #   cwd 또는 FILE_PATH 가 worktree (`*/worktrees/*`) 가 아니고
-#   functional exemption 14건 매칭 안 됨 → exit 2 차단.
+#   functional exemption 15건 매칭 안 됨 → exit 2 차단.
 #   단, cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) 면제 — worktree 생성 자체가
 #   불가능하므로 강제 차단이 작업을 막는다 (path-pattern 면제와 별개인 state-condition 면제).
 #
@@ -11,7 +11,7 @@
 #   - 모든 소스 작업 = worktree 격리 (사고 영구 차단)
 #   - feature 분기 = 사용자 요청 시 생성 (자동 강제 폐기)
 #
-# Functional exemption 14건:
+# Functional exemption 15건:
 #   1. */worktrees/*                  (worktree 자체)
 #   2. */state/sessions/*.lock        (session lock)
 #   3. */projects/*/memory/*          (auto memory)
@@ -26,6 +26,7 @@
 #   12. */.claude/commands/*         (슬래시 커맨드 정의 — 추적 파일이나 슬래시 호출 시 라이브 발효 필요 = hooks(#9)/CLAUDE.md(#11) 동질 path 면제, 2026-06-04)
 #   13. */.claude/skills/*           (스킬 정의 — commands(#12) 동질 path 면제, 2026-07-06)
 #   14. */.claude/README.md          (하니스 카탈로그 문서 — CLAUDE.md(#11) 동질, 라이브/문서 성격, 2026-07-06)
+#   15. */.claude/custom-plugin/*    (플러그인 commands/skills — hooks(#9)/commands(#12)/skills(#13) 동질 라이브 발효. git 추적 전환(2026-07-15)으로 #10 gitignore 면제 소멸 → 명시 path 면제 승격, backlog worktree-exempt-plugin-drift 해소)
 #
 # SSOT: CLAUDE.md §4.3 "worktree 항상 강제" + 본 hook
 # 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + custom-plugin/git/commands/{create,merge}.md
@@ -35,7 +36,7 @@ set -uo pipefail
 PAYLOAD=$(cat)
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "worktree-enforce" "enter" "pid=$$"
 
-# --- 면제 판정 단일 함수 (13 path-pattern + #10 check-ignore) ---
+# --- 면제 판정 단일 함수 (14 path-pattern + #10 check-ignore) ---
 # Edit/Write 모드와 Bash 모드 target 검사가 공유하는 단일 SSOT (v6, 2026-06-10 — 사용자 승인 오탐 픽스).
 is_exempt_path() {
   local P="$1"
@@ -53,6 +54,7 @@ is_exempt_path() {
     */.claude/commands/*)            return 0 ;;  # #12
     */.claude/skills/*)              return 0 ;;  # #13
     */.claude/README.md)             return 0 ;;  # #14
+    */.claude/custom-plugin/*)       return 0 ;;  # #15
     C:/Works/infra/*|/c/Works/infra/*) return 0 ;;  # #8
   esac
   # #10 (2026-05-29): untracked+ignored 로컬 전용 파일 — worktree 에 존재하지 않아 격리 불가능.

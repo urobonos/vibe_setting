@@ -1,0 +1,23 @@
+{
+  "name": "pv-local",
+  "owner": {
+    "name": "박재영"
+  },
+  "plugins": [
+    {
+      "name": "tools",
+      "source": "./tools",
+      "description": "개인 유틸리티 — 검색(search-chat/search-docset) + CLI(cli-bitbucket/cli-notion) + 보고·평가(report-work/kpi/competency)"
+    },
+    {
+      "name": "taskflow",
+      "source": "./taskflow",
+      "description": "작업 문서 생명주기 통합 (task-docs 수트) — 분석~회고 8단계 + working/ 저장·분배·재개·이동"
+    },
+    {
+      "name": "git",
+      "source": "./git",
+      "description": "git 워크플로우 — worktree 정착(create 신규 분기/merge 기존 분기 ff-only) + 커밋 포맷 SSOT·push 안내(push)"
+    }
+  ]
+}

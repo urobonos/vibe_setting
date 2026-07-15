@@ -1,0 +1,136 @@
+---
+description: 작업 분배 — 현재 작업/맥락을 독립 청크 N개로 분해 → 각 청크를 자기완결 분배 문서로 생성 + DISPATCH.md 에 태그 등록(available). 타 세션·에이전트가 `/taskflow:claim #tag` 로 배타적 claim. 짝 슬래시 = `/taskflow:claim`
+allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Agent
+argument-hint: "[작업명]  # 생략 시 현재 working/ 문서 또는 직전 대화 맥락에서 분해"
+---
+
+현재 세션의 작업을 **독립 청크 N개로 분해**해 각 청크를 자기완결 분배 문서로 만들고, `DISPATCH.md` 풀에 태그로 등록한다. 타 세션·에이전트팀이 `/taskflow:claim #tag` 로 배타적 claim 해 이어받는다. 짝 슬래시 = **`/taskflow:claim`**.
+
+## 핵심 원칙 — 독립 청크 (자기완결성)
+
+분배 청크는 **타 세션이 본 대화 맥락 없이(cold) 분배 문서만 읽고 착수**할 수 있어야 한다. 따라서:
+
+- **의존 0:** 청크 간 선후 의존이 없어야 병렬 claim 가능. 의존이 불가피하면 (a) 의존 청크를 하나의 태그로 묶거나 (b) 분배 문서 `## 참고` 에 선행 태그를 명시하고 선행 done 후 claim 안내.
+- **자기완결:** 각 분배 문서는 목표·배경 컨텍스트·작업 내용·DoD·대상 파일을 모두 포함. "위에서 말한", "아까 그" 류 외부 참조 금지.
+- **원자성:** 한 청크 = 한 책임 단위. claim 한 세션이 단독으로 완료 가능한 크기.
+
+> 분해 자체가 모호하거나 청크 의존이 복잡하면 `Agent` (Plan/general-purpose) 로 분해안을 먼저 도출 후 검토.
+
+## 동작 5단계
+
+| 단계 | 동작 | 결과 |
+|------|------|------|
+| ① 대상 작업 식별 | 인자 작업명 매칭 / 현재 working/ 문서 / 직전 대화 맥락 | 분해 원본 확정 |
+| ② 독립 청크 분해 | 작업을 의존 0 자기완결 청크 N개로 분해 (위 핵심 원칙) | 청크 목록 + 태그 |
+| ③ 분배 문서 생성 | 각 청크 → `docs/working/dispatch/{yyyy-mm-dd}-{product}-{작업명}-{tag}.md` Write | 자기완결 문서 N개 |
+| ④ DISPATCH 등록 | `dispatch_add` 로 각 태그 status=available 등록 | DISPATCH.md 갱신 |
+| ⑤ 분배 요약 출력 | 태그별 목표·대상·상태 표 + claim 안내 | 타 세션 진입점 |
+
+## 인자
+
+- `$ARGUMENTS` = (선택) 작업명. 생략 시 현재 진행 중 working/ 문서 또는 직전 대화 맥락에서 분해 대상 추론.
+
+## 태그 네이밍
+
+- 형식: `{작업slug}-{nn}` 자동 (예: `auth-refactor-01`) 또는 의미 부여 (예: `auth-jwt`, `auth-routes`).
+- 제약: **영숫자 + `-` `_` 만** (lock 디렉토리·파일 경로명에 사용 — `dispatch_tag_sanitize` 가 그 외 제거). 입력 `#` prefix 는 표시용, 저장은 `#` 없이.
+- 중복: 동일 태그 재분배는 available 상태만 덮어쓰기 가능 (claimed/done 은 `dispatch_add` 가 거부).
+
+## ③ 분배 문서 양식 (자기완결 — working/dispatch/ 평면)
+
+> **경로:** `~/.claude/docs/working/dispatch/{yyyy-mm-dd}-{product}-{작업명}-{tag}.md`. working/ 날짜폴더(`YYYYMMDD`) 밖이라 `working-register`·`output-naming-check`·`working-lifecycle` 비대상 (자동 register/이동 없음 — 분배 풀은 claim 전까지 '대기' 상태로 격리).
+
+```markdown
+---
+tag: {tag}
+작업명: {원본 작업명}
+product: {product}
+의존: 없음 (독립 청크)
+상태: available
+분배: {dispatched_by sid8} / {yyyy-mm-dd HH:MM}
+원본: {원본 working 문서 경로 또는 "대화 맥락"}
+---
+
+# 분배 #{tag}: {청크 제목}
+
+## 목표
+{이 청크 단독으로 달성할 결과 — 1~2줄}
+
+## 배경 컨텍스트
+{타 세션이 cold 로 이해하도록: 전체 작업 중 이 청크의 위치, 왜 필요한지, 선행 가정·환경}
+
+## 작업 내용
+- [ ] {구체 작업 1}
+- [ ] {구체 작업 2}
+
+## 완료 기준 (DoD)
+- [ ] {검증 가능한 완료 조건}
+
+## 대상 파일
+- `{파일 경로}` — {변경 요약}
+
+## 참고
+- 원본 작업 문서: `{경로}` (있으면)
+- 선행 태그: #{tag} done 후 진행 (의존 있으면)
+```
+
+## ④ DISPATCH 등록 (Bash)
+
+```bash
+source ~/.claude/hooks/lib/dispatch-utils.sh
+source ~/.claude/hooks/lib/product-resolver.sh
+PRODUCT=$(resolve_product "$PWD")
+# 각 청크마다 (tag, 작업명, product, 분배 문서 절대경로)
+dispatch_add "{tag}" "{작업명}" "$PRODUCT" "$HOME/.claude/docs/working/dispatch/{파일명}.md"
+```
+
+> `dispatch_add` 가 race-safe(mkdir lock)하게 DISPATCH.md 에 status=available 등록. 분배 문서 Write 전에 `mkdir -p ~/.claude/docs/working/dispatch` 1회.
+
+## ⑤ 분배 요약 출력
+
+```
+[Claude] 작업 'auth-refactor' → 독립 청크 3개 분배 완료:
+
+  #auth-jwt    | JWT 발급·검증 분리     | 대상: AuthService.php  | available
+  #auth-routes | 라우트 가드 재배치      | 대상: Routes.php       | available
+  #auth-test   | 인증 e2e 테스트 추가    | 대상: tests/Auth/      | available
+
+  타 세션/에이전트 진입: /taskflow:claim #auth-jwt
+  목록 조회:            /taskflow:claim           (인자 없음 = available 목록)
+```
+
+## §3 Checkpoint 우선 적용
+
+- 분배 문서 생성 = `docs/working/dispatch/` Write (Gate-0 면제 경로). DISPATCH 등록 = lib 함수 (인덱스 파일 mutation).
+- **분배 ≠ 실행.** 본 슬래시는 작업을 쪼개 등록만 한다. 실제 코드 변경은 claim 세션의 `/taskflow:execute`·`/taskflow:auto` 영역 — §3 매칭(비가역·광범위·외부)은 그 시점에 각 guard hook 이 강제.
+- 원본 작업이 §3 매칭(예: DB 마이그레이션·force push)이면 해당 청크 분배 문서 `## 참고` 에 "§3 — claim 후 사용자 명시 승인 필수" 명시.
+
+## SSOT
+
+| SSOT | 역할 |
+|------|------|
+| `~/.claude/hooks/lib/dispatch-utils.sh` | DISPATCH CRUD + 배타적 claim lib (본 슬래시 = `dispatch_add` 호출) |
+| `~/.claude/docs/working/DISPATCH.md` | 분배 풀 인덱스 (직접 편집 금지 — lib 경유) |
+| `~/.claude/hooks/lib/product-resolver.sh` | product 산출 |
+| **`~/.claude/custom-plugin/taskflow/commands/claim.md`** | **짝 슬래시 — #tag 배타적 claim + 분배 문서 로드** |
+| `~/.claude/custom-plugin/taskflow/commands/save.md` | 세션 마감 저장 (분배와 구분 — 저장은 단일 세션 보관, 분배는 타 세션 이관) |
+| `~/.claude/custom-plugin/taskflow/commands/plan.md` §step 분해 | 청크 분해 발상의 단일 세션판 (step=순차 의존 / 분배 청크=병렬 독립) |
+
+## 호출 예
+
+```
+/taskflow:dispatch                    ← 현재 working/ 문서 또는 대화 맥락을 청크 분해
+/taskflow:dispatch auth-refactor      ← 특정 작업을 청크 분해·태깅
+```
+
+## 차별점 (다른 슬래시와)
+
+| 슬래시 | 단위 | 소비 주체 | 의존 |
+|--------|------|----------|------|
+| `/taskflow:plan` step 분해 | step-NN 평면 파일 | **단일 세션** 순차 소비 (`/taskflow:execute`) | 순차 의존 (DAG) |
+| **`/taskflow:dispatch`** | **dispatch 청크 + #tag** | **타 세션·에이전트** 병렬 claim (`/taskflow:claim`) | **독립 (의존 0)** |
+| `/taskflow:save` | working/ 통합 문서 | 동일 세션 재개 (`/taskflow:load`) | - |
+
+## Changelog
+
+- 2026-06-15: 신설
