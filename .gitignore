@@ -92,4 +92,7 @@ docs-backup-*.zip
 .DS_Store
 Thumbs.db
 Desktop.ini
-custom-plugin/
+
+# custom-plugin: 2026-07-15 git 추적 전환 (이력·롤백 확보). 토큰류만 격리 유지.
+custom-plugin/tools/.token/
+custom-plugin/**/*.token
