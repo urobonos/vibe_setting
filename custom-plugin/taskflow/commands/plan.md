@@ -75,12 +75,30 @@ step: NN
 ### unified §계획 Step 분해 인덱스 표
 ```markdown
 ## Step 분해 (순차 실행 단위)
-| step | 제목 | step 파일 | 의존 | 완료 기준(DoD) | 상태 |
-|------|------|----------|------|---------------|------|
-| 01 | {제목} | `...-step-01-{slug}.md` | - | {DoD} | Pending |
-| 02 | {제목} | `...-step-02-{slug}.md` | 01 | {DoD} | Pending |
+| step | 제목 | step 파일 | 의존 | 병렬그룹 | 완료 기준(DoD) | 상태 |
+|------|------|----------|------|---------|---------------|------|
+| 01 | {제목} | `...-step-01-{slug}.md` | - | - | {DoD} | Pending |
+| 02 | {제목} | `...-step-02-{slug}.md` | 01 | A | {DoD} | Pending |
+| 03 | {제목} | `...-step-03-{slug}.md` | 01 | A | {DoD} | Pending |
 ```
 > `/taskflow:execute` 이 이 인덱스를 step-01 부터 의존 순서대로 순차 소비하며 상태를 `Pending → In Progress → Done` 으로 갱신한다.
+> **병렬그룹 열 (2026-07-16, dispatch 흡수):** 같은 그룹 문자(A/B/…)를 단 step 은 **상호 독립(의존 0, 파일 충돌 없음)** — 단일 세션은 인라인 병렬 소비, **다세션이면 아래 §"병렬 그룹 다세션 분배"가 DISPATCH 풀에 자동 등록**한다. `-` = 순차 전용(분배 비대상). 독립성 판정 = `/taskflow:survey` 재사용.
+
+### 병렬 그룹 다세션 분배 (dispatch 흡수, 2026-07-16)
+
+병렬그룹이 지정된 step 을 **다세션/에이전트가 나눠 처리**할 때, plan 이 해당 그룹 step 들을 DISPATCH 풀에 자동 등록한다 (구 `/taskflow:dispatch` 슬래시 흡수 — 별도 슬래시 호출 불요). 단일 세션 순차 처리면 등록 생략.
+
+```bash
+source ~/.claude/hooks/lib/dispatch-utils.sh
+source ~/.claude/hooks/lib/product-resolver.sh
+PRODUCT=$(resolve_product "$PWD")
+# 병렬그룹 지정 step 마다 (독립 = 의존 0, 자기완결 풀사이클 step 파일이 곧 분배 문서)
+dispatch_add "{작업명}-step-NN" "{작업명}" "$PRODUCT" "{step 평면 파일 절대경로}"
+```
+
+> **다세션 필요 판정:** 사용자가 다세션 병렬을 명시하거나 작업 규모가 커 분산이 필요할 때만 등록. 등록된 그룹은 `/taskflow:load #tag` 가 자동 claim 해 이어받는다 (claim 흡수). 기본(단일 세션)은 등록 없이 execute 가 병렬그룹을 인라인 병렬 소비.
+> **원자성:** 병렬그룹 step 은 **풀사이클 골격**(자기완결)이어야 분배 대상 — step 파일이 곧 자립 분배 문서라 별도 분배 문서 생성 불요. 경량 골격(순차 의존)은 병렬그룹 `-`.
+> **§3 매칭 그룹:** 특정 병렬그룹 step 이 §3(비가역·외부) 이면 등록하되 분배 문서 `## 참고` 에 "§3 — claim 후 사용자 명시 승인 필수" 명시 (claim 세션이 승인 흐름 재진입).
 
 ## 풀사이클 step (L·독립 다단위 M — 자기완결 단위)
 

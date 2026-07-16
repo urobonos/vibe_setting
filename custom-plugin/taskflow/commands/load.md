@@ -1,7 +1,7 @@
 ---
-description: 작업 로드 — working/ 잔여 작업(미체크 `- [ ]` ≥1) 보유 문서 + DISPATCH 분배 풀(`#tag` available) 동시 스캔 후 본문·재진입 안내. 짝 슬래시 = `/taskflow:save`·`/taskflow:claim`. **기본 전체 잔존 노출 (cwd 필터 기본 해제 — 인자 없음=전 product 잔여 전부, Status 무관) + 분배 풀 통합**
-allowed-tools: Bash, Read, Glob, Grep, PowerShell
-argument-hint: "[작업명|latest|all|{product}]  # 인자 없음 = 전체 product 잔존(=all), latest = 본 product 가장 최근, all = 전체, {product} = 특정 product 만"
+description: 작업 로드 — working/ 잔여 작업 + DISPATCH 분배 풀 스캔 후 본문·재진입 안내 + **`#tag` 배타 claim·로드(구 claim/consume 흡수, 2026-07-16)**. 짝 슬래시 = `/taskflow:save`. **기본 전체 잔존 노출 (cwd 필터 기본 해제) + 분배 풀 통합 + #tag 배타 claim**
+allowed-tools: Bash, Read, Glob, Grep, PowerShell, Edit
+argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음=전체 잔존 / #tag=분배 배타 claim+로드 / #tag done=완료"
 ---
 
 다음 세션 시작 직후 호출하는 잔존 작업 로드 슬래시. `/taskflow:save` 분기 B (Status: Partial + `## 잔여 작업` 섹션) 로 working/ 에 보관된 작업을 다시 컨텍스트로 끌어온다. **동시에 `/taskflow:dispatch` 가 DISPATCH 풀에 등록한 `available` 분배 작업(`#tag`)도 함께 표시** — 세션 시작 시 "내 잔존 작업 + 집어갈 분배 작업"을 한 화면에 노출한다. 분배 작업은 **표시·안내만** 하고 claim(점유) 은 짝 슬래시 `/taskflow:claim #tag` 영역이다 (본 슬래시 read-only 유지).
@@ -25,6 +25,9 @@ argument-hint: "[작업명|latest|all|{product}]  # 인자 없음 = 전체 produ
 | `latest` (`/taskflow:load latest`) | **본 product 안** 가장 최근 잔존 작업 1건 자동 선택 → 본문 + 잔여 항목 표시. 본 product 잔존 0건 시 fallback 안내 (전체 latest 진입 옵션) |
 | `all` (`/taskflow:load all`) | 전체 product 잔존 작업 목록 표시 (= 인자 없음과 동일) |
 | `{product}` (`/taskflow:load hongcafe_global_backend`) | 특정 product 잔존 작업 목록 표시 |
+| `#tag` (`/taskflow:load #auth-jwt`) | **분배 배타 claim + 문서 로드** (claim 흡수 — 아래 §"#tag claim") |
+| `#tag done` (`/taskflow:load #auth-jwt done`) | **claim 작업 완료 마킹** (`dispatch_done`) |
+| `#consume` (`/taskflow:load #consume`) | **available 자동 폴링·claim·소비 루프** (consume 흡수) |
 
 ## ① 잔존 작업 스캔 + 빈 폴더 정리
 
@@ -219,9 +222,49 @@ ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${작업명
 
 **§3 Checkpoint 우선 적용:** 재진입 후 작업 수행은 §3 Checkpoint 매칭 시 별도 승인 요구. 본 슬래시는 **로드 (read-only)** 만 담당, 실제 작업 실행은 후속 슬래시 또는 사용자 지시.
 
+## #tag — 분배 claim + 로드 (claim/consume 흡수, 2026-07-16)
+
+`#tag` 인자 = 구 `/taskflow:claim` 흡수. DISPATCH 풀에서 배타적 claim 후 분배 문서 로드. **claim 은 read-only 목록과 달리 lock mutation** (load 의 유일한 mutation 분기). 짝 = plan 의 병렬 그룹 자동 등록(`plan.md §"병렬 그룹 다세션 분배"`).
+
+> **점유 선확인 = `dispatch_claim` 내장:** 배타 lock + `TAKEN` 거부가 타 세션 침범을 원천 차단한다 (별도 §0 게이트 불요 — lock 이 곧 게이트). 어떤 분배 작업을 하기로 판단했더라도 분배 문서를 직접 열지 말고 **항상 이 claim 을 먼저** 거친다 (claim 이 `TAKEN` 이면 타 세션 소유).
+
+```bash
+source ~/.claude/hooks/lib/dispatch-utils.sh
+SID8="${CLAUDE_SESSION_ID:0:8}"
+[ -z "$SID8" ] && SID8="<현재 세션 sid 8자 — Claude 본체 기입>"
+OUT=$(dispatch_claim "{tag}" "$SID8"); RC=$?
+RESULT="${OUT%%|*}"; DOC="${OUT#*|}"
+```
+
+| RESULT (rc) | 처리 |
+|-------------|------|
+| `CLAIMED`/`ALREADY_YOURS`/`STOLEN` (0) | 분배 문서(`$DOC`) 본문 로드 + 터미널 제목 `#{tag}` 설정 + 진입 안내 (`/taskflow:execute`·`/taskflow:auto` 위임) |
+| `TAKEN:<sid>` (3) | **거부** — 타 세션 점유, 다른 태그 선택 또는 24h 후 |
+| `DONE` (4) | **거부** — 이미 완료 |
+| `NOTFOUND` (2) | available 목록 재표시 + 오타 확인 |
+
+> **`#tag done`:** `dispatch_done "{tag}" "$SID8"` — status=done + lock 정리 (claim 본인 sid 만 정상).
+
+### consume 흡수 (자동 폴링)
+
+`/taskflow:load #consume` (권장 `/loop /taskflow:load #consume`) = available 풀을 자동 폴링·claim·소비 연속 (구 `/taskflow:consume` 흡수). 풀이 빌 때까지 건별 `dispatch_claim` → `/taskflow:execute` 위임 → `dispatch_done`. worker 세션 무인 소비.
+
+## 터미널 제목 설정 (SSOT, claim.md 이전 2026-07-16)
+
+작업·분배 진행 슬래시가 진입 시 터미널 창 제목을 태스크명으로 설정한다 (다세션 병렬 창 식별). 본 섹션이 방식·형식의 단일 SSOT — `/taskflow:execute`·`/taskflow:auto`·`/taskflow:save`·`load #consume` 이 값만 다르게 참조한다.
+
+| 항목 | 값 |
+|------|-----|
+| **방식** | **PowerShell 도구**로 `$Host.UI.RawUI.WindowTitle = "{제목}"` (Bash 도구 금지 — 별도 PTY라 OSC 미반영, 검증 완료) |
+| **형식** | 분배(claim) = `#{tag}` / 워킹(execute·auto·load) = `#{작업명}` |
+| **원복** | 세션 마감(`/taskflow:save`) = `$Host.UI.RawUI.WindowTitle = (Split-Path -Leaf $PWD)` |
+| **전제** | `settings.json` env `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` (자동 제목 override 차단) |
+| **OS·실패** | Windows(PowerShell) 전용. 비-Windows·실패 시 무시하고 진행 |
+
 ## §3 Checkpoint 우선 적용
 
-- 본 슬래시 = **준 read-only** (Read / Glob / Grep / Bash 조회계 + **금일 이전 빈 폴더 `rmdir` 1종**). working/ 파일 자체 수정 없음.
+- 본 슬래시 = **잔존 스캔 read-only** (Read / Glob / Grep / Bash 조회계 + 빈 폴더 `rmdir`) + **`#tag` claim 시 lock mutation** (dispatch_claim). working/ 파일 자체 수정 없음.
+- **`#tag` claim = 회복 가능** (`dispatch_release` 로 available 복귀) — 사용자 승인 없이 진행 가능. claim 후 실제 코드 변경이 §3 매칭이면 그 시점 각 guard hook 강제.
 - **DISPATCH 분배 풀 = `dispatch_list` 조회만 (read-only).** claim(`dispatch_claim` = DISPATCH.md + lock mutation) 은 본 슬래시 비대상 — 짝 슬래시 `/taskflow:claim #tag` 영역. 본 슬래시는 `#tag` 표시 + claim 진입 안내까지만.
 - **빈 폴더 정리 예외 사유:** (1) `*.md` 파일 0건만 대상 → 데이터 손실 0, (2) `rmdir` 는 비어 있지 않은 폴더 자동 실패 → 안전 잠금, (3) 금일 폴더는 보호 (진행 중일 수 있음). §3 Checkpoint "비가역 작업" 매칭이지만 무해 정리로 한정 — 매 호출 사용자 승인 면제.
 - 실제 작업 진행 = 사용자 선택 후 후속 슬래시 호출 (`/taskflow:auto` 등) 또는 직접 지시.

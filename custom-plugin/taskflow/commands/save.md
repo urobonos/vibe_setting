@@ -1,7 +1,7 @@
 ---
-description: 작업 저장 — worktree 정착(승인 후 Claude 자동) + working/ 문서 마무리 + 잔여 작업 판정 후 working/ 기록 (Partial) 또는 tasks/ 이동 (Done) + 본 세션 claim DISPATCH 태그 정리(done/유지/release). 짝 슬래시 = `/taskflow:load`·`/taskflow:claim`
+description: 작업 저장 — worktree 정착 + working/ 문서 마무리 + 잔여 판정 후 working/ 기록(Partial) 또는 tasks/ 이동(Done) + DISPATCH 태그 정리 + **즉시 이동 모드(구 done 흡수, 2026-07-16)**. 짝 슬래시 = `/taskflow:load`
 allowed-tools: Bash, Edit, Read, Glob, Grep, PowerShell
-argument-hint: "[작업명]  # 생략 시 working/ 전체 저장"
+argument-hint: "[작업명|now]  # 생략=전체 저장(판정 동반) / now=즉시 이동(판정 생략, 구 done 흡수)"
 ---
 
 세션 종료 직전 호출하는 통합 저장 슬래시. `/taskflow:done` (단순 이동) 과 `/taskflow:auto` (실행 모드 진입) 의 중간 — **세션 마감 저장** 역할. 짝 슬래시 = **`/taskflow:load`** (다음 세션 시작 시 잔존 작업 불러오기). **+ 본 세션이 `/taskflow:claim` 으로 claim 한 DISPATCH 태그 작업도 working 문서 Done/Partial 판정에 연동해 함께 정리** (완료 → `dispatch_done` / 이어감 → claimed 유지 / 포기 → `dispatch_release`).
@@ -95,6 +95,19 @@ Status: Partial
 
 → working/ 원본 유지 (이동 SKIP). 다음 세션에서 `/taskflow:load` 호출 → 잔여 항목 본문 표시 → 처리 후 다시 `/taskflow:save` 시 잔여 0건이면 자동 이동.
 
+### 즉시 이동 모드 (`save now` — 구 done 흡수, 2026-07-16)
+
+`now` 인자 = 잔여 판정·Self-Critique 보강을 **생략하고 working/ → tasks/ 즉시 이동** (구 `/taskflow:done`). 긴급 정리·다중 파일 일괄 이동용. `working-lifecycle.sh` 를 done.md 와 동일한 UserPromptSubmit 경로로 직접 호출 → 이동 + **DISPATCH done 문서 일괄 정리**(`dispatch_purge_done`)까지 포함:
+
+```bash
+# 인자 없음 — 전체 일괄 즉시 이동 (판정 생략)
+bash ~/.claude/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSubmit","prompt":"/taskflow:done"}'
+# 특정 작업만
+bash ~/.claude/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSubmit","prompt":"/taskflow:done {작업명}"}'
+```
+
+> **`save` (판정) vs `save now` (즉시):** 기본 `save` = 잔여 판정 → Done/Partial 분기 (분기 A/B 위). `save now` = 판정 없이 강제 이동 (Status 무관, 긴급). 자연어 `작업 완료`·`tasks 이동`·`done` 키워드도 `working-lifecycle.sh` UserPromptSubmit 경로가 직접 처리 (부정문 가드·확인 스텝 = hook 내장).
+
 ### REGISTRY 갱신 (2026-05-15 신설)
 
 본 슬래시 ② working/ 문서 마무리 직후 `~/.claude/docs/working/REGISTRY.md` 갱신:
@@ -175,7 +188,7 @@ done
 | **`~/.claude/custom-plugin/git/commands/{create,merge}.md`** | **① 정착 절차 정본 — 명령 순서 / 개별 Bash 호출 강제 / ff-only 실패 시 cherry-pick fallback / Claude 자동 실행 (2026-06-04~)** |
 | `~/.claude/hooks/branch-enforce.sh` | push (§1) + master/main merge·checkout·switch (§1.5) + master/main HEAD cherry-pick (§1.6) 차단. **`worktree remove`·`branch -D` 는 본 hook 비대상** (`branch -D wip/*` 단독은 `git-guard.py` 면제) |
 | `~/.claude/skills/task-docs/references/unified-template.md` | 양식 SSOT (잔여 작업 섹션 포함) |
-| `~/.claude/custom-plugin/taskflow/commands/done.md` | 본 슬래시의 ③-A 분기 (단순 이동) 단독 진입점 |
+| `~/.claude/hooks/working-lifecycle.sh` (즉시 이동) | `save now` = 구 `/taskflow:done` 흡수 (판정 생략 강제 이동 + dispatch_purge_done), 2026-07-16 |
 | `~/.claude/custom-plugin/taskflow/commands/auto.md` | 자동진행 맥락의 ① 정착 진입점 요약 (절차 본문은 위 `git/commands/{create,merge}.md` 정본) |
 | **`~/.claude/custom-plugin/taskflow/commands/load.md`** | **짝 슬래시 — Status: Partial 잔존 작업 불러오기 (다음 세션 진입점)** |
 | `~/.claude/custom-plugin/taskflow/commands/save.md` (본 파일) | 세션 마감 통합 저장 — worktree + 문서 + 잔여 동시 처리 |
