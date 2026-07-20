@@ -115,7 +115,7 @@ argument-hint: "[작업명]  # 생략 시 본 세션 전체 회고"
 | `/taskflow:deploy` | §리뷰 통과 후 | git-push + branch-enforce 안내 |
 | **`/taskflow:retro`** | §배포 후 / 세션 마감 직전 | history.md + summary.md 기록 + 회고 요약 |
 | `/taskflow:save` | 세션 마감 직전 | worktree 정착 + 잔여 작업 통합 저장 (회고 와 보완 관계) |
-| `/taskflow:done` | 작업 완료 직후 | working/ → tasks/ 단순 이동 |
+| `save now` | 작업 완료 직후 | working/ → tasks/ 단순 이동 |
 
 ## Changelog
 

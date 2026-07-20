@@ -444,7 +444,7 @@ Status: Done
 | 트리거 | 조건 | 발동 시점 |
 |--------|------|---------|
 | 본문 마커 자동 | `^Status:\s*Done` + `## Self-Critique` 동시 존재 | PostToolUse (Edit/Write 직후) |
-| 사용자 명시 | `/taskflow:done` 슬래시 또는 `작업 완료` / `tasks 이동` / `done` 자연어 | UserPromptSubmit |
+| 사용자 명시 | `/taskflow:save now` 슬래시 또는 `working-lifecycle.sh` 자연어(`작업 완료` / `tasks 이동` / `done`) 키워드 | UserPromptSubmit |
 
 ## 사후 hook 검증 (tasks/ 직접 Edit/Write 시)
 

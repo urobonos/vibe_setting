@@ -36,7 +36,7 @@ argument-hint: "[작업 내용 — 선택]"
 
 본 slash 진입 시 Claude 본체는 **항상 worktree 생성 후 작업한다**. cwd 영역 무관 — `~/.claude/` 영역 (claude-harness) 포함 모든 영역 적용. 구 (2026-05-13) "cwd 분기 판단" 폐기.
 
-> **터미널 제목 설정 (진입 직후):** worktree SLUG(작업명) 확정 후 PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = "#{작업명}"` 실행 (예: `#commerce-price-audit`). 방식·전제·OS·실패 처리 = `custom-plugin/taskflow/commands/claim.md` §"터미널 제목 설정 (SSOT)".
+> **터미널 제목 설정 (진입 직후):** worktree SLUG(작업명) 확정 후 PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = "#{작업명}"` 실행 (예: `#commerce-price-audit`). 방식·전제·OS·실패 처리 = `custom-plugin/taskflow/commands/load.md` §"터미널 제목 설정 (SSOT)".
 
 ### worktree 적용 절차 (Claude 본체 책임)
 

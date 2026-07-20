@@ -4,7 +4,7 @@ allowed-tools: Bash, Edit, Read, Glob, Grep, PowerShell
 argument-hint: "[작업명|now]  # 생략=전체 저장(판정 동반) / now=즉시 이동(판정 생략, 구 done 흡수)"
 ---
 
-세션 종료 직전 호출하는 통합 저장 슬래시. `/taskflow:done` (단순 이동) 과 `/taskflow:auto` (실행 모드 진입) 의 중간 — **세션 마감 저장** 역할. 짝 슬래시 = **`/taskflow:load`** (다음 세션 시작 시 잔존 작업 불러오기). **+ 본 세션이 `/taskflow:claim` 으로 claim 한 DISPATCH 태그 작업도 working 문서 Done/Partial 판정에 연동해 함께 정리** (완료 → `dispatch_done` / 이어감 → claimed 유지 / 포기 → `dispatch_release`).
+세션 종료 직전 호출하는 통합 저장 슬래시. `save now` (단순 이동) 과 `/taskflow:auto` (실행 모드 진입) 의 중간 — **세션 마감 저장** 역할. 짝 슬래시 = **`/taskflow:load`** (다음 세션 시작 시 잔존 작업 불러오기). **+ 본 세션이 `/taskflow:load #tag` 로 claim 한 DISPATCH 태그 작업도 working 문서 Done/Partial 판정에 연동해 함께 정리** (완료 → `dispatch_done` / 이어감 → claimed 유지 / 포기 → `dispatch_release`).
 
 ## 동작 4단계
 
@@ -12,7 +12,7 @@ argument-hint: "[작업명|now]  # 생략=전체 저장(판정 동반) / now=즉
 |------|------|------|
 | ① worktree 정착 | `git worktree list` 스캔 → `~/.claude/worktrees/` 존재 시 정착 여부 승인 요청 | 승인 후 Claude 직접 실행 (`/git:create`·`/git:merge`) |
 | ② working/ 문서 마무리 | working/ 스캔 → 각 파일 잔여 작업 판정 | Status 결정 (Done / Partial) |
-| ③ 잔여 작업 기록 / 이동 | 잔여 0건 = `Status: Done` 부착 → tasks/ 이동 (미이동 시 `/taskflow:done`) / 잔여 ≥ 1 건 = `Status: Partial` + `## 잔여 작업` 섹션 추가 → working/ 유지 (다음 세션 `/taskflow:load` 진입점) | 분기 처리 |
+| ③ 잔여 작업 기록 / 이동 | 잔여 0건 = `Status: Done` 부착 → tasks/ 이동 (미이동 시 `save now`) / 잔여 ≥ 1 건 = `Status: Partial` + `## 잔여 작업` 섹션 추가 → working/ 유지 (다음 세션 `/taskflow:load` 진입점) | 분기 처리 |
 | ④ 분배 태그 정리 | 본 세션 sid 가 claim 한 DISPATCH 태그 조회 → 완료판정 연동 (완료 `dispatch_done` / 이어감 claimed 유지 / 포기 `dispatch_release`) | 분배 풀 정합 |
 
 ## 호출 방식
@@ -70,7 +70,7 @@ Status: Done
 
 > **코드 변경 동반 시 verify+review 필수 (2026-07-14):** 마감 대상 작업이 **코드 파일(php/js/ts/py/sql)** 을 변경했다면 `Status: Done` 부착 **전** `/taskflow:verify`(e2e 5점)·`/taskflow:review` 체인 완료를 확인한다 (CLAUDE.md §4.3 "코드 라이프사이클 게이트", `execute.md:112-117` 동일 문구). 미완료 시 verify+review 먼저 수행 후 Done 판정 — QA-after 규율이 `/taskflow:save` 의 Done 경로로 우회되지 않도록. 코드 변경 없는 문서·분석 작업은 비대상.
 
-> **이동 확인 필수 (2026-07-09):** PostToolUse hook 자동 트리거가 미작동한 실측 사례가 있다 (memory `backlog_backlog-lifecycle-posttooluse-nomove` — 수동 호출은 정상). `Status: Done` 부착 직후 **working/ 에 파일이 잔류하는지 확인**하고, 잔류 시 `/taskflow:done` 으로 명시 이동한다. 잔류 방치 = 다음 세션 `/taskflow:load` 노이즈 + REGISTRY orphan 누적.
+> **이동 확인 필수 (2026-07-09):** PostToolUse hook 자동 트리거가 미작동한 실측 사례가 있다 (memory `backlog_backlog-lifecycle-posttooluse-nomove` — 수동 호출은 정상). `Status: Done` 부착 직후 **working/ 에 파일이 잔류하는지 확인**하고, 잔류 시 `save now` 로 명시 이동한다. 잔류 방치 = 다음 세션 `/taskflow:load` 노이즈 + REGISTRY orphan 누적.
 
 ### 분기 B — 잔여 ≥ 1건 (`/taskflow:load` 진입점)
 
@@ -121,7 +121,7 @@ bash ~/.claude/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSub
 
 ## ④ 분배 태그 정리 (DISPATCH, 2026-06-15 신설)
 
-② working/ 문서 Done/Partial 판정과 **대칭**으로, 본 세션이 `/taskflow:claim` 으로 claim 한 DISPATCH 태그를 세션 마감 시 정리한다. **본 세션 claim 분만 대상** — 분배만 하고 미claim된 `available` 태그는 비대상 (풀 유지, 타 세션용). 타 세션이 claim 한 태그는 건드리지 않는다.
+② working/ 문서 Done/Partial 판정과 **대칭**으로, 본 세션이 `/taskflow:load #tag` 로 claim 한 DISPATCH 태그를 세션 마감 시 정리한다. **본 세션 claim 분만 대상** — 분배만 하고 미claim된 `available` 태그는 비대상 (풀 유지, 타 세션용). 타 세션이 claim 한 태그는 건드리지 않는다.
 
 ### 본 세션 claim 태그 식별 (sid 기반)
 
@@ -148,7 +148,7 @@ done
 | 판정 | 동작 | 명령 |
 |------|------|------|
 | **완료** (working Done / DoD 전부 `[x]`) | status=done + lock 정리 | `dispatch_done "{tag}" "$SID8"` |
-| **이어감** (working Partial / 잔여 ≥1) | claimed 유지 (다음 세션 `/taskflow:claim #tag` 으로 재개) | (mutation 없음 — 유지) |
+| **이어감** (working Partial / 잔여 ≥1) | claimed 유지 (다음 세션 `/taskflow:load #tag` 으로 재개) | (mutation 없음 — 유지) |
 | **명시 포기** (이 세션 더 안 함, 타 세션 이양) | available 복귀 | `dispatch_release "{tag}" "$SID8"` |
 
 > **세션 완전 종료 일괄 release (2026-06-15):** 이어갈 태그 없이 세션을 마칠 때는 본 세션 claim 전체를 한 번에 풀 수 있다 — `dispatch_release_session "$SID8"` (claim 태그 전부 `available` + dispatch lock 제거) + `registry_release_session "$SID8" paused` (REGISTRY entry + session lock). **Stop hook (`working-release.sh`) 이 세션 종료 시 동일 동작을 자동 수행**하므로, 슬래시 없이 종료해도 orphan claim/lock 은 남지 않는다 (본 ④ = 명시 정리 진입점, Stop = 안전망).
@@ -166,7 +166,7 @@ done
 
 ## 터미널 제목 원복 (세션 마감)
 
-세션 마감이므로 진행 중 설정됐던 `#{작업명}` 터미널 제목을 현재 폴더명으로 리셋한다 — PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = (Split-Path -Leaf $PWD)` 실행. 방식·전제 = `custom-plugin/taskflow/commands/claim.md` §"터미널 제목 설정 (SSOT)". 비-Windows·실패 시 무시.
+세션 마감이므로 진행 중 설정됐던 `#{작업명}` 터미널 제목을 현재 폴더명으로 리셋한다 — PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = (Split-Path -Leaf $PWD)` 실행. 방식·전제 = `custom-plugin/taskflow/commands/load.md` §"터미널 제목 설정 (SSOT, claim.md 이전 2026-07-16)". 비-Windows·실패 시 무시.
 
 ## §3 Checkpoint 우선 적용
 
@@ -183,8 +183,6 @@ done
 | `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + §4.3 "branch·worktree·push·머지 통합 정책" | 정책 SSOT |
 | `~/.claude/hooks/working-lifecycle.sh` | Status: Done 자동 이동 본체 |
 | **`~/.claude/hooks/lib/dispatch-utils.sh`** | **본 세션 claim DISPATCH 태그 정리 (`dispatch_done`/`dispatch_release`/`dispatch_list claimed`) — ④ 단계** |
-| **`~/.claude/custom-plugin/taskflow/commands/dispatch.md`** | **분배 작업 생성자 (DISPATCH 등록) — 본 슬래시 ④가 정리하는 태그의 작성 측** |
-| **`~/.claude/custom-plugin/taskflow/commands/claim.md`** | **분배 태그 claim 진입점 — 본 슬래시 ④가 정리하는 claim 의 생성자 (claim↔정리 짝)** |
 | **`~/.claude/custom-plugin/git/commands/{create,merge}.md`** | **① 정착 절차 정본 — 명령 순서 / 개별 Bash 호출 강제 / ff-only 실패 시 cherry-pick fallback / Claude 자동 실행 (2026-06-04~)** |
 | `~/.claude/hooks/branch-enforce.sh` | push (§1) + master/main merge·checkout·switch (§1.5) + master/main HEAD cherry-pick (§1.6) 차단. **`worktree remove`·`branch -D` 는 본 hook 비대상** (`branch -D wip/*` 단독은 `git-guard.py` 면제) |
 | `~/.claude/skills/task-docs/references/unified-template.md` | 양식 SSOT (잔여 작업 섹션 포함) |
@@ -213,7 +211,7 @@ done
            - 2026-05-14-hongcafe_global_backend-auth-refactor.md → 잔여 0건
            - 2026-05-14-claude-harness-hook-cleanup.md → 잔여 3건 (미체크 박스)
         ③ 처리:
-           - auth-refactor → Status: Done 부착 → tasks/ 이동 (미이동 시 /taskflow:done 명시 호출)
+           - auth-refactor → Status: Done 부착 → tasks/ 이동 (미이동 시 save now 명시 호출)
            - hook-cleanup → Status: Partial + ## 잔여 작업 섹션 추가 → working/ 유지
         ④ 분배 태그 정리:
            - 본 세션 claim 태그 조회 (sid 기반) → 해당 0건이면 SKIP
@@ -229,7 +227,7 @@ done
 | 슬래시 | 시점 | 범위 |
 |--------|------|------|
 | `/taskflow:auto` | 작업 시작·중간 | 묶음 승인 모드 진입 (실행) |
-| `/taskflow:done` | 작업 완료 직후 | working/ → tasks/ 단순 이동 (분기 A 만) |
+| `save now` | 작업 완료 직후 | working/ → tasks/ 단순 이동 (분기 A 만) |
 | **`/taskflow:save`** | **세션 마감 직전** | **worktree + 문서 + 잔여 + 본 세션 claim 분배 태그 정리 (분기 A + B + worktree + DISPATCH ④)** |
 | **`/taskflow:load`** | **다음 세션 시작 직후** | **Status: Partial 잔존 작업 식별 + 재진입 안내** |
 

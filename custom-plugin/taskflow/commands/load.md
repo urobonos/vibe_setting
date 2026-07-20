@@ -4,7 +4,7 @@ allowed-tools: Bash, Read, Glob, Grep, PowerShell, Edit
 argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음=전체 잔존 / #tag=분배 배타 claim+로드 / #tag done=완료"
 ---
 
-다음 세션 시작 직후 호출하는 잔존 작업 로드 슬래시. `/taskflow:save` 분기 B (Status: Partial + `## 잔여 작업` 섹션) 로 working/ 에 보관된 작업을 다시 컨텍스트로 끌어온다. **동시에 `/taskflow:dispatch` 가 DISPATCH 풀에 등록한 `available` 분배 작업(`#tag`)도 함께 표시** — 세션 시작 시 "내 잔존 작업 + 집어갈 분배 작업"을 한 화면에 노출한다. 분배 작업은 **표시·안내만** 하고 claim(점유) 은 짝 슬래시 `/taskflow:claim #tag` 영역이다 (본 슬래시 read-only 유지).
+다음 세션 시작 직후 호출하는 잔존 작업 로드 슬래시. `/taskflow:save` 분기 B (Status: Partial + `## 잔여 작업` 섹션) 로 working/ 에 보관된 작업을 다시 컨텍스트로 끌어온다. **동시에 `/taskflow:dispatch` 가 DISPATCH 풀에 등록한 `available` 분배 작업(`#tag`)도 함께 표시** — 세션 시작 시 "내 잔존 작업 + 집어갈 분배 작업"을 한 화면에 노출한다. 분배 작업도 load 가 `#tag` 로 직접 claim 한다 (아래 §"#tag claim" 참조).
 
 **기본 전체 잔존 노출 (2026-06-18~ 변경):** 인자 없음(`/taskflow:load`) = product 구분 없이 working/ 내 **잔여 작업(미체크 `- [ ]` ≥ 1) 보유 문서 전부** 노출 (Status `Partial`/`Plan Complete`/`폐기` 무관 — 잔여가 있으면 모두). `latest` 만 `hooks/lib/product-resolver.sh` 의 `resolve_product` 로 현재 cwd → 본 product 안 자동 선택 (자동 선택은 라우팅 정확도가 중요하므로 cwd 매칭 유지). 좁혀 보려면 `/taskflow:load {product}` 명시. **Why:** 다레포 환경에서 본 product 잔존이 0건이어도 타 product 진행 작업을 한눈에 봐야 세션 연속성·작업 누락 방지가 된다 (구 cwd 1차 필터는 본 product 0건 시 빈 화면 → 누락 위험). **자동 선택(`latest`)만** cwd 라우팅을 유지해 잘못된 product 빨려듦을 방지한다.
 
@@ -103,7 +103,7 @@ for dir in ~/.claude/docs/working/*/; do
   fi
 done
 
-# 4) DISPATCH 분배 풀 조회 — claim 가능(available) (read-only; claim 은 /taskflow:claim 영역)
+# 4) DISPATCH 분배 풀 조회 — claim 가능(available) (여기는 목록 조회만 read-only; claim 은 #tag 분기)
 source ~/.claude/hooks/lib/dispatch-utils.sh
 # available 표시 — 분배 작업은 #tag prefix. product = 표 4번째 컬럼($4), working 잔존과 동일 필터(TARGET_PRODUCT)
 dispatch_list available | awk -F"$DISPATCH_FS" -v p="$TARGET_PRODUCT" '
@@ -112,9 +112,9 @@ dispatch_list available | awk -F"$DISPATCH_FS" -v p="$TARGET_PRODUCT" '
   { other++ }
   END { if (other) printf "[타 product 분배] %d 건 — /taskflow:load all 로 조회\n", other }
 '
-# claimed(점유 중) 카운트 요약 — 상세·claim 은 /taskflow:claim 영역
+# claimed(점유 중) 카운트 요약 — 상세·claim 은 #tag 분기
 CLAIMED_CNT=$(dispatch_list claimed | grep -cE '^\|')
-[ "${CLAIMED_CNT:-0}" -gt 0 ] && echo "[분배 풀] claimed(점유 중) ${CLAIMED_CNT} 건 — 상세는 /taskflow:claim"
+[ "${CLAIMED_CNT:-0}" -gt 0 ] && echo "[분배 풀] claimed(점유 중) ${CLAIMED_CNT} 건 — 상세는 /taskflow:load"
 ```
 
 각 파일에 대해 메타 추출:
@@ -150,11 +150,11 @@ CLAIMED_CNT=$(dispatch_list claimed | grep -cE '^\|')
 
         분배 풀 claim 가능 (전체, #tag):
 
-  #mod20-sns-token-svc | gantt-progress | available → /taskflow:claim #mod20-sns-token-svc
+  #mod20-sns-token-svc | gantt-progress | available → /taskflow:load #mod20-sns-token-svc
 
   본 cwd product 안 가장 최근만 자동 선택: /taskflow:load latest
   특정 product 로 좁히기:                 /taskflow:load infra
-  분배 작업 claim:                        /taskflow:claim #mod20-sns-token-svc
+  분배 작업 claim:                        /taskflow:load #mod20-sns-token-svc
 ```
 
 ### `{작업명}` — 본문 출력 (product 무관)
@@ -193,7 +193,7 @@ ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${작업명
 
 ## ③ 재진입 안내
 
-> **터미널 제목 설정:** `{작업명}`·`latest` 로 특정 작업을 로드(본문 출력)한 경우 PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = "#{작업명}"` 설정 (목록 표시 분기 `없음`·`all`·`{product}` 은 제외 — 로드한 단일 작업이 없으므로). 방식·전제 = `custom-plugin/taskflow/commands/claim.md` §"터미널 제목 설정 (SSOT)".
+> **터미널 제목 설정:** `{작업명}`·`latest` 로 특정 작업을 로드(본문 출력)한 경우 PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = "#{작업명}"` 설정 (목록 표시 분기 `없음`·`all`·`{product}` 은 제외 — 로드한 단일 작업이 없으므로). 방식·전제 = 아래 §"터미널 제목 설정 (SSOT)".
 
 ### 잔존 작업 (working/ Partial) — 본문 표시 후 잔여 항목 요약
 
@@ -213,11 +213,11 @@ ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${작업명
 
 ### 분배 작업 (DISPATCH available) — claim 안내
 
-분배 작업은 본 슬래시에서 **표시·안내만** 한다 (claim = lock mutation = `/taskflow:claim` 영역). `#tag` 진입:
+분배 작업은 load 가 `#tag` 로 직접 배타적 claim 한다 (아래 §"#tag claim" 참조). `#tag` 진입:
 
 ```
-  분배 작업 claim:  /taskflow:claim #hook-refactor-01    ← 배타적 claim + 분배 문서 로드
-  분배 목록 조회:   /taskflow:claim                       ← available 전체
+  분배 작업 claim:  /taskflow:load #hook-refactor-01      ← 배타적 claim + 분배 문서 로드
+  분배 목록 조회:   /taskflow:load                         ← available 전체
 ```
 
 **§3 Checkpoint 우선 적용:** 재진입 후 작업 수행은 §3 Checkpoint 매칭 시 별도 승인 요구. 본 슬래시는 **로드 (read-only)** 만 담당, 실제 작업 실행은 후속 슬래시 또는 사용자 지시.
@@ -265,10 +265,10 @@ RESULT="${OUT%%|*}"; DOC="${OUT#*|}"
 
 - 본 슬래시 = **잔존 스캔 read-only** (Read / Glob / Grep / Bash 조회계 + 빈 폴더 `rmdir`) + **`#tag` claim 시 lock mutation** (dispatch_claim). working/ 파일 자체 수정 없음.
 - **`#tag` claim = 회복 가능** (`dispatch_release` 로 available 복귀) — 사용자 승인 없이 진행 가능. claim 후 실제 코드 변경이 §3 매칭이면 그 시점 각 guard hook 강제.
-- **DISPATCH 분배 풀 = `dispatch_list` 조회만 (read-only).** claim(`dispatch_claim` = DISPATCH.md + lock mutation) 은 본 슬래시 비대상 — 짝 슬래시 `/taskflow:claim #tag` 영역. 본 슬래시는 `#tag` 표시 + claim 진입 안내까지만.
+- **DISPATCH 분배 풀 목록 조회(`dispatch_list`) = read-only.** `#tag` claim(`dispatch_claim` = DISPATCH.md + lock mutation) 은 본 슬래시가 직접 수행한다 (아래 §"#tag claim").
 - **빈 폴더 정리 예외 사유:** (1) `*.md` 파일 0건만 대상 → 데이터 손실 0, (2) `rmdir` 는 비어 있지 않은 폴더 자동 실패 → 안전 잠금, (3) 금일 폴더는 보호 (진행 중일 수 있음). §3 Checkpoint "비가역 작업" 매칭이지만 무해 정리로 한정 — 매 호출 사용자 승인 면제.
 - 실제 작업 진행 = 사용자 선택 후 후속 슬래시 호출 (`/taskflow:auto` 등) 또는 직접 지시.
-- 잔존 작업 파일 자체 삭제·이동 = 본 슬래시 비대상 — `/taskflow:save` 또는 `/taskflow:done` 영역.
+- 잔존 작업 파일 자체 삭제·이동 = 본 슬래시 비대상 — `/taskflow:save` 또는 `/taskflow:save now` 영역.
 
 ## SSOT
 
@@ -276,14 +276,12 @@ RESULT="${OUT%%|*}"; DOC="${OUT#*|}"
 |------|------|
 | `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" | working/ 경로 정책 |
 | **`~/.claude/hooks/lib/product-resolver.sh`** | **cwd → product 산출 (worktree 안 호출 시 원본 repo 역해석)** |
-| **`~/.claude/hooks/lib/dispatch-utils.sh`** | **DISPATCH 분배 풀 조회 (`dispatch_list available/claimed`) — read-only, claim 미수행** |
-| **`~/.claude/custom-plugin/taskflow/commands/dispatch.md`** | **분배 작업 생성자 (DISPATCH 등록) — 본 슬래시가 읽는 풀의 작성 측** |
-| **`~/.claude/custom-plugin/taskflow/commands/claim.md`** | **짝 슬래시 — `#tag` 배타적 claim + 분배 문서 로드 (본 슬래시는 표시·안내, claim 은 작업시작)** |
+| **`~/.claude/hooks/lib/dispatch-utils.sh`** | **DISPATCH 분배 풀 조회(`dispatch_list`, read-only) + `#tag` claim/done(`dispatch_claim`/`dispatch_done`, mutation) — 본 슬래시가 직접 호출** |
 | `~/.claude/hooks/working-lifecycle.sh` | working/ → tasks/ 이동 본체 (본 슬래시는 read-only, 호출 안 함) |
 | `~/.claude/skills/task-docs/references/unified-template.md` | unified 양식 (Status / 잔여 작업 섹션 위치) |
 | **`~/.claude/custom-plugin/taskflow/commands/save.md`** | **짝 슬래시 — Status: Partial 마킹 + `## 잔여 작업` 섹션 작성 (잔존 작업 생성자)** |
 | `~/.claude/custom-plugin/taskflow/commands/auto.md` | 잔여 일괄 처리 시 후속 진입점 |
-| `~/.claude/custom-plugin/taskflow/commands/load.md` (본 파일) | 잔존 작업 read-only 식별·표시 진입점 |
+| `~/.claude/custom-plugin/taskflow/commands/load.md` (본 파일) | 잔존 작업 식별·표시 + `#tag` claim 진입점 |
 | **REGISTRY 갱신 책임 (audit M13 명문 2026-05-20)** | **읽기 only — active/paused/orphan 3분류 표시. mutation 0 (본 슬래시는 read-only, 갱신은 작업저장 영역)** |
 
 ## 호출 예
@@ -336,10 +334,9 @@ cwd 미스매치 예시 (본 cwd = `C:\Works\hongcafe_global_backend`, 본 produ
 | 슬래시 | 시점 | 동작 |
 |--------|------|------|
 | `/taskflow:auto` | 작업 시작·중간 | 묶음 승인 모드 진입 (실행, mutation 허용) |
-| `/taskflow:done` | 작업 완료 직후 | working/ → tasks/ 단순 이동 (mutation) |
+| `/taskflow:save now` | 작업 완료 직후 | working/ → tasks/ 즉시 이동 모드, 판정 생략 (mutation) |
 | `/taskflow:save` | 세션 마감 직전 | worktree + 문서 + 잔여 저장 (mutation) |
-| `/taskflow:claim` | 타 세션·에이전트 | 분배 풀 `#tag` 배타적 claim + 분배 문서 로드 (mutation: lock) |
-| **`/taskflow:load`** | **다음 세션 시작 직후** | **전체 product 잔존(잔여 미체크 ≥1, Status 무관) + DISPATCH `available`(`#tag`) 식별 + 본문 표시 + 빈 폴더 자동 정리 (준 read-only, claim 안 함). `latest` 만 본 cwd product 자동 선택** |
+| **`/taskflow:load`** | **다음 세션 시작 직후 / 타 세션·에이전트** | **전체 product 잔존(잔여 미체크 ≥1, Status 무관) + DISPATCH `available`(`#tag`) 식별 + 본문 표시 + 빈 폴더 자동 정리 + `#tag` 배타적 claim(mutation: lock, 구 claim 흡수). `latest` 만 본 cwd product 자동 선택** |
 
 ## Changelog
 

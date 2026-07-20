@@ -26,7 +26,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | **③.5 QA 게이트 (조건부)** | **외부 참조 문서 존재 시에만** — worktree 변경분(신규 파일 포함) ↔ 외부 문서를 단일 subagent 가 대조 (아래 §"QA 게이트"). 외부 문서 없으면 skip. Status 마킹 *전* | **PASS / skip → ④ 진행 / FAIL → §잔여 이슈 + Status: Partial** |
 | ④ Status 판정 | **QA PASS 또는 skip(사유 기록)** + 전 step Done = `Status: Done` (최후 write) / QA FAIL 또는 일부 step 미완 = `Status: Partial` + `## 잔여 작업` 섹션 (미완 step·QA findings 명시) | 자동 이동 트리거 또는 working/ 유지 |
 
-> **터미널 제목 설정 (① 직후):** working/ 문서 식별로 작업명이 확정되면 PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = "#{작업명}"` 실행 (예: `#auth-refactor`). 방식·전제·OS·실패 처리 = `custom-plugin/taskflow/commands/claim.md` §"터미널 제목 설정 (SSOT)".
+> **터미널 제목 설정 (① 직후):** working/ 문서 식별로 작업명이 확정되면 PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = "#{작업명}"` 실행 (예: `#auth-refactor`). 방식·전제·OS·실패 처리 = `custom-plugin/taskflow/commands/load.md` §"터미널 제목 설정 (SSOT)".
 
 > **비필수 사이드이펙트 백로그 격리:** 구현 중 발견한 (① 필수요소 아님 + ② 문제·버그 아님 + ③ 사이드이펙트급) 3조건 충족 항목은 즉시 수정·코드 TODO 로 끌어올리지 말고(스코프 크리프 차단) backlog 메모리에만 기록 후 현재 step 계속. 하나라도 불충족 = 정상 처리. **실제 버그는 경미해도 미루지 않음.** SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
 

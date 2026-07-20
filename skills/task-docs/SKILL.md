@@ -55,7 +55,7 @@ min_claude_md_version: "4.0"
 
 # Task Docs Skill
 
-> **호출 방식:** 슬래시 — `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물) / `/taskflow:done` (working/ 완료 → tasks/ 이동). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `작업 시작`, `작업 완료`, `working 정리`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"working/ 단일 통합 워크플로우" 절차를 동일하게 따른다.
+> **호출 방식:** 슬래시 — `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물) / `/taskflow:save now` (working/ 완료 → tasks/ 이동). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `작업 시작`, `작업 완료`, `working 정리`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"working/ 단일 통합 워크플로우" 절차를 동일하게 따른다.
 
 > **[신규 정책 2026-05-12 시행]** 코드 작업 산출물은 **단일 통합 문서 1개**로 작성·보존된다 (이전 3종 분리 정책 종료, 역소급 면제 적용).
 > - **진행 중:** `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` (글로벌 통합, product 분리 없음)
@@ -227,7 +227,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 ## working/ 단일 통합 워크플로우 (2026-05-12 시행, 필수)
 
-> **SSOT:** 본 섹션 + `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + `~/.claude/hooks/working-lifecycle.sh` (자동 이동 강제) + `~/.claude/custom-plugin/taskflow/commands/done.md` (수동 진입점) + `~/.claude/skills/task-docs/references/unified-template.md` (양식 SSOT).
+> **SSOT:** 본 섹션 + `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + `~/.claude/hooks/working-lifecycle.sh` (자동 이동 강제) + `~/.claude/custom-plugin/taskflow/commands/save.md` §"즉시 이동 모드" (수동 진입점) + `~/.claude/skills/task-docs/references/unified-template.md` (양식 SSOT).
 
 ### 1. 작업 시작 — working/ 단일 통합 문서 생성
 
@@ -253,7 +253,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 - 둘 다 매칭 시 즉시 이동 절차 발동
 
 **트리거 2 — 사용자 명시 키워드 (UserPromptSubmit / 슬래시):**
-- 슬래시 `/taskflow:done` 직접 호출
+- 슬래시 `/taskflow:save now` 직접 호출
 - 자연어 키워드 — `작업 완료` / `tasks 이동` / `working 정리` / `done` / `완료 저장`
 
 **이동 절차:**
@@ -304,7 +304,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 [Edit: ## 분석 채움 → ## 계획 채움 → ## 실행 채움]
     ↓
 [완료 마커: Status: Done + ## Self-Critique 작성]
-    ↓ (또는 사용자 "작업 완료" 키워드 / /taskflow:done 호출)
+    ↓ (또는 사용자 "작업 완료" 키워드 / /taskflow:save now 호출)
 [working-lifecycle.sh PostToolUse hook 자동 발동]
     ↓
 [tasks/YYYYMMDD/{작업명}/ 폴더 생성 → mv → working/ 원본 제거]

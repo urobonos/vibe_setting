@@ -48,7 +48,7 @@
 - **L 등급:** 8단계 전체
 - 의견이 갈리면 어느 단계에서나 `/taskflow:debate`(16 Agent) 또는 `/taskflow:suggest`(경량 단일 권고)을 끼워 호출합니다.
 
-세션 관리: `/taskflow:save`(마감 저장) · `/taskflow:load`(재개) · `/taskflow:done`(즉시 정리).
+세션 관리: `/taskflow:save`(마감 저장) · `/taskflow:load`(재개) · `/taskflow:save now`(즉시 정리).
 
 ---
 
@@ -102,7 +102,7 @@
 
 - **8단계 사이클:** `/taskflow:analyze`(진단) → `/taskflow:feasibility`(공식 근거) → `/taskflow:plan`(step 분해) → `/taskflow:execute`(구현) → `/taskflow:verify`(e2e 5점) → `/taskflow:review`(Self-Critique) → `/taskflow:deploy`(push 안내) → `/taskflow:retro`(이력 기록)
 - **결정·조사:** `/taskflow:debate`(16 Agent 토론) · `/taskflow:suggest`(경량 단일 권고) · `/taskflow:research`(웹 Research) · `/taskflow:parallel`(Agent spawn 강제 병렬화)
-- **세션·자동화:** `/taskflow:auto`(묶음 승인 자동 진행) · `/taskflow:save`(마감 저장) · `/taskflow:load`(재개) · `/taskflow:done`(즉시 정리) · `/taskflow:ps`(세션 orphan 정리)
+- **세션·자동화:** `/taskflow:auto`(묶음 승인 자동 진행) · `/taskflow:save`(마감 저장) · `/taskflow:load`(재개) · `/taskflow:save now`(즉시 정리) · `/taskflow:ps`(세션 orphan 정리)
 - **worktree 정착:** `/git:create`(신규 분기) · `/git:merge`(기존 분기 ff-only 머지) — `custom-plugin/git` 플러그인
 
 > 전체 인벤토리·자동화 등급 카운트·동기화 규칙의 SSOT 는 `CLAUDE.md` §5 "Skill & Slash Inventory" 입니다.
