@@ -198,6 +198,24 @@ v_template_guard() {
       tgb=()
     fi
   fi
+  # 게이트 1-bis (2026-07-20): 완료(lifecycle-closed) 문서 유지보수 강등
+  # 조건: tasks/ 하위 + Status: Done|Partial (= 이미 종결·이관된 산출물) → 섹션 blocking 을 warn 으로 강등.
+  # Why: 작성 시점 교정은 working/(위 L86 면제)와 taskflow 커맨드가 담당하고, working→tasks 자동 이동은
+  #      mv 라 PostToolUse 미발동이다. 결국 tasks/ blocking 이 실제로 걸리는 유일한 지점은
+  #      "이미 완료된 문서를 나중에 고칠 때"뿐이며, 그 결과
+  #      (a) stale 진단 정정·오기재 수정 같은 정상 유지보수가 영구 차단되고,
+  #      (b) 통과하려면 존재 이유가 없는 §계획/§실행 섹션을 지어내야 해서 구조 위조가 유일한 우회로가 된다.
+  #      진단형·audit 문서(코드 변경 0)는 애초에 §계획/§실행·이슈 4분류가 없어 영구 차단 대상이 된다.
+  # 보존: specs/ 는 tasks/ 아니므로 blocking 유지. Status 없는 tasks/ 직접 작성분도 blocking 유지(진짜 authoring).
+  # SSOT: memory backlog_doc-unified-check-audit-doc-hardblock (실증 A=infra audit 아카이브 / B=be tasks 문서)
+  if [ ${#tgb[@]} -gt 0 ] && _ge '^Status[[:space:]]*[::][[:space:]]*(Done|Partial)'; then
+    case "$FP" in
+      */docs/tasks/*|*/docs/*/tasks/*)
+        tgh+=("[완료 문서 유지보수 — blocking 강등] ${tgb[*]}")
+        tgb=()
+        ;;
+    esac
+  fi
   # 역소급 게이트 2 (techstack 2026-06-01, 독립 임계. 미상=신규=차단)
   if [ "$MISSING_TECHSTACK" = "1" ]; then
     if [ -n "$CREATED" ] && [[ "$CREATED" < "2026-06-01" ]]; then
