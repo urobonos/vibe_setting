@@ -19,7 +19,7 @@
 #   5. */.claude/docs/*               (산출물 - Gate-0 직행 정합, working/REGISTRY.md 포함)
 #   6. */.claude/settings.json        (git untracked, worktree 동기화 불가능)
 #   7. */.claude/settings.local.json  (git untracked)
-#   8. C:/Works/infra/*               (dev-team 인프라 영역, git 미추적, 2026-05-20)
+#   8. C:/Works/infra/*               (hongcafe:dev-team 인프라 영역, git 미추적, 2026-05-20)
 #   9. */.claude/hooks/*             (프로젝트 로컬 hook, git 미추적, 2026-05-27)
 #   10. git check-ignore 매칭         (untracked+ignored 로컬 전용 파일, 2026-05-29)
 #   11. */.claude/CLAUDE.md          (루트/프로젝트 글로벌 지침 — 추적 파일이나 정책 변경마다 라이브 발효 필요 = 명시 path 면제, 2026-06-04)

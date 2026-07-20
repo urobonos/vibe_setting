@@ -5,6 +5,11 @@
   },
   "plugins": [
     {
+      "name": "hongcafe",
+      "source": "./hongcafe",
+      "description": "HongCafe 도메인 — 코드(php8/mysql8) + API(api-team/api-test/api-spec-audit/sns-oauth) + 운영(prod-debug/db-migration/mirror-be-claude/dev-team) + 컨텍스트(global-context/debug-skill)"
+    },
+    {
       "name": "tools",
       "source": "./tools",
       "description": "개인 유틸리티 — 검색(search-chat/search-docset) + CLI(cli-bitbucket/cli-notion) + 보고·평가(report-work/kpi/competency)"

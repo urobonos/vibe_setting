@@ -1,0 +1,42 @@
+{
+  "state": "done",
+  "detail": "session cleanup done; stop-hook-latency-optimize completed",
+  "tempo": "idle",
+  "inFlight": {
+    "tasks": 0,
+    "queued": 0,
+    "kinds": []
+  },
+  "tokens": 106198,
+  "output": {
+    "result": "session archived; stop-hook-latency-optimize task marked Done and moved to tasks/"
+  },
+  "children": null,
+  "linkScanOffset": 1174725,
+  "linkScanPath": "C:\\Users\\PV\\.claude\\projects\\C--Users-PV--claude\\80c26351-b382-4ad3-a2f9-3da49adb8606.jsonl",
+  "template": "bg",
+  "respawnFlags": [
+    "--effort",
+    "high",
+    "--permission-mode",
+    "auto",
+    "--model",
+    "sonnet"
+  ],
+  "intent": "Ran 7 stop hooks 이거 출력하는거 너무많은거 같은데 조정안해도되겠음?",
+  "name": "legal-persona-skill-evaluation",
+  "nameSource": "auto",
+  "sessionId": "80c26351-b382-4ad3-a2f9-3da49adb8606",
+  "resumeSessionId": "80c26351-b382-4ad3-a2f9-3da49adb8606",
+  "daemonShort": "80c26351",
+  "cliVersion": "2.1.211",
+  "cwd": "C:\\Users\\PV\\.claude",
+  "bridgeSessionId": "cse_019nPv3GJ6cewDDM1NsNPDxj",
+  "bridgeOutboundOnly": false,
+  "bgIsolation": "none",
+  "providerEnv": {},
+  "backend": "daemon",
+  "createdAt": "2026-07-16T01:45:50.683Z",
+  "updatedAt": "2026-07-16T04:52:48.020Z",
+  "firstTerminalAt": "2026-07-16T01:47:21.050Z"
+}

@@ -94,9 +94,9 @@ def execute_with_failover(query, params=None, is_write=False):
 
 > **Why (페일오버 재시도):** Aurora 페일오버 시 기존 연결은 끊어지지만 DNS 갱신까지 수십 초 소요 — 재시도 없이 단발 연결 시 페일오버 직후 모든 호출이 실패. RDS Proxy 사용 시 본 로직은 불필요(프록시가 라우팅 처리).
 
-## mysql8 연동
+## hongcafe:mysql8 연동
 
-Lambda 에서 Aurora 쿼리 작성 시에도 `mysql8` 의 규칙을 동일하게 적용한다:
+Lambda 에서 Aurora 쿼리 작성 시에도 `hongcafe:mysql8` 의 규칙을 동일하게 적용한다:
 - 표준 ANSI SQL 우선
 - `SELECT *` 금지, 필요 컬럼만 명시
 - N+1 방지

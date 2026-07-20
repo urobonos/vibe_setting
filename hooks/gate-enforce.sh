@@ -137,7 +137,7 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
 
   # --- plan-before 게이트 (2026-07-08, 독립 검사 / 숫자 게이트 무관) ---
   # hard-code 파일(php/js/ts/py/sql)은 세션 §계획 문서 존재 시에만 수정 허용.
-  # 신호 = REGISTRY(SID8) → working_file → `^Status: (Plan Complete|In Progress|Done)` (execute 단계 In Progress 포함).
+  # 신호 = REGISTRY(SID8) → working_file → `^Status: (Plan Complete|In Progress|Done|Partial)` (execute 단계 In Progress 포함).
   # override 마커(/tmp/claude_trivial_${SESSION_ID}, 핫픽스) 존재 시 통과.
   # 판정 원재료(REGISTRY) 부재 시 fail-open(통과) — 전역 게이트라 미상 시 차단 금지.
   # SSOT: docs/claude-harness/output/analysis/2026-07-08-code-lifecycle-enforcement.
@@ -153,7 +153,7 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
         _plan_ok=0
         while IFS= read -r _plan_wf; do
           [ -z "$_plan_wf" ] && continue
-          if [ -f "$_plan_wf" ] && grep -qE '^Status:[[:space:]]*(Plan Complete|In Progress|Done)' "$_plan_wf" 2>/dev/null; then
+          if [ -f "$_plan_wf" ] && grep -qE '^Status:[[:space:]]*(Plan Complete|In Progress|Done|Partial)' "$_plan_wf" 2>/dev/null; then
             _plan_ok=1; break
           fi
         done < <(awk -F'|' -v s="$_plan_sid8" '{gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$9); if ($4==s) print $9}' "$_plan_registry" 2>/dev/null)

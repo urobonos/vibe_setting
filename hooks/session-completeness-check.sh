@@ -13,31 +13,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 STDIN_DATA=$(cat)
 
-# python3 우선 파싱 + grep fallback (Windows 환경 JSON 이스케이프 호환)
-PARSED=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    sid = data.get('session_id', '')
-    cwd = data.get('cwd', '')
-    if not sid:
-        sys.exit(1)
-    safe_cwd = cwd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    print(f'SESSION_ID=\"{sid}\"')
-    print(f'CWD=\"{safe_cwd}\"')
-except Exception:
-    sys.exit(1)
-" 2>/dev/null)
-if [ -n "$PARSED" ]; then
-  eval "$PARSED"
-else
-  SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-  CWD=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-  # JSON이스케이프된 \\를 실제 \로 복원 (Windows 경로)
-  CWD=$(echo "$CWD" | sed 's/\\\\/\\/g')
-  SESSION_ID=${SESSION_ID:-default}
-  CWD=${CWD:-.}
-fi
+# bash 정규식 추출 (2026-07-16 최적화: python3 우선 경로 제거 — session_id/cwd 2개 필드만 필요,
+# working-release.sh와 동일 패턴의 fallback을 유일 경로로 승격)
+SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+CWD=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+# JSON이스케이프된 \\를 실제 \로 복원 (Windows 경로)
+CWD=$(echo "$CWD" | sed 's/\\\\/\\/g')
+SESSION_ID=${SESSION_ID:-default}
+CWD=${CWD:-.}
 
 TODAY=$(date +%Y%m%d)
 TODAY_DOT=$(date +%Y.%m.%d)

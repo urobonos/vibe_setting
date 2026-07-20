@@ -258,7 +258,7 @@
 | 5 | mock 검증 분리 | - | - |
 
 > `doc-unified-check.sh V5` — 5건 모두 PASS 시 통과, 일부 FAIL 시 exit 2.
-> SSOT: php8 §"e2e 검증" + CLAUDE.md §4.3 "e2e 검증 (필수)".
+> SSOT: hongcafe:php8 §"e2e 검증" + CLAUDE.md §4.3 "e2e 검증 (필수)".
 
 ---
 
@@ -446,7 +446,9 @@ Status: Done
 | 본문 마커 자동 | `^Status:\s*Done` + `## Self-Critique` 동시 존재 | PostToolUse (Edit/Write 직후) |
 | 사용자 명시 | `/taskflow:done` 슬래시 또는 `작업 완료` / `tasks 이동` / `done` 자연어 | UserPromptSubmit |
 
-## 사후 hook 검증 (tasks/ 이동 후 1회)
+## 사후 hook 검증 (tasks/ 직접 Edit/Write 시)
+
+> **주의 (2026-07-15 교정):** working/ → tasks/ 자동 이동은 `working-lifecycle.sh` 내부 shell `mv` 라 PostToolUse hook 이 **발동하지 않는다** (`execute.md` §"QA 게이트" known-limitations 동일 자인). 아래 검증의 실효 발동 표면 = tasks/ 문서를 **직접 Edit/Write** 하는 순간뿐이다.
 
 | Hook | 검증 항목 | 차단 강도 |
 |------|---------|----------|

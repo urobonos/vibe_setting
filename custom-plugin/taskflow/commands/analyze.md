@@ -39,7 +39,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 - **T1 미충족 → 정지.** §분석 마치고 "plan 진입할까요?" 1줄 (침묵 종료 금지).
 - **T2 미충족 (진단성 분석) → 자동 전이 금지.** CLAUDE.md §4.2 "audit 결과 자동 수정 금지" 를 준수한다 — 진단은 현황 보고이지 수정 계획을 낳는 task 가 아니다. 사용자 명시 수정 요청 시에만 plan 진입.
 
-> **적용 범위 = `/taskflow:analyze` 한정.** `/api-spec-audit` · `/security-audit` 등 audit 슬래시는 본 전이의 대상이 아니다 (§4.2 가 직접 금지).
+> **적용 범위 = `/taskflow:analyze` 한정.** `/hongcafe:api-spec-audit` · `/security-audit` 등 audit 슬래시는 본 전이의 대상이 아니다 (§4.2 가 직접 금지).
 > **역방향과의 관계:** `/taskflow:execute` 중 결정이 막혀 analyze 로 되돌아온 경우(= `execute.md` §"결정 escalation ladder" L1)는 이미 bounded cap 을 소모한 상태이므로, 해소 후 **execute 로 복귀**하지 본 전이로 plan 을 다시 부르지 않는다 (순환 차단).
 
 ## 직병렬 실행 지침

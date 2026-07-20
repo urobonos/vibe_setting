@@ -4,12 +4,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 # Stop Hook: 세션 종료 시 체크포인트 메모리 자동 저장
 #
 # 동작:
-#   1. transcript_path에서 마지막 6턴(user 3 + assistant 3) 추출
-#   2. claude -p --model haiku로 현재 작업 상태 요약 (timeout 20s)
+#   1. transcript_path에서 마지막 6턴(user 3 + assistant 3) 추출 (Raw, 모델 호출 없음)
+#   2. git status/log 기반 객관적 상태 스냅샷 생성
 #   3. ~/.claude/projects/{PROJECT}/memory/session_checkpoint.md 저장
 #   4. MEMORY.md 인덱스에 pointer 자동 등록 (1회)
 #
 # 실패 시 graceful degrade — 세션 종료 차단하지 않음.
+# 참고: claude -p --model haiku 요약 호출은 활성 세션과 충돌·timeout 빈발로 제거됨(하단 C 부분 주석 참조).
 
 STDIN_DATA=$(cat)
 

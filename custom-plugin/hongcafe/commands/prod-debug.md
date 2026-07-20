@@ -110,4 +110,4 @@ argument-hint: "[connect|verify|sync] [env] [args]"
 
 ## 자동화 분류
 
-`prod-debug` skill = **C (수동 진입점)** — 모드별 사용자 단계별 결정 필요 (CLAUDE.md §5.1 카운트 정합).
+`prod-debug` skill = **C (수동 진입점)** — 모드별 사용자 단계별 결정 필요 (`skill-inventory.md` §5.1 카운트 정합).

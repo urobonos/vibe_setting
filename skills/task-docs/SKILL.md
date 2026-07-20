@@ -2,13 +2,11 @@
 name: task-docs
 description: >
   작업 문서 생명주기(분석→계획→결과)를 표준 템플릿으로 생성·이동한다.
-  **신규 (2026-05-12~)** = `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 통합 문서로 진행 후 완료 시 `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 로 자동 이동 (working-lifecycle.sh hook).
-  **기존 (역소급 면제, < 2026-05-12)** = `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/` 에 analyze/plan/result 3종 분리 그대로 보존.
-  일일 작업 요약을 `~/.claude/docs/{product}/tasks/YYYYMMDD/summary.md`, 전체 이력을 `~/.claude/docs/{product}/tasks/history.md` 에 기록.
-  모든 문서 파일은 `{yyyy-mm-dd}-` prefix 필수.
-  보고용 산출물은 `~/.claude/docs/{product}/output/{category}/{제목}/{파일명}.md`, IEEE 산출물(SDP/SRS/SDD/IDD/STP/STD)은 `~/.claude/docs/{product}/specs/`.
-  {product}는 basename $CWD (.claude→claude-harness 예외). 규칙은 글로벌 CLAUDE.md §File Paths 참조.
-  **backlog 메모리 (2026-05-13~)** = 잔여 후속·시간 트리거·사용자 결정 보류 작업은 `~/.claude/projects/C--Users-PV--claude/memory/backlog_{slug}.md` 단일 파일로 보관. frontmatter `status: done` 시 `backlog-lifecycle.sh` hook 가 `~/.claude/docs/{product}/tasks/{YYYYMMDD}/backlog/{yyyy-mm-dd}-{slug}.md` 자동 이동. SSOT = CLAUDE.md §4 "backlog 메모리 정책".
+  신규(2026-05-12~)=working/ 단일 통합 문서 진행 후 완료 시 tasks/ 자동 이동(working-lifecycle.sh),
+  기존(<2026-05-12)=analyze/plan/result 3종 분리 보존.
+  보고용=output/{category}/, IEEE 산출물(SDP/SRS/SDD/IDD/STP/STD)=specs/.
+  backlog 메모리(잔여·후속·시간 트리거)=memory/backlog_{slug}.md, status:done 시 자동 이동.
+  경로·규칙 상세는 글로벌 CLAUDE.md §File Paths 참조.
 triggers:
   - "/task-docs"
   - "/task-docs specs"

@@ -85,23 +85,20 @@ v_template_guard() {
   esac
   case "$FP" in */docs/working/*) return 0 ;; esac
   case "$FP" in
-    */docs/tasks/*|*/docs/output/*|*/docs/specs/*|*/docs/*/tasks/*|*/docs/*/output/*|*/docs/*/specs/*) ;;
+    */docs/tasks/*|*/docs/specs/*|*/docs/*/tasks/*|*/docs/*/specs/*) ;;
     *) return 0 ;;
   esac
-
-  local IS_OUTPUT=0
-  case "$FP" in */docs/output/*|*/docs/*/output/*) IS_OUTPUT=1 ;; esac
+  # output/ 은 2026-07-15 Scope 제외 — tasks 템플릿 warn 과잉 해소. output/ 실질 가드 = V2(참조 출처)·output-naming-check·output-report-share-guard 가 자체 스코프로 잔존.
 
   local tgb=() tgh=()
   _g '^# '   || tgh+=("제목(# heading)")
   _g '^>'    || tgh+=("간단 요약(> blockquote)")
   _g '## 작성 정보' || tgh+=("## 작성 정보")
   _ge '## (내용|분석|계획|실행|결과|분석 결과|실행 계획|실행 결과)' || tgh+=("## 내용 (본문 섹션)")
-  _g '## 체크리스트' || tgh+=("## 체크리스트")
+  _ge '^##?[[:space:]]+.*체크리스트' || tgh+=("## 체크리스트")
   _g '## 변경 기록'  || tgh+=("## 변경 기록")
 
   local MISSING_TECHSTACK=0
-  if [ "$IS_OUTPUT" = "0" ]; then
     case "$LOWER_BN" in
       *-unified.md|*_unified.md)
         _ge '^##[[:space:]]+.*(타당성 검토|Feasibility Review)' || tgb+=("타당성 검토 (§4 필수, unified §분석)")
@@ -115,7 +112,7 @@ v_template_guard() {
         _ge '^##[[:space:]]+.*(장기 영향|Long-term Impact)'    || tgb+=("장기 영향 (CLAUDE.md §4.1 강제, unified)")
         _ge '^##[[:space:]]+.*(재발 방지|Regression Prevention)' || tgb+=("재발 방지 (CLAUDE.md §4.1 강제, unified)")
         _ge '^##[[:space:]]+.*(SSOT 일관성|SSOT Consistency)'  || tgb+=("SSOT 일관성 (CLAUDE.md §4.1 강제, unified)")
-        _ge '(^##[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::])' || tgb+=("작업 등급 S/M/L (unified §계획)")
+        _ge '(^##[[:space:]]+.*작업 등급|작업 등급[[:space:]]*[::]|^\|[[:space:]]*작업 등급[[:space:]]*\|)' || tgb+=("작업 등급 S/M/L (unified §계획)")
         _ge '^##[[:space:]]+.*Blueprint'   || tgb+=("Blueprint (unified §계획)")
         _ge '^##[[:space:]]+.*수정 대상'   || tgb+=("수정 대상 (unified §계획)")
         _ge '^##[[:space:]]+.*실행 계획'   || tgb+=("실행 계획 (unified §계획)")
@@ -193,7 +190,6 @@ v_template_guard() {
         fi
         ;;
     esac
-  fi
 
   # 역소급 게이트 1 (2026-05-07): 섹션 blocking 강등
   if [ -n "$CREATED" ] && [[ "$CREATED" < "2026-05-07" ]]; then
@@ -427,7 +423,7 @@ v_verify_e2e() {
   fi
   local bmsg="[BLOCKED] verify-e2e-check: e2e 5점 중 $FAIL_COUNT 점 누락"$'\n'"  파일: $FP"
   local p; for p in "${fail_points[@]}"; do bmsg+=$'\n'"  · $p"; done
-  bmsg+=$'\n\n'"SSOT: php8 §\"e2e 검증\" + CLAUDE.md §4.3 \"e2e 검증 (필수)\""$'\n'"진입점: /taskflow:verify  (~/.claude/custom-plugin/taskflow/commands/verify.md)"
+  bmsg+=$'\n\n'"SSOT: hongcafe:php8 §\"e2e 검증\" + CLAUDE.md §4.3 \"e2e 검증 (필수)\""$'\n'"진입점: /taskflow:verify  (~/.claude/custom-plugin/taskflow/commands/verify.md)"
   add_block "$bmsg"
 }
 

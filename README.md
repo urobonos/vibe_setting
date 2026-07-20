@@ -54,41 +54,46 @@
 
 ## 스킬 카탈로그
 
-글로벌 스킬 21개(user-invocable 19 + internal 2) + 플러그인(`git`·`taskflow`·`tools`) 스킬 9. 자동화 등급 — **A** = 완전 자동(1회 트리거로 끝까지) / **B** = 부분 자동(분석 자동, 변경 적용은 사용자 결정) / **C** = 수동 진입점(단계별 결정).
+글로벌 스킬 6개 + 플러그인(`git`·`taskflow`·`tools`·`hongcafe`) 스킬 21 (HongCafe 도메인 12종은 2026-07-15 `hongcafe` 플러그인 이동). 자동화 등급 — **A** = 완전 자동(1회 트리거로 끝까지) / **B** = 부분 자동(분석 자동, 변경 적용은 사용자 결정) / **C** = 수동 진입점(단계별 결정).
 
 ### 오케스트레이션·팀
 
 - **`orchestration`** `A` — 3-Team(Analyze → Plan → Execute) 통합 오케스트레이션. 9-Core + 3-Consultants 페르소나, Effort/Model/Task Sizing 기준, Communication Protocol, Vibe Coding Group을 정의한다. 다단계 구현(M·L 등급)의 기본 진입점.
 - **`debate`** `A` (`/taskflow:debate`) — 질문·트레이드오프·의견 갈림 시 4 에이전트팀(각 4 Agent = 총 16) 풀-병렬 spawn 토론. 각 팀원은 cold context로 독립 spawn돼 자기 관점만 발언하고 Lead가 종합한다. 토론만 수행하며 구현·커밋은 별도 워크플로우로 처리.
-- **`dev-team`** `A` — HongCafe Global 다레포 개발 전용 팀(BE / 인프라 / 문서 / FE read-only). Lead가 task를 분석해 필요한 도메인 멤버만 1~4 spawn(api-team이 항상 3 spawn하는 것과 분리). api-team(영향분석) → dev-team(구현) handoff 패턴.
-- **`api-team`** `A` — API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석. `add` 모드는 3-레포 반영 체크리스트, `debug` 모드는 가설 우선순위. 인프라 멤버는 AWS CLI 실시간 조회(조회계 즉시, 변경계 승인).
 
 ### 검증·감사
 
 - **`security-audit`** `A` — 7개 도메인(공통 / PHP·CI4 / MySQL / Lambda / CI·CD·공급망 / Docker / 프로세스) 통합 보안 감사. OWASP Top 10·CWE Top 25·ASVS L1 등 14개 프레임워크 적용. 취약점 발견 시 즉시 Checkpoint 발동.
-- **`api-spec-audit`** `A` — API 명세(Routes / api-docs / OpenAPI) ↔ IEEE 산출물(SRS/SDD/IDD) 9축 정합성 audit. EP 수·인증·응답 스키마·환경별 URL·에러 코드·페이지네이션·키 케이스·API 버전을 교차 검증. module / endpoint / full 3모드.
 - **`skill-validator`** `B` — 글로벌 + 프로젝트 로컬 스킬의 경로 정합성·구조 완전성·CLAUDE.md 규칙 정합·스킬 간 미스매치를 4 병렬 에이전트로 검증.
 
 ### 개발 스택
 
-- **`php8`** `B` — PHP 8.4+ / CI 4.7+ Mono-repo Modular Monolith API. Controller → Service → Repository → Model 레이어, 모듈 간 직접 참조 금지(Interface 통신만), service() DI 강제. 신규 모듈은 9산출물 동반 필수(부분 구현 금지).
-- **`mysql8`** `B` — MySQL 8.x 쿼리·최적화·스키마 설계. ANSI SQL 우선, N+1·Full Scan 방지, EXPLAIN FORMAT=TREE 필수. 인덱스 추가/수정은 사용자 승인, 타 DB 이관 고려해 전용 구문 시 ANSI 병기.
 - **`aws`** `C` — AWS 서비스(Lambda / SQS / SNS / Aurora MySQL / EC2 / RDS Proxy / IAM / 보안그룹). Lambda 핸들러·IAM 최소권한·Aurora 연결 패턴 정의. 조회계는 즉시, 변경계는 사용자 승인.
-- **`sns-oauth`** `A·B` — SNS OAuth(kakao / naver / google / apple) 표준 패턴. 4-provider 매트릭스(식별키·scope·콜백·토큰만료·client_secret)를 SSOT로 보유하고 encrypted payload·이메일 충돌·account-link 흐름을 표준화. add / verify / debug 3모드.
-- **`prod-debug`** `C` — prd/stg/dev EC2 직접 접속 → 점검·수정 → 검증 → 로컬 반영 통합 진입점. connect / verify / sync 3모드 + 환경별 매트릭스(prd 최후수단 / stg 검증우선 / dev 일상). CloudTrail + 보조 audit log.
-- **`debug-skill`** `B` — 다영역 디버깅(PHP / DB / AWS / 보안) 통합 진입점.
+
+### HongCafe 도메인 (플러그인 `custom-plugin/hongcafe`, 2026-07-15 이동)
+
+- **`hongcafe:api-team`** `A` (`/hongcafe:api-team`) — API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석. `add` 모드는 3-레포 반영 체크리스트, `debug` 모드는 가설 우선순위.
+- **`hongcafe:dev-team`** `A` — HongCafe 다레포 개발 전용 팀(BE / 인프라 / 문서 / FE read-only). Lead 라우팅 1~4 spawn, api-team(영향분석) → dev-team(구현) handoff.
+- **`hongcafe:api-spec-audit`** `A` (`/hongcafe:api-spec-audit`) — API 명세 ↔ IEEE 산출물(SRS/SDD/IDD) 9축 정합성 audit. module / endpoint / full 3모드.
+- **`hongcafe:api-test`** `A·B` — BE API 러너(`tools/runner/runner.py`) 호출 — smoke(공개 EP) / e2e(자동가입→코인).
+- **`hongcafe:php8`** `B` — PHP 8.4+ / CI 4.7+ Modular Monolith API. 레이어 규칙·DI 강제·9산출물 동반. e2e 5점 검증 SSOT.
+- **`hongcafe:mysql8`** `B` — MySQL 8.x 쿼리·최적화·스키마 설계. ANSI 우선, EXPLAIN 필수, 인덱스 변경 사용자 승인.
+- **`hongcafe:sns-oauth`** `A·B` — SNS OAuth(kakao/naver/google/apple) 4-provider 매트릭스 SSOT. add / verify / debug 3모드.
+- **`hongcafe:prod-debug`** `C` (`/hongcafe:prod-debug`) — 서버 우선 디버그 → 로컬 반영. connect / verify / sync 3모드, prd 최후 수단.
+- **`hongcafe:debug-skill`** `B` — 다영역 디버깅(PHP / DB / AWS / 보안) 통합 진입점.
+- **`hongcafe:hongcafe-db-migration`** `C` — 소스 DB(NCP) → prd Aurora(US/JP) 안전 이관 (접속판별→dry-run→적재→PII위생→롤백).
+- **`hongcafe:mirror-be-claude`** `A·C` — be CLAUDE.md ↔ 글로벌 미러 + api-docs 3-way 정합. verify / sync-from-be / sync-from-global.
+- **`hongcafe:global-context`** (internal) — HongCafe Global 다국가 서비스 컨텍스트(국가코드·Feature Flag·i18n·타임존).
 
 ### 산출물·문서·연동
 
 - **`task-docs`** `A` — 작업 문서 생명주기(분석 → 계획 → 결과). working/ 단일 통합 문서로 진행하다 완료 시 tasks/로 자동 이동(hook). history.md / summary.md 기록, 표준 템플릿 강제.
 - **`tools:report-work`** `A` (플러그인 · `custom-plugin/tools`) — 일일·주간·월간 업무 리포트 생성. tasks/ 작업 이력을 product별로 스캔해 주제별 그룹화 + 진행률 판정. (인사평가 `tools:report-competency`·`tools:report-kpi` 동거)
-- **`mirror-be-claude`** `A·C` — be 프로젝트 CLAUDE.md ↔ 글로벌 미러본 양방향 + api-docs 3-way(글로벌 ↔ be ↔ docs) 정합. verify(검증) / sync-from-be / sync-from-global 3모드.
 - **`git:push`** `C` — Conventional Commits(`type(scope): 제목`) 포맷 정의 + 현재 브랜치 git push 즉시 실행. 커밋 메시지 포맷의 SSOT. (`custom-plugin/git` 플러그인)
 - **`skill-creator`** `C` — 스킬 생성·수정·최적화의 강제 진입점. skills/ 하위 모든 파일 수정은 본 스킬 경유(skill-edit-guard.sh가 락으로 강제).
 
 ### Internal (slash 호출 없음 — 자동 트리거/의존성용)
 
-- **`global-context`** — HongCafe Global 다국가 서비스 컨텍스트(국가코드·Country Resolver·Feature Flag·i18n·타임존·환경 분리). 프로젝트 한정.
 - **`simplify`** — 변경 코드의 재사용성·가독성·효율성 리뷰 후 이슈 픽스. Claude Code 내장 plugin(본체 파일 없음), `/taskflow:review` 보조 호출.
 
 ### 한글 워크플로우 슬래시 (thin wrapper)

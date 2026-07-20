@@ -15,7 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #
 # 산출물 SSOT:
 #   ~/.claude/docs/claude-harness/tasks/20260507/be-claude-md-mirror/2026-05-07-be-claude-md-mirror-plan.md
-#   ~/.claude/skills/mirror-be-claude/SKILL.md (수동 진입점)
+#   ~/.claude/custom-plugin/hongcafe/skills/mirror-be-claude/SKILL.md (수동 진입점)
 
 source "$(dirname "$0")/lib/hook-input.sh"
 hook_init

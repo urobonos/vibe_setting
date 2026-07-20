@@ -7,6 +7,20 @@ description: >-
   시나리오", "게시판/커머스/결제 시나리오" 도 트리거. 3모드 — smoke(공개 EP 4종, 즉시) / e2e(자동가입→코인,
   SSM 키) / scenario(ep.json 카탈로그 기반 다단계 시나리오: 가입→도메인, 값 전달·검증). 브라우저 도구
   tools/api-test.html 의 클로드 자동 실행 버전.
+triggers:
+  - "api 테스트"
+  - "smoke 돌려줘"
+  - "smoke 테스트"
+  - "코인 테스트 돌려줘"
+  - "회원가입 코인 e2e"
+  - "공개 EP 테스트"
+  - "hongcafe api 호출 검증"
+  - "시나리오 돌려줘"
+  - "회원 시나리오"
+  - "게시판 시나리오"
+  - "커머스 시나리오"
+  - "결제 시나리오"
+  - "/api-test"
 user-invocable: true
 version: 1.1.0
 ---

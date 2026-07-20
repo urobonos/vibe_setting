@@ -1,0 +1,8 @@
+{
+  "name": "hongcafe",
+  "description": "HongCafe 도메인 — 코드(php8/mysql8) + API(api-team/api-test/api-spec-audit/sns-oauth) + 운영(prod-debug/hongcafe-db-migration/mirror-be-claude/dev-team) + 컨텍스트(global-context/debug-skill)",
+  "version": "1.0.0",
+  "author": {
+    "name": "박재영"
+  }
+}

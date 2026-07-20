@@ -29,7 +29,7 @@ triggers:
   - "/aws"
 version: 1.0.1
 user-invocable: true
-depends_on: [mysql8, security-audit]
+depends_on: [hongcafe:mysql8, security-audit]
 conflicts_with: []
 min_claude_md_version: "4.0"
 ---
@@ -102,11 +102,11 @@ deploy/
 - 국가별 `.env` 로 DB 접속, API 키, 외부 서비스 엔드포인트, Aurora/RDS Proxy 엔드포인트 분리
 - 배포 스크립트(`deploy.sh`) 도 국가별 분리 — 리전, 인스턴스 ID, CloudFront 배포 차이
 - CI/CD 파이프라인에서 `COUNTRY` 환경변수로 대상 국가 지정
-- 상세는 `global-context` §8 "배포 환경 분리" 참조
+- 상세는 `hongcafe:global-context` §8 "배포 환경 분리" 참조
 
 ### 2.3. 주석 규칙
 
-Lambda Python 코드에도 `php8` 코딩 표준 (`~/.claude/skills/php8/references/coding-standards.md`) 과 동일한 규칙을 적용한다:
+Lambda Python 코드에도 `hongcafe:php8` 코딩 표준 (`~/.claude/custom-plugin/hongcafe/skills/php8/references/coding-standards.md`) 과 동일한 규칙을 적용한다:
 - 모든 함수에 docstring 필수 (`@param`, `@return` 포함)
 - 복잡한 로직에 단계별 설명 주석
 - 추상화 시 사유 주석

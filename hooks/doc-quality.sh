@@ -1,13 +1,9 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "doc-quality" "enter" "pid=$$"
-# PostToolUse Hook: 문서 품질 + 테스트 동반 + Notion 동기화
-# 통합: doc-checklist-guard.sh + test-coexistence-check.sh + notion-sync-reminder.sh
-#
-# Fail-fast 순서:
-#   1. 문서 체크리스트 최소 개수 검증 (exit 2)
-#   2. Service 수정 시 테스트 파일 존재 확인 (warning)
-#   3. CLAUDE.md 수정 시 Notion 동기화 플래그 (warning + flag)
+# PostToolUse Hook: Service 수정 시 테스트 동반 확인 (No Test, No Merge)
+# 원 통합(doc-checklist/test-coexistence/notion-sync) 중 체크리스트=doc-unified-check.sh V4 이관,
+# Notion INFO=요청기반 정책으로 폐기 (2026-07-15). 잔여 = 테스트 동반 확인 단일 책임 (warning, exit 0).
 
 STDIN_DATA=$(cat)
 
@@ -20,11 +16,6 @@ fi
 
 SESSION_ID="default"; [[ "$STDIN_DATA" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && SESSION_ID="${BASH_REMATCH[1]}"
 CWD="."; [[ "$STDIN_DATA" =~ \"cwd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && CWD="${BASH_REMATCH[1]}"
-
-# Windows 백슬래시 → 슬래시
-FILE_PATH_UNIX="${FILE_PATH//\\//}"
-BASENAME="${FILE_PATH_UNIX##*/}"
-LOWER_BASENAME="${BASENAME,,}"
 
 # ===== 1. 문서 체크리스트 검증 — doc-unified-check.sh V4 (v_checklist_count) 가 수행 =====
 # 체크리스트 개수 검증(analyze/unified≥30, plan/result≥20)은 doc-unified-check.sh SSOT.
@@ -51,18 +42,6 @@ if [[ "$FILE_PATH" == *.php ]] && echo "$FILE_PATH" | grep -qE 'app/Modules/[A-Z
       fi
     fi
   fi
-fi
-
-# ===== 3. Notion 동기화 알림 (요청 기반, 2026-04-22~) =====
-# 정책: 사용자 명시 요청 시에만 Notion 연동. CLAUDE.md 수정 시 자동 플래그 세팅 제거.
-# 사용자가 "노션에 반영"/"Notion 동기화" 등 명시 요청 시, 별도 경로에서 플래그를 세팅한다.
-if [[ "$LOWER_BASENAME" == "claude.md" ]]; then
-  echo ""
-  echo "━━━ CLAUDE.md Modified ━━━"
-  echo "[INFO] CLAUDE.md가 수정되었습니다."
-  echo "  Notion 동기화는 사용자가 명시적으로 요청할 때만 수행합니다 (요청 기반 정책)."
-  echo "  자동 동기화는 비활성화되어 있습니다."
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
 
 exit 0
