@@ -1,5 +1,5 @@
 ---
-description: 작업 로드 — working/ 잔여 작업 + DISPATCH 분배 풀 스캔 후 본문·재진입 안내 + **`#tag` 배타 claim·로드(구 claim/consume 흡수, 2026-07-16)**. 짝 슬래시 = `/taskflow:save`. **기본 전체 잔존 노출 (cwd 필터 기본 해제) + 분배 풀 통합 + #tag 배타 claim**
+description: 작업 로드 — working/ 잔여 작업 + DISPATCH 분배 풀 스캔 후 본문·재진입 안내 + **`#tag` 배타 claim·로드(구 claim/consume 흡수, 2026-07-16)**. 짝 슬래시 = `/taskflow:save`. **기본 전체 잔존 노출 (cwd 필터 기본 해제) + 분배 풀 통합 + #tag 배타 claim**. **로드 전용 — `#tag`·`{작업명}` 미지정 시 목록 출력 후 정지, 잔여 작업 자동 실행 금지**
 allowed-tools: Bash, Read, Glob, Grep, PowerShell, Edit
 argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음=전체 잔존 / #tag=분배 배타 claim+로드 / #tag done=완료"
 ---
@@ -14,7 +14,7 @@ argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음
 |------|------|------|
 | ① 잔존 작업 스캔 + 분배 풀 조회 + 빈 폴더 정리 | `~/.claude/docs/working/YYYYMMDD/` 전체 스캔 → `## 잔여 작업` 섹션의 미체크 `- [ ]` ≥1 보유 파일 추출 (Status 무관) → **인자 product 필터 (인자 없음 = 전체, 필터 없음)**. **+ DISPATCH 풀 `dispatch_list available` 조회 (`#tag` 표시, product 필터 동일).** **금일(`date +%Y%m%d`) 이전 폴더 중 `*.md` 파일 0건이면 해당 폴더 자동 삭제** (working/ → tasks/ 이동 후 남은 빈 껍데기 정리). | 전체 잔존 + 분배(`#tag`) 목록 + 빈 폴더 0건 |
 | ② 인자 분기 처리 | 인자 없음 = 전체 목록 (=all) / `{작업명}` = 본문 출력 / `latest` = 본 product 가장 최근 1건 / `all` = 전체 product / `{product}` = 특정 product 잔존 | 본문 또는 목록 |
-| ③ 재진입 안내 | 잔여 항목 미체크 박스 추출 + `/taskflow:auto {요약}` 제안 | 다음 액션 결정 |
+| ③ 재진입 안내 | 잔여 항목 미체크 박스 추출 + `/taskflow:auto {요약}` **제안까지만** (후속 슬래시 자동 호출 금지 — 아래 §"자동 실행 금지") | 다음 액션 결정 = 사용자 |
 
 ## 호출 방식
 
@@ -222,6 +222,22 @@ ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${작업명
 
 **§3 Checkpoint 우선 적용:** 재진입 후 작업 수행은 §3 Checkpoint 매칭 시 별도 승인 요구. 본 슬래시는 **로드 (read-only)** 만 담당, 실제 작업 실행은 후속 슬래시 또는 사용자 지시.
 
+### 자동 실행 금지 (2026-07-22 신설, 필수)
+
+**`#tag` 또는 `{작업명}` 을 지시하지 않은 호출** (인자 없음 / `all` / `{product}` / `latest`) = 목록·본문 출력 + 재진입 안내까지만 하고 **그 턴에서 정지**한다. 잔여 항목을 골라 실행하거나 `/taskflow:execute`·`/taskflow:auto` 를 스스로 호출하는 것은 위반이다.
+
+| 금지 | 대신 |
+|------|------|
+| 잔여 미체크 항목을 그 턴에 착수 | 항목 나열 + "어느 옵션으로 진행하시겠습니까?" 로 종료 |
+| 후속 슬래시(`/taskflow:execute`·`/taskflow:auto`) 자동 호출 | 진입 명령 **문자열만** 제시 |
+| "가장 급한 것부터 처리하겠습니다" 류 자율 선택 | 우선순위 **권고**만, 선택은 사용자 |
+
+**gate=2 (묶음 승인 모드) 에서도 동일.** 자동 위임 정책의 "권고안 자동 채택"(CLAUDE.md §4.4 (2))은 **직전 응답의 권고**에 적용되는 것이지, load 가 방금 발견한 잔존 작업 목록에는 적용되지 않는다 (사용자가 승인한 대상이 아니다). 따라서 목록 분기 응답은 self-critique 통과 후 마지막 줄에 **`[AUTO-ITERATE-DONE]`** 을 부착해 Stop 루프를 정상 종료시킨다.
+
+**예외 = 같은 프롬프트에 실행 의사가 함께 있을 때만** (예: `/taskflow:load latest 이어서 진행해`, `/taskflow:load #auth-jwt` 후 사용자가 실행 지시). `#tag` claim 도 claim + 문서 로드까지가 기본값 — 실행은 별도 지시.
+
+**Why:** load 는 "무엇이 남았는지 보는" 진입점이다. 조회가 착수로 미끄러지면 사용자가 의도하지 않은 작업이 gate=2 아래에서 끝까지 굴러간다 — 되돌리는 비용이 조회 편의보다 훨씬 크다.
+
 ## #tag — 분배 claim + 로드 (claim/consume 흡수, 2026-07-16)
 
 `#tag` 인자 = 구 `/taskflow:claim` 흡수. DISPATCH 풀에서 배타적 claim 후 분배 문서 로드. **claim 은 read-only 목록과 달리 lock mutation** (load 의 유일한 mutation 분기). 짝 = plan 의 병렬 그룹 자동 등록(`plan.md §"병렬 그룹 다세션 분배"`).
@@ -267,7 +283,7 @@ RESULT="${OUT%%|*}"; DOC="${OUT#*|}"
 - **`#tag` claim = 회복 가능** (`dispatch_release` 로 available 복귀) — 사용자 승인 없이 진행 가능. claim 후 실제 코드 변경이 §3 매칭이면 그 시점 각 guard hook 강제.
 - **DISPATCH 분배 풀 목록 조회(`dispatch_list`) = read-only.** `#tag` claim(`dispatch_claim` = DISPATCH.md + lock mutation) 은 본 슬래시가 직접 수행한다 (아래 §"#tag claim").
 - **빈 폴더 정리 예외 사유:** (1) `*.md` 파일 0건만 대상 → 데이터 손실 0, (2) `rmdir` 는 비어 있지 않은 폴더 자동 실패 → 안전 잠금, (3) 금일 폴더는 보호 (진행 중일 수 있음). §3 Checkpoint "비가역 작업" 매칭이지만 무해 정리로 한정 — 매 호출 사용자 승인 면제.
-- 실제 작업 진행 = 사용자 선택 후 후속 슬래시 호출 (`/taskflow:auto` 등) 또는 직접 지시.
+- **본 슬래시는 실행 트리거가 아니다.** 실제 작업 진행 = 사용자 선택 후 후속 슬래시 호출 (`/taskflow:auto` 등) 또는 직접 지시. `#tag`·`{작업명}` 미지정 호출의 정지 규칙 = 위 §"자동 실행 금지" SSOT.
 - 잔존 작업 파일 자체 삭제·이동 = 본 슬래시 비대상 — `/taskflow:save` 또는 `/taskflow:save now` 영역.
 
 ## SSOT
@@ -343,3 +359,4 @@ cwd 미스매치 예시 (본 cwd = `C:\Works\hongcafe_global_backend`, 본 produ
 - 2026-05-14: 신설
 - 2026-06-15: 분배 풀 통합
 - 2026-06-18: cwd 필터 기본 해제 (인자 없음=전 product 잔여 노출)
+- 2026-07-22: **자동 실행 금지** 명문화 — `#tag`·`{작업명}` 미지정 호출은 출력 후 정지 (gate=2 포함, `[AUTO-ITERATE-DONE]` 부착)
