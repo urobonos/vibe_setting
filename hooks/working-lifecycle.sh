@@ -50,7 +50,8 @@ fi
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/template-patterns.sh" 2>/dev/null || {
   # lib 로드 실패 fallback — 인라인 정규식 보존 (회귀 안전성)
-  has_status_done() { [ -f "$1" ] && grep -qE '^(Status|상태):[[:space:]]*(Done|완료)[[:space:]]*$' "$1"; }
+  # 정규식은 lib/template-patterns.sh has_status_done 과 동일 유지 (종결 키워드 4종, 단독 라인 엄격 — 2026-07-22)
+  has_status_done() { [ -f "$1" ] && grep -qE '^(Status|상태):[[:space:]]*(Done|완료|폐기|Abandoned)[[:space:]]*$' "$1"; }
   has_self_critique_h2() { [ -f "$1" ] && grep -qE '^##[[:space:]]+.*Self-Critique' "$1"; }
   detect_self_critique_wrong_heading() { [ -f "$1" ] && grep -nE '^#{3,}[[:space:]]+.*Self-Critique|^#{1}[[:space:]]+.*Self-Critique' "$1" 2>/dev/null | head -1; }
 }
@@ -399,7 +400,14 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
       for f in "$dir"*.md; do
         [ -f "$f" ] || continue
         if ! has_completion_markers "$f"; then
-          echo "[working-lifecycle] $(basename "$f") — Status:Done + Self-Critique 미충족, 스킵" >&2
+          # 미충족 사유를 조건별로 분리 출력 (2026-07-22) — 구 통합 메시지는 어느 조건이
+          # 깨졌는지 알려주지 않아 "hook 고장" 오진을 유발했다 (실측 1회).
+          if ! has_status_done "$f"; then
+            skip_reason="종결 마커 부재 — 'Status: Done'(또는 완료/폐기/Abandoned) **단독 라인** 필요. 요약·사유는 '> 완료 요약: ...' 인용문으로 분리"
+          else
+            skip_reason="'## Self-Critique' (h2) 부재"
+          fi
+          echo "[working-lifecycle] $(basename "$f") — $skip_reason → 스킵" >&2
           skipped_count=$((skipped_count + 1))
           continue
         fi

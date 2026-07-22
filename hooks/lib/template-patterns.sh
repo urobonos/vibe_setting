@@ -13,12 +13,25 @@
 # 단일 함수 호출 SSOT 로 통일한다 (audit S-3 / H-2 / H-3 묶음, 2026-05-13 도입).
 
 # ─────────────────────────────────────────────────────────
-# Status / 상태 = Done / 완료 — 시작 라인 또는 YAML frontmatter 안 필드
+# Status / 상태 = 종결 마커 — 시작 라인 또는 YAML frontmatter 안 필드
+#
+# 종결 키워드 (2026-07-22 확장): Done / 완료 / 폐기 / Abandoned
+#   Why: 폐기도 Done 과 동일한 종결 상태인데 구 정규식이 Done|완료 만 받아
+#        폐기 문서가 working/ 에 영구 잔류했다 (실측: contact-channel-gap 이
+#        2026-07-15 폐기 확정 후 7일간 잔류하며 /taskflow:load 목록을 오염).
+#
+# ⛔ 후행 사유(설명 부기)는 계속 불허 — 줄끝 앵커 `[[:space:]]*$` 유지.
+#   backlog `working-lifecycle-posttooluse-misfire` 3사례(06-24·07-03·07-20)
+#   해소 2택에서 **사용자 결정 = ① 문서 측 규약화(hook 무변경)**, ② 정규식
+#   완화는 `Done — 아직 아님` 류 **오탐 여지**로 기각됐다 (2026-07-21).
+#   2026-07-22 에 ②를 재도입했다가 오탐 4케이스 실측으로 확인 후 철회.
+#   → 요약·사유는 `> 완료 요약: ...` 인용문으로 분리하고 마커는 단독 라인.
+#   규약 SSOT = skills/task-docs/references/unified-template.md L11/L436/L450.
 # ─────────────────────────────────────────────────────────
 has_status_done() {
   local file="$1"
   [ -f "$file" ] || return 1
-  grep -qE '^(Status|상태):[[:space:]]*(Done|완료)[[:space:]]*$' "$file"
+  grep -qE '^(Status|상태):[[:space:]]*(Done|완료|폐기|Abandoned)[[:space:]]*$' "$file"
 }
 
 # ─────────────────────────────────────────────────────────
