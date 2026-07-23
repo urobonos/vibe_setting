@@ -67,8 +67,8 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
    - **우회 (필수):** 앞 step 이 막혀 있어도 **그 step 에 의존하지 않는 독립 step 은 계속 진행**한다 ("앞이 막히면 뒤도 전혀 진행 안 함" 방지). 진행 가능 여부는 전체 순번이 아니라 **직접 의존 선행**만으로 판단한다.
    - **필수 블로커:** 직접 의존 선행이 `NeedsDecision`/`In Progress` 면 그 step 은 **진행 불가** (선행 결과에 실제로 의존하므로).
    - 진행 가능 step **0** → 전부 `ReadyToMerge`/`Done` 이면 **4단계 정지** / 블록(의존 선행 미해결)만 남으면 **task 정지**(사용자 판단 필요).
-2. 그 step 파일을 진행 단위로 `/taskflow:auto` 실행 (execute.md step 순차 소비 재사용).
-3. step DoD 충족 → 그 step 파일 `Status: ReadyToMerge` + 인덱스 표 상태 갱신 → 다음 step (막히거나 전부 ReadyToMerge 까지).
+2. **착수 표시** — claim 직후 그 step 파일 `상태: Pending → In Progress` + 인덱스 표 갱신 (control·다른 tick 이 "진행 중" 을 봄). 이어서 그 step 을 진행 단위로 `/taskflow:auto` 실행 (execute.md step 순차 소비 재사용).
+3. step DoD 충족 → 그 step 파일 `상태: ReadyToMerge`(머지 준비) + 인덱스 표 갱신 → 다음 step (막히거나 전부 ReadyToMerge 까지). 전이·SSOT = 아래 §"step 상태 라이프사이클".
 4. step 도중 판단 필요 → **3단계 마감** (unified NeedsDecision, 다음 tick 이 그 step 부터 재개).
 
 > step 분해 없는 경량 unified = unified 전체를 1 진행 단위로 처리하고 완료 시 unified 자체에 `Status: ReadyToMerge`.
@@ -103,6 +103,21 @@ step 이 개발→verify→review 를 통과하면:
 3. blocker 0 → unified `Status: Done` → `working-lifecycle.sh` tasks/ 이동 + 전파.
 
 tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge 로 올리는 데까지만.
+
+## step 상태 라이프사이클 (SSOT = step 파일 `상태:`)
+
+각 평면 step 파일 frontmatter `상태:` 가 진행 SSOT 다. unified §계획 인덱스 표 상태 컬럼은 사람이 보는 미러 — tick 이 step 파일 갱신 시 함께 동기화한다 (working-scan 은 step 파일 `상태:` 를 읽는다).
+
+| 상태 | 시점 | 전이 주체 |
+|------|------|----------|
+| `Pending` | plan 이 step 분해 생성 | `/taskflow:plan` |
+| `In Progress` | tick 이 그 step claim + 착수 | `/taskflow:tick` |
+| `ReadyToMerge` | 개발+verify+review 완료 (머지 준비) | `/taskflow:tick` |
+| `NeedsDecision` | 판단 필요로 마감 (그 step 한정) | `/taskflow:tick` |
+| `Done` | 사용자가 그 step 머지 | `/taskflow:save` |
+
+- **동기화:** tick 은 step 파일 `상태:` 변경 시 unified 인덱스 표 상태 컬럼도 같은 값으로 갱신 (불일치 시 step 파일이 우선 — working-scan 이 파일을 읽으므로).
+- **다세션 상보:** step 파일 `상태: In Progress` = 문서 레벨 진행 표시 / REGISTRY active(step slug claim) = 배타 lock. 둘이 함께 control·다른 tick 에 진행 중 step 을 가시화한다.
 
 ## step 상세 기록 (무인 필수)
 
