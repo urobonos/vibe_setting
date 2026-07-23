@@ -45,6 +45,7 @@ claim 한 working 문서의 시작부 `Status:` 라인으로 진입 단계를 �
 | 없음 / `초안` / raw | `/taskflow:analyze` → `/taskflow:plan` → `/taskflow:auto` | 분석부터 |
 | `Plan Complete` | `/taskflow:auto` | 계획 완료 → 실행부터 |
 | `In Progress` / `Partial` | `/taskflow:auto` (이어서) | 잔여 이어감 |
+| `NeedsDecision` | **skip** | 사용자 판단 대기 — 결정 입력 전 재잡이 금지(무한 방지). 사용자 결정 후 `In Progress` 복귀 시 재개 |
 | `ReadyToMerge` | **skip** | 이미 완료대기 — 사용자 머지 대기, tick 대상 아님 |
 | `Done` | **skip** | 종결 |
 
@@ -63,7 +64,9 @@ unified §계획에 **Step 분해 인덱스 표**(step-01~nn)가 존재하면 un
 
 `/taskflow:auto` 실행 중 결정 요구 발생 시 분류·마감은 **`execute.md` §"결정 escalation ladder" SSOT** 를 그대로 따른다 (본 커맨드 재기술 안 함). 요지:
 
-- **권한형 P1~P4 (§3 매칭 / 사업 판단 / 외부 상태 변경 / 하니스 룰) · 판정 불확실** → 즉시 §실행 `## 결정 Escalation 로그` 표에 **무엇을 결정해야 하는지** 기록 + `[AUTO-ITERATE-USER-DECISION]` 마감. 무인이라 사용자가 나중에 이 기록만 보고 판단할 수 있어야 하므로 **선택지·트레이드오프·추천을 문서에 남긴다.**
+- **권한형 P1~P4 (§3 매칭 / 사업 판단 / 외부 상태 변경 / 하니스 룰) · 판정 불확실** → 즉시 §실행 `## 결정 Escalation 로그` 표에 **무엇을 결정해야 하는지** 기록 + working 문서 시작부 **`Status: NeedsDecision`** 부착 + `registry_update {작업명} {sid8} needs-decision` + `[AUTO-ITERATE-USER-DECISION]` 마감. 무인이라 사용자가 나중에 이 기록만 보고 판단할 수 있어야 하므로 **선택지·트레이드오프·추천을 문서에 남긴다.**
+  - `NeedsDecision` 은 `ReadyToMerge` 와 대칭 — 종결 정규식(`Done|완료|폐기|Abandoned`) 비대상이라 자동이동 안 되고 working/ 에 잔류한다. tick 은 이 문서를 **skip**(재잡이 무한 방지)하고, SessionStart 배너가 `⚠️ 판단 필요` 로 최우선 노출한다.
+  - **재개:** 사용자가 결정을 입력하면 working 문서 `Status: In Progress` 로 되돌리고 (`registry_update … active`) 막혔던 지점(step 단위면 인덱스 표의 그 step)부터 이어간다.
 - **정보 부족형 I1~I3** → bounded `/taskflow:analyze`→`/taskflow:plan` 자체 해소 시도, 미해소 시 조사결과 첨부 후 마감.
 
 ## 4단계 — 완주 정지 (`Status: ReadyToMerge`)

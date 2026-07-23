@@ -60,7 +60,7 @@ git worktree list 2>/dev/null
 
 ## ③ 잔여 작업 기록 / 이동
 
-> **먼저 `Status: ReadyToMerge` 확인 (분기 C 우선):** 문서 시작부가 `Status: ReadyToMerge` (=`/taskflow:tick` 무인 완주 산출) 면 잔여 0건이어도 분기 A(Done) 로 직행하지 않는다 — 아래 **분기 C** 로 처리한다. 정착(머지) 승인 전 Done 부착 시 worktree 가 orphan 이 된다.
+> **먼저 `Status: ReadyToMerge` / `NeedsDecision` 확인 (분기 C 우선):** 문서 시작부가 `Status: ReadyToMerge` (=`/taskflow:tick` 무인 완주 산출) 면 잔여 0건이어도 분기 A(Done) 로 직행하지 않는다 — 아래 **분기 C** 로 처리한다 (정착 승인 전 Done 부착 시 worktree orphan). `Status: NeedsDecision` (=tick 판단 대기) 이면 **Partial 로 덮지 말고 그대로 보존** — 사용자 결정 대기 문서이므로 status 를 유지한다 (tick 이 결정 후 `In Progress` 복귀로 재개).
 
 ### 분기 A — 잔여 0건
 
