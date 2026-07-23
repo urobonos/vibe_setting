@@ -63,8 +63,9 @@ working_scan() {
     # product 필터
     if [ "$filter" != "all" ] && [ "$filter" != "$product" ]; then continue; fi
 
-    # status = '^Status:' 값 (영문/한글 상태어, 공백 포함 'Plan Complete'·'In Progress')
-    status=$(grep -m1 -E '^Status:' "$f" 2>/dev/null | sed -E 's/^Status:[[:space:]]*//; s/[[:space:]]*$//')
+    # status = '^Status:'(unified) 또는 '^상태:'(step frontmatter, plan.md 규약) 값
+    #   step 평면 파일은 frontmatter 라벨이 한글 '상태:' 라 영문 'Status:' 만으론 못 읽는다 (2026-07-23 버그픽스)
+    status=$(grep -m1 -E '^(Status|상태):' "$f" 2>/dev/null | sed -E 's/^(Status|상태):[[:space:]]*//; s/[[:space:]]*$//')
     [ -z "$status" ] && status="-"
 
     printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$f" "$date_part" "$product" "$task" "$status" "$is_step"

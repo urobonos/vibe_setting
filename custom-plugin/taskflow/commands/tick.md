@@ -87,7 +87,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 step 이 개발→verify→review 를 통과하면:
 
 1. **머지 안 함** — 정착(`/git:merge`) 하지 않는다. wip/* worktree 그대로. 커밋만 누적.
-2. 그 step 파일 시작부 **`Status: ReadyToMerge`** 부착 (인덱스 표 상태도 갱신).
+2. 그 step 파일 frontmatter 상태를 **`상태: ReadyToMerge`** 로 갱신 (plan.md step 규약 = 한글 `상태:` 라벨. unified 는 `Status:`. working-scan 은 `Status`/`상태` 둘 다 인식하므로 어느 쪽이든 잡힌다). 인덱스 표 상태 컬럼도 갱신.
 3. `## 머지 전 리뷰 포인트`(step 파일) 기록 — worktree 경로 + 핵심 변경 + verify/review 결과.
 4. 다음 진행 가능 step 으로 계속. **모든 step 이 ReadyToMerge 면 tick 정지** — `[AUTO-ITERATE-USER-DECISION]`(사용자 step 머지 대기).
 
