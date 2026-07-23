@@ -60,6 +60,8 @@ git worktree list 2>/dev/null
 
 ## ③ 잔여 작업 기록 / 이동
 
+> **먼저 `Status: ReadyToMerge` 확인 (분기 C 우선):** 문서 시작부가 `Status: ReadyToMerge` (=`/taskflow:tick` 무인 완주 산출) 면 잔여 0건이어도 분기 A(Done) 로 직행하지 않는다 — 아래 **분기 C** 로 처리한다. 정착(머지) 승인 전 Done 부착 시 worktree 가 orphan 이 된다.
+
 ### 분기 A — 잔여 0건
 
 ```markdown
@@ -94,6 +96,19 @@ Status: Partial
 ```
 
 → working/ 원본 유지 (이동 SKIP). 다음 세션에서 `/taskflow:load` 호출 → 잔여 항목 본문 표시 → 처리 후 다시 `/taskflow:save` 시 잔여 0건이면 자동 이동.
+
+### 분기 C — Status: ReadyToMerge (완료대기, `/taskflow:tick` 산출)
+
+`/taskflow:tick` 무인 완주 문서는 개발·verify·review 를 마쳤으나 **정착(머지) 전** 상태다 (worktree 유지, `Status: ReadyToMerge`). 잔여 0건이어도 **worktree 정착 승인 전에는 Done 전환 금지.**
+
+| ① worktree 정착 | 처리 |
+|-----------------|------|
+| 승인 → `/git:merge` (또는 `/git:create`) 정착 완료 | `Status: ReadyToMerge` → `Status: Done` 전환 → `working-lifecycle.sh` tasks/ 이동 + REGISTRY entry 제거 |
+| 보류 (아직 리뷰 안 함) | `Status: ReadyToMerge` 유지 → working/ 잔류. REGISTRY `registry_update {slug} {sid} ready-to-merge` 유지. 다음 세션 재확인 |
+
+- source = main/master 시 정착 절대 금지 (분기 A/B 와 동일 — PR 안내 대체).
+- 정착 후 `git push` = 사용자 직접 (§4.3 (d)).
+- `## 머지 전 리뷰 포인트` 섹션(tick 이 기록)을 먼저 확인해 핵심 변경·미결 결정을 리뷰한 뒤 정착 승인.
 
 ### 즉시 이동 모드 (`save now` — 구 done 흡수, 2026-07-16)
 
