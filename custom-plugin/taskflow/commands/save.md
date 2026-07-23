@@ -60,7 +60,7 @@ git worktree list 2>/dev/null
 
 ## ③ 잔여 작업 기록 / 이동
 
-> **먼저 `Status: ReadyToMerge` / `NeedsDecision` 확인 (분기 C 우선):** 문서 시작부가 `Status: ReadyToMerge` (=`/taskflow:tick` 무인 완주 산출) 면 잔여 0건이어도 분기 A(Done) 로 직행하지 않는다 — 아래 **분기 C** 로 처리한다 (정착 승인 전 Done 부착 시 worktree orphan). `Status: NeedsDecision` (=tick 판단 대기) 이면 **Partial 로 덮지 말고 그대로 보존** — 사용자 결정 대기 문서이므로 status 를 유지한다 (tick 이 결정 후 `In Progress` 복귀로 재개).
+> **먼저 step ReadyToMerge / NeedsDecision 확인 (분기 C 우선):** task 의 step 파일에 `Status: ReadyToMerge`(=`/taskflow:tick` 이 올린 머지 준비 step)가 있거나 unified 가 `Status: NeedsDecision` 이면 분기 A(Done) 직행 금지 — 아래 **분기 C**(step 개별 머지 + 완료 게이트)로 처리한다. `NeedsDecision` 은 **Partial 로 덮지 말고 보존**(사용자 결정 대기, tick 이 결정 후 `In Progress` 복귀로 재개). **ReadyToMerge 는 step 단위 "머지 준비"이지 task "완료대기"가 아니다.**
 
 ### 분기 A — 잔여 0건
 
@@ -97,18 +97,25 @@ Status: Partial
 
 → working/ 원본 유지 (이동 SKIP). 다음 세션에서 `/taskflow:load` 호출 → 잔여 항목 본문 표시 → 처리 후 다시 `/taskflow:save` 시 잔여 0건이면 자동 이동.
 
-### 분기 C — Status: ReadyToMerge (완료대기, `/taskflow:tick` 산출)
+### 분기 C — step ReadyToMerge → step 개별 머지 + 완료 게이트 (`/taskflow:tick` 산출)
 
-`/taskflow:tick` 무인 완주 문서는 개발·verify·review 를 마쳤으나 **정착(머지) 전** 상태다 (worktree 유지, `Status: ReadyToMerge`). 잔여 0건이어도 **worktree 정착 승인 전에는 Done 전환 금지.**
+`/taskflow:tick` 이 무인으로 각 step 을 `Status: ReadyToMerge`(머지 준비)로 올려둔 task. **task 자체엔 ReadyToMerge Status 가 없다** — ReadyToMerge 는 step 단위다. 완료(Done)는 2단계:
 
-| ① worktree 정착 | 처리 |
-|-----------------|------|
-| 승인 → `/git:merge` (또는 `/git:create`) 정착 완료 | `Status: ReadyToMerge` → `Status: Done` 전환 → `working-lifecycle.sh` tasks/ 이동 + REGISTRY entry 제거 |
-| 보류 (아직 리뷰 안 함) | `Status: ReadyToMerge` 유지 → working/ 잔류. REGISTRY `registry_update {slug} {sid} ready-to-merge` 유지. 다음 세션 재확인 |
+**① step 개별 머지 (사용자 승인)**
+- 각 step 파일 `## 머지 전 리뷰 포인트` 확인 후, `ReadyToMerge` step 을 feature 에 **개별 머지**. worktree = task 1개, **step별 커밋 단위**로 순차 머지 (`/git:merge`). 머지한 step 파일 `Status: ReadyToMerge` → `Status: Done`.
+- source = main/master 정착 금지 (PR 대체) · 정착 후 `git push` = 사용자 직접 (§4.3 (d)).
 
-- source = main/master 시 정착 절대 금지 (분기 A/B 와 동일 — PR 안내 대체).
-- 정착 후 `git push` = 사용자 직접 (§4.3 (d)).
-- `## 머지 전 리뷰 포인트` 섹션(tick 이 기록)을 먼저 확인해 핵심 변경·미결 결정을 리뷰한 뒤 정착 승인.
+**② 완료 게이트 (Done 이동 전 필수 검증)**
+
+```bash
+source ~/.claude/hooks/lib/working-scan.sh
+working_gate_blockers "{product}" "{작업명}"
+```
+
+- **출력(미해결)이 1줄이라도 있으면 `Done` 차단** — 미처리 step(인덱스 `Pending`/`In Progress`) · `NeedsDecision` · 미체크박스 `- [ ]` · `## 잔여` 섹션 · verify/review FAIL. 목록 제시 후 해소 요청.
+- blocker **0 줄** → unified `Status: Done` 부착 → `working-lifecycle.sh` tasks/ 이동 + 전파(history·summary·인덱스·REGISTRY·step 분배).
+
+> **ReadyToMerge 는 "완료대기"가 아니다** (step 머지 준비). task 완료는 **완료 게이트가 판정** — 잔여·미해결이 하나라도 있으면 넘어가지 않는다. tick 은 step 을 ReadyToMerge 로 올리는 데까지만 하고, 머지·게이트·Done 은 본 분기(사용자)가 담당한다.
 
 ### 즉시 이동 모드 (`save now` — 구 done 흡수, 2026-07-16)
 

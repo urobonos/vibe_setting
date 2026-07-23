@@ -1,147 +1,127 @@
 ---
-description: 무인 loop 1-iteration 러너 — cwd 최신 task 1건 claim → Status 분기(analyze/plan/auto) → 판단 필요 시 문서 기록 후 마감, 아니면 worktree + `Status: ReadyToMerge` 로 완주 정지(머지·push 안 함). harness `/loop <interval> /taskflow:tick` 로 주기 반복. 로직 재구현 0 — 기존 조각 순차 호출.
+description: 무인 loop 1-iteration 러너 — cwd 최신 task 1건 claim → Status 분기 → 다음 진행 가능한 step 개발+verify+review → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent, PowerShell
 argument-hint: "[작업명|#tag — 선택. 생략 시 cwd 최신 1건 자동 claim]"
 ---
 
-무인 1-iteration 러너. **주기 반복은 이 커맨드가 아니라 harness `/loop` 가 담당** — `/loop 30m /taskflow:tick` 처럼 감싸 호출한다. tick 자체는 **task 1건**만 잡아 완료대기(ReadyToMerge)까지 진행하고 멈춘다.
+무인 1-iteration 러너. **주기 반복은 harness `/loop`** 가 담당 — `/loop 30m /taskflow:tick`. tick 자체는 **다음 진행 가능한 step 1개**를 `ReadyToMerge`(머지 준비)까지 올리고 멈춘다.
 
 ## 핵심 원칙
 
-- **로직 재구현 0.** claim=`/taskflow:load`, 실행=`/taskflow:auto`, 마감=escalation ladder, 정지=`Status: ReadyToMerge`. 전부 기존 조각 순차 호출.
-- **머지·push 안 함.** 무인이므로 완주해도 정착(머지)하지 않고 ReadyToMerge 에서 정지한다. 정착은 사용자가 나중에 `/taskflow:save` 로 승인 (§3/§4.3 — Claude 자동 머지·push 금지).
-- **판단 필요 = 즉시 마감.** 권한형 결정(§3 매칭)에 걸리면 문서에 판단 필요사항을 적고 `[AUTO-ITERATE-USER-DECISION]` 로 그 iteration 을 끝낸다.
+- **로직 재구현 0.** claim=`/taskflow:load`, 실행=`/taskflow:auto`, 마감=escalation ladder, step 스캔=`hooks/lib/working-scan.sh`.
+- **머지·push 안 함 (§3).** step 완료 → 그 step `Status: ReadyToMerge`(머지 준비)까지. **실제 step 머지 + task 완료(Done)는 사용자**가 `control`→`/taskflow:save` 로 수행.
+- **`ReadyToMerge` 는 step 단위 상태 — "완료대기"가 아니다.** task(unified)엔 ReadyToMerge 가 없다. task 는 모든 step 머지 + 완료 게이트 통과 후에만 `Done`.
+- **판단 필요 = 즉시 마감.** 권한형 결정(§3)에 걸리면 unified 에 `NeedsDecision` 부착 + 판단사항 기록 후 그 iteration 종료.
 
 ## 1-iteration 흐름
 
 ```
 1. claim   : /taskflow:load {인자|latest}   (배타 claim, dispatch lock 재사용)
-              └ 진행 가능 task 0건 → "진행 가능 task 없음" 출력 후 종료 (loop 다음 주기 대기)
-2. 분기    : working 문서 Status 판정 →
-              (없음/raw)      → /taskflow:analyze → /taskflow:plan → /taskflow:auto
-              (Plan Complete) → /taskflow:auto
-              (In Progress)   → /taskflow:auto  (이어서)
-2-bis.step하강: unified §계획에 Step 인덱스 표가 있으면 unified 통짜로 잡지 않고
-              다음 진행 가능한 step(Pending + 선행 Done)부터 step 파일 단위로 진행
-              (execute.md step-01~nn 순차 소비 재사용). step 없으면 unified 전체 진행.
-3. 실행    : /taskflow:auto 가 worktree 생성 → 개발 → QA → verify(e2e 5점) → review 관통
-              (step 단위면 각 step 파일 §실행/§QA 기록 + 인덱스 표 Pending→In Progress→Done 갱신)
-              └ P1~P4 권한형/판정 불확실 → §실행 `## 결정 Escalation 로그` 기록
-                + 판단 필요사항 명시 → [AUTO-ITERATE-USER-DECISION] 마감 (iteration 종료)
-4. 완주정지: 결정 없이 통과 시 →
-              worktree 유지 (정착 안 함)
-              + working 문서 Status: ReadyToMerge
-              + REGISTRY status=ready-to-merge
-              + ## 머지 전 리뷰 포인트 기록
-              → [AUTO-ITERATE-USER-DECISION] 마감 (머지 승인이 사용자 결정 영역)
+              └ 진행 가능 task 0건 → "없음" 출력 후 종료 (loop 다음 주기)
+2. 분기    : unified Status 판정 (아래 표)
+2-bis 하강 : working-scan 으로 다음 진행 가능한 step(Pending + 선행 Done) 선택
+3. step 실행: 개발 → verify(e2e 5점) → review → 그 step 파일에 Status: ReadyToMerge 부착
+              (머지 안 함. §계획 인덱스 표 상태도 ReadyToMerge 로 갱신)
+              └ P1~P4 권한형/판정 불확실 → unified Status: NeedsDecision + §결정 로그 → 마감
+4. 반복/정지: 다음 tick = 다음 step. 모든 step ReadyToMerge → tick 정지
+              (사용자가 control 로 보고 step별 머지 + 완료 게이트 → task Done)
 ```
 
-## 2단계 — Status 자동 분기
+## 2단계 — unified Status 분기
 
-claim 한 working 문서의 시작부 `Status:` 라인으로 진입 단계를 정한다 (이미 계획된 task 재분석 금지 — 중복 작업 0).
-
-| 현재 Status | 진입 | 사유 |
+| unified Status | 진입 | 사유 |
 |------------|------|------|
 | 없음 / `초안` / raw | `/taskflow:analyze` → `/taskflow:plan` → `/taskflow:auto` | 분석부터 |
-| `Plan Complete` | `/taskflow:auto` | 계획 완료 → 실행부터 |
-| `In Progress` / `Partial` | `/taskflow:auto` (이어서) | 잔여 이어감 |
-| `NeedsDecision` | **skip** | 사용자 판단 대기 — 결정 입력 전 재잡이 금지(무한 방지). 사용자 결정 후 `In Progress` 복귀 시 재개 |
-| `ReadyToMerge` | **skip** | 이미 완료대기 — 사용자 머지 대기, tick 대상 아님 |
+| `Plan Complete` | `/taskflow:auto` (2-bis step 하강) | 계획 완료 → step 실행 |
+| `In Progress` | `/taskflow:auto` (다음 step) | 이어감 |
+| `NeedsDecision` | **skip** | 사용자 판단 대기 — 결정 입력 전 재잡이 금지(무한 방지). 결정 후 `In Progress` 복귀 시 재개 |
+| **모든 step `ReadyToMerge`** | **skip** | 사용자 step 머지 대기 (control→/save) |
 | `Done` | **skip** | 종결 |
 
-## 2-bis단계 — step 하강 (unified 내 step 분해가 있을 때)
+## 2-bis단계 — step 하강 (working-scan)
 
-unified §계획에 **Step 분해 인덱스 표**(step-01~nn)가 존재하면 unified 를 통짜로 잡지 않고 **step 파일 단위로 내려가 진행**한다 (사용자 원의도 = "task-step" 단위). unified Status(Plan Complete / In Progress)는 진입점만 정하고, 실제 진행 단위는 step 이다.
+unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가 아니라 **step 파일 단위**로 진행한다.
 
-1. §계획 Step 인덱스 표에서 **다음 진행 가능한 step** 선택 — 상태 `Pending` + 선행 step 전부 `Done`(의존 충족). 진행 가능 step 이 없고 전부 `Done` 이면 → **4단계 완주 정지**로.
-2. 그 step 파일 `{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` 을 진행 단위로 `/taskflow:auto` 실행 (execute.md 의 "step-01 부터 의존 순서대로 순차 소비, 상태 `Pending→In Progress→Done`" 로직 그대로 재사용).
-3. step DoD 충족 → 인덱스 표 상태 `Done` 갱신 → 다음 진행 가능 step 으로 계속 (막히거나 전부 완주까지).
-4. **step 도중 판단 필요(P1~P4)** → 그 step 파일 §실행 `## 결정 Escalation 로그` 기록 + `[AUTO-ITERATE-USER-DECISION]` 마감. 다음 tick 이 **그 step 부터 재개**한다 (인덱스 표 상태로 재개 지점 판별).
+1. `hooks/lib/working-scan.sh` 의 `working_scan {product}` 로 이 task 의 step 파일 상태를 읽어 **다음 진행 가능한 step** 선택 — 인덱스 표 `Pending` + 선행 step 전부 완료(`ReadyToMerge`/`Done`). 진행 가능 step 0 + 전부 ReadyToMerge = **4단계 정지**.
+2. 그 step 파일을 진행 단위로 `/taskflow:auto` 실행 (execute.md step 순차 소비 재사용).
+3. step DoD 충족 → 그 step 파일 `Status: ReadyToMerge` + 인덱스 표 상태 갱신 → 다음 step (막히거나 전부 ReadyToMerge 까지).
+4. step 도중 판단 필요 → **3단계 마감** (unified NeedsDecision, 다음 tick 이 그 step 부터 재개).
 
-> step 분해가 없는 경량 unified 는 본 단계 skip — unified 전체를 1 진행 단위로 처리한다.
+> step 분해 없는 경량 unified = unified 전체를 1 진행 단위로 처리하고 완료 시 unified 자체에 `Status: ReadyToMerge`.
 
 ## 3단계 — 판단 필요 시 문서 기록 후 마감
 
-`/taskflow:auto` 실행 중 결정 요구 발생 시 분류·마감은 **`execute.md` §"결정 escalation ladder" SSOT** 를 그대로 따른다 (본 커맨드 재기술 안 함). 요지:
+분류·마감은 **`execute.md` §"결정 escalation ladder" SSOT**. 요지:
 
-- **권한형 P1~P4 (§3 매칭 / 사업 판단 / 외부 상태 변경 / 하니스 룰) · 판정 불확실** → 즉시 §실행 `## 결정 Escalation 로그` 표에 **무엇을 결정해야 하는지** 기록 + working 문서 시작부 **`Status: NeedsDecision`** 부착 + `registry_update {작업명} {sid8} needs-decision` + `[AUTO-ITERATE-USER-DECISION]` 마감. 무인이라 사용자가 나중에 이 기록만 보고 판단할 수 있어야 하므로 **선택지·트레이드오프·추천을 문서에 남긴다.**
-  - `NeedsDecision` 은 `ReadyToMerge` 와 대칭 — 종결 정규식(`Done|완료|폐기|Abandoned`) 비대상이라 자동이동 안 되고 working/ 에 잔류한다. tick 은 이 문서를 **skip**(재잡이 무한 방지)하고, SessionStart 배너가 `⚠️ 판단 필요` 로 최우선 노출한다.
-  - **재개:** 사용자가 결정을 입력하면 working 문서 `Status: In Progress` 로 되돌리고 (`registry_update … active`) 막혔던 지점(step 단위면 인덱스 표의 그 step)부터 이어간다.
-- **정보 부족형 I1~I3** → bounded `/taskflow:analyze`→`/taskflow:plan` 자체 해소 시도, 미해소 시 조사결과 첨부 후 마감.
+- **권한형 P1~P4 · 판정 불확실** → unified §실행 `## 결정 Escalation 로그` 에 **무엇을 결정해야 하는지** + 선택지·트레이드오프·추천 기록 + unified **`Status: NeedsDecision`** 부착 + `registry_update {작업명} {sid8} needs-decision` + `[AUTO-ITERATE-USER-DECISION]` 마감.
+  - `NeedsDecision` 은 종결 정규식(`Done|완료|폐기|Abandoned`) 비대상 → 자동이동 안 되고 working/ 잔류. tick 은 skip(재잡이 무한 방지). SessionStart 배너·`/taskflow:control` 이 `⚠️ 판단 필요` 로 최우선 노출.
+  - **재개:** 사용자 결정 입력 → unified `Status: In Progress` + `registry_update … active` → 막혔던 step 부터 이어감.
+- **정보 부족형 I1~I3** → bounded `/taskflow:analyze`→`/taskflow:plan` 자체 해소, 미해소 시 조사결과 첨부 후 마감.
 
-## 4단계 — 완주 정지 (`Status: ReadyToMerge`)
+## 4단계 — step ReadyToMerge (머지 준비, 정지)
 
-결정 요구 없이 **(step 분해 시) 인덱스 표의 모든 step 이 `Done`**, 또는 (경량) unified 전체가 개발→QA→verify→review 를 통과하면:
+step 이 개발→verify→review 를 통과하면:
 
-1. **worktree 유지** — 정착(`/git:create`·`/git:merge`) **하지 않는다**. wip/* 분기·worktree 그대로 둔다.
-2. **working 문서** 시작부 `Status: ReadyToMerge` 부착.
-   - ⚠️ ReadyToMerge 는 `working-lifecycle.sh` 종결 정규식(`Done|완료|폐기|Abandoned`)에 **없다** → 자동 이동 안 됨 = working/ 에 남아 사용자 리뷰 대기 (의도된 동작).
-3. **REGISTRY** status 를 `ready-to-merge` 로 갱신:
-   ```bash
-   source ~/.claude/hooks/lib/registry-utils.sh
-   registry_update "{작업명}" "{sid8}" ready-to-merge
-   ```
-   (`registry_update` 는 status 자유 문자열 수용 — 코드 변경 불필요. `registry_list_active` 는 active 만 잡으므로 완료대기는 active 목록에서 제외 = 의도.)
-4. **`## 머지 전 리뷰 포인트`** 섹션 기록 (무인 특화 — 사용자 리뷰 진입점):
-   ```markdown
-   ## 머지 전 리뷰 포인트
-   - worktree: `~/.claude/worktrees/{sid8}-{slug}` (wip/{sid8}-{slug})
-   - 핵심 변경: {1~3줄 요약}
-   - verify: e2e 5점 {PASS/부분} / review: Self-Critique {통과/잔여}
-   - 미결 결정: {없음 | 사용자 판단 필요 항목}
-   - 정착: `/taskflow:save {작업명}` → 승인 → /git:merge (머지·push 는 사용자)
-   ```
-5. `[AUTO-ITERATE-USER-DECISION]` 마감 — 머지 승인이 사용자 결정 영역이므로 DONE 아님.
+1. **머지 안 함** — 정착(`/git:merge`) 하지 않는다. wip/* worktree 그대로. 커밋만 누적.
+2. 그 step 파일 시작부 **`Status: ReadyToMerge`** 부착 (인덱스 표 상태도 갱신).
+3. `## 머지 전 리뷰 포인트`(step 파일) 기록 — worktree 경로 + 핵심 변경 + verify/review 결과.
+4. 다음 진행 가능 step 으로 계속. **모든 step 이 ReadyToMerge 면 tick 정지** — `[AUTO-ITERATE-USER-DECISION]`(사용자 step 머지 대기).
 
-## step 문서 상세 기록 (무인 필수)
+> `ReadyToMerge` 는 종결 정규식 비대상이라 step 파일도 working/ 에 잔류한다 (자동이동 안 됨 = 의도).
 
-무인이라 기록이 유일한 리뷰 근거다. task 1건이면 working 통합 문서 §실행에, 여러 step 으로 쪼개졌으면 각 `step-NN` 평면 파일 §실행/§QA 에 **생략 없이** 기록한다 (기존 §4.1 강제 재사용, 신규 룰 0):
+## 완료 게이트 (task Done — tick 이 아니라 save 담당)
 
-- `## 변경 영향 기록` — 무엇을 / 개선점 / 수행 이유
-- `## Before/After 대조` — 제안 0건이면 "없음 — 지시 그대로"
-- `§ 검증` e2e 5점 + `§ 리뷰` Self-Critique 결과
-- `## 결정 Escalation 로그` — 판단 필요로 걸린 항목 (= 사용자가 머지 전 볼 것)
+**task 를 `Done`(tasks/ 이동)으로 넘기는 것은 tick 이 하지 않는다.** 사용자가 control→`/taskflow:save` 로:
+
+1. ReadyToMerge step 들을 feature 에 **개별 머지** (worktree=task 1개, step별 커밋 단위).
+2. **완료 게이트 검증** = `working-scan.sh::working_gate_blockers {product} {작업명}` — 출력(미해결)이 있으면 **Done 차단**:
+   - 미처리 step (인덱스 `Pending`/`In Progress`) · NeedsDecision · 미체크박스 `- [ ]` · `## 잔여` 섹션 · verify/review FAIL.
+3. blocker 0 → unified `Status: Done` → `working-lifecycle.sh` tasks/ 이동 + 전파.
+
+tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge 로 올리는 데까지만.
+
+## step 상세 기록 (무인 필수)
+
+무인이라 기록이 유일한 리뷰 근거다. 각 step 파일 §실행/§QA 에 생략 없이 (기존 §4.1 강제 재사용, 신규 룰 0): `## 변경 영향 기록`(무엇/개선점/왜) · `## Before/After 대조` · verify 5점 + review Self-Critique · `## 결정 Escalation 로그`(판단 걸린 것).
 
 ## §3 Checkpoint 우선 적용
 
-- tick 은 §3 보호 우회 통로가 아니다. 무인 실행 중 권한형 결정(P1~P4)·비가역·외부 시스템 변경은 `dangerous-ops-guard.sh`/`branch-enforce.sh` 가 hook 레벨에서 별도 차단하고, escalation ladder 가 즉시 USER-DECISION 마감한다.
-- **완주해도 정착(머지)하지 않는다** — 정착은 사용자 명시 승인 게이트(`save.md:33`)이므로 무인 tick 은 ReadyToMerge 에서 정지. master/main 머지·push 는 어떤 경우도 사용자 직접.
+- tick 은 §3 우회 통로가 아니다. 권한형 결정·비가역·외부 변경은 `dangerous-ops-guard.sh`/`branch-enforce.sh` 가 hook 레벨 차단 + escalation ladder 가 즉시 NeedsDecision 마감.
+- **머지 절대 안 함** — step ReadyToMerge 까지만. step 머지·task 완료·master/main·push 는 전부 사용자 직접.
 
-## SSOT (재사용 조각 — 본 커맨드는 순차 호출 래퍼)
+## SSOT (재사용 조각)
 
 | 조각 | 역할 | SSOT |
 |------|------|------|
 | 주기 반복 | `/loop <interval> /taskflow:tick` | harness `/loop` 스킬 |
-| claim | cwd 최신 1건 / #tag 배타 claim | `custom-plugin/taskflow/commands/load.md` |
+| claim | cwd 최신 1건 / #tag | `custom-plugin/taskflow/commands/load.md` |
 | 실행 관통 | worktree → 개발 → QA → verify → review | `custom-plugin/taskflow/commands/auto.md` |
-| 결정 마감 | escalation ladder P1~P4 / I1~I3 | `custom-plugin/taskflow/commands/execute.md` §"결정 escalation ladder" |
-| step 순차 소비 | step-01~nn 의존 순서 `Pending→In Progress→Done` | `custom-plugin/taskflow/commands/execute.md` (step 순차 실행) + `plan.md` §"step 파일 양식" |
-| 완주 정지 | ReadyToMerge = 종결 정규식 비대상(자동이동 안 됨) | `hooks/working-lifecycle.sh:54` |
-| REGISTRY | status 자유 문자열 | `hooks/lib/registry-utils.sh` |
-| 정착 (사용자) | ReadyToMerge → 승인 → Done | `custom-plugin/taskflow/commands/save.md` |
+| 결정 마감 | escalation ladder P1~P4 / I1~I3 | `execute.md` §"결정 escalation ladder" |
+| step 순차 소비 | step-01~nn 의존 순서 | `execute.md` + `plan.md` §"step 파일 양식" |
+| **step 스캔 + 완료 게이트** | working/ 훑기 · `working_gate_blockers` | **`hooks/lib/working-scan.sh`** |
+| ReadyToMerge = 비종결 | 자동이동 안 됨 | `hooks/working-lifecycle.sh:54` |
+| step 머지 + 완료 판정 | 사용자 | `custom-plugin/taskflow/commands/save.md` |
+| 대기 큐 리뷰 | step ReadyToMerge + NeedsDecision | `custom-plugin/taskflow/commands/control.md` |
 
 ## 호출 예
 
 ```
-/loop 30m /taskflow:tick        ← 30분마다 cwd 최신 task 1건 자율 진행 (무인 백로그 소진)
-/taskflow:tick                  ← 1회분만 수동 실행 (cwd 최신 1건)
-/taskflow:tick #auth-jwt        ← 특정 분배 태그 1건
+/loop 30m /taskflow:tick        ← 30분마다 다음 step 을 ReadyToMerge 로 진행 (무인)
+/taskflow:tick                  ← 1 step 만 수동 진행
 ```
 
-무인 loop 흐름 예시:
+무인 흐름 예시:
 
 ```
-[loop tick 진입]
-  1) /taskflow:load latest → 2026-07-23-...-commerce-price-audit (Status: Plan Complete)
-  2) 분기 → Plan Complete → /taskflow:auto 진입
-  3) worktree 생성 → 개발 → QA → verify(e2e 5/5) → review(통과)
-     결정 요구 없음
-  4) worktree 유지 + Status: ReadyToMerge + REGISTRY ready-to-merge
-     + ## 머지 전 리뷰 포인트 기록
-  → [AUTO-ITERATE-USER-DECISION]  (사용자가 /taskflow:save 로 머지 승인 대기)
-[loop 다음 주기 → 다음 task claim]
+[tick] load → commerce-audit (Plan Complete, step 3개)
+  2-bis → step-01 (Pending, 선행 없음) 선택
+  3 → 개발·verify 5/5·review 통과 → step-01 Status: ReadyToMerge (머지 X)
+  → [AUTO-ITERATE-DONE]  (다음 tick 이 step-02)
+[tick] → step-02 ReadyToMerge …
+[tick] → step-03 ReadyToMerge → 모든 step ReadyToMerge → 정지
+  → [AUTO-ITERATE-USER-DECISION]  (사용자: control 로 보고 step 머지 + 완료 게이트)
 ```
 
 ## Changelog
 
-- 2026-07-23: 신설 (무인 loop 1-iteration 러너)
+- 2026-07-23: 신설 → step 단위 ReadyToMerge + 완료 게이트 재설계
