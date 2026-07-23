@@ -79,3 +79,23 @@ has_unified_completion_markers() {
   local file="$1"
   has_status_done "$file" && has_self_critique_h2 "$file"
 }
+
+# ─────────────────────────────────────────────────────────
+# 잔여 섹션(## 잔여 / ## TODO / ## Follow-up) 내부의 미체크박스(- [ ]) 존재 여부.
+# Why: Status: Done 부착 시 잔여가 남았는데 tasks/ 로 이동하는 무검증 이동 방지
+#      (working-lifecycle.sh move_working_to_tasks 가드, 2026-07-23 도입).
+#      Self-Critique 등 다른 섹션의 위험기록 체크박스는 제외 — 섹션 스코프 한정(결정 2-A).
+#      save now(/taskflow:done 슬래시 명시 이동)는 호출측 force 인자로 우회(결정 1-B).
+# 반환: 0 = 잔여 섹션 미체크박스 존재(이동 차단) / 1 = 없음(이동 허용)
+# 산출물 SSOT: docs/working/20260723/2026-07-23-claude-harness-done-gate-residual-block.md
+# ─────────────────────────────────────────────────────────
+has_residual_unchecked() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  awk '
+    /^##[[:space:]]+(잔여|TODO|Follow-up)/ { inres=1; next }
+    /^##[[:space:]]/                        { inres=0 }
+    inres && /^[[:space:]]*-[[:space:]]\[[[:space:]]\]/ { found=1 }
+    END { exit(found ? 0 : 1) }
+  ' "$file"
+}

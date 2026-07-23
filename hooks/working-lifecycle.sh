@@ -54,6 +54,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/template-patterns.sh" 2>/dev/null || 
   has_status_done() { [ -f "$1" ] && grep -qE '^(Status|상태):[[:space:]]*(Done|완료|폐기|Abandoned)[[:space:]]*$' "$1"; }
   has_self_critique_h2() { [ -f "$1" ] && grep -qE '^##[[:space:]]+.*Self-Critique' "$1"; }
   detect_self_critique_wrong_heading() { [ -f "$1" ] && grep -nE '^#{3,}[[:space:]]+.*Self-Critique|^#{1}[[:space:]]+.*Self-Critique' "$1" 2>/dev/null | head -1; }
+  # 잔여 섹션 미체크박스 가드 (2026-07-23) — lib/template-patterns.sh has_residual_unchecked 와 동일 유지
+  has_residual_unchecked() { [ -f "$1" ] && awk '/^##[[:space:]]+(잔여|TODO|Follow-up)/{inres=1;next} /^##[[:space:]]/{inres=0} inres && /^[[:space:]]*-[[:space:]]\[[[:space:]]\]/{found=1} END{exit(found?0:1)}' "$1"; }
 }
 
 # Active Task Registry entry/lock 정리 함수 (lib 가용 시에만, 2026-05-15)
@@ -67,7 +69,16 @@ has_completion_markers() {
 # ============= 헬퍼: working 파일 → tasks 이동 =============
 move_working_to_tasks() {
   local working_file="$1"
+  local force="$2"   # "force" = 잔여 가드 우회 (save now = /taskflow:done 슬래시 명시 이동, 2026-07-23 결정 1-B)
   [ -f "$working_file" ] || return 1
+
+  # [게이트] 잔여 섹션 미체크박스 차단 (2026-07-23) — Status: Done 무검증 이동 방지.
+  # ## 잔여/TODO/Follow-up 섹션에 - [ ] 잔존 시 이동 스킵. force 경로는 명시 강제라 우회(결정 1-B).
+  # SSOT: docs/working/20260723/2026-07-23-claude-harness-done-gate-residual-block.md
+  if [ "$force" != "force" ] && has_residual_unchecked "$working_file"; then
+    echo "[working-lifecycle] $(basename "$working_file") — ## 잔여/TODO/Follow-up 섹션에 미체크박스(- [ ]) 잔존 → 이동 차단 (완료 아님). 강제 이동은 /taskflow:save now" >&2
+    return 1
+  fi
 
   local filename
   filename=$(basename "$working_file")
@@ -411,7 +422,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
           skipped_count=$((skipped_count + 1))
           continue
         fi
-        if move_working_to_tasks "$f"; then
+        if move_working_to_tasks "$f" force; then   # 슬래시 /taskflow:done = save now → 잔여 가드 우회(결정 1-B)
           moved_count=$((moved_count + 1))
         fi
       done

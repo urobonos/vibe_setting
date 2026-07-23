@@ -85,6 +85,7 @@ working_gate_blockers() {
       # step 은 ReadyToMerge(머지 준비) 또는 Done(머지됨)이어야 완료 가능. 그 외 = 미처리.
       case "$st" in
         ReadyToMerge|Done|완료) : ;;
+        NeedsDecision) echo "판단 대기 step: $(basename "$path")" ;;
         *) echo "미처리 step: $(basename "$path") (Status=$st)" ;;
       esac
     else

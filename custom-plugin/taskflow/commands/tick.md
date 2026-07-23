@@ -42,7 +42,10 @@ argument-hint: "[작업명|#tag — 선택. 생략 시 cwd 최신 1건 자동 cl
 
 unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가 아니라 **step 파일 단위**로 진행한다.
 
-1. `hooks/lib/working-scan.sh` 의 `working_scan {product}` 로 이 task 의 step 파일 상태를 읽어 **다음 진행 가능한 step** 선택 — 인덱스 표 `Pending` + 선행 step 전부 완료(`ReadyToMerge`/`Done`). 진행 가능 step 0 + 전부 ReadyToMerge = **4단계 정지**.
+1. `hooks/lib/working-scan.sh` 의 `working_scan {product}` 로 step 상태를 읽어 **다음 진행 가능한 step** 선택 — 인덱스 표 `Pending` + **그 step 의 직접 의존 선행(인덱스 표 '의존' 컬럼)이 전부 완료(`ReadyToMerge`/`Done`)**.
+   - **우회 (필수):** 앞 step 이 막혀 있어도 **그 step 에 의존하지 않는 독립 step 은 계속 진행**한다 ("앞이 막히면 뒤도 전혀 진행 안 함" 방지). 진행 가능 여부는 전체 순번이 아니라 **직접 의존 선행**만으로 판단한다.
+   - **필수 블로커:** 직접 의존 선행이 `NeedsDecision`/`In Progress` 면 그 step 은 **진행 불가** (선행 결과에 실제로 의존하므로).
+   - 진행 가능 step **0** → 전부 `ReadyToMerge`/`Done` 이면 **4단계 정지** / 블록(의존 선행 미해결)만 남으면 **task 정지**(사용자 판단 필요).
 2. 그 step 파일을 진행 단위로 `/taskflow:auto` 실행 (execute.md step 순차 소비 재사용).
 3. step DoD 충족 → 그 step 파일 `Status: ReadyToMerge` + 인덱스 표 상태 갱신 → 다음 step (막히거나 전부 ReadyToMerge 까지).
 4. step 도중 판단 필요 → **3단계 마감** (unified NeedsDecision, 다음 tick 이 그 step 부터 재개).
@@ -53,7 +56,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 
 분류·마감은 **`execute.md` §"결정 escalation ladder" SSOT**. 요지:
 
-- **권한형 P1~P4 · 판정 불확실** → unified §실행 `## 결정 Escalation 로그` 에 **무엇을 결정해야 하는지** + 선택지·트레이드오프·추천 기록 + unified **`Status: NeedsDecision`** 부착 + `registry_update {작업명} {sid8} needs-decision` + `[AUTO-ITERATE-USER-DECISION]` 마감.
+- **권한형 P1~P4 · 판정 불확실** → 그 **step 파일** `Status: NeedsDecision` + §실행 `## 결정 Escalation 로그`(결정 사항 + 선택지·트레이드오프·추천). **task(unified)는 진행 가능한 독립 step 이 남아있으면 `In Progress` 유지** — tick 이 다음 iteration 에 그 독립 step 을 진행한다 (막힌 step 하나가 task 전체를 세우지 않는다). **모든 진행 가능 step 이 0** 이면 unified `Status: NeedsDecision` + `registry_update {작업명} {sid8} needs-decision`. `[AUTO-ITERATE-USER-DECISION]` 마감.
   - `NeedsDecision` 은 종결 정규식(`Done|완료|폐기|Abandoned`) 비대상 → 자동이동 안 되고 working/ 잔류. tick 은 skip(재잡이 무한 방지). SessionStart 배너·`/taskflow:control` 이 `⚠️ 판단 필요` 로 최우선 노출.
   - **재개:** 사용자 결정 입력 → unified `Status: In Progress` + `registry_update … active` → 막혔던 step 부터 이어감.
 - **정보 부족형 I1~I3** → bounded `/taskflow:analyze`→`/taskflow:plan` 자체 해소, 미해소 시 조사결과 첨부 후 마감.

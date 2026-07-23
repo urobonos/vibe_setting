@@ -70,6 +70,8 @@ Status: Done
 
 (시작 라인) 부착 + `## Self-Critique` 보강 → `working-lifecycle.sh` PostToolUse hook 발동 → `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 이동.
 
+> **잔여 섹션 미체크박스 가드 (2026-07-23):** `move_working_to_tasks()` 는 `## 잔여/TODO/Follow-up` 섹션에 미체크박스(`- [ ]`)가 있으면 이동을 **차단**한다 (`has_residual_unchecked`, exit 없이 `return 1` + stderr). 즉 잔여가 남은 문서에 `Status: Done` 을 붙여도 자동 이동되지 않는다 — "잔여 0건" 판정을 hook 이 강제한다. 강제 이동이 필요하면 `save now`(= `/taskflow:done` 슬래시)로 우회한다 (Self-Critique 위험기록 체크박스는 잔여 섹션 밖이라 제외). SSOT = `hooks/lib/template-patterns.sh::has_residual_unchecked` + `docs/claude-harness/tasks/20260723/done-gate-residual-block/`.
+
 > **코드 변경 동반 시 verify+review 필수 (2026-07-14):** 마감 대상 작업이 **코드 파일(php/js/ts/py/sql)** 을 변경했다면 `Status: Done` 부착 **전** `/taskflow:verify`(e2e 5점)·`/taskflow:review` 체인 완료를 확인한다 (CLAUDE.md §4.3 "코드 라이프사이클 게이트", `execute.md:112-117` 동일 문구). 미완료 시 verify+review 먼저 수행 후 Done 판정 — QA-after 규율이 `/taskflow:save` 의 Done 경로로 우회되지 않도록. 코드 변경 없는 문서·분석 작업은 비대상.
 
 > **이동 확인 필수 (2026-07-09):** PostToolUse hook 자동 트리거가 미작동한 실측 사례가 있다 (memory `backlog_backlog-lifecycle-posttooluse-nomove` — 수동 호출은 정상). `Status: Done` 부착 직후 **working/ 에 파일이 잔류하는지 확인**하고, 잔류 시 `save now` 로 명시 이동한다. 잔류 방치 = 다음 세션 `/taskflow:load` 노이즈 + REGISTRY orphan 누적.
@@ -112,8 +114,8 @@ source ~/.claude/hooks/lib/working-scan.sh
 working_gate_blockers "{product}" "{작업명}"
 ```
 
-- **출력(미해결)이 1줄이라도 있으면 `Done` 차단** — 미처리 step(인덱스 `Pending`/`In Progress`) · `NeedsDecision` · 미체크박스 `- [ ]` · `## 잔여` 섹션 · verify/review FAIL. 목록 제시 후 해소 요청.
-- blocker **0 줄** → unified `Status: Done` 부착 → `working-lifecycle.sh` tasks/ 이동 + 전파(history·summary·인덱스·REGISTRY·step 분배).
+- **출력(미해결)이 1줄이라도 있으면 `Done` 절대 차단** — 후속 step 미완/미머지(인덱스 `Pending`/`In Progress`) · `NeedsDecision` · 미체크박스 `- [ ]` · `## 잔여` 섹션 · verify/review FAIL. **이 경우 `Status: Done` 을 부착하지 않는다** — 부착하면 `working-lifecycle.sh` 가 자동으로 tasks/ 로 이동시켜 **후속 step 이 남은 채 종결되는 사고**가 난다. 목록 제시 후 해소 요청, working/ 유지.
+- blocker **0 줄 (= 전체 완료)** 일 때만 → unified `Status: Done` 부착 → `working-lifecycle.sh` tasks/ 이동 + 전파(history·summary·인덱스·REGISTRY·step 분배).
 
 > **ReadyToMerge 는 "완료대기"가 아니다** (step 머지 준비). task 완료는 **완료 게이트가 판정** — 잔여·미해결이 하나라도 있으면 넘어가지 않는다. tick 은 step 을 ReadyToMerge 로 올리는 데까지만 하고, 머지·게이트·Done 은 본 분기(사용자)가 담당한다.
 
