@@ -145,6 +145,56 @@ registry_add() {
   return 0
 }
 
+# 원자 claim (2026-07-23) — lock 안에서 active 점유 확인 + add 를 한 번에 수행해
+# registry_find(확인) → registry_add(점유) 분리로 인한 TOCTOU race 를 차단한다.
+# 병렬 워커(tick-team)가 동시에 같은 slug 를 잡는 것을 원천 방지.
+#   registry_claim <slug> <product> <sid> <cwd> <working_file>
+#   stdout: CLAIMED:<slug> (신규 점유) / ALREADY:<sid> (본인 재claim) / TAKEN:<other_sid> (타 sid 점유) / ERR:<사유>
+registry_claim() {
+  local slug product sid cwd_val wfile now started other existing_started
+  slug="$(registry_sanitize "$1")"
+  product="$(registry_sanitize "$2")"
+  sid="$(registry_sanitize "$3")"
+  cwd_val="$(registry_sanitize "$4")"
+  wfile="$(registry_sanitize "$5")"
+  now="$(date +'%Y-%m-%d %H:%M')"
+  [ -z "$slug" ] && { echo "ERR:slug-empty"; return 1; }
+  [ -z "$sid" ]  && { echo "ERR:sid-empty"; return 1; }
+
+  registry_init_if_missing
+  registry_lock_acquire || { echo "ERR:lock-timeout"; return 1; }
+
+  # ── lock 구간: 확인 + add 원자 ──
+  other=$(awk -v slug="$slug" -F"$REGISTRY_FS" '
+    /^\|/ && $2!="slug" && $2!~/^-+$/ && $2==slug && $7=="active" { print $4; exit }
+  ' "$REGISTRY_PATH" 2>/dev/null)
+
+  if [ -n "$other" ]; then
+    registry_lock_release
+    [ "$other" = "$sid" ] && { echo "ALREADY:$sid"; return 0; }
+    echo "TAKEN:$other"; return 3
+  fi
+
+  # started 보존 (동일 slug+sid 기존 entry 있으면)
+  started="$now"
+  existing_started=$(awk -v slug="$slug" -v sid="$sid" -F"$REGISTRY_FS" '
+    /^\|/ && $2==slug && $4==sid { print $5; exit }
+  ' "$REGISTRY_PATH" 2>/dev/null)
+  [ -n "$existing_started" ] && started="$existing_started"
+
+  awk -v slug="$slug" -v sid="$sid" -F"$REGISTRY_FS" '
+    /^\|/ && $2!="slug" && $2!~/^-+$/ && $2==slug && $4==sid { next }
+    { print }
+  ' "$REGISTRY_PATH" >"$REGISTRY_PATH.tmp"
+  printf '| %s | %s | %s | %s | %s | %s | %s | %s |\n' \
+    "$slug" "$product" "$sid" "$started" "$now" "active" "$cwd_val" "$wfile" >>"$REGISTRY_PATH.tmp"
+  mv "$REGISTRY_PATH.tmp" "$REGISTRY_PATH"
+
+  registry_lock_release
+  echo "CLAIMED:$slug"
+  return 0
+}
+
 registry_update() {
   local slug sid status now
   slug="$(registry_sanitize "$1")"

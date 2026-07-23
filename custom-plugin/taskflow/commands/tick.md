@@ -8,7 +8,7 @@ argument-hint: "[작업명|#tag — 선택. 생략 시 cwd 최신 1건 자동 cl
 
 ## 핵심 원칙
 
-- **로직 재구현 0.** claim=`working_scan` 선택 + `registry_add` 배타 점유, 실행=`/taskflow:auto`, 마감=escalation ladder, step 스캔=`hooks/lib/working-scan.sh`.
+- **로직 재구현 0.** claim=`working_scan` 선택 + `registry_claim` 원자 점유, 실행=`/taskflow:auto`, 마감=escalation ladder, step 스캔=`hooks/lib/working-scan.sh`.
 - **머지·push 안 함 (§3).** step 완료 → 그 step `Status: ReadyToMerge`(머지 준비)까지. **실제 step 머지 + task 완료(Done)는 사용자**가 `control`→`/taskflow:save` 로 수행.
 - **`ReadyToMerge` 는 step 단위 상태 — "완료대기"가 아니다.** task(unified)엔 ReadyToMerge 가 없다. task 는 모든 step 머지 + 완료 게이트 통과 후에만 `Done`.
 - **판단 필요 = 즉시 마감.** 권한형 결정(§3)에 걸리면 unified 에 `NeedsDecision` 부착 + 판단사항 기록 후 그 iteration 종료.
@@ -16,7 +16,7 @@ argument-hint: "[작업명|#tag — 선택. 생략 시 cwd 최신 1건 자동 cl
 ## 1-iteration 흐름
 
 ```
-1. claim   : working_scan 전체 스캔(cwd 무관) → 진행 가능 항목 선택 → registry_add 로 배타 점유
+1. claim   : working_scan 전체 스캔(cwd 무관) → 진행 가능 항목 선택 → registry_claim 로 원자 배타 점유
               단위: 평면(step 분해) task = 다음 진행 가능 step slug / 통(경량) task = task slug
               (타 sid active 면 skip → 다음 후보)
               └ 진행 가능 0건 → "없음" 출력 후 종료 (loop 다음 주기)
@@ -36,11 +36,14 @@ argument-hint: "[작업명|#tag — 선택. 생략 시 cwd 최신 1건 자동 cl
 1. `working_scan all`(cwd 무관 — cwd product 0건이어도 타 product 진행) → 진행 가능 후보 산출:
    - **평면(step 분해) task** = 다음 진행 가능 step(2-bis 의존 판정) → claim 단위 = **step slug** `{작업명}-step-NN`.
    - **통(경량·step 없음) task** = unified 전체 → claim 단위 = **task slug** `{작업명}`.
-2. 배타 claim — claim 전 `registry_find "{slug}"` 로 점유 확인:
+2. 배타 claim — `registry_claim`(lock 안에서 확인+add 원자 수행, TOCTOU race 차단 — 병렬 워커 필수):
    ```bash
    source ~/.claude/hooks/lib/registry-utils.sh
-   [ -n "$(registry_find "{slug}" | awk -F"$REGISTRY_FS" -v s="{sid8}" '$7=="active" && $4!=s')" ] && SKIP   # 타 sid active → skip
-   registry_add "{slug}" "{product}" "{sid8}" "{cwd}" "{working_file}"                                       # 본 sid 점유
+   RESULT=$(registry_claim "{slug}" "{product}" "{sid8}" "{cwd}" "{working_file}")
+   case "$RESULT" in
+     CLAIMED:*|ALREADY:*) ;;                                  # 점유 성공 → 진행
+     TAKEN:*)  echo "타 sid 점유 → 다음 후보"; continue ;;      # 타 세션 → skip
+   esac
    ```
    - 평면 task 는 slug 가 **step 단위**라 다른 tick 이 **같은 task 의 다른 독립 step 을 병렬** claim 가능.
    - 통 task 는 task slug 라 task 전체 배타 점유.
