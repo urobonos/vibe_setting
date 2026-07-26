@@ -15,11 +15,12 @@ argument-hint: "[N — 최대 동시 워커 수. 생략 시 min(진행가능 slu
 
 ## 동작
 
-1. **leader**: `working_scan all` → 진행 가능 step slug 목록 산출 (tick 2-bis 의존 판정 재사용 — Pending + 직접 의존 선행 완료).
-2. **동시 상한 N** = `min(진행가능 slug, min(16, cores-2))` (기본) 또는 인자 N.
-3. **워커 spawn** (slug 후보마다, 상한 N까지) — Agent `isolation: worktree`, 프롬프트:
-   > registry_claim 으로 다음 미점유 step 을 자율 claim (`CLAIMED`=진행 / `TAKEN`=다음 후보) → `/taskflow:auto` 로 그 step 진행(개발+verify+review) → 완료 시 step `상태: ReadyToMerge` + `registry_update {slug} {sid} paused`(반납) → 종료.
-4. **수합·유동**: 워커 완료 → leader 가 결과 수합(claim 반납 확인). 진행 가능 slug 가 남아 있으면 빈 슬롯에 추가 spawn. 진행 가능 slug **0** → 종료.
+1. **leader**: `working_scan all` 로 진행 가능 step **수**만 파악 (N 결정용 — slug 목록을 leader 가 분배하지 않는다. 분배는 워커 자율 claim).
+2. **동시 상한 N** = `min(진행가능 step 수, min(16, cores-2))` (기본) 또는 인자 N.
+3. **워커 spawn** (N개, `isolation: worktree`) — 프롬프트는 **`/taskflow:tick` Skill 호출**만:
+   > `Skill` 도구로 `taskflow:tick` 을 호출해라. tick 이 `working_scan` → `registry_claim`(원자 자율 점유) → 개발+verify+review → step `상태: ReadyToMerge` 까지 전부 수행한다. claim 가능 step 이 없으면 "진행 가능 없음" 반환 후 종료. **하니스 hook(gate/worktree-enforce/dangerous-ops/§3 가드)은 subagent 도구 호출에도 적용되므로(아래 §"하니스 자동 상속" 실측) tick 명세의 룰이 자동 상속된다 — 워커별 재구현 0.**
+   > **fallback:** tick 이 available-skills 미등재 세션(신규 커맨드 → 세션 재시작 전)이면 `bash` 로 tick 1단계(`working_scan` + `registry_claim`)를 직접 수행.
+4. **수합·유동**: 워커 완료 수합. 진행 가능 step 남으면 빈 슬롯에 추가 spawn. **0** → 종료. (워커가 각자 자율 claim 하므로 leader 는 수만 세고 spawn/kill 만 조율)
 
 ## claim 원자성 (필수)
 
@@ -30,6 +31,12 @@ source ~/.claude/hooks/lib/registry-utils.sh
 RESULT=$(registry_claim "{slug}" "{product}" "{sid8}" "{cwd}" "{working_file}")
 # CLAIMED:<slug> → 진행 / ALREADY:<sid> → 본인 재claim / TAKEN:<sid> → 다음 후보
 ```
+
+## 하니스 자동 상속 (2026-07-23 실측)
+
+**subagent(워커) 도구 호출에도 PreToolUse hook 이 적용된다** — 워커의 Write 를 `worktree-enforce` 가, `rm -rf` 를 `dangerous-ops-guard` 가 차단함을 실측 확인(2026-07-23, Agent probe). 따라서 워커가 `/taskflow:tick` 을 Skill 로 호출하면 tick 명세의 claim/auto/step 로직 **+ 하니스 룰(gate·worktree·§3 가드)이 자동 상속**된다 → 워커별 룰 재구현 0. 이것이 tick-team 이 워커에게 `registry_claim` 을 직접 지시하지 않고 `/taskflow:tick` 호출만 시키는 근거다.
+
+> **카탈로그 등재 주의:** slash 를 Skill 로 호출하려면 available-skills 카탈로그에 등재돼야 하고, 카탈로그는 **세션 시작 시 로드**된다. 신규 커맨드(tick)는 생성 당일 세션엔 미등재 → 그 세션 워커는 fallback(bash 직접) 사용, 다음 세션부터 Skill 호출 가능.
 
 ## Workflow 도구 활용 (선택, 대규모)
 
