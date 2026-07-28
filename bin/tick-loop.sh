@@ -8,23 +8,45 @@
 #   프로세스를 끊으면 매 iteration 이 시작값으로 리셋된다 (headless 실측 첫 턴 76.8K).
 #   tick 은 설계상 stateless (상태 = working/ 문서 + REGISTRY) 라 잃는 컨텍스트가 없다.
 #
+# 왜 병렬이 안전한가:
+#   tick 은 `registry_claim`(lock 안 확인+add 원자)으로 step 을 배타 점유한다.
+#   여러 인스턴스가 동시에 돌아도 같은 step 을 중복 작업하지 않는다 — 못 잡은 쪽은
+#   TAKEN 을 받고 다음 후보로 넘어간다. 슬롯마다 완전히 독립된 프로세스라
+#   하나가 죽어도 나머지는 무관하다 (subagent 워커와 다른 점).
+#
 # 사용:
-#   tick-loop.sh [간격]   기동 (detach). 기본 1800. 형식: 60 / 30m / 1h
-#   tick-loop.sh --once   1회만 실행 (검증용 — detach 안 하고 출력을 그대로 보여준다)
-#   tick-loop.sh stop     정지
-#   tick-loop.sh status   상태 조회
+#   tick-loop.sh [간격] [N]   기동 (detach). 간격 기본 1800(60/30m/1h), N 기본 1
+#   tick-loop.sh --once       1회만 실행 (검증용 — detach 안 하고 출력을 그대로 보여준다)
+#   tick-loop.sh stop [슬롯]  정지. 슬롯 생략 시 전체
+#   tick-loop.sh status       전 슬롯 상태 조회
 #
 # 환경변수 override: TICK_LOOP_MODEL(기본 sonnet) / TICK_LOOP_PERM(기본 acceptEdits)
 # SSOT: custom-plugin/taskflow/commands/tick-loop.md
 set -uo pipefail
 
 STATE_DIR="$HOME/.claude/state"
-PID_FILE="$STATE_DIR/tick-loop.pid"
-LOG_FILE="$STATE_DIR/tick-loop.log"
+SLOT_DIR="$STATE_DIR/tick-loop"
 MODEL="${TICK_LOOP_MODEL:-sonnet}"
 PERM="${TICK_LOOP_PERM:-acceptEdits}"
 
-mkdir -p "$STATE_DIR"
+mkdir -p "$SLOT_DIR"
+
+slot_pid() { echo "$SLOT_DIR/$1.pid"; }
+slot_log() { echo "$SLOT_DIR/$1.log"; }
+slot_alive() {
+  local f; f=$(slot_pid "$1")
+  [ -f "$f" ] && kill -0 "$(cat "$f" 2>/dev/null)" 2>/dev/null
+}
+
+# 동시 슬롯 상한 — §4.2 병렬 fan-out 과 같은 식 min(16, cores-2)
+max_slots() {
+  local cores m
+  cores=$(nproc 2>/dev/null || echo 4)
+  m=$(( cores - 2 ))
+  [ "$m" -gt 16 ] && m=16
+  [ "$m" -lt 1 ] && m=1
+  echo "$m"
+}
 
 # 60 / 30m / 1h → 초. 형식 오류는 ERR (숫자부가 비었거나 숫자가 아니면).
 parse_interval() {
@@ -37,24 +59,36 @@ parse_interval() {
   esac
 }
 
-alive() { [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; }
-
 run_once() {
-  local rc
-  echo "=== $(date '+%F %T') tick 시작 (model=$MODEL perm=$PERM)"
+  local rc tag="${1:-}"
+  echo "=== $(date '+%F %T')${tag:+ [slot $tag]} tick 시작 (model=$MODEL perm=$PERM)"
   # stdin 을 끊는다 — headless 라 프롬프트를 읽을 곳이 없다
   claude -p --model "$MODEL" --permission-mode "$PERM" "/taskflow:tick" < /dev/null 2>&1
   rc=$?
-  echo "=== $(date '+%F %T') tick 종료 (exit=$rc)"
+  echo "=== $(date '+%F %T')${tag:+ [slot $tag]} tick 종료 (exit=$rc)"
   return $rc
 }
 
+stop_slot() {
+  local n="$1" f pid child
+  f=$(slot_pid "$n")
+  if slot_alive "$n"; then
+    pid=$(cat "$f")
+    # 자식(claude) 을 먼저 죽인다 — 부모만 죽이면 claude 가 고아로 남아 계속 파일을 만진다
+    for child in $(ps -ef 2>/dev/null | awk -v p="$pid" '$3==p {print $2}'); do
+      kill "$child" 2>/dev/null && echo "  [slot $n] 자식 종료: PID $child"
+    done
+    kill "$pid" 2>/dev/null && echo "[slot $n] 정지: PID $pid"
+  fi
+  rm -f "$f"
+}
+
 case "${1:-}" in
-  # nohup 재진입 전용 — 사용자가 직접 호출하지 않는다
+  # nohup 재진입 전용 — 사용자가 직접 호출하지 않는다. $2=간격 $3=슬롯
   __run)
-    trap 'echo "=== $(date "+%F %T") 루프 정지 (시그널 수신)"; exit 0' INT TERM
+    trap 'echo "=== $(date "+%F %T") [slot '"${3:-?}"'] 루프 정지 (시그널 수신)"; exit 0' INT TERM
     while :; do
-      run_once
+      run_once "${3:-}"
       rc=$?
       # 자식 claude 가 시그널로 죽었다(128+N) = 사용자가 개입했다는 뜻이다.
       # 이때 루프까지 멈추지 않으면 "다 껐다"고 믿는 사이 다음 iteration 이 뜬다
@@ -69,42 +103,43 @@ case "${1:-}" in
     ;;
 
   --once)
-    run_once | tee -a "$LOG_FILE"
+    run_once | tee -a "$SLOT_DIR/once.log"
     ;;
 
   stop)
-    if alive; then
-      PID=$(cat "$PID_FILE")
-      # 자식(claude) 을 먼저 죽인다 — 부모만 죽이면 claude 가 고아로 남아
-      # 계속 돌면서 파일을 만진다
-      for CHILD in $(ps -ef 2>/dev/null | awk -v p="$PID" '$3==p {print $2}'); do
-        kill "$CHILD" 2>/dev/null && echo "  자식 종료: PID $CHILD"
-      done
-      kill "$PID" 2>/dev/null && echo "정지: PID $PID"
+    if [ -n "${2:-}" ]; then
+      stop_slot "$2"
     else
-      echo "실행 중 아님"
+      FOUND=0
+      for f in "$SLOT_DIR"/*.pid; do
+        [ -e "$f" ] || continue
+        n=$(basename "$f" .pid)
+        slot_alive "$n" && FOUND=$((FOUND+1))
+        stop_slot "$n"
+      done
+      [ "$FOUND" -eq 0 ] && echo "실행 중 아님"
     fi
-    rm -f "$PID_FILE"
+    exit 0
     ;;
 
   status)
-    if alive; then
-      echo "실행 중: PID $(cat "$PID_FILE")"
-      echo "로그 마지막 5줄 ($LOG_FILE):"
-      tail -5 "$LOG_FILE" 2>/dev/null | sed 's/^/  /'
-    else
-      echo "정지 상태"
-      [ -f "$PID_FILE" ] && echo "  (PID 파일 잔존 = 비정상 종료. 'stop' 으로 정리)"
-    fi
-    # status 는 조회다 — 마지막 [ -f ] 결과가 종료코드로 새는 것을 막는다
+    RUNNING=0
+    for f in "$SLOT_DIR"/*.pid; do
+      [ -e "$f" ] || continue
+      n=$(basename "$f" .pid)
+      if slot_alive "$n"; then
+        RUNNING=$((RUNNING+1))
+        echo "[slot $n] 실행 중: PID $(cat "$f")"
+        tail -1 "$(slot_log "$n")" 2>/dev/null | sed 's/^/    /'
+      else
+        echo "[slot $n] PID 파일 잔존 = 비정상 종료. 'stop $n' 으로 정리"
+      fi
+    done
+    [ "$RUNNING" -eq 0 ] && echo "실행 중인 슬롯 없음 (상한 $(max_slots))"
     exit 0
     ;;
 
   *)
-    if alive; then
-      echo "이미 실행 중 (PID $(cat "$PID_FILE")). 먼저 'tick-loop.sh stop'." >&2
-      exit 1
-    fi
     INTERVAL=$(parse_interval "${1:-1800}")
     if [ "$INTERVAL" = ERR ]; then
       echo "간격 형식 오류: '${1}' (예: 60, 30m, 1h)" >&2
@@ -115,10 +150,34 @@ case "${1:-}" in
       echo "간격이 너무 짧다: ${INTERVAL}s (최소 10s)" >&2
       exit 1
     fi
-    nohup "$0" __run "$INTERVAL" >> "$LOG_FILE" 2>&1 &
-    echo $! > "$PID_FILE"
-    echo "기동: PID $(cat "$PID_FILE") / 간격 ${INTERVAL}s / model=$MODEL"
-    echo "로그: $LOG_FILE"
+
+    WANT="${2:-1}"
+    if [ -z "${WANT//[0-9]/}" ] && [ -n "$WANT" ] && [ "$WANT" -ge 1 ]; then :; else
+      echo "슬롯 수 오류: '${2}' (1 이상 정수)" >&2
+      exit 1
+    fi
+    MAX=$(max_slots)
+    if [ "$WANT" -gt "$MAX" ]; then
+      echo "요청 $WANT 개는 상한을 넘는다 — $MAX 개로 줄인다 (min(16, cores-2))" >&2
+      WANT="$MAX"
+    fi
+
+    STARTED=0
+    for n in $(seq 1 "$MAX"); do
+      [ "$STARTED" -ge "$WANT" ] && break
+      slot_alive "$n" && continue          # 이미 쓰는 슬롯은 건너뛴다
+      nohup "$0" __run "$INTERVAL" "$n" >> "$(slot_log "$n")" 2>&1 &
+      echo $! > "$(slot_pid "$n")"
+      echo "[slot $n] 기동: PID $(cat "$(slot_pid "$n")") / 간격 ${INTERVAL}s / model=$MODEL"
+      STARTED=$((STARTED+1))
+    done
+
+    if [ "$STARTED" -eq 0 ]; then
+      echo "빈 슬롯이 없다 — 이미 $MAX 개가 돌고 있다. 'status' 로 확인." >&2
+      exit 1
+    fi
+    [ "$STARTED" -lt "$WANT" ] && echo "요청 $WANT 개 중 $STARTED 개만 기동 (나머지는 슬롯 사용 중)" >&2
+    echo "로그: $SLOT_DIR/{슬롯}.log"
     echo "정지: bash ~/.claude/bin/tick-loop.sh stop"
     ;;
 esac
