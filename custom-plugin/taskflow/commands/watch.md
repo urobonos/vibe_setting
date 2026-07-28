@@ -10,18 +10,43 @@ argument-hint: "[product|all — 생략 시 all. `sessions` = 다른 세션 진�
 
 ## 1-iteration 흐름
 
+**두 트랙이 독립으로 돈다.** 변경 감지(A)와 머지 해소(B)는 서로의 결과를 기다리지 않는다.
+
 ```
-1. diff     : watch_diff {scope} → A(신규) / M(상태·내용 변경) / D(사라짐)
-              └ 0건 → "변동 없음" 1줄 출력 후 종료 (스냅샷 갱신 불요)
-2. 분류     : 변경 항목마다 코드 축 / 문서 축 판별 (§"코드·문서 판별")
-3. 검증     : 상태 전이·완료 게이트 공통 + 축별 —
-              코드 축 → 변경분 코드리뷰 Agent / 문서 축 → 정합성 검증
-4. 해소     : ReadyToMerge 만 — 리뷰 클린 → ff머지 + Done / 지적 ≥1 → Pending 복귀
-5. 보고     : 문제 있는 것만 올린다. 이상 없으면 "N건 변경, 이상 없음"
-6. commit   : watch_commit {scope} — 검증·해소를 마친 뒤에만 스냅샷 확정
+A. 변경 트랙 (diff 기반)
+  A1. diff   : watch_diff {scope} → A(신규) / M(상태·내용 변경) / D(사라짐)
+               └ 0건 → 이 트랙만 skip (B 는 계속 — 종료하지 않는다)
+  A2. 분류   : 변경 항목마다 코드 축 / 문서 축 판별 (§"코드·문서 판별")
+  A3. 검증   : 상태 전이·완료 게이트 공통 + 축별 —
+               코드 축 → 변경분 코드리뷰 Agent / 문서 축 → 정합성 검증
+
+B. 해소 트랙 (상태 기반 — diff 와 무관하게 매 iteration 실행)
+  B1. 수집   : working_scan 으로 ReadyToMerge 전건 (변경 여부 안 봄)
+  B2. 리뷰   : 코드 축 → 변경분 리뷰 / 문서 축 → 정합성 검증
+  B3. 해소   : 지적 0건 → ff머지 + Done / 지적 1건 이상 → Pending 복귀
+
+C. 보고 + commit
+  C1. 보고   : 문제 있는 것만. 양 트랙 모두 조용하면 "변동 없음"
+  C2. commit : watch_commit {scope} — A·B 를 마친 뒤에만 스냅샷 확정
 ```
 
-**6단계 순서가 중요하다.** 검증 전에 스냅샷을 갱신하면 그 변경분은 영영 검증 대상에서 빠진다.
+**B 를 A 에 종속시키면 안 된다.** `ReadyToMerge` 문서는 이미 그 상태로 스냅샷에 박혀 있어 `M` 으로 잡히지 않는다 — B 가 A1 뒤에 오면 머지 대상이 **영원히 0건**이 된다 (2026-07-28 실측: diff 0건인데 미해소 ReadyToMerge 2건 방치). 사용자 요구는 "**상태가** ReadyToMerge 면 해소" 지 "ReadyToMerge 로 **바뀌면** 해소" 가 아니다.
+
+**C2 순서도 중요하다.** 검증 전에 스냅샷을 갱신하면 그 변경분은 영영 A 트랙 대상에서 빠진다.
+
+## cwd 에 국한되지 않는다 (필수)
+
+**watch 는 호출된 위치와 무관하게 전 프로젝트를 본다.** 스캔도, 머지도, 상태 변경도 cwd 를 따르지 않는다.
+
+| 축 | 범위 | 근거 |
+|----|------|------|
+| 문서 스캔 | `working_scan all` — 전 product | 인자 생략 시 기본 `all` (`control` 이 cwd product 기본인 것과 반대) |
+| repo 감시 | `state/watch/repos.txt` 전건 | cwd 와 무관한 목록 파일 |
+| **머지·상태 변경** | **`git -C {repo}` 로 원격 조작** | 프로세스 cwd 를 바꾸지 않는다 |
+
+**`cd` 를 쓰지 않는다.** `git -C` 로만 다른 repo 를 조작한다 — `cd` 는 이후 hook 의 판정 컨텍스트를 바꾸고, 무인 루프가 지금 어느 repo 에 서 있는지 추적을 어렵게 만든다. 2026-07-28 실측: `~/.claude` cwd 에서 `git -C /c/Works/hongcafe_global_docs` 로 브랜치 생성·체크아웃·ff머지·worktree remove·`branch -D` 를 전부 수행했고 `worktree-enforce`·`branch-enforce` 를 통과했다.
+
+인자로 좁히고 싶을 때만 `/taskflow:watch {product}` 를 쓴다. 기본은 항상 전체다.
 
 ## 스캔 (Bash — lib 재사용, 인라인 재작성 금지)
 
@@ -46,7 +71,7 @@ watch_commit "${1:-all}"      # 스냅샷 확정
 
 **`git pull`·`fetch` 는 하지 않는다.** watch 는 read-only 이고 pull 은 로컬 상태를 바꾼다 — 무인 루프가 남의 미커밋 작업을 stash 하거나 rebase 충돌을 만드는 사고가 실재한다. 최신화가 필요하면 사용자가 직접 하거나 `--pull` 을 명시한다 (기본 비활성).
 
-## 3단계 — 변경 항목 검증 (변경 유형별)
+## A3 — 변경 항목 검증 (변경 유형별)
 
 | 유형 | 무엇을 보나 | 판정 |
 |------|-----------|------|
@@ -95,15 +120,55 @@ git -C "$REPO" worktree list --porcelain \
 
 worktree 는 그 repo 안이 아니라 `~/.claude/worktrees/` 에 생기고 `worktree list` 는 **소유 repo 에서 조회**해야 나온다 (위 예시도 `hongcafe_global_docs` 에서 조회했다). 감시 repo 를 순회하며 찾는다.
 
-| 판별 순서 | 조건 | 축 |
-|-----------|------|-----|
-| 1 | `wip/*` worktree 의 slug 가 문서 작업명과 매칭 + `merge-base..HEAD` diff 존재 | **코드** |
-| 2 | worktree 매칭 없음 + 같은 product repo 축이 이번 diff 에서 HEAD 변동 | **코드** |
-| 3 | 위 둘 다 아님 | **문서** |
+### worktree ↔ 문서 대응 — 문서 기록이 1순위, 없으면 내용 대조
 
-변경 파일이 전부 `.md` 면 git 변경분이 있어도 **문서 축**이다 (`is_hard_code_file` 재사용, `hooks/lib/path-utils.sh`) — `hongcafe_global_docs` 처럼 product 자체가 문서 레포인 경우가 여기 걸린다.
+**문서의 `머지 전 리뷰 포인트` 에 worktree 가 적혀 있으면 그게 가장 정확하다.** base 브랜치와 머지 순서까지 함께 적히는 경우가 있고, 그건 git 추론으로는 얻을 수 없는 정보다.
 
-> **판별 실패는 문서 축으로 떨어뜨린다.** worktree 가 이미 정착·삭제돼 없으면 리뷰할 diff 자체가 없다. 없는 diff 를 리뷰하려 시도하지 않고, 4단계 해소에서도 **머지 대상 없음**으로 처리한다 (실측된 케이스 — "산출물이 `specs/` 라 레포 커밋 0").
+```
+- worktree: `~/.claude/worktrees/7f1eebc3-mod02-priceoptions`
+  (branch `wip/7f1eebc3-mod02-priceoptions`, base=`wip/e294a6aa-mod02-qnafcmuse` @ `f55e9eed`)
+- 머지 순서: `f55e9eed`(qnaFcmUse) → 본 브랜치. 뒤집으면 forSelf 키 카운트 단언이 어긋난다
+```
+
+**단 보유율이 고르지 않다** — 2026-07-28 실측에서 20건 중 0건이었다가 같은 날 새로 생성된 문서엔 적혀 있었다. 그러니 **있으면 쓰고, 없을 때만 아래 추론으로 내려간다.** 기록이 있는데 무시하고 git 으로 추론하면 base·순서 정보를 버리게 된다.
+
+### 기록이 없을 때 — 문자열 매칭으로 정하지 않는다 (필수)
+
+**slug 도 sid 도 1:1 규약이 아니다.** 2026-07-28 실측:
+
+```
+worktree                        문서 작업명
+7f1eebc3-mod02-priceoptions  ↔  mod-02-advisor-readback-gaps   (문자열 불일치)
+e294a6aa-mod02-qnafcmuse     ↔  mod-02-advisor-readback-gaps   (한 문서에 worktree 2개)
+e294a6aa-mod-04-viewer-role  ↔  mod-04-chat-viewer-role        (sid 하나가 두 task)
+```
+
+slug 는 사람이 자유롭게 짓고, 한 세션(sid)이 여러 task 를 거치며, 한 task 가 여러 worktree 를 쓴다. **기계적 정확 매칭은 0건**이고, REGISTRY sid 축도 다대다라 판정이 안 선다.
+
+그래서 이렇게 한다 — **기계는 후보만 뽑고, 대응은 Claude 가 내용으로 판단한다.**
+
+```bash
+# 후보 수집만 — 매칭은 하지 않는다
+working_scan all | awk -F'\t' '$5=="ReadyToMerge" {print $1"\t"$4}'          # 해소 대상
+for REPO in $(grep -vE '^\s*(#|$)' ~/.claude/state/watch/repos.txt); do      # 살아있는 wip
+  git -C "$REPO" worktree list --porcelain 2>/dev/null \
+    | awk -v r="$REPO" '/^worktree /{w=$2} /^branch refs\/heads\/wip\//{print r"\t"$2"\t"w}'
+done
+```
+
+대응 판정 = 그 문서의 `## 변경 파일`·§실행 기록·`머지 전 리뷰 포인트` 와 **worktree diff 의 실제 파일 목록**을 대조한다. 이름이 아니라 **무엇을 건드렸는지**가 근거다.
+
+| 판정 | 축 | 동작 |
+|------|-----|------|
+| worktree diff 가 그 문서의 서술과 일치 | **코드** | 리뷰 → 해소 |
+| 대응 worktree 없음 + repo HEAD 변동도 없음 | **문서** | 정합성 검증 → 해소 |
+| **대응이 불확실 / 후보 2개 이상** | — | **머지 금지.** 후보를 나열해 사용자에게 확인 요청 |
+
+변경 파일이 전부 `.md` 면 git 변경분이 있어도 **문서 축**이다 (`is_hard_code_file` 재사용, `hooks/lib/path-utils.sh`).
+
+> **불확실하면 멈춘다.** 잘못 짝지어 머지하면 남의 작업이 엉뚱한 feature 에 들어간다 — 되돌리기 비싼 실수다. 무인 진행보다 보고가 낫다.
+>
+> **앞으로의 매칭 비용을 줄이려면** tick 이 step 완료 시 `머지 전 리뷰 포인트` 에 worktree 경로를 실제로 적어야 한다 (tick.md 4단계 3에 이미 명시돼 있으나 실측 보유율 0/20). 그게 지켜지면 이 판정은 기계화된다.
 
 ### 코드 축 — 변경분 리뷰
 
@@ -132,16 +197,18 @@ printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$DOC" | bash ~/.c
 
 > `doc-unified-check.sh` 는 **통과와 면제를 구분해서 알려주지 않는다** (둘 다 exit 0). 그래서 양식 축 단독으로 "정합함" 을 선언하지 않는다 — 내용 정합 축이 실질 판정이다.
 
-## 4단계 — ReadyToMerge 해소
+## B 트랙 — ReadyToMerge 해소 (상태 기반)
 
-**해소는 `ReadyToMerge` + 무인 허용 마커 보유 항목에만 한다.** 다른 상태(In Progress·NeedsDecision·Pending)는 3단계 검증 후 보고만 하고 손대지 않는다.
+**diff 를 보지 않는다.** 매 iteration 마다 `working_scan` 으로 `ReadyToMerge` 전건을 새로 훑는다.
 
 ```bash
-# tick 과 같은 화이트리스트 — unified frontmatter 마커 (SSOT = tick.md §0단계)
-grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$UNIFIED" || { echo "무인 미허용 — 보고만"; }
+source ~/.claude/hooks/lib/working-scan.sh
+working_scan all | awk -F'\t' '$5=="ReadyToMerge" {print $1"\t"$4"\t"$6}'   # 경로 / 작업명 / is_step
 ```
 
-**1~3단계 감시·검증은 전건에 대해 그대로 한다.** 마커는 **mutation 게이트**지 감시 범위 제한이 아니다 — 마커 없는 문서도 상태 전이·정합성 이상은 똑같이 보고한다. 다만 머지·상태 변경은 하지 않는다.
+`ReadyToMerge` 가 아닌 상태(In Progress·NeedsDecision·Pending)는 A 트랙에서 검증·보고만 하고 손대지 않는다.
+
+> **마커(`tick: allow`)를 요구하지 않는다.** 그 화이트리스트는 `/taskflow:tick` 이 **무인으로 아무 task 나 잡지 않게** 하는 장치다. watch 의 해소는 `ReadyToMerge` 라는 상태 자체가 이미 "개발·verify·review 를 통과해 머지만 남았다" 는 명시 신호이므로 별도 게이트를 겹치지 않는다.
 
 | 축 | 검증 결과 | 동작 |
 |----|-----------|------|
@@ -167,13 +234,31 @@ done
 | base 판별 결과 | 동작 |
 |----------------|------|
 | `feature/*` 단일 | ff머지 진행 |
-| **`master`/`main` 뿐** | **머지 금지 — "PR 필요" 로 보고**. 상태는 `ReadyToMerge` 유지 |
+| **`master`/`main` 뿐** | **repo별 착지 브랜치 정책**(아래) 적용 |
 | 후보 2개 이상 (모호) | 머지 금지 — 후보 목록과 함께 보고. 상태 유지 |
 | 후보 0개 | 머지 대상 없음으로 보고 |
 
-master/main 케이스를 watch 가 **먼저** 걸러야 한다. `branch-enforce.sh` 가 어차피 exit 2 로 막지만, 그러면 무인 루프가 매 주기 차단에 부딪힌다. 실측상 현재 유일한 실존 wip(`wip/46299ae3-mirror-sync`)의 base 후보가 정확히 `master` 하나뿐이라, 이 분기는 가정이 아니라 첫 iteration 에서 바로 밟는 경로다.
+### repo별 착지 브랜치 (master 회피)
 
-**차단 시 상태를 되돌리지 않는다.** 코드 자체엔 문제가 없으므로 `Pending` 반려가 아니라 `ReadyToMerge` 를 유지한 채 사용자에게 PR 절차를 넘긴다.
+base 가 master/main 뿐이어도 **master 에 직접 머지하지는 않는다**. repo 마다 착지 지점이 정해져 있다.
+
+| repo | 착지 브랜치 | 비고 |
+|------|------------|------|
+| `hongcafe_global_docs` | **`working_docs`** — 없으면 `master` 에서 생성 후 거기로 머지 | master 불변 |
+| `~/.claude` (claude-harness) | **현재 브랜치 그대로** (`vibe_setting`) | 기본 작업 브랜치가 master/main 이 아니라 그냥 머지 |
+| 그 외 | `feature/*` 가 있으면 그쪽 / 없으면 **머지 금지 → PR 보고** | 상태는 `ReadyToMerge` 유지 |
+
+```bash
+# hongcafe_global_docs — 착지 브랜치 확보 (idempotent, 리다이렉트 없이 --quiet)
+git -C "$REPO" show-ref --verify --quiet refs/heads/working_docs || git -C "$REPO" branch working_docs master
+git -C "$REPO" checkout working_docs
+```
+
+**master 로 checkout·머지하지 않는 한 `branch-enforce.sh` 는 통과한다** — `working_docs` 는 8 target ref 에 없다. master 에서 분기만 뜨는 것은 master 를 변경하지 않는다.
+
+**PR 보고로 빠지는 경우엔 상태를 되돌리지 않는다.** 코드 자체엔 문제가 없으므로 `Pending` 반려가 아니라 `ReadyToMerge` 를 유지한 채 사용자에게 넘긴다.
+
+> **여러 wip 을 같은 착지 브랜치로 순차 머지하면 두 번째부터 ff-only 가 깨진다** (첫 머지로 착지 브랜치가 전진하므로 두 번째 wip 이 그 후손이 아니게 된다). 그때는 `/git:merge` 의 cherry-pick fallback 을 탄다 — **범위 cherry-pick 전에 `git rev-list --merges` 로 머지 커밋 유무를 먼저 확인**하고, 1건이라도 있으면 시작하지 않고 보고한다.
 
 base 가 확정되면 절차는 `/git:merge` 를 그대로 탄다 (재구현 0). 4개 명령 **개별 Bash 호출**, `&&`/`;` 결합 금지 — 결합하면 `dangerous-ops-guard.sh` 의 `git branch -D wip/…` 면제가 매칭에 실패해 차단된다.
 
@@ -211,9 +296,9 @@ base 가 확정되면 절차는 `/git:merge` 를 그대로 탄다 (재구현 0).
 watch 의 쓰기는 **딱 두 가지**다. 그 밖은 전부 보고만 한다.
 
 1. 자기 스냅샷 (`state/watch/{scope}.tsv`)
-2. `ReadyToMerge` 해소 — ff머지 + step `상태:` 전이 (Done / Pending) + 인덱스 표 동기화 + 반려 블록
+2. **B 트랙** `ReadyToMerge` 해소 — ff머지 + step `상태:` 전이 (Done / Pending) + 인덱스 표 동기화 + 반려 블록
 
-**보고만 하고 고치지 않는 것:** 상태 역행 · 근거 누락 · 문서 실종 · 미기록 커밋 · dirty 정체 · 문서 정합성 위반. 진단 결과에 자동으로 수정을 덧붙이지 않는다 (CLAUDE.md §4.2 "audit 결과 자동 수정 금지"). 수정은 `/taskflow:execute` 로.
+**A 트랙은 진단 전용이다.** 상태 역행 · 근거 누락 · 문서 실종 · 미기록 커밋 · dirty 정체 · 문서 정합성 위반은 **보고만** 하고 고치지 않는다 (CLAUDE.md §4.2 "audit 결과 자동 수정 금지"). 수정은 `/taskflow:execute` 로.
 
 **절대 안 하는 것:** `git push` · master/main 머지·checkout·switch (§4.3(d)(e) — `branch-enforce.sh` 가 hook 레벨로도 차단) · 코드 파일 직접 수정 · task `Status: Done` 전이.
 
@@ -265,7 +350,7 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
 스냅샷 갱신: 84건 (문서 77 / repo 7)
 ```
 
-변경 0건이면 `[watch — scope=all] 변동 없음` 1줄.
+A·B 양 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1줄. **diff 0건이어도 B 트랙에 미해소 `ReadyToMerge` 가 있으면 "변동 없음" 이 아니다.**
 
 ## SSOT
 
@@ -276,7 +361,6 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
 | working/ 스캔 + 완료 게이트 | `working_scan` · `working_gate_blockers` | `hooks/lib/working-scan.sh` |
 | 세션 관측 | transcript tail 신호 4개 | `hooks/lib/transcript-tail.py` |
 | 주기 반복 | `/loop <interval> /taskflow:watch` | harness `/loop` 스킬 |
-| **무인 허용 마커** | `tick: allow` 화이트리스트 (mutation 게이트) | **`custom-plugin/taskflow/commands/tick.md`** §0단계 |
 | **ff머지 절차** | checkout→ff-only→worktree remove→branch -D | **`custom-plugin/git/commands/merge.md`** |
 | **문서 양식 검증** | V1~V8 통합 validator (stdin JSON) | **`hooks/doc-unified-check.sh`** |
 | 원본 drift | 원본 지문(sha256) 대조 | `custom-plugin/taskflow/commands/draft.md` (`check`) |
@@ -288,7 +372,9 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
 
 ## `/taskflow:control` 과의 차이
 
-control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. watch 는 **지난번 이후 바뀐 것**만 본다. 무인 loop 에는 watch, 사람이 앉아서 훑을 땐 control 이다.
+control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. watch 는 **지난번 이후 바뀐 것**(A 트랙) + **상태가 `ReadyToMerge` 인 것**(B 트랙)을 본다. 무인 loop 에는 watch, 사람이 앉아서 훑을 땐 control 이다.
+
+**기본 범위도 반대다** — control 은 cwd product, watch 는 전 product. watch 는 무인이라 사람이 어디 서 있는지와 무관해야 한다.
 
 해소 주체도 다르다 — control 은 read-only 라 목록만 내고 머지는 사용자가 `/taskflow:save` 로 하지만, watch 는 리뷰가 클린인 `ReadyToMerge` 를 직접 ff머지한다. 그래서 watch loop 가 돌고 있으면 control 대기 큐에는 **리뷰에서 반려됐거나 판단이 필요한 것**만 남는다.
 
@@ -303,6 +389,7 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
-- 2026-07-28: 무인 허용 마커(`tick: allow`) 화이트리스트를 해소 게이트에 적용 — 감시·검증은 전건 유지, mutation 만 제한
+- 2026-07-28: repo별 착지 브랜치 정책 (`hongcafe_global_docs` → `working_docs` / `~/.claude` → 현재 브랜치 직접 / 그 외 feature 또는 PR) + cwd 비종속 명문화 (`git -C` 만, `cd` 금지)
+- 2026-07-28: **해소를 diff 에서 분리해 독립 B 트랙으로** — 변경 감지(A)와 상태 기반 해소(B)가 서로 기다리지 않는다. 해소를 A 하위 단계로 뒀더니 `ReadyToMerge` 가 스냅샷에 이미 박혀 있어 diff 0건 → 머지 대상 영구 0건이 됐다 (실측). watch 해소의 무인 허용 마커 요구도 철회 — 그 마커는 tick 전용이다
 - 2026-07-28: 축별 검증(코드=리뷰 / 문서=정합성) + `ReadyToMerge` 자동 해소 — 리뷰 클린이면 ff머지→Done, 지적 ≥1건이면 Pending 복귀. read-only 계약 해제 (mutation 경계 = §"mutation 경계")
 - 2026-07-27: 신설 — 스냅샷 diff 기반 변경분 검증 + sessions 관측 모드
