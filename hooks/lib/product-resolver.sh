@@ -58,6 +58,12 @@ resolve_product() {
       cwd="${cwd%/}"
       ;;
   esac
+  # self-nesting 가드: 산출물 저장소(`~/.claude/docs`) 내부 cwd → `claude-harness` 폴백.
+  # basename 만 쓰면 `docs/참조문서` → product `참조문서` 로 잡혀 `docs/참조문서/tasks/` 빈 껍데기가 생긴다
+  # (`session-completeness-check.sh` 가 tasks 를 선생성). `.claude` → `claude-harness` 와 같은 논리.
+  case "$cwd" in
+    */.claude/docs|*/.claude/docs/*) echo "claude-harness"; return ;;
+  esac
   local base
   base=$(basename "$cwd")
   case "$base" in
