@@ -18,6 +18,8 @@ argument-hint: "/{인자 슬래시} {인자}  # 예: /taskflow:auto module A B C
 
 **원칙:** 본 슬래시 자체가 직병렬 modifier — 인자 슬래시의 독립 태스크를 단일 응답 내 multi tool_use 동시 spawn 으로 강제 병렬화한다. 의존성 판단·race 가드는 §활용 예 / §안전 가드 참조.
 
+**갯수:** 병렬 spawn 갯수 = 효율 상한 `min(독립 항목, min(16,cores−2))` 까지 제안 (소극적 부분집합 금지). SSOT = `orchestration §2.3`.
+
 | 태스크 | 직렬·병렬 | 방법 |
 |--------|----------|-----|
 | 인자 슬래시의 독립 Agent spawn | **병렬 (강제)** | multi tool_use 블록 동시 spawn (본 응답 1회) |
