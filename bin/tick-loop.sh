@@ -52,8 +52,17 @@ run_once() {
 case "${1:-}" in
   # nohup 재진입 전용 — 사용자가 직접 호출하지 않는다
   __run)
+    trap 'echo "=== $(date "+%F %T") 루프 정지 (시그널 수신)"; exit 0' INT TERM
     while :; do
       run_once
+      rc=$?
+      # 자식 claude 가 시그널로 죽었다(128+N) = 사용자가 개입했다는 뜻이다.
+      # 이때 루프까지 멈추지 않으면 "다 껐다"고 믿는 사이 다음 iteration 이 뜬다
+      # (2026-07-28 실측 사고 — claude 만 kill 했는데 부모 루프가 살아남았다).
+      if [ "$rc" -ge 128 ]; then
+        echo "=== claude 가 시그널로 종료 (exit=$rc) — 루프를 멈춘다"
+        break
+      fi
       echo "--- $2s 대기"
       sleep "$2"
     done
@@ -66,6 +75,11 @@ case "${1:-}" in
   stop)
     if alive; then
       PID=$(cat "$PID_FILE")
+      # 자식(claude) 을 먼저 죽인다 — 부모만 죽이면 claude 가 고아로 남아
+      # 계속 돌면서 파일을 만진다
+      for CHILD in $(ps -ef 2>/dev/null | awk -v p="$PID" '$3==p {print $2}'); do
+        kill "$CHILD" 2>/dev/null && echo "  자식 종료: PID $CHILD"
+      done
       kill "$PID" 2>/dev/null && echo "정지: PID $PID"
     else
       echo "실행 중 아님"
@@ -82,6 +96,8 @@ case "${1:-}" in
       echo "정지 상태"
       [ -f "$PID_FILE" ] && echo "  (PID 파일 잔존 = 비정상 종료. 'stop' 으로 정리)"
     fi
+    # status 는 조회다 — 마지막 [ -f ] 결과가 종료코드로 새는 것을 막는다
+    exit 0
     ;;
 
   *)
