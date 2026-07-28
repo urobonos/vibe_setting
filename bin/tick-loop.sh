@@ -20,14 +20,16 @@
 #   tick-loop.sh stop [슬롯]  정지. 슬롯 생략 시 전체
 #   tick-loop.sh status       전 슬롯 상태 조회
 #
-# 환경변수 override: TICK_LOOP_MODEL(기본 sonnet) / TICK_LOOP_PERM(기본 acceptEdits)
+# 환경변수 override: TICK_LOOP_MODEL(기본 sonnet) / TICK_LOOP_PERM(기본 auto)
 # SSOT: custom-plugin/taskflow/commands/tick-loop.md
 set -uo pipefail
 
 STATE_DIR="$HOME/.claude/state"
 SLOT_DIR="$STATE_DIR/tick-loop"
 MODEL="${TICK_LOOP_MODEL:-sonnet}"
-PERM="${TICK_LOOP_PERM:-acceptEdits}"
+# auto — 실측으로 고른 값이다. acceptEdits 는 sensitive file 승인 요청에서 멈추고,
+# dontAsk 는 "묻지 않고 거부" 라 Write 도구 자체가 차단된다(2026-07-28 A/B 확인).
+PERM="${TICK_LOOP_PERM:-auto}"
 # graceful stop 대기 상한(초). tick 1회가 20분 걸리는 경우가 실재하므로 넉넉히 잡는다
 STOP_WAIT="${TICK_LOOP_STOP_WAIT:-1800}"
 

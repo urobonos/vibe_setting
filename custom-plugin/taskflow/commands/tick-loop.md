@@ -32,7 +32,9 @@ tick 은 설계상 stateless 다 — 상태는 working/ 문서와 REGISTRY 에 �
 | `/taskflow:tick-loop stop --now [슬롯]` | 즉시 정지 — 진행 중 tick 을 중단한다 |
 | `/taskflow:tick-loop status` | 전 슬롯 생존 + 각 로그 마지막 줄 |
 
-간격은 `60`(초) / `30m` / `1h` 를 받고 생략 시 1800초, 하한 10초. 모델·권한은 환경변수로 바꾼다 — `TICK_LOOP_MODEL`(기본 `sonnet`) · `TICK_LOOP_PERM`(기본 `acceptEdits`) · `TICK_LOOP_STOP_WAIT`(graceful 대기 상한, 기본 1800초).
+간격은 `60`(초) / `30m` / `1h` 를 받고 생략 시 1800초, 하한 10초. 모델·권한은 환경변수로 바꾼다 — `TICK_LOOP_MODEL`(기본 `sonnet`) · `TICK_LOOP_PERM`(기본 `auto`) · `TICK_LOOP_STOP_WAIT`(graceful 대기 상한, 기본 1800초).
+
+**`auto` 는 실측으로 고른 값이다.** 2026-07-28 A/B — `acceptEdits` 는 sensitive file 승인 요청에서 멈춰 tick 이 파일을 못 고치고, `dontAsk` 는 "묻지 않고 **거부**" 라 Write 도구 자체가 차단된다("don't ask mode" 권한 정책). 무인 루프에는 승인할 사람이 없으므로 둘 다 쓸 수 없다.
 
 ### graceful stop
 
@@ -84,7 +86,7 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 - **기동 = 사용자의 명시 호출이 승인이다.** Claude 가 자발적으로 이 커맨드를 호출하지 않는다.
 - **정지도 사용자 몫이다.** no-op 이 여러 번 이어져도 그것은 정지 근거가 아니다 — 무인 루프는 조용한 게 정상 동작이다. SSOT = 메모리 `feedback_no-autonomous-loop-kill`.
 - 루프 안에서 도는 것은 `/taskflow:tick` 이므로 **머지·push·task Done 은 여전히 안 한다** (tick.md §3 그대로 상속). worktree·gate·dangerous-ops 가드도 각 tick 프로세스에서 정상 작동한다.
-- `--permission-mode acceptEdits` 는 편집 승인만 자동화한다. §3 매칭 조작은 각 hook 이 exit 2 로 차단하므로 이 커맨드가 §3 우회 통로가 되지 않는다.
+- `--permission-mode auto` 는 **권한 프롬프트**만 자동화한다. hook(worktree·gate·dangerous-ops·branch-enforce)은 permission-mode 와 무관하게 그대로 돌며 §3 매칭 조작을 exit 2 로 차단하므로, 이 커맨드가 §3 우회 통로가 되지 않는다.
 
 ## 로그
 
