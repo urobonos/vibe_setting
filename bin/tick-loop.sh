@@ -67,6 +67,11 @@ parse_interval() {
 run_once() {
   local rc tag="${1:-}"
   echo "=== $(date '+%F %T')${tag:+ [slot $tag]} tick 시작 (model=$MODEL perm=$PERM)"
+  # cwd 를 고정한다 — 안 하면 부모 셸의 cwd 를 그대로 상속해서 product 판정이
+  # "어디서 띄웠는지"에 좌우된다. 실측으로 ~/.claude/docs/... 하위에서 돈 세션들이
+  # 남았고 그 부작용이 product-resolver self-nesting 가드를 낳았다.
+  # tick 자체는 cwd 무관 전체 스캔이고 작업 repo 는 step 의 product 가 정한다.
+  cd "$HOME/.claude" || return 1
   # stdin 을 끊는다 — headless 라 프롬프트를 읽을 곳이 없다
   claude -p --model "$MODEL" --permission-mode "$PERM" "/taskflow:tick" < /dev/null 2>&1
   rc=$?

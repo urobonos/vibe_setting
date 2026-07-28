@@ -1,5 +1,5 @@
 ---
-description: 무인 loop 1-iteration 러너 — cwd 최신 task 1건 claim → Status 분기 → 다음 진행 가능한 step 개발+verify+review → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
+description: 무인 loop 1-iteration 러너 — **cwd 무관 전체 스캔**으로 진행 가능 step 1건 claim → Status 분기 → 개발+verify+review → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent, PowerShell
 argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명] | deny [작업명]"
 ---
@@ -138,6 +138,20 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 
 > step 분해 없는 경량 unified = unified 전체를 1 진행 단위로 처리하고 완료 시 unified 자체에 `Status: ReadyToMerge`.
 
+## cwd 에 국한되지 않는다 (필수)
+
+**스캔도 작업도 호출된 위치를 따르지 않는다.** tick 은 `working_scan all` 로 전 product 를 훑고, 잡은 step 의 **product 가 작업 repo 를 결정**한다 — cwd 가 무엇이든 무관하다.
+
+| 축 | 무엇이 결정하나 |
+|----|----------------|
+| 문서 스캔 | `working_scan all` — 전 product (cwd 미참조) |
+| **작업 repo** | **claim 한 step 의 product** (cwd 아님) |
+| worktree 생성 | 그 product repo 에서 `git -C {repo} worktree add` |
+
+**`cd` 로 옮겨다니지 않는다.** `git -C` 로만 대상 repo 를 조작한다 — `cd` 는 이후 hook 의 판정 컨텍스트(product 판정·worktree 면제)를 바꾸고, 무인 루프가 지금 어디에 서 있는지 추적을 어렵게 만든다. `watch.md` 가 같은 규약을 쓴다(2026-07-28 실측으로 `git -C` 경유 브랜치 생성·ff머지·worktree remove 가 전부 hook 통과 확인).
+
+> **러너 쪽도 cwd 를 고정한다.** `tick-loop.sh` 는 `claude` 를 띄우기 전에 `~/.claude` 로 이동한다. 그러지 않으면 부모 셸의 cwd 를 그대로 상속해 product 판정이 호출 위치에 좌우된다 — 실측으로 `~/.claude/docs/...` 하위에서 돈 세션들이 남았고, 그 부작용을 막은 것이 `product-resolver` 의 self-nesting 가드다.
+
 ## dev 스택 보장 (step 실행 전, 필수)
 
 **step 개발에 착수하기 전에 검증 환경을 먼저 확보한다.**
@@ -238,7 +252,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | 조각 | 역할 | SSOT |
 |------|------|------|
 | 주기 반복 | `/loop <interval> /taskflow:tick` | harness `/loop` 스킬 |
-| claim | cwd 최신 1건 / #tag | `custom-plugin/taskflow/commands/load.md` |
+| claim | **cwd 무관 전체 스캔** / #tag | `custom-plugin/taskflow/commands/load.md` |
 | 실행 관통 | worktree → 개발 → QA → verify → review | `custom-plugin/taskflow/commands/auto.md` |
 | 결정 마감 | escalation ladder P1~P4 / I1~I3 | `execute.md` §"결정 escalation ladder" |
 | step 순차 소비 | step-01~nn 의존 순서 | `execute.md` + `plan.md` §"step 파일 양식" |
