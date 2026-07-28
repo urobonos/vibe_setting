@@ -3,7 +3,7 @@
 #
 # 정책: 모든 소스 mutation 작업은 worktree 안에서 수행되어야 한다.
 #   cwd 또는 FILE_PATH 가 worktree (`*/worktrees/*`) 가 아니고
-#   functional exemption 15건 매칭 안 됨 → exit 2 차단.
+#   functional exemption 16건 매칭 안 됨 → exit 2 차단.
 #   단, cwd 가 git work-tree 가 아니면 (git 미연동 프로젝트) 면제 — worktree 생성 자체가
 #   불가능하므로 강제 차단이 작업을 막는다 (path-pattern 면제와 별개인 state-condition 면제).
 #
@@ -11,7 +11,7 @@
 #   - 모든 소스 작업 = worktree 격리 (사고 영구 차단)
 #   - feature 분기 = 사용자 요청 시 생성 (자동 강제 폐기)
 #
-# Functional exemption 15건:
+# Functional exemption 16건:
 #   1. */worktrees/*                  (worktree 자체)
 #   2. */state/sessions/*.lock        (session lock)
 #   3. */projects/*/memory/*          (auto memory)
@@ -27,6 +27,7 @@
 #   13. */.claude/skills/*           (스킬 정의 — commands(#12) 동질 path 면제, 2026-07-06)
 #   14. */.claude/README.md          (하니스 카탈로그 문서 — CLAUDE.md(#11) 동질, 라이브/문서 성격, 2026-07-06)
 #   15. */.claude/custom-plugin/*    (플러그인 commands/skills — hooks(#9)/commands(#12)/skills(#13) 동질 라이브 발효. git 추적 전환(2026-07-15)으로 #10 gitignore 면제 소멸 → 명시 path 면제 승격, backlog worktree-exempt-plugin-drift 해소)
+#   16. */.claude/PERSONA.md         (persona-reminder 훅 매 턴 주입 페이로드 — CLAUDE.md(#11)/README.md(#14) 동질 루트 하니스 문서, 2026-07-21)
 #
 # SSOT: CLAUDE.md §4.3 "worktree 항상 강제" + 본 hook
 # 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + custom-plugin/git/commands/{create,merge}.md
@@ -54,6 +55,7 @@ is_exempt_path() {
     */.claude/commands/*)            return 0 ;;  # #12
     */.claude/skills/*)              return 0 ;;  # #13
     */.claude/README.md)             return 0 ;;  # #14
+    */.claude/PERSONA.md)            return 0 ;;  # #16 (CLAUDE.md#11/README.md#14 동질 루트 하니스 문서 — persona-reminder 훅 매 턴 주입 페이로드, 2026-07-21)
     */.claude/custom-plugin/*)       return 0 ;;  # #15
     C:/Works/infra/*|/c/Works/infra/*) return 0 ;;  # #8
   esac
@@ -222,7 +224,7 @@ echo "                신규 작업 = git worktree add ~/.claude/worktrees/{sid}
 echo "                기존 feature 수정 = git worktree add ~/.claude/worktrees/{sid}-{slug} feature/X" >&2
 echo "              면제 14건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
 echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json /" >&2
-echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md / .claude/commands/* / .claude/skills/* / .claude/README.md" >&2
+echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md / .claude/commands/* / .claude/skills/* / .claude/README.md / .claude/PERSONA.md" >&2
 echo "              SSOT: CLAUDE.md §4.3 \"worktree 항상 강제\"" >&2
 command -v log_event >/dev/null 2>&1 && log_event "worktree-enforce" "block" "reason=worktree-required"
 exit 2
