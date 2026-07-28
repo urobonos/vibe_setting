@@ -44,6 +44,12 @@ be 프로젝트 (`hongcafe_global_backend`) 의 2 영역 미러링 상태를 검
 
 > **[실행 주체]** Claude 본체 단독. 외부 Agent spawn 불필요. cp / diff / sha256 단순 작업.
 
+> **⚠ 본문 셸 코드에 `$1`·`$2` 를 쓰지 말 것.** 이 스킬을 인자와 함께 호출하면(`/mirror-be-claude sync-from-be board`)
+> 하니스가 로드 시점에 본문의 `$1` 을 그 인자로 **문자열 치환**한다. 예전 `awk '{print $1}'` 은 `awk '{print board}'`
+> 로 바뀌어 들어왔고, awk 의 미정의 변수는 빈 문자열이라 **모든 해시가 "" 로 같아져 아무것도 복사하지 않은 채
+> 성공한 것처럼 끝난다**(2026-07-22 실제 관측). 그래서 해시 추출은 `cut -d' ' -f1` 을 쓴다.
+> 위치 인자가 꼭 필요하면 `${1}` 대신 별도 변수로 받아 쓰고, 셸 예시에는 위치 인자를 남기지 않는다.
+
 ---
 
 ## 1. 호출 방식
@@ -137,13 +143,13 @@ comm -23 \
 echo "===== sha256 비교 (LF 정규화) ====="
 cd "$BE_DIR" && find . -maxdepth 3 -type f 2>/dev/null | sort | while read f; do
   # raw byte sha256 (참고용 — LF-only drift 식별)
-  g_raw=$(sha256sum "$GLOBAL_DIR/$f" 2>/dev/null | awk '{print $1}')
-  b_raw=$(sha256sum "$BE_DIR/$f"     2>/dev/null | awk '{print $1}')
-  d_raw=$(sha256sum "$DOCS_DIR/$f"   2>/dev/null | awk '{print $1}')
+  g_raw=$(sha256sum "$GLOBAL_DIR/$f" 2>/dev/null | cut -d' ' -f1)
+  b_raw=$(sha256sum "$BE_DIR/$f"     2>/dev/null | cut -d' ' -f1)
+  d_raw=$(sha256sum "$DOCS_DIR/$f"   2>/dev/null | cut -d' ' -f1)
   # LF normalize 후 sha256 (실 내용 비교)
-  g_lf=$(tr -d '\r' < "$GLOBAL_DIR/$f" 2>/dev/null | sha256sum | awk '{print $1}')
-  b_lf=$(tr -d '\r' < "$BE_DIR/$f"     2>/dev/null | sha256sum | awk '{print $1}')
-  d_lf=$(tr -d '\r' < "$DOCS_DIR/$f"   2>/dev/null | sha256sum | awk '{print $1}')
+  g_lf=$(tr -d '\r' < "$GLOBAL_DIR/$f" 2>/dev/null | sha256sum | cut -d' ' -f1)
+  b_lf=$(tr -d '\r' < "$BE_DIR/$f"     2>/dev/null | sha256sum | cut -d' ' -f1)
+  d_lf=$(tr -d '\r' < "$DOCS_DIR/$f"   2>/dev/null | sha256sum | cut -d' ' -f1)
   if [ "$g_lf" != "$b_lf" ] || [ "$g_lf" != "$d_lf" ]; then
     # 실 drift — push 시 실제 변경 발생
     g_t=$(stat -c %Y "$GLOBAL_DIR/$f" 2>/dev/null || echo 0)
@@ -165,36 +171,53 @@ done
 - 영역 2 PASS / FAIL — api-docs file count + 누락 N건 + sha256 mismatch N건 + newest source 분포
 - FAIL 시: 사용자에게 newest source 보고 → 적절한 sync 모드 권고. 자동 sync 진행 금지.
 
-### 2.2. `sync-from-be` — be → 글로벌 + docs 강제
+### 2.2. `sync-from-be` — be → 글로벌 + docs (무손실 게이트 필수)
+
+> **덮어쓰기 전에 "대상에만 있는 줄"을 세고, 0 이 아니면 그 파일은 건너뛴다.** be 를 SSOT 로 부르는 것과
+> be 가 실제로 상위집합인 것은 별개다 — 미러 쪽에만 있는 최신 섹션이 남아 있는 채로 전량 cp 하면 그게
+> 그대로 소실된다. sha256 비교만으로는 "다르다"까지만 알 뿐 **어느 쪽이 더 많은지**를 모른다.
+>
+> 2026-07-22 실제 사고: newest source 미확인 상태로 전량 cp → `board-api.md` 의 `R5` 섹션(-37줄)·
+> `board-api.yaml`(-54줄)·`content-api.md`(-3줄) 소실. push 전 발견해 `git revert` 로 복구.
 
 ```bash
-# 영역 1 — CLAUDE.md
-BE_MD="C:/Works/hongcafe_global_backend/CLAUDE.md"
-MIRROR_MD="$HOME/.claude/mirrors/hongcafe_global_backend/CLAUDE.md"
-cp -f "$BE_MD" "$MIRROR_MD"
-diff -q "$BE_MD" "$MIRROR_MD" && echo "[SYNC be→mirror CLAUDE.md] OK"
-
-# 영역 2 — api-docs (be 기준 글로벌 + docs 양쪽 일괄 cp)
 GLOBAL_DIR="$HOME/.claude/docs/hongcafe_global_backend/api-docs"
 BE_DIR="C:/Works/hongcafe_global_backend/api-docs"
 DOCS_DIR="C:/Works/hongcafe_global_docs/be/api-docs"
 
-cd "$BE_DIR" && find . -maxdepth 3 -type f 2>/dev/null | while read f; do
-  GP="$GLOBAL_DIR/$f"; BP="$BE_DIR/$f"; DP="$DOCS_DIR/$f"
-  g=$(sha256sum "$GP" 2>/dev/null | awk '{print $1}')
-  b=$(sha256sum "$BP" 2>/dev/null | awk '{print $1}')
-  d=$(sha256sum "$DP" 2>/dev/null | awk '{print $1}')
-  [ "$g" = "$b" ] && [ "$b" = "$d" ] && continue
-  mkdir -p "$(dirname "$GP")" 2>/dev/null
-  mkdir -p "$(dirname "$DP")" 2>/dev/null
-  cp -f "$BP" "$GP" && echo "  G+ $f"
-  cp -f "$BP" "$DP" && echo "  D+ $f"
+# 대상에만 있는 줄 수 = 덮어쓰면 사라질 내용. LF 정규화 후 비교(docs 는 CRLF).
+lost_lines() {
+  [ -f "$2" ] || { echo 0; return; }
+  diff <(tr -d '\r' < "$1" 2>/dev/null) <(tr -d '\r' < "$2" 2>/dev/null) 2>/dev/null | grep -c '^>'
+}
+
+cd "$BE_DIR" && find . -maxdepth 3 -type f 2>/dev/null | sort | while read f; do
+  rel="${f#./}"
+  BP="$BE_DIR/$rel"
+  for target in "$GLOBAL_DIR/$rel" "$DOCS_DIR/$rel"; do
+    b=$(tr -d '\r' < "$BP"     2>/dev/null | sha256sum | cut -d' ' -f1)
+    t=$(tr -d '\r' < "$target" 2>/dev/null | sha256sum | cut -d' ' -f1)
+    [ "$b" = "$t" ] && continue
+
+    lost=$(lost_lines "$BP" "$target")
+    if [ "${lost:-0}" -gt 0 ]; then
+      echo "  × $rel — SKIP: 대상에만 있는 ${lost}줄. be 백포트 먼저"
+      continue
+    fi
+    mkdir -p "$(dirname "$target")" 2>/dev/null
+    cp -f "$BP" "$target" && echo "  + $rel"
+  done
 done
 ```
 
+**SKIP 이 나오면 그게 정상 동작이다.** 처리 순서는 (1) SKIP 파일의 `diff` 로 미러-only 내용 확인 →
+(2) 그 내용이 **코드에 실재하는지** Routes/Controller/Filter 를 grep →
+(3) 실재하면 be 로 백포트한 뒤 재실행 / 코드와 어긋나면(stale) 사유를 남기고 그 파일만 강제 덮어쓰기.
+"SKIP 이 성가시니 게이트를 끄자"는 사고 재현 경로다.
+
 - 글로벌 + docs 만 변경 → §3 Checkpoint 미발동 (be 프로젝트 git 추적 파일 무변경).
 - 사용자 명시 요청 (`/mirror-be-claude sync-from-be` 또는 "be 기준으로 동기화") 시에만 실행.
-- 결과: 양 영역 cp + sha256 재검증 + 보고.
+- CLAUDE.md 영역은 단일 파일이라 게이트 대상이 아니다 — 변경됐을 때만 `cp -f "$BE_MD" "$MIRROR_MD"`.
 
 ### 2.3. `sync-from-global` — 글로벌 → be 강제 (§3 매칭)
 
@@ -213,8 +236,8 @@ diff -q "$BE_MD" "$MIRROR_MD" && echo "[SYNC mirror→be CLAUDE.md] OK"
 # 영역 2 — api-docs (글로벌 → be 단방향)
 cd "$GLOBAL_DIR" && find . -maxdepth 3 -type f 2>/dev/null | while read f; do
   GP="$GLOBAL_DIR/$f"; BP="$BE_DIR/$f"
-  g=$(sha256sum "$GP" 2>/dev/null | awk '{print $1}')
-  b=$(sha256sum "$BP" 2>/dev/null | awk '{print $1}')
+  g=$(sha256sum "$GP" 2>/dev/null | cut -d' ' -f1)
+  b=$(sha256sum "$BP" 2>/dev/null | cut -d' ' -f1)
   [ "$g" = "$b" ] && continue
   mkdir -p "$(dirname "$BP")" 2>/dev/null
   cp -f "$GP" "$BP" && echo "  B+ $f"
@@ -289,4 +312,5 @@ done
 |------|------|------|
 | 2026-05-07 | 1.0.0 | 신규 생성 — be CLAUDE.md ↔ 글로벌 미러본 양방향 동기화 검증·강제 스킬 (사용자 결정: 양방향 + `~/.claude/mirrors/{product}/`) |
 | 2026-05-18 | 1.1.0 | api-docs 3-way 영역 통합 — `mirror-docs.sh` 자동 hook 폐기 결정 (정책 ↔ 실 사용 어긋남, 산출물 `output/analysis/2026-05-18-mirror-policy-redesign/`) 후 본 스킬이 api-docs 3-way 단일 명시 진입점으로 확장. `verify` / `sync-from-be` / `sync-from-global` 3 모드 모두 양 영역 통합 처리 |
+| 2026-07-22 | 1.3.0 | **`sync-from-be` 무손실 게이트 도입** — 덮어쓰기 전 "대상에만 있는 줄"(`diff \| grep -c '^>'`)을 세어 0 이 아니면 해당 파일 SKIP. sha256 은 "다르다"만 알려줄 뿐 어느 쪽이 상위집합인지 모른다는 게 원인이었다. 발단 = 같은 날 실사고(newest source 미확인 전량 cp → `board-api.md` R5 섹션 -37줄, `board-api.yaml` -54줄, `content-api.md` -3줄 소실, push 전 `git revert` 복구). 병행 수정: 본문 셸의 `awk '{print $1}'` → `cut -d' ' -f1` — 스킬을 인자와 함께 호출하면 하니스가 본문 `$1` 을 인자로 치환해 awk 미정의 변수(빈 문자열)가 되고, 전 해시가 ""로 같아져 **아무것도 복사하지 않은 채 성공한 것처럼 끝나던** 잠복 함정 제거 |
 | 2026-05-20 | 1.2.0 | sha256 비교 LF 정규화 도입 — `tr -d '\r'` 후 비교로 실 drift / LF-only drift 분리. 발견 commit `4d8961d` (`hongcafe_global_docs` master) = 실 변경 1 파일 1행 (`be/api-docs/member/payment-api.md` L16 `/api/member` → `/api/members`) vs raw sha256 mismatch 66 건 (97% LF over-count). docs 레포 `core.autocrlf=true` + `.gitattributes` 부재 영향 — 스킬 측 정규화로 보고 정확도 향상. §2.1.2 비교 로직 + §3 보고 양식 "실 drift / LF-only drift" 분리 |

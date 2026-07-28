@@ -59,7 +59,7 @@ set -- $ARGUMENTS
 SRC="${1/#\~/$HOME}"                        # 원본 경로. $ARGUMENTS 는 리터럴이라 선행 ~ 를 $HOME 로 명시 확장
 [ -f "$SRC" ] || { echo "원본 없음: $SRC"; exit 1; }
 SRC_ABS=$(cd "$(dirname "$SRC")" && pwd)/$(basename "$SRC")
-HASH=$(sha256sum "$SRC" | cut -c1-12)
+HASH=$(sha256sum < "$SRC" | cut -c1-12)   # stdin 입력 — 파일명이 출력에 없어야 백슬래시 경로 이스케이프(`\`+해시) 회피
 SIZE=$(stat -c %s "$SRC")
 MTIME=$(stat -c %y "$SRC" | cut -d'.' -f1)
 echo "원본: $SRC_ABS | sha256:$HASH | ${SIZE}B | $MTIME"
@@ -88,7 +88,7 @@ for DOC in $DOCS; do
         h=$(echo "$hash" | tr -d '`' | sed 's/^ *//;s/ *$//')
         [ -z "$p" ] && continue
         if [ ! -f "$p" ]; then echo "  ✗ 원본 없음: $p"; continue; fi
-        cur=$(sha256sum "$p" | cut -c1-12)
+        cur=$(sha256sum < "$p" | cut -c1-12)   # stdin — 생성 ①과 동일 방식(백슬래시 경로 이스케이프 회피)
         if [ "$cur" = "$h" ]; then
           echo "  ✓ 최신: $p"
         else
