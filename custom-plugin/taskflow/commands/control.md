@@ -6,6 +6,8 @@ argument-hint: "[all — 선택. 생략=cwd product / all=전체 product]"
 
 `/taskflow:tick` 의 대칭짝 — tick 이 무인으로 올린 **사용자 대기 큐**를 한눈에 리뷰한다. **read-only**: 리스트업 + 진입 안내까지만, 실제 머지·결정은 개별 `/taskflow:save`·`/taskflow:load` 로.
 
+> `/taskflow:watch` loop 가 돌고 있으면 리뷰 클린인 `ReadyToMerge` step 은 watch 가 ff머지로 먼저 해소한다. 그래서 여기 남는 건 **리뷰에서 반려된 것**(`Pending` 복귀 + 반려 체크박스)**과 판단 대기**다.
+
 ## 리스트업 대상
 
 | 대상 | 단위 | 의미 | 요약 소스 | 처리 진입 |
@@ -54,7 +56,7 @@ control 은 read-only 라 전파를 트리거하지 않는다. 처리 경로가 
 
 - **ReadyToMerge step 해소:** `/taskflow:save {작업명}` → step 개별 머지 → step `Status: Done`.
 - **모든 step 머지 + 완료 게이트 통과:** save 가 `working_gate_blockers` 0 확인 → unified `Status: Done` → `working-lifecycle.sh` PostToolUse 발동.
-- **NeedsDecision 해소:** `/taskflow:load {작업명}` → 결정 입력 → `Status: In Progress` 재개 → step 진행 → ReadyToMerge → 위 경로.
+- **NeedsDecision 해소:** `/taskflow:load {작업명}` → 결정 입력 → Claude 본체가 결정 기록 + step `상태: Pending` 복귀 + unified `Status: In Progress` + `registry_update … active` (절차 SSOT = `tick.md` §"결정 수용") → 다음 tick 이 재잡이 → ReadyToMerge → 위 경로.
 
 `Status: Done` 시 `working-lifecycle.sh` 자동: tasks/ 이동 · history/summary · 작업분석 인덱스 역갱신 · REGISTRY·lock 정리 · step 평면 파일 `steps/` 분배. (SSOT = `working-lifecycle.sh` + `survey.md §전파`)
 
