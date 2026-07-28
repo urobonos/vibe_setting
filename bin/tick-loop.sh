@@ -28,11 +28,16 @@ STATE_DIR="$HOME/.claude/state"
 SLOT_DIR="$STATE_DIR/tick-loop"
 MODEL="${TICK_LOOP_MODEL:-sonnet}"
 PERM="${TICK_LOOP_PERM:-acceptEdits}"
+# graceful stop 대기 상한(초). tick 1회가 20분 걸리는 경우가 실재하므로 넉넉히 잡는다
+STOP_WAIT="${TICK_LOOP_STOP_WAIT:-1800}"
 
 mkdir -p "$SLOT_DIR"
 
-slot_pid() { echo "$SLOT_DIR/$1.pid"; }
-slot_log() { echo "$SLOT_DIR/$1.log"; }
+slot_pid()  { echo "$SLOT_DIR/$1.pid"; }
+slot_log()  { echo "$SLOT_DIR/$1.log"; }
+# graceful stop 신호 — 시그널이 아니라 파일로 한다. 시그널은 루프가 자식 claude 를
+# 기다리는 동안 지연되고, 그때 자식을 죽이면 애초에 graceful 이 아니게 된다.
+slot_stop() { echo "$SLOT_DIR/$1.stop"; }
 slot_alive() {
   local f; f=$(slot_pid "$1")
   [ -f "$f" ] && kill -0 "$(cat "$f" 2>/dev/null)" 2>/dev/null
@@ -86,9 +91,11 @@ stop_slot() {
 case "${1:-}" in
   # nohup 재진입 전용 — 사용자가 직접 호출하지 않는다. $2=간격 $3=슬롯
   __run)
-    trap 'echo "=== $(date "+%F %T") [slot '"${3:-?}"'] 루프 정지 (시그널 수신)"; exit 0' INT TERM
+    SLOT="${3:-0}"
+    STOP_FLAG=$(slot_stop "$SLOT")
+    trap 'echo "=== $(date "+%F %T") [slot '"$SLOT"'] 루프 정지 (시그널 수신)"; exit 0' INT TERM
     while :; do
-      run_once "${3:-}"
+      run_once "$SLOT"
       rc=$?
       # 자식 claude 가 시그널로 죽었다(128+N) = 사용자가 개입했다는 뜻이다.
       # 이때 루프까지 멈추지 않으면 "다 껐다"고 믿는 사이 다음 iteration 이 뜬다
@@ -97,9 +104,25 @@ case "${1:-}" in
         echo "=== claude 가 시그널로 종료 (exit=$rc) — 루프를 멈춘다"
         break
       fi
+      # graceful stop — 진행 중이던 tick 은 위에서 이미 완주했다
+      if [ -f "$STOP_FLAG" ]; then
+        echo "=== graceful stop 요청 확인 — 이번 tick 을 마치고 종료"
+        break
+      fi
       echo "--- $2s 대기"
-      sleep "$2"
+      # 대기를 1초 단위로 쪼갠다 — 통째로 sleep 하면 stop 요청에 최대 간격만큼 늦게 반응한다
+      WAITED=0
+      while [ "$WAITED" -lt "$2" ]; do
+        [ -f "$STOP_FLAG" ] && break
+        sleep 1
+        WAITED=$((WAITED+1))
+      done
+      if [ -f "$STOP_FLAG" ]; then
+        echo "=== graceful stop 요청 확인 (대기 중) — 종료"
+        break
+      fi
     done
+    rm -f "$STOP_FLAG"
     ;;
 
   --once)
@@ -107,17 +130,56 @@ case "${1:-}" in
     ;;
 
   stop)
-    if [ -n "${2:-}" ]; then
-      stop_slot "$2"
+    # stop [--now] [슬롯] — 기본은 graceful (진행 중 tick 완주), --now 는 즉시 중단
+    NOW=0
+    if [ "${2:-}" = "--now" ]; then NOW=1; TARGET="${3:-}"; else TARGET="${2:-}"; fi
+
+    SLOTS=""
+    if [ -n "$TARGET" ]; then
+      slot_alive "$TARGET" && SLOTS="$TARGET"
     else
-      FOUND=0
       for f in "$SLOT_DIR"/*.pid; do
         [ -e "$f" ] || continue
         n=$(basename "$f" .pid)
-        slot_alive "$n" && FOUND=$((FOUND+1))
-        stop_slot "$n"
+        if slot_alive "$n"; then SLOTS="$SLOTS $n"; else rm -f "$f"; fi
       done
-      [ "$FOUND" -eq 0 ] && echo "실행 중 아님"
+    fi
+    SLOTS=$(echo $SLOTS)
+
+    if [ -z "$SLOTS" ]; then
+      echo "실행 중 아님"
+      exit 0
+    fi
+    TOTAL=$(echo "$SLOTS" | wc -w)
+
+    if [ "$NOW" = 1 ]; then
+      echo "즉시 정지 — 진행 중 tick 을 중단한다 (${TOTAL}개)"
+      for n in $SLOTS; do stop_slot "$n"; rm -f "$(slot_stop "$n")"; done
+      exit 0
+    fi
+
+    echo "graceful stop 요청 — ${TOTAL}개 슬롯, 진행 중 tick 은 완주합니다"
+    for n in $SLOTS; do : > "$(slot_stop "$n")"; done
+
+    DONE=0; REPORTED=""
+    for _ in $(seq 1 "$STOP_WAIT"); do
+      for n in $SLOTS; do
+        case " $REPORTED " in *" $n "*) continue ;; esac
+        slot_alive "$n" && continue
+        DONE=$((DONE+1)); REPORTED="$REPORTED $n"
+        echo "  tick 종료 $DONE/$TOTAL (slot $n)"
+        rm -f "$(slot_pid "$n")" "$(slot_stop "$n")"
+      done
+      [ "$DONE" -ge "$TOTAL" ] && break
+      sleep 1
+    done
+
+    if [ "$DONE" -ge "$TOTAL" ]; then
+      echo "전체 정지 완료"
+    else
+      echo "${STOP_WAIT}s 안에 ${DONE}/${TOTAL} 만 종료했다 — 남은 슬롯은 tick 이 아직 진행 중이다." >&2
+      echo "  즉시 세우려면: bash ~/.claude/bin/tick-loop.sh stop --now" >&2
+      exit 1
     fi
     exit 0
     ;;

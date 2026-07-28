@@ -28,10 +28,28 @@ tick 은 설계상 stateless 다 — 상태는 working/ 문서와 REGISTRY 에 �
 |------|------|
 | `/taskflow:tick-loop [간격] [N]` | detach 기동 **N 개**(기본 1). 빈 슬롯을 찾아 배정하고 즉시 반환 |
 | `/taskflow:tick-loop --once` | **1회만** 실행하고 출력을 그대로 보여준다 (검증용, detach 안 함) |
-| `/taskflow:tick-loop stop [슬롯]` | 정지. 슬롯 생략 시 **전체** |
+| `/taskflow:tick-loop stop [슬롯]` | **graceful 정지** — 진행 중 tick 은 완주시킨다. 슬롯 생략 시 전체 |
+| `/taskflow:tick-loop stop --now [슬롯]` | 즉시 정지 — 진행 중 tick 을 중단한다 |
 | `/taskflow:tick-loop status` | 전 슬롯 생존 + 각 로그 마지막 줄 |
 
-간격은 `60`(초) / `30m` / `1h` 를 받고 생략 시 1800초, 하한 10초. 모델·권한은 환경변수로 바꾼다 — `TICK_LOOP_MODEL`(기본 `sonnet`) · `TICK_LOOP_PERM`(기본 `acceptEdits`).
+간격은 `60`(초) / `30m` / `1h` 를 받고 생략 시 1800초, 하한 10초. 모델·권한은 환경변수로 바꾼다 — `TICK_LOOP_MODEL`(기본 `sonnet`) · `TICK_LOOP_PERM`(기본 `acceptEdits`) · `TICK_LOOP_STOP_WAIT`(graceful 대기 상한, 기본 1800초).
+
+### graceful stop
+
+기본 `stop` 은 **진행 중이던 tick 을 죽이지 않는다.** 그 iteration 을 끝까지 마치게 두고, 다음 iteration 으로 넘어가지 않게 막는다. 작업 도중에 끊으면 step 이 어중간한 상태로 남기 때문이다.
+
+```
+graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
+  tick 종료 1/3 (slot 1)
+  tick 종료 2/3 (slot 3)
+  tick 종료 3/3 (slot 2)
+전체 정지 완료
+```
+
+- **신호는 시그널이 아니라 파일**(`state/tick-loop/{슬롯}.stop`)이다. 시그널은 루프가 자식 claude 를 기다리는 동안 지연되고, 그때 자식을 죽이면 애초에 graceful 이 아니다.
+- **대기 중에도 1초 안에 반응한다** — `sleep` 을 통째로 하지 않고 1초 단위로 쪼개 플래그를 확인한다.
+- 대기 상한(기본 30분) 안에 안 끝나면 남은 슬롯 수를 알리고 `--now` 를 안내한다. 무한 대기는 터미널을 잠근다.
+- **`--now` 를 남겨둔 이유** — tick 1회가 20분 걸리는 경우가 실재하므로 "지금 당장" 이 필요한 상황이 있다.
 
 ## 병렬 실행
 
@@ -95,6 +113,7 @@ tick 은 설계상 stateless 다 — 상태는 working/ 문서와 REGISTRY 에 �
 
 ## Changelog
 
+- 2026-07-28: **graceful stop** — `stop` 이 진행 중 tick 을 완주시키고 다음 iteration 만 막는다. `tick 종료 N/M` 진행 표시. 즉시 중단은 `stop --now`. 신호는 플래그 파일(시그널은 자식 대기 중 지연됨), 대기 중에도 1초 내 반응
 - 2026-07-28: **병렬 슬롯** — `tick-loop <간격> <N>` 으로 N 개 독립 프로세스 동시 기동. 상태를 `state/tick-loop/{슬롯}.{pid,log}` 로 분리, 빈 슬롯 자동 배정, `stop [슬롯]` 개별/전체. 상한 `min(16, cores−2)`. tick-team 대비 leader 누적 없음 + 장애 격리
 - 2026-07-28: 자식 kill 시 루프 잔존 픽스 — exit 128 이상이면 break, `trap INT TERM`, `stop` 이 자식 먼저 kill, `status` exit 0 고정
 - 2026-07-28: 신설 — `/loop` 의 컨텍스트 누적(실측 5.1배) 대안. 매 iteration 새 프로세스 + sonnet + detach
