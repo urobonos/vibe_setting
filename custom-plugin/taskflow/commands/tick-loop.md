@@ -1,0 +1,70 @@
+---
+description: tick 무인 루프 기동·정지 — `/taskflow:tick` 을 **매번 새 프로세스**로 반복 실행해 컨텍스트 누적을 0 으로 만든다. harness `/loop` 이 한 세션에 iteration 을 쌓아 컨텍스트가 5배까지 늘던 문제의 대안. detach 기동이라 호출한 세션을 블로킹하지 않는다. 짝 = `/taskflow:tick`(1회분) · `/taskflow:control`(대기 큐)
+allowed-tools: Bash
+argument-hint: "[간격 — 60 / 30m / 1h, 생략 시 1800초] | --once | stop | status"
+---
+
+`~/.claude/bin/tick-loop.sh` 의 thin wrapper. 로직 재구현 0 — 인자를 그대로 넘긴다.
+
+```bash
+bash ~/.claude/bin/tick-loop.sh "$@"
+```
+
+## 왜 `/loop` 이 아니라 이것인가
+
+**`/loop 30m /taskflow:tick` 은 한 세션에 iteration 을 누적한다.** 2026-07-28 실측 — 세션 746244a3 이 step 7개를 530턴에 담는 동안 턴당 컨텍스트가 **116K → 595K (5.1배)** 로 늘었고, 그날 전체 토큰의 **97% 가 cache_read** 였다. 즉 비용의 대부분은 생성이 아니라 **같은 컨텍스트를 매 턴 다시 읽는 것**이다.
+
+tick 은 설계상 stateless 다 — 상태는 working/ 문서와 REGISTRY 에 있고, 커맨드 자신이 "로직 재구현 0" 을 표방한다. **컨텍스트를 들고 있을 이유가 없다.** 프로세스를 끊으면 매 iteration 이 시작값으로 리셋된다 (headless 실측 첫 턴 76.8K — 대화형보다 40K 낮다. UI 관련 시스템 프롬프트 섹션이 빠진다).
+
+| | `/loop 30m /taskflow:tick` | `/taskflow:tick-loop 30m` |
+|---|---|---|
+| iteration 간 컨텍스트 | 누적 (턴당 352K 까지) | **리셋 (76.8K 시작)** |
+| 모델 | 세션 모델 | **sonnet** (`--model`) |
+| 호출한 세션 | 그 세션에서 돎 | **detach — 블로킹 0** |
+
+## 4 모드
+
+| 호출 | 동작 |
+|------|------|
+| `/taskflow:tick-loop [간격]` | detach 기동. PID 를 `state/tick-loop.pid` 에 기록하고 즉시 반환 |
+| `/taskflow:tick-loop --once` | **1회만** 실행하고 출력을 그대로 보여준다 (검증용, detach 안 함) |
+| `/taskflow:tick-loop stop` | 정지 + PID 파일 정리 |
+| `/taskflow:tick-loop status` | 생존 여부 + 로그 마지막 5줄 |
+
+간격은 `60`(초) / `30m` / `1h` 를 받고 생략 시 1800초. 모델·권한은 환경변수로 바꾼다 — `TICK_LOOP_MODEL`(기본 `sonnet`) · `TICK_LOOP_PERM`(기본 `acceptEdits`).
+
+**중복 기동은 거부한다.** PID 가 살아 있으면 exit 1 — 같은 step 을 두 루프가 `registry_claim` 으로 다투는 상황(한쪽이 계속 skip)을 막는다.
+
+## §3 Checkpoint
+
+- **기동 = 사용자의 명시 호출이 승인이다.** Claude 가 자발적으로 이 커맨드를 호출하지 않는다.
+- **정지도 사용자 몫이다.** no-op 이 여러 번 이어져도 그것은 정지 근거가 아니다 — 무인 루프는 조용한 게 정상 동작이다. SSOT = 메모리 `feedback_no-autonomous-loop-kill`.
+- 루프 안에서 도는 것은 `/taskflow:tick` 이므로 **머지·push·task Done 은 여전히 안 한다** (tick.md §3 그대로 상속). worktree·gate·dangerous-ops 가드도 각 tick 프로세스에서 정상 작동한다.
+- `--permission-mode acceptEdits` 는 편집 승인만 자동화한다. §3 매칭 조작은 각 hook 이 exit 2 로 차단하므로 이 커맨드가 §3 우회 통로가 되지 않는다.
+
+## 로그
+
+`~/.claude/state/tick-loop.log` 에 append. headless 라 화면 출력이 없어 이 파일이 유일한 추적 수단이다. **회전하지 않으므로** 장기 운용 시 크기를 확인한다.
+
+## SSOT
+
+| 조각 | SSOT |
+|------|------|
+| **러너 본체** | `~/.claude/bin/tick-loop.sh` |
+| iteration 1회분 로직 | `custom-plugin/taskflow/commands/tick.md` |
+| 병렬 상위 (워커 팀) | `custom-plugin/taskflow/commands/tick-team.md` |
+| 대기 큐 소비 | `custom-plugin/taskflow/commands/control.md` |
+| 정지 금지 근거 | 메모리 `feedback_no-autonomous-loop-kill` |
+
+## 호출 예
+
+```
+/taskflow:tick-loop --once      ← 검증: 1회 돌려 permission·모델 확인
+/taskflow:tick-loop 30m         ← 30분 간격 기동
+/taskflow:tick-loop status      ← 살아 있나
+/taskflow:tick-loop stop        ← 정지
+```
+
+## Changelog
+
+- 2026-07-28: 신설 — `/loop` 의 컨텍스트 누적(실측 5.1배) 대안. 매 iteration 새 프로세스 + sonnet + detach
