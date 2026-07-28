@@ -24,6 +24,7 @@ argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명]
               └ 진행 가능 0건 → "없음" 출력 후 종료 (loop 다음 주기)
 2. 분기    : unified Status 판정 (아래 표)
 2-bis 하강 : working-scan 으로 다음 진행 가능한 step(Pending + 선행 Done) 선택
+2-ter 환경 : dev-stack.sh up (검증 환경 보장 — §"dev 스택 보장". 실패 시 NeedsDecision)
 3. step 실행: 개발 → verify(e2e 5점) → review → 그 step 파일에 Status: ReadyToMerge 부착
               (머지 안 함. §계획 인덱스 표 상태도 ReadyToMerge 로 갱신)
               └ P1~P4 권한형/판정 불확실 → unified Status: NeedsDecision + §결정 로그 → 마감
@@ -137,6 +138,23 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 
 > step 분해 없는 경량 unified = unified 전체를 1 진행 단위로 처리하고 완료 시 unified 자체에 `Status: ReadyToMerge`.
 
+## dev 스택 보장 (step 실행 전, 필수)
+
+**step 개발에 착수하기 전에 검증 환경을 먼저 확보한다.**
+
+```bash
+bash ~/.claude/bin/dev-stack.sh up     # idempotent — 이미 떠 있으면 즉시 반환
+```
+
+e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`hongcafe:php8` §e2e 검증), 살아 있는 환경 없이는 verify 가 애초에 완결되지 않는다. 코드를 다 고친 뒤 검증 단계에서 스택이 없다는 걸 발견하면 그 iteration 이 통째로 낭비되므로 **착수 전**에 세운다.
+
+- **`up` 은 병렬에서도 안전하다.** `docker compose up -d` 가 idempotent 라 슬롯 N 개가 동시에 불러도 이미 떠 있으면 아무 일도 일어나지 않는다. 최초 기동만 mkdir 락으로 직렬화된다.
+- **기동 실패 시 그 step 은 `NeedsDecision`** 으로 마감한다 (검증 불가 = 완료 판정 불가). 코드를 고쳐놓고 verify 를 건너뛰는 것보다 낫다.
+- **`down` 은 절대 호출하지 않는다.** 슬롯 하나가 내리면 같은 스택을 쓰는 다른 슬롯의 검증이 깨진다. 내리는 것은 사람이 `dev-stack.sh down` 으로 명시할 때만이다.
+- 대상은 **로컬 docker** 다. EC2 dev 는 공유 자원이라 무인 루프가 건드리지 않는다 (CLAUDE.md §4.3 "서버 우선 디버그" = 사용자 명시 승인 영역).
+
+**`/taskflow:tick-loop` 과 `/taskflow:tick-team` 은 별도 처리가 없다** — 둘 다 결국 tick 을 호출하므로 이 규약을 그대로 상속한다. 세 곳에 각각 넣으면 drift 가 생긴다.
+
 ## 3단계 — 판단 필요 시 문서 기록 후 마감
 
 분류·마감은 **`execute.md` §"결정 escalation ladder" SSOT**. 요지:
@@ -225,6 +243,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | 결정 마감 | escalation ladder P1~P4 / I1~I3 | `execute.md` §"결정 escalation ladder" |
 | step 순차 소비 | step-01~nn 의존 순서 | `execute.md` + `plan.md` §"step 파일 양식" |
 | **step 스캔 + 완료 게이트** | working/ 훑기 · `working_gate_blockers` · **`working_rejections`**(반려 소비 모드 판정) | **`hooks/lib/working-scan.sh`** |
+| **dev 검증 환경** | 로컬 docker 스택 ensure(up) / 헬스체크 / down(사람 전용) | **`~/.claude/bin/dev-stack.sh`** |
 | ReadyToMerge = 비종결 | 자동이동 안 됨 | `hooks/working-lifecycle.sh:54` |
 | step 머지 + 완료 판정 | 사용자 | `custom-plugin/taskflow/commands/save.md` |
 | 대기 큐 리뷰 | step ReadyToMerge + NeedsDecision | `custom-plugin/taskflow/commands/control.md` |
