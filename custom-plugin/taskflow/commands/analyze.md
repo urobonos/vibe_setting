@@ -16,15 +16,29 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 - **등급 비례:** S = ② index 스캔만 / M·L = ①②③ 전수.
 
-## 동작 3단계
+## 동작 4단계
 
 | 단계 | 동작 | 결과 |
 |------|------|------|
 | ① working/ 문서 식별 | 인자 있음 = 파일명 매칭 / 없음 = 가장 최근 working/ 파일 | 대상 파일 경로 |
 | ② 양식 골격 prepend | `~/.claude/skills/task-docs/references/unified-template.md` SSOT 골격 prepend (파일 미존재 시) | `## 분석` 헤더 + 하위 표 |
 | ③ §분석 섹션 채움 | 분석 관점별 요약 / Critical~Low 4분류 / 트레이드오프 / 우선순위 권고 + § 공통 (타당성 검토 / 변경 영향 기록 / 장기 영향 / 재발 방지 / SSOT 일관성) | 분석 체크리스트 = 작업 등급 비례 (§4.3 SSOT) 충족 |
+| ④ Status 마커 부착 | 단독 라인 `Status: Analysis Complete` (아래 §"종료 마커") | tick 이 분석 재실행하지 않고 `/taskflow:plan` 부터 진입 |
 
 > **비필수 사이드이펙트 백로그 격리 (Critical~Low 분류 전 사전 필터):** ③ 에서 발견한 항목이 **① 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급** 3조건을 **모두** 충족하면 Critical~Low 등급 행을 **부여하지 말고** backlog 메모리(`backlog_{slug}.md` + MEMORY.md `## Backlog`)에만 기록 후 현재 분석을 계속한다. 하나라도 불충족 = 정상 4분류. **실제 버그는 경미해도 미루지 않음.** §3 매칭 항목은 사용자 보고. SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
+
+## 종료 마커
+
+```markdown
+Status: Analysis Complete
+```
+
+§분석을 채운 뒤 unified 에 **단독 라인**으로 부착한다 (`Status: Done` 과 동일하게 뒤에 설명·구분자를 붙이지 않는다 — `unified-template.md` §규칙).
+
+- **의미:** 분석 완료 / 계획 미수립. `/taskflow:plan` 이 `Status: Plan Complete` 로 덮어쓴다 (단일 축 — 단계별 필드를 따로 두지 않는다).
+- **소비처:** `/taskflow:tick` 2단계 분기가 이 값을 보고 **분석을 재실행하지 않고 `/taskflow:plan` 부터** 진입한다. `report-work` 는 진행률 30% 로 집계한다.
+- **코드 변경은 여전히 차단** — `gate-enforce.sh` 는 `Plan Complete|In Progress|Done|Partial` 만 통과시킨다 (분석만 끝난 상태에서 코드 mutation 금지, 의도된 제외).
+- **자동 전이(T1∧T2)로 plan 까지 이어가는 경우** 이 마커는 `Plan Complete` 로 즉시 대체되므로 중간 상태로만 남는다.
 
 ## 단계 전이 (→ plan)
 
@@ -83,6 +97,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | `~/.claude/hooks/doc-unified-check.sh V4` L54 | unified 체크리스트 임계 |
 | `~/.claude/hooks/doc-unified-check.sh V6` | 타당성 검토 인용 강제 |
 | **본 파일 §"단계 전이 (→ plan)"** | **순방향 전이 조건 (T1 gate=2 / T2 수정 대상 ≥1) SSOT** — CLAUDE.md·reminder hook 이 참조 |
+| **본 파일 §"종료 마커"** | **`Status: Analysis Complete` 부착 규약 SSOT** — 소비처 = `tick.md` 2단계 분기 / `working-scan.sh` 파싱 / `report-work` 진행률 |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"결정 escalation ladder" | 역방향 분류 판별식 SSOT — 본 슬래시의 짝 (execute 중 결정 막힘 시 L1 재진입 대상) |
 
 ## §3 Checkpoint 우선 적용

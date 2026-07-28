@@ -8,7 +8,9 @@
 - 필요한 섹션만 채울 수 있으나 헤더 자체는 SSOT 골격 그대로 유지 (분석 단독 = `## 계획` / `## 실행` 는 "해당 없음" 1행 허용).
 - 체크리스트 ≥ 50개 (분석 ≥ 20 + 계획 ≥ 15 + 실행 Self-Critique ≥ 15).
 - 완료 마커 = `Status: Done` (시작 라인) + `## Self-Critique` 섹션 동시 존재 → `working-lifecycle.sh` 자동 이동.
+  - **⚠️ Status 는 반드시 단독 라인** — hook 정규식이 `^Status:[[:space:]]*Done[[:space:]]*$` **완전일치**라 `Status: Done — {요약}` 처럼 뒤에 설명·구분자(`—`/`-`)를 붙이면 **매칭 실패 → 자동 이동 안 됨**(조용히 실패, 경고 없음). 요약이 필요하면 **직전 줄에 인용문**(`> 완료 요약: …`)으로 분리하고 `Status: Done` 은 단독으로 둔다. (`상태: 완료` 도 동일 규칙.)
 - 이동 후 `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` 로 영구 보존.
+- **Status 단일 축 (단계별 필드 신설 금지):** `초안` → `Analysis Complete`(analyze) → `Plan Complete`(plan) → `In Progress`(execute) → `NeedsDecision`(판단 대기) → `Done`. 단계마다 별도 필드를 두지 않고 **한 라인을 덮어쓴다** — 두 벌이면 한쪽만 갱신될 때 tick 이 멈추거나 중복 claim 한다. 부착 주체·소비처 = `custom-plugin/taskflow/commands/{analyze,plan,tick}.md`, 파싱 = `hooks/lib/working-scan.sh`. step 평면 파일은 **별도 축**(`상태:` Pending→In Progress→ReadyToMerge→Done, SSOT = `plan.md` §"step 파일 양식").
 
 ## 템플릿
 
@@ -428,8 +430,11 @@
 
 Status: Plan Complete
 
+> 완료 요약: {한 줄 요약 — 요약은 여기 인용문에. 아래 Status 라인엔 붙이지 않는다}
 Status: Done
 ```
+
+> **위 `Status: Done` 은 단독 라인 예시다** — 자동 이동 hook 이 완전일치라 `Status: Done — 요약` 형태는 탈락한다(§규칙 참조). 요약은 직전 인용문(`> 완료 요약: …`)으로 분리한다.
 
 ## 등급별 워크플로우
 
@@ -443,7 +448,7 @@ Status: Done
 
 | 트리거 | 조건 | 발동 시점 |
 |--------|------|---------|
-| 본문 마커 자동 | `^Status:\s*Done` + `## Self-Critique` 동시 존재 | PostToolUse (Edit/Write 직후) |
+| 본문 마커 자동 | `^Status:[[:space:]]*Done[[:space:]]*$` (**완전일치** — 뒤에 설명 부기 시 탈락) + `## Self-Critique` 동시 존재 | PostToolUse (Edit/Write 직후) |
 | 사용자 명시 | `/taskflow:save now` 슬래시 또는 `working-lifecycle.sh` 자연어(`작업 완료` / `tasks 이동` / `done`) 키워드 | UserPromptSubmit |
 
 ## 사후 hook 검증 (tasks/ 직접 Edit/Write 시)
