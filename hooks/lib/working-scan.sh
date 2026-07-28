@@ -70,6 +70,19 @@ working_scan() {
   '
 }
 
+# 미해소 반려 지적 수 — `### 반려 N회` 블록 ~ 다음 `## ` 헤더 전까지의 `- [ ]` 개수.
+#   working_rejections <문서경로>   → 정수 1줄 (0 = 없음 / 파일 없음)
+#
+# 왜 별도 함수인가: step 파일의 완료 게이트(working_gate_blockers)는 `상태:` 만 보고
+#   미체크박스를 보지 않는다(미체크박스 검사 = is_step=0 전용). 그래서 watch 반려 지적은
+#   게이트를 전혀 막지 못하고, 이 축을 보는 주체가 watch(머지 차단)와 tick(반려 소비 모드)
+#   둘뿐이다. 판정식이 두 커맨드 문서에 복붙되면 곧 갈라지므로 여기가 SSOT.
+#   소비처: custom-plugin/taskflow/commands/{watch,tick}.md
+working_rejections() {
+  [ -f "$1" ] || { echo 0; return 0; }
+  awk '/^#+ 반려 [0-9]+회/{inb=1;next} inb && /^## /{inb=0} inb && /^[[:space:]]*- \[ \]/{c++} END{print c+0}' "$1"
+}
+
 # task 완료 게이트 — 특정 task 의 unified + 모든 step 을 스캔해 미해결건을 라인별로 출력.
 # 출력이 있으면(=미해결 존재) 완료(Done) 차단. 출력 0줄 = 게이트 통과.
 #   working_gate_blockers <product> <작업명>

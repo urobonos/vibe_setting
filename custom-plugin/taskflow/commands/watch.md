@@ -208,6 +208,21 @@ working_scan all | awk -F'\t' '$5=="ReadyToMerge" {print $1"\t"$4"\t"$6}'   # �
 
 `ReadyToMerge` 가 아닌 상태(In Progress·NeedsDecision·Pending)는 A 트랙에서 검증·보고만 하고 손대지 않는다.
 
+### 선행 필터 — 미해소 반려가 남은 `ReadyToMerge` 는 머지하지 않는다 (필수)
+
+리뷰를 돌리기 **전에** 거른다. 지난 iteration 이 반려한 지적이 안 지워졌는데 이번 리뷰가 클린으로 나오면 그대로 머지되기 때문이다 (2026-07-28 실측 — `ReadyToMerge` 2건이 각각 미해소 지적 3건을 달고 머지 대기 중이었다).
+
+```bash
+source ~/.claude/hooks/lib/working-scan.sh
+working_rejections "$DOC"          # 미해소 반려 지적 수 (tick 반려 소비 모드와 같은 판정식)
+```
+
+**> 0 이면 리뷰도 머지도 하지 않고 `상태: Pending` 으로 되돌린다** + "반려 미해소 N건 — 재작업 필요" 보고. 리뷰 Agent 를 다시 띄우지 않는 게 핵심이다 — 같은 코드에 같은 지적이 또 나오거나(중복 반려), 리뷰어가 달라져 클린이 나오면(지적 증발) 둘 다 틀린다.
+
+**단 `상태:` 가 `ReadyToMerge` 로 되돌려져 있는 경우**(다른 세션이 반려를 drift 로 오판) 도 같은 처리다. 상태보다 반려 블록이 우선한다.
+
+> 왜 상태가 아니라 체크박스가 근거인가 — `working_gate_blockers` 는 step 파일에서 **`상태:` 만** 본다(미체크박스 검사는 `is_step=0` 전용). 그래서 step 의 반려 체크박스는 완료 게이트를 전혀 막지 못한다. watch 가 이 축을 보는 유일한 주체다.
+
 > **마커(`tick: allow`)를 요구하지 않는다.** 그 화이트리스트는 `/taskflow:tick` 이 **무인으로 아무 task 나 잡지 않게** 하는 장치다. watch 의 해소는 `ReadyToMerge` 라는 상태 자체가 이미 "개발·verify·review 를 통과해 머지만 남았다" 는 명시 신호이므로 별도 게이트를 겹치지 않는다.
 
 | 축 | 검증 결과 | 동작 |
@@ -289,7 +304,22 @@ base 가 확정되면 절차는 `/git:merge` 를 그대로 탄다 (재구현 0).
 
 경량 task 는 unified `Status: In Progress` 로 되돌린다 (unified 에는 `Pending` 이 없다 — tick 2단계 분기표 기준 재진입 상태가 `In Progress`). 이 경우 상태만으로는 게이트가 안 걸리므로 **체크박스를 반드시 남긴다.**
 
-복귀 시 보고에 **그 작업의 cwd** 를 같이 낸다 (REGISTRY entry 의 cwd). 사용자가 바로 그 자리에서 이어받거나, 다음 tick 이 재잡이한다. REGISTRY 는 건드리지 않는다 — 다음 tick 이 `registry_claim` 으로 새로 점유한다.
+복귀 시 보고에 **그 작업의 cwd** 를 같이 낸다 (REGISTRY entry 의 cwd). REGISTRY 는 건드리지 않는다 — 재잡이하는 쪽이 `registry_claim` 으로 새로 점유한다.
+
+**재작업 주체는 마커로 갈린다 — "다음 tick 이 재잡이한다" 고 뭉뚱그려 보고하지 않는다.** watch 는 `tick: allow` 없이도 해소하지만 tick 은 마커 없으면 그 task 를 **영원히 안 잡는다**(`tick.md` §1단계 0 화이트리스트). 실측 보유율 7/26 unified 라 대부분이 여기 걸린다.
+
+```bash
+grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$UNIFIED" && echo tick || echo user
+```
+
+| 마커 | 보고 문구 | 실제 |
+|------|----------|------|
+| 있음 | `↳ 다음 tick 이 반려 소비 모드로 재작업` | tick 이 worktree 재사용해 지적만 처리 |
+| **없음** | `↳ 재작업 필요 (무인 대상 아님 — 사용자 또는 /taskflow:tick {작업명})` | 인자 명시 호출은 마커 면제라 수동 진입은 가능하다 |
+
+**마커를 자동으로 붙이지 않는다.** 무인 허용 범위를 넓히는 건 사용자 결정이다 (§3).
+
+반려된 step 의 wip worktree·커밋은 **그대로 보존한다.** tick 반려 소비 모드가 그 경로를 재사용하므로, `worktree remove`·`branch -D` 는 머지 성공 경로에서만 수행한다.
 
 ## mutation 경계 (필수)
 
@@ -342,6 +372,10 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
 🚫 머지 불가 (상태 유지)
   mirror-sync                          base 후보가 master 뿐 → PR 필요 (§4.3(e))
 
+🔒 반려 미해소 (리뷰 skip)
+  mod-01-join-409-langkey / step-07   ReadyToMerge 인데 지난 반려 3건 미소진 → Pending 복귀
+                                       ↳ 다음 tick 이 반려 소비 모드로 재작업
+
 ❓ 확인 필요
   legacy-cleanup                       사라짐 — tasks/ 에서 못 찾음
   hongcafe_global_backend              커밋 d504e63e→79a79787; 미커밋 0→1건
@@ -358,7 +392,7 @@ A·B 양 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1�
 |------|------|------|
 | **변경 감지** | 스냅샷 diff (A/M/D) — 문서 축 + repo 축 | **`hooks/lib/watch-snapshot.sh`** |
 | 감시 repo 목록 | 사용자 소유 목록 (자동 갱신 안 함) | `~/.claude/state/watch/repos.txt` |
-| working/ 스캔 + 완료 게이트 | `working_scan` · `working_gate_blockers` | `hooks/lib/working-scan.sh` |
+| working/ 스캔 + 완료 게이트 | `working_scan` · `working_gate_blockers` · **`working_rejections`**(미해소 반려 수) | `hooks/lib/working-scan.sh` |
 | 세션 관측 | transcript tail 신호 4개 | `hooks/lib/transcript-tail.py` |
 | 주기 반복 | `/loop <interval> /taskflow:watch` | harness `/loop` 스킬 |
 | **ff머지 절차** | checkout→ff-only→worktree remove→branch -D | **`custom-plugin/git/commands/merge.md`** |
@@ -367,7 +401,7 @@ A·B 양 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1�
 | api-docs 정합 | 3-way 미러 검증 | `hongcafe:mirror-be-claude` (`verify`) |
 | 코드/문서 파일 판정 | `is_hard_code_file` | `hooks/lib/path-utils.sh` |
 | 대기 큐 상세 | NeedsDecision·ReadyToMerge 처리 진입 | `custom-plugin/taskflow/commands/control.md` |
-| 상태 라이프사이클 + Pending 복귀 근거 | Pending→In Progress→ReadyToMerge | `custom-plugin/taskflow/commands/tick.md` |
+| 상태 라이프사이클 + Pending 복귀 근거 | Pending→In Progress→ReadyToMerge · **반려 소비 모드**(worktree 재사용) | `custom-plugin/taskflow/commands/tick.md` (§2-bis 2 · §"step 상태 라이프사이클") |
 | 정지 금지 | loop·cron 임의 종료 차단 | 메모리 `feedback_no-autonomous-loop-kill` |
 
 ## `/taskflow:control` 과의 차이
@@ -389,6 +423,7 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
+- 2026-07-28: **반려 왕복 정합** — (1) 미해소 반려가 남은 `ReadyToMerge` 는 리뷰·머지 skip 후 `Pending` 복귀 (실측 2건이 지적 3건씩 달고 머지 대기 중이었다. step 완료 게이트는 `상태:` 만 보므로 체크박스를 막는 주체가 watch 뿐) (2) 반려 보고를 `tick: allow` 마커로 분기 — 마커 없으면 tick 이 영원히 재잡이하지 않는데 "다음 tick 이 재잡이" 로 보고하던 거짓 약속 제거 (실측 보유 7/26) (3) 반려 step 의 worktree·커밋 보존 명문화 (tick 반려 소비 모드가 재사용)
 - 2026-07-28: repo별 착지 브랜치 정책 (`hongcafe_global_docs` → `working_docs` / `~/.claude` → 현재 브랜치 직접 / 그 외 feature 또는 PR) + cwd 비종속 명문화 (`git -C` 만, `cd` 금지)
 - 2026-07-28: **해소를 diff 에서 분리해 독립 B 트랙으로** — 변경 감지(A)와 상태 기반 해소(B)가 서로 기다리지 않는다. 해소를 A 하위 단계로 뒀더니 `ReadyToMerge` 가 스냅샷에 이미 박혀 있어 diff 0건 → 머지 대상 영구 0건이 됐다 (실측). watch 해소의 무인 허용 마커 요구도 철회 — 그 마커는 tick 전용이다
 - 2026-07-28: 축별 검증(코드=리뷰 / 문서=정합성) + `ReadyToMerge` 자동 해소 — 리뷰 클린이면 ff머지→Done, 지적 ≥1건이면 Pending 복귀. read-only 계약 해제 (mutation 경계 = §"mutation 경계")

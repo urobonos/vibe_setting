@@ -118,9 +118,22 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
    - **우회 (필수):** 앞 step 이 막혀 있어도 **그 step 에 의존하지 않는 독립 step 은 계속 진행**한다 ("앞이 막히면 뒤도 전혀 진행 안 함" 방지). 진행 가능 여부는 전체 순번이 아니라 **직접 의존 선행**만으로 판단한다.
    - **필수 블로커:** 직접 의존 선행이 `NeedsDecision`/`In Progress` 면 그 step 은 **진행 불가** (선행 결과에 실제로 의존하므로).
    - 진행 가능 step **0** → 전부 `ReadyToMerge`/`Done` 이면 **4단계 정지** / 블록(의존 선행 미해결)만 남으면 **task 정지**(사용자 판단 필요).
-2. **착수 표시** — claim 직후 그 step 파일 `상태: Pending → In Progress` + 인덱스 표 갱신 (control·다른 tick 이 "진행 중" 을 봄). 이어서 그 step 을 진행 단위로 `/taskflow:auto` 실행 (execute.md step 순차 소비 재사용).
-3. step DoD 충족 → 그 step 파일 `상태: ReadyToMerge`(머지 준비) + 인덱스 표 갱신 → 다음 step (막히거나 전부 ReadyToMerge 까지). 전이·SSOT = 아래 §"step 상태 라이프사이클".
-4. step 도중 판단 필요 → **3단계 마감** (unified NeedsDecision, 다음 tick 이 그 step 부터 재개).
+2. **착수 전 반려 검사 (필수)** — `Pending` 은 "미착수" 만 뜻하지 않는다. `/taskflow:watch` 가 리뷰 지적으로 반려한 step 도 `Pending` 이라, 구분 없이 `/taskflow:auto` 를 태우면 **이미 커밋된 작업을 백지에서 재수행**한다.
+
+   ```bash
+   source ~/.claude/hooks/lib/working-scan.sh
+   working_rejections "$STEP"        # 미해소 반려 지적 수 (판정식 SSOT = 그 lib)
+   ```
+
+   **> 0 이면 반려 소비 모드**로 진입한다 (신규 개발 아님):
+   - **worktree 를 새로 만들지 않는다.** `## 머지 전 리뷰 포인트` 의 worktree 경로·wip 브랜치를 **재사용**한다 (`auto.md` §worktree 적용 절차 skip). 그 경로가 `git worktree list` 에 없으면 진행하지 말고 보고 — 커밋을 잃은 상태라 판단이 필요하다.
+   - 작업 범위 = **미해소 체크박스 그것뿐**. 해소한 항목은 `- [x]` 로 소진하고 §실행에 대응 커밋을 기록한다.
+   - 전건 소진 후에만 `ReadyToMerge` 재부착. 하나라도 남으면 `Pending` 유지.
+   - 지적이 §3 매칭이거나 계획 자체를 바꾸면 개발하지 말고 `NeedsDecision` 마감 (escalation ladder).
+
+3. **착수 표시** — claim 직후 그 step 파일 `상태: Pending → In Progress` + 인덱스 표 갱신 (control·다른 tick 이 "진행 중" 을 봄). 이어서 그 step 을 진행 단위로 `/taskflow:auto` 실행 (execute.md step 순차 소비 재사용).
+4. step DoD 충족 → 그 step 파일 `상태: ReadyToMerge`(머지 준비) + 인덱스 표 갱신 → 다음 step (막히거나 전부 ReadyToMerge 까지). 전이·SSOT = 아래 §"step 상태 라이프사이클".
+5. step 도중 판단 필요 → **3단계 마감** (unified NeedsDecision, 다음 tick 이 그 step 부터 재개).
 
 > step 분해 없는 경량 unified = unified 전체를 1 진행 단위로 처리하고 완료 시 unified 자체에 `Status: ReadyToMerge`.
 
@@ -182,8 +195,13 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | `In Progress` | tick 이 그 step claim + 착수 | `/taskflow:tick` |
 | `ReadyToMerge` | 개발+verify+review 완료 (머지 준비) | `/taskflow:tick` |
 | `NeedsDecision` | 판단 필요로 마감 (그 step 한정) | `/taskflow:tick` |
-| `Pending` (복귀) | 사용자 결정 입력 → 재잡이 가능 상태로 되돌림 | Claude 본체 (§"결정 수용") |
+| `Pending` (결정 복귀) | 사용자 결정 입력 → 재잡이 가능 상태로 되돌림 | Claude 본체 (§"결정 수용") |
+| **`Pending` (반려 복귀)** | **watch 리뷰 지적 ≥ 1건 → 재작업 대상으로 되돌림** | **`/taskflow:watch`** (§"반려 — Pending 복귀") |
 | `Done` | 사용자가 그 step 머지 | `/taskflow:save` |
+
+> **`Pending` 은 단일 의미가 아니다 — 진입로가 셋이다** (미착수 / 결정 복귀 / 반려 복귀). 상태 값만 보고 "아직 안 한 step" 으로 단정하면 반려 재작업이 신규 개발로 뒤바뀐다. 착수 전에 **반드시** §2-bis 2 의 반려 검사를 돌린다. **상태 축을 늘려 구분하지 않는 이유:** `working_scan` KW 목록·`working_gate_blockers`·control·watch 가 전부 이 어휘를 공유해서, 값 하나 추가가 4곳 동시 개정이 된다. 문서 안 반려 블록으로 판별하는 편이 싸다.
+>
+> **`Pending` 을 drift 로 오판해 되돌리지 않는다.** 2026-07-28 실측 — 다른 세션이 watch 반려를 "동시 저장 역행" 으로 오인해 `ReadyToMerge` 로 복구했고, 그 결과 지적 3건이 미해소인 채 머지 대기 상태가 됐다. 커밋이 실재하고 검증 기록이 온전해도 그건 반려 사유(DoD 밖 신규 지적)와 무관하다. 되돌리기 전 `### 반려 N회` 블록을 먼저 확인한다.
 
 - **동기화:** tick 은 step 파일 `상태:` 변경 시 unified 인덱스 표 상태 컬럼도 같은 값으로 갱신 (불일치 시 step 파일이 우선 — working-scan 이 파일을 읽으므로).
 - **다세션 상보:** step 파일 `상태: In Progress` = 문서 레벨 진행 표시 / REGISTRY active(step slug claim) = 배타 lock. 둘이 함께 control·다른 tick 에 진행 중 step 을 가시화한다.
@@ -206,10 +224,11 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | 실행 관통 | worktree → 개발 → QA → verify → review | `custom-plugin/taskflow/commands/auto.md` |
 | 결정 마감 | escalation ladder P1~P4 / I1~I3 | `execute.md` §"결정 escalation ladder" |
 | step 순차 소비 | step-01~nn 의존 순서 | `execute.md` + `plan.md` §"step 파일 양식" |
-| **step 스캔 + 완료 게이트** | working/ 훑기 · `working_gate_blockers` | **`hooks/lib/working-scan.sh`** |
+| **step 스캔 + 완료 게이트** | working/ 훑기 · `working_gate_blockers` · **`working_rejections`**(반려 소비 모드 판정) | **`hooks/lib/working-scan.sh`** |
 | ReadyToMerge = 비종결 | 자동이동 안 됨 | `hooks/working-lifecycle.sh:54` |
 | step 머지 + 완료 판정 | 사용자 | `custom-plugin/taskflow/commands/save.md` |
 | 대기 큐 리뷰 | step ReadyToMerge + NeedsDecision | `custom-plugin/taskflow/commands/control.md` |
+| **반려 생산** | 리뷰 지적 → `Pending` 복귀 + 반려 블록 append | **`custom-plugin/taskflow/commands/watch.md`** (§"반려 — Pending 복귀") |
 
 ## 호출 예
 
@@ -235,5 +254,6 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 
 ## Changelog
 
+- 2026-07-28: **반려 소비 모드 (2-bis 2)** — `Pending` 진입로가 셋(미착수/결정 복귀/**watch 반려**)인데 라이프사이클 표에 반려가 없어, tick 이 반려 step 을 미착수로 읽고 `/taskflow:auto` 를 태우면 새 wip 브랜치를 파 **이미 커밋된 작업을 백지 재수행**했다. 착수 전 반려 블록 검사 → worktree 재사용 + 지적만 처리. 상태 값은 늘리지 않는다(4곳 동시 개정 회피)
 - 2026-07-28: **무인 허용 마커 화이트리스트 (0단계)** — unified frontmatter `tick: allow` 가 있는 task 만 무인 자동 선택 대상. 인자 명시 호출은 면제. `/taskflow:watch` 해소 게이트도 같은 마커 공유. 마커 조작 = `allow`/`deny` 서브명령
 - 2026-07-23: 신설 → step 단위 ReadyToMerge + 완료 게이트 재설계
