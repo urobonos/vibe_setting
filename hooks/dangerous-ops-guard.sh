@@ -165,18 +165,71 @@ fi
 
 # ===== Checkpoint 경고 (exit 0) =====
 
-# SSM send-command
+# SSM send-command — 조회계/변경계 분류 (2026-07-29)
+#
+# 무인 tick 이 조회계 SSM 을 승인 대기 없이 돌 수 있게 "조회냐 변경이냐"를 여기서 판정한다.
+# 산문 룰로 두면 판정 주체가 Claude 자신이라 안전장치가 아니다 — send-command 는 임의 셸이고
+# `grep x y` 와 `grep x y; rm -rf /` 가 같은 명령 형태로 들어온다.
+#
+# 판정 결과:
+#   readonly → [SSM-READONLY-OK] — tick 무인 실행 허용 (사용자 승인 불요)
+#   review   → 기존 Checkpoint 경고 — 사용자 승인 후 Claude 직접 실행
+#
+# exit 2 로 올리지 않는 이유: §4.2 "exit 0 경고 = 승인 후 직접 실행 신호" 계약을 깨면
+#   사용자가 이미 승인한 변경계 명령까지 hook 이 막아 기존 흐름이 죽는다. 본 분기는
+#   차단 강화가 아니라 조회계 라벨링이다.
+#
+# env 판정을 인스턴스 ID 로 안 하는 이유 (2026-07-29 실측): 리전당 SSM 인스턴스가 1대뿐이고
+#   (us-east-1 i-0183f9ab360cc9d80 / ap-northeast-1 i-00e741e10d528c7e5) 그 한 대가
+#   prd/dev/stg 를 함께 호스팅한다(env 구분 = /works/hongcafe-global/{env}/be 경로).
+#   인스턴스로는 env 를 못 가르므로 명령 본문의 prd 마커를 배제하는 쪽으로 간다.
+#
+# 판정 불가 = review (fail-closed).
 if [[ "$COMMAND" =~ aws[[:space:]]+ssm[[:space:]]+send-command ]]; then
-  echo ""
-  echo "━━━ CHECKPOINT: 프로덕션 서버 원격 명령 감지 ━━━"
-  echo "명령: $COMMAND"
-  echo ""
-  echo "프로덕션 서버에 명령을 전송합니다."
-  echo "반드시 사용자에게 다음을 확인받으세요:"
-  echo "  1. 실행할 명령의 정확한 내용"
-  echo "  2. 서비스 영향 범위"
-  echo "  3. 롤백 방법"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  SSM_VERDICT="review"
+
+  if [[ "$COMMAND" == *"commands="* ]]; then
+    SSM_PAYLOAD="${COMMAND#*commands=}"
+    # commands=["a","b"] 의 배열 안쪽만 — 뒤따르는 --region 등 플래그가 세그먼트로 새지 않게
+    SSM_PAYLOAD="${SSM_PAYLOAD#*[}"
+    SSM_PAYLOAD="${SSM_PAYLOAD%%]*}"
+    SSM_LOWER=$(printf '%s' "$SSM_PAYLOAD" | tr '[:upper:]' '[:lower:]')
+
+    # 탈락 조건: prd 마커 / 셸 체이닝 / 리다이렉트 / 명령치환
+    #   체이닝(; && || &)을 막아야 파이프 세그먼트 검사가 의미를 갖는다 (뒤에 변경계를 못 붙임)
+    if [[ "$SSM_LOWER" != *"/prd/"* && "$SSM_LOWER" != *"prd_"* && "$SSM_LOWER" != *"_prd"* \
+       && "$SSM_PAYLOAD" != *";"*  && "$SSM_PAYLOAD" != *"&"*   && "$SSM_PAYLOAD" != *">"* \
+       && "$SSM_PAYLOAD" != *'`'*  && "$SSM_PAYLOAD" != *'$('* ]]; then
+      SSM_VERDICT="readonly"
+      # 배열 원소(",")와 파이프(|)로 쪼개 각 세그먼트의 첫 명령을 화이트리스트에 대조
+      while IFS= read -r seg; do
+        [ -z "$seg" ] && continue
+        if   [[ "$seg" =~ ^(tail|grep|cat|ls|printenv)([[:space:]]|$) ]]; then :
+        elif [[ "$seg" =~ ^systemctl[[:space:]]+status([[:space:]]|$) ]]; then :
+        elif [[ "$seg" =~ ^git[[:space:]]+(log|status|diff)([[:space:]]|$) ]]; then :
+        else SSM_VERDICT="review"; break
+        fi
+      done <<< "$(printf '%s' "$SSM_PAYLOAD" | sed 's/","/\n/g' | tr '|' '\n' \
+                   | sed 's/^[]["'"'"' ]*//; s/[]["'"'"' ]*$//')"
+    fi
+  fi
+
+  if [ "$SSM_VERDICT" = "readonly" ]; then
+    echo "[SSM-READONLY-OK] 조회계 SSM 판정 — 무인(tick) 실행 허용, 사용자 승인 불요."
+    echo "  화이트리스트: tail/grep/cat/ls/printenv · systemctl status · git log|status|diff"
+    echo "  (prd 마커·체이닝·리다이렉트·명령치환 부재 확인됨)"
+  else
+    echo ""
+    echo "━━━ CHECKPOINT: 프로덕션 서버 원격 명령 감지 ━━━"
+    echo "명령: $COMMAND"
+    echo ""
+    echo "조회계 화이트리스트 비해당 (변경계 또는 판정 불가 = fail-closed)."
+    echo "반드시 사용자에게 다음을 확인받으세요:"
+    echo "  1. 실행할 명령의 정확한 내용"
+    echo "  2. 서비스 영향 범위"
+    echo "  3. 롤백 방법"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  fi
 fi
 
 # php spark migrate

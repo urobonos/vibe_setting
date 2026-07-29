@@ -180,17 +180,28 @@ frontmatter `triggers` 매칭 시 즉시 호출. 모호한 경우 한 줄 확인
 
 | 조건 | 본 스킬 매칭 |
 |------|---------|
-| 비가역적 작업 | SSM send-command (서버 명령 실행) / sync (로컬 commit) — 사용자 명시 |
+| 비가역적 작업 | SSM send-command **변경계** (서버 명령 실행) / sync (로컬 commit) — 사용자 명시 |
 | 광범위 영향 | 다중 인스턴스 send-command — 사용자 명시 |
-| 외부 시스템 연동 | aws ssm API 호출 = §3 매칭 — 사용자 명시 (aws skill §"실행 주체" 정합) |
+| 외부 시스템 연동 | aws ssm API 호출 = §3 매칭 — 사용자 명시 (aws skill §"실행 주체" 정합). **조회계 예외는 아래 참조** |
 | 권한 외 파일 접근 | 서버 `/etc/`·`.env` 접근 시 사용자 명시 |
 
 **§3 우선 적용 - 모드별 자동화 수준:**
 - `connect` 조회계 (describe/get-command-invocation) = 자동
+- `connect` **send-command 조회계** (아래 §"조회계 send-command 자동 판정") = 자동
 - `connect` 변경계 (send-command) = 사용자 명시 후 Claude 직접
 - `verify` curl 200 OK (조회) = 자동
 - `verify` write (POST/PUT/DELETE) = 사용자 명시
 - `sync` = 100% 사용자 명시
+
+### 조회계 send-command 자동 판정 (2026-07-29~)
+
+무인 `/taskflow:tick` 이 서버 조회로 검증을 완결할 수 있게, `send-command` 를 **조회계/변경계로 기계 판정**한다. 판정 주체는 Claude 가 아니라 `hooks/dangerous-ops-guard.sh` 다 — 산문 룰로 두면 판정자가 자기 자신이라 안전장치가 못 된다 (`grep x y` 와 `grep x y; rm -rf /` 는 같은 명령 형태로 들어온다).
+
+- **조회계 판정 시** `[SSM-READONLY-OK]` 출력 → 사용자 승인 없이 Claude 직접 실행.
+- **그 외 전부** 기존 Checkpoint 경고 → 사용자 명시 승인 후 실행. **판정 불가도 여기로 (fail-closed).**
+- 화이트리스트·탈락 조건(prd 마커·체이닝·리다이렉트·명령치환)의 **SSOT = `hooks/dangerous-ops-guard.sh` §"SSM send-command"**. 여기 복붙하지 않는다 (drift 방지).
+- **인스턴스로 env 를 가르지 않는다** — 2026-07-29 실측상 리전당 SSM 인스턴스가 1대뿐이고(us-east-1 `i-0183f9ab360cc9d80` / ap-northeast-1 `i-00e741e10d528c7e5`) 그 한 대가 prd/dev/stg 를 함께 호스팅한다(env = `/works/hongcafe-global/{env}/be` 경로). 그래서 명령 본문의 prd 마커를 배제하는 방식이다.
+- **잔여 위험 (명시):** 하니스 내장 classifier 는 이 hook 과 별개로 동작하므로 조회계라도 내용에 따라 차단될 수 있다. 또한 env 무관 시스템 조회(`systemctl status`·`tail /var/log/nginx/*`)는 prd 마커가 없어 통과하지만 실제로는 공용 인프라를 본다.
 
 ---
 

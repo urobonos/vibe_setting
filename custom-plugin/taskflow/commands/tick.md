@@ -79,7 +79,7 @@ working_scan all | awk -F'\t' -v t="$TASK" '$4==t && $6==0 {print $1}'   # unifi
 - **0건 매칭**이면 오타 가능성을 보고하고 정지한다 (working/ 에 없는 작업명).
 - 인자 없는 조회는 허용 목록 + `working/` 전체 건수를 같이 낸다 (몇 건 중 몇 건이 무인 대상인지가 실질 정보다).
 
-1. `working_scan all`(cwd 무관 — cwd product 0건이어도 타 product 진행) → **0단계 통과분에 한해** 진행 가능 후보 산출:
+1. `working_scan all 5`(cwd 무관 — cwd product 0건이어도 타 product 진행. **`min_age_min=5`** — 최종 수정 5분 이내 문서는 후보에서 제외, 방금 다른 세션이 저장한 문서를 바로 채가는 경합 방지) → **0단계 통과분에 한해** 진행 가능 후보 산출:
    - **평면(step 분해) task** = 다음 진행 가능 step(2-bis 의존 판정) → claim 단위 = **step slug** `{작업명}-step-NN`.
    - **통(경량·step 없음) task** = unified 전체 → claim 단위 = **task slug** `{작업명}`.
 2. 배타 claim — `registry_claim`(lock 안에서 확인+add 원자 수행, TOCTOU race 차단 — 병렬 워커 필수):
@@ -115,7 +115,7 @@ working_scan all | awk -F'\t' -v t="$TASK" '$4==t && $6==0 {print $1}'   # unifi
 
 unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가 아니라 **step 파일 단위**로 진행한다.
 
-1. `hooks/lib/working-scan.sh` 의 `working_scan {product}` 로 step 상태를 읽어 **다음 진행 가능한 step** 선택 — 인덱스 표 `Pending` + **그 step 의 직접 의존 선행(인덱스 표 '의존' 컬럼)이 전부 완료(`ReadyToMerge`/`Done`)**.
+1. `hooks/lib/working-scan.sh` 의 `working_scan {product} 5` 로 step 상태를 읽어 **다음 진행 가능한 step** 선택 — 인덱스 표 `Pending` + **그 step 의 직접 의존 선행(인덱스 표 '의존' 컬럼)이 전부 완료(`ReadyToMerge`/`Done`)**. **5분 이내 수정된 step 은 후보 제외** (0단계와 같은 경합 방지 — 방금 다른 세션이 만지던 step 을 바로 이어받지 않는다).
    - **우회 (필수):** 앞 step 이 막혀 있어도 **그 step 에 의존하지 않는 독립 step 은 계속 진행**한다 ("앞이 막히면 뒤도 전혀 진행 안 함" 방지). 진행 가능 여부는 전체 순번이 아니라 **직접 의존 선행**만으로 판단한다.
    - **필수 블로커:** 직접 의존 선행이 `NeedsDecision`/`In Progress` 면 그 step 은 **진행 불가** (선행 결과에 실제로 의존하므로).
    - 진행 가능 step **0** → 전부 `ReadyToMerge`/`Done` 이면 **4단계 정지** / 블록(의존 선행 미해결)만 남으면 **task 정지**(사용자 판단 필요).
@@ -144,7 +144,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 
 | 축 | 무엇이 결정하나 |
 |----|----------------|
-| 문서 스캔 | `working_scan all` — 전 product (cwd 미참조) |
+| 문서 스캔 | `working_scan all 5` — 전 product (cwd 미참조), 5분 이내 수정분 제외 |
 | **작업 repo** | **claim 한 step 의 product** (cwd 아님) |
 | worktree 생성 | 그 product repo 에서 `git -C {repo} worktree add` |
 
@@ -165,7 +165,9 @@ e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`hongcafe:ph
 - **`up` 은 병렬에서도 안전하다.** `docker compose up -d` 가 idempotent 라 슬롯 N 개가 동시에 불러도 이미 떠 있으면 아무 일도 일어나지 않는다. 최초 기동만 mkdir 락으로 직렬화된다.
 - **기동 실패 시 그 step 은 `NeedsDecision`** 으로 마감한다 (검증 불가 = 완료 판정 불가). 코드를 고쳐놓고 verify 를 건너뛰는 것보다 낫다.
 - **`down` 은 절대 호출하지 않는다.** 슬롯 하나가 내리면 같은 스택을 쓰는 다른 슬롯의 검증이 깨진다. 내리는 것은 사람이 `dev-stack.sh down` 으로 명시할 때만이다.
-- 대상은 **로컬 docker** 다. EC2 dev 는 공유 자원이라 무인 루프가 건드리지 않는다 (CLAUDE.md §4.3 "서버 우선 디버그" = 사용자 명시 승인 영역).
+- 스택 기동 대상은 **로컬 docker** 다. EC2 는 무인 루프가 **기동·변경하지 않는다** (CLAUDE.md §4.3 "서버 우선 디버그" = 사용자 명시 승인 영역).
+
+**단 EC2 조회는 허용된다 (2026-07-29~).** verify 단계에서 서버 상태 확인이 필요하면 `aws ssm send-command` 로 **조회계 명령**을 승인 없이 실행할 수 있다 — `hooks/dangerous-ops-guard.sh` 가 조회계로 판정하면 `[SSM-READONLY-OK]` 를 낸다. 변경계·판정 불가는 그대로 사용자 승인 대기(`NeedsDecision` 마감)다. 판정식 SSOT = 그 hook + `hongcafe:prod-debug` §"조회계 send-command 자동 판정". **서버 수정은 여전히 금지** — 무인 루프는 읽기만 한다.
 
 **`/taskflow:tick-loop` 과 `/taskflow:tick-team` 은 별도 처리가 없다** — 둘 다 결국 tick 을 호출하므로 이 규약을 그대로 상속한다. 세 곳에 각각 넣으면 drift 가 생긴다.
 
@@ -287,6 +289,8 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 
 ## Changelog
 
+- 2026-07-29: **EC2 조회계 SSM 허용** — verify 에서 `send-command` 조회계(hook 기계 판정 `[SSM-READONLY-OK]`)를 승인 없이 실행. 변경계·판정 불가는 fail-closed 로 사용자 승인 유지. "무인 루프는 EC2 를 안 건드린다" 를 "기동·변경 안 함 / 조회는 함" 으로 좁혔다. SSOT = `dangerous-ops-guard.sh` + `prod-debug` SKILL
+- 2026-07-28: **신선도 필터 (5분)** — claim 후보 산출 시 `working_scan {product|all} 5` 로 호출, 최종 수정 5분 이내 문서/step 은 후보에서 제외. 방금 다른 세션이 저장한 문서를 무인이 바로 채가는 경합 완화. `working_gate_blockers`(완료 게이트)는 최신 상태를 봐야 하므로 필터 미적용
 - 2026-07-28: **반려 소비 모드 (2-bis 2)** — `Pending` 진입로가 셋(미착수/결정 복귀/**watch 반려**)인데 라이프사이클 표에 반려가 없어, tick 이 반려 step 을 미착수로 읽고 `/taskflow:auto` 를 태우면 새 wip 브랜치를 파 **이미 커밋된 작업을 백지 재수행**했다. 착수 전 반려 블록 검사 → worktree 재사용 + 지적만 처리. 상태 값은 늘리지 않는다(4곳 동시 개정 회피)
 - 2026-07-28: **무인 허용 마커 화이트리스트 (0단계)** — unified frontmatter `tick: allow` 가 있는 task 만 무인 자동 선택 대상. 인자 명시 호출은 면제. `/taskflow:watch` 해소 게이트도 같은 마커 공유. 마커 조작 = `allow`/`deny` 서브명령
 - 2026-07-23: 신설 → step 단위 ReadyToMerge + 완료 게이트 재설계
