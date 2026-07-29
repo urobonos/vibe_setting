@@ -1,5 +1,5 @@
 ---
-description: 태스크 감시 루프 1-iteration — working/ 문서를 스냅샷 대비 diff 해서 **변경분만** 검증한다. 코드 작업이면 코드리뷰, 문서 작업이면 정합성 검증. `ReadyToMerge` 는 리뷰가 클린이면 ff머지로 해소하고, 지적이 있으면 `Pending` 복귀시켜 재작업 대상으로 되돌린다. 변경 없으면 1줄로 종료(no-op). `/loop 5m /taskflow:watch` 로 무인 반복. 짝 = `/taskflow:control`(대기 큐) · `/taskflow:tick`(생산)
+description: 태스크 감시 루프 1-iteration — working/ 문서를 스냅샷 대비 diff 해서 **변경분만** 검증한다. 코드 작업이면 코드리뷰, 문서 작업이면 정합성 검증. `ReadyToMerge` 는 리뷰가 클린이면 ff머지로 해소하고, 지적이 있으면 `Pending` 복귀시켜 재작업 대상으로 되돌린다. **1시간 이상 무진행인 문서는 tick 이 왜 못 잡는지 게이트를 특정해 병목을 제거한다** — 죽은 `active` claim 해제 · step `In Progress` → `Pending` 복귀 (사용자 판단 대기건은 제외). 변경 없으면 1줄로 종료(no-op). `/loop 5m /taskflow:watch` 로 무인 반복. 짝 = `/taskflow:control`(대기 큐) · `/taskflow:tick`(생산)
 allowed-tools: Bash, Read, Glob, Grep, Skill, Edit, Agent
 argument-hint: "[product|all — 생략 시 all. `sessions` = 다른 세션 진행 관측]"
 ---
@@ -12,12 +12,12 @@ argument-hint: "[product|all — 생략 시 all. `sessions` = 다른 세션 진�
 
 ## 1-iteration 흐름
 
-**두 트랙이 독립으로 돈다.** 변경 감지(A)와 머지 해소(B)는 서로의 결과를 기다리지 않는다.
+**세 트랙이 독립으로 돈다.** 변경 감지(A)·머지 해소(B)·정체 해소(C)는 서로의 결과를 기다리지 않는다.
 
 ```
 A. 변경 트랙 (diff 기반)
   A1. diff   : watch_diff {scope} → A(신규) / M(상태·내용 변경) / D(사라짐)
-               └ 0건 → 이 트랙만 skip (B 는 계속 — 종료하지 않는다)
+               └ 0건 → 이 트랙만 skip (B·C 는 계속 — 종료하지 않는다)
   A2. 분류   : 변경 항목마다 코드 축 / 문서 축 판별 (§"코드·문서 판별")
   A3. 검증   : 상태 전이·완료 게이트 공통 + 축별 —
                코드 축 → 변경분 코드리뷰 Agent / 문서 축 → 정합성 검증
@@ -27,14 +27,22 @@ B. 해소 트랙 (상태 기반 — diff 와 무관하게 매 iteration 실행)
   B2. 리뷰   : 코드 축 → 변경분 리뷰 / 문서 축 → 정합성 검증
   B3. 해소   : 지적 0건 → ff머지 + Done / 지적 1건 이상 → Pending 복귀
 
-C. 보고 + commit
-  C1. 보고   : 문제 있는 것만. 양 트랙 모두 조용하면 "변동 없음"
-  C2. commit : watch_commit {scope} — A·B 를 마친 뒤에만 스냅샷 확정
+C. 정체 트랙 (경과 기반 — 1시간 무진행. diff·상태 어느 쪽도 안 잡는 축)
+  C1. 수집   : working_stalled {scope} → 결정 대기·종결·ReadyToMerge 제외 후보
+  C2. 병목   : tick claim 게이트를 순서대로 물어 **첫 실패 게이트** 특정 (G1~G4 / OK)
+  C3. 해소   : G3-orphan → registry_mark_stale · G4 → step `Pending` 복귀
+               G1·G2 = 사용자 영역 보고 / OK = 병목 없음(루프 미가동) 1줄 집계
+
+D. 보고 + commit
+  D1. 보고   : 문제 있는 것만. 세 트랙 모두 조용하면 "변동 없음"
+  D2. commit : watch_commit {scope} — A·B·C 를 마친 뒤에만 스냅샷 확정
 ```
 
 **B 를 A 에 종속시키면 안 된다.** `ReadyToMerge` 문서는 이미 그 상태로 스냅샷에 박혀 있어 `M` 으로 잡히지 않는다 — B 가 A1 뒤에 오면 머지 대상이 **영원히 0건**이 된다 (2026-07-28 실측: diff 0건인데 미해소 ReadyToMerge 2건 방치). 사용자 요구는 "**상태가** ReadyToMerge 면 해소" 지 "ReadyToMerge 로 **바뀌면** 해소" 가 아니다.
 
-**C2 순서도 중요하다.** 검증 전에 스냅샷을 갱신하면 그 변경분은 영영 A 트랙 대상에서 빠진다.
+**C 도 같은 이유로 독립이다.** 정체는 정의상 **아무 변화가 없는 상태**라 A 의 diff 에는 영원히 안 걸리고, 상태가 `ReadyToMerge` 도 아니라 B 도 안 본다. 두 트랙 모두의 사각지대다.
+
+**D2 순서도 중요하다.** 검증 전에 스냅샷을 갱신하면 그 변경분은 영영 A 트랙 대상에서 빠진다.
 
 ## cwd 에 국한되지 않는다 (필수)
 
@@ -57,9 +65,31 @@ source ~/.claude/hooks/lib/working-scan.sh
 source ~/.claude/hooks/lib/watch-snapshot.sh
 
 watch_diff "${1:-all}"        # 변경분만 — 스냅샷은 안 건드림
-# … 검증 후 …
+
+# 문서에 쓰기를 하기 직전에만 그 문서를 잠근다 (B 트랙 해소 / C 트랙 G4)
+for DOC in $대상; do
+  watch_doc_lock_acquire "$DOC" || { echo "  ↳ 타 인스턴스 처리 중 — 이 문서만 skip"; continue; }
+  # … 리뷰·머지·상태 전이 …
+  watch_doc_lock_release "$DOC"
+done
+
 watch_commit "${1:-all}"      # 스냅샷 확정
 ```
+
+### 문서 단위 lock (필수)
+
+**인스턴스를 통째로 직렬화하지 않는다.** 그러면 서로 다른 문서를 보는 watch 까지 막혀서, 대기 물량이 쌓여도 한 번에 하나씩밖에 못 푼다. 잠그는 단위는 **watch 가 쓰기를 하는 문서**다.
+
+두 세션이 `/loop 5m /taskflow:watch` 를 동시에 돌릴 때 같은 문서를 양쪽이 처리하면 깨진다 — **B 트랙의 ff머지 → `worktree remove` → `branch -D` 가 멱등이 아니라서** 두 번째가 이미 지워진 worktree·브랜치를 건드리거나, 한쪽 머지 도중 다른 쪽이 worktree 를 지운다. (C 트랙 조치는 상태 플립·`mark_stale` 이라 멱등이지만 같은 lock 을 쓰는 편이 단순하다.)
+
+- **`registry_claim` 을 쓰지 않는다.** 그건 tick 의 점유를 뺏어 정작 일할 주체를 막는다. lock 은 watch 전용 공간(`state/watch/locks/`)이라 tick 과 무관하다.
+- **못 잡으면 그 문서만 건너뛴다** — 대기하지 않는다. 한 문서 때문에 나머지를 세울 이유가 없다.
+- lock 키 = **문서 경로**(파일명 안전하게 sanitize). `mkdir` 의 원자성 + mtime TTL stale 회수(`WATCH_LOCK_TTL_MIN`, 기본 30분) — `registry_lock_acquire` 와 같은 형태다. acquire 후 프로세스가 죽으면 그 문서가 영구히 잠기므로 회수가 필요하다.
+- **쓰기 직전에 잡고 끝나면 바로 푼다.** iteration 전체를 감싸지 않는다 — 읽기만 하는 문서까지 잠그면 통째 lock 과 다를 게 없어진다.
+
+> **처리 중 문서는 스냅샷에서 이전 값으로 유지된다.** 통째 lock 을 없애면 인스턴스 A 가 검증 중인 문서를 B 가 `watch_commit` 으로 확정해버려 A 의 변경분이 영영 diff 에서 빠지는 사고가 가능하다(§"D2 순서" 와 같은 종류). `watch_scan_now` 가 lock 걸린 문서를 **신선한 문서와 같게** 다뤄 이전 스냅샷 값을 내보내는 것으로 막는다 — 신선도 필터의 값-유지 경로를 그대로 재사용하고 새 장치를 만들지 않는다.
+>
+> `watch_commit` 의 tmp 파일명에는 PID 가 붙는다. 동시 도달이 가능해진 뒤로 고정 이름이면 서로의 쓰기를 덮어써 스냅샷이 깨진다.
 
 스냅샷 = `~/.claude/state/watch/{scope}.tsv` — 문서 행(path/mtime/size/status) + **repo 행**(`repo:{경로}`/HEAD/미커밋수/브랜치). **scratchpad 가 아니라 state/** 에 둔다 — 세션이 죽어도 남아야 다음 세션 loop 가 이어서 diff 한다.
 
@@ -306,7 +336,9 @@ base 가 확정되면 절차는 `/git:merge` 를 그대로 탄다 (재구현 0).
 
 경량 task 는 unified `Status: In Progress` 로 되돌린다 (unified 에는 `Pending` 이 없다 — tick 2단계 분기표 기준 재진입 상태가 `In Progress`). 이 경우 상태만으로는 게이트가 안 걸리므로 **체크박스를 반드시 남긴다.**
 
-복귀 시 보고에 **그 작업의 cwd** 를 같이 낸다 (REGISTRY entry 의 cwd). REGISTRY 는 건드리지 않는다 — 재잡이하는 쪽이 `registry_claim` 으로 새로 점유한다.
+복귀 시 보고에 **그 작업의 cwd** 를 같이 낸다 (REGISTRY entry 의 cwd). **B 트랙은 REGISTRY 를 건드리지 않는다** — 재잡이하는 쪽이 `registry_claim` 으로 새로 점유하면 그만이다.
+
+> **C 트랙 G3 만 예외다.** 거기서는 `active` entry 자체가 `TAKEN` 을 반환해 **재잡이를 영구히 막는** 상태라, 손대지 않으면 아무도 못 잡는다. B 의 `paused`·`none` 은 claim 을 막지 않으므로 그 예외가 필요 없다 (`registry-utils.sh:169`).
 
 **재작업 주체는 마커로 갈린다 — "다음 tick 이 재잡이한다" 고 뭉뚱그려 보고하지 않는다.** watch 는 `tick: allow` 없이도 해소하지만 tick 은 마커 없으면 그 task 를 **영원히 안 잡는다**(`tick.md` §1단계 0 화이트리스트). 실측 보유율 7/26 unified 라 대부분이 여기 걸린다.
 
@@ -323,12 +355,99 @@ grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$UNIFIED" && echo tick || 
 
 반려된 step 의 wip worktree·커밋은 **그대로 보존한다.** tick 반려 소비 모드가 그 경로를 재사용하므로, `worktree remove`·`branch -D` 는 머지 성공 경로에서만 수행한다.
 
+## C 트랙 — 정체 해소 (1시간 무진행)
+
+**A 도 B 도 못 보는 사각지대를 메운다.** 정체는 아무것도 안 바뀐 상태라 diff(A)에 안 걸리고, `ReadyToMerge` 가 아니라 B 도 안 본다. 그대로 두면 문서가 몇 날이고 방치된다 — 2026-07-29 실측에서 `be-fe-full-qa` step 2건이 **5.8일**, `mod-04-chatconnect-…-hermes` step 이 **25시간** 멈춰 있었다.
+
+```bash
+source ~/.claude/hooks/lib/working-scan.sh
+working_stalled "${1:-all}"        # 기본 1시간(WORKING_STALL_SEC=3600)
+# 출력(9열): 경과분 \t status \t is_step \t claim \t gate \t 처리 \t product \t 작업명 \t 경로
+#   처리 = stale(claim 해제) / pending(상태 복귀) / report(보고) / none(손대지 않음)
+```
+
+**빈 필드가 없다는 게 계약이다.** `IFS=$'\t' read` 는 탭이 IFS 공백류라 **연속 탭을 하나로 합친다** — 빈 칸 하나가 뒤 필드를 통째로 밀어버린다. 실측에서 `claim_sid` 가 비자 `task` 가 밀려 비었고, 그 빈 값으로 unified 를 조회하니 **전건이 "마커 없음"(G1)으로 오판**됐다. 없는 값은 `-` 로 채운다.
+
+### 왜 멈추는가 — 근본 원인 (실측 규명)
+
+**`working-release.sh`(Stop hook)는 REGISTRY 만 `paused` 로 풀고 문서의 `상태:` 는 건드리지 않는다.** 그래서 세션이 끝날 때 step 이 `In Progress` 였으면 문서는 영원히 `In Progress` 로 남는데, tick 의 진행 가능 조건은 **`Pending` + 선행 완료**(`tick.md` §2-bis)라 그 step 을 **다시는 잡지 않는다**.
+
+2026-07-29 실측이 정확히 그 모습이다 — REGISTRY `active` **0건**인데 문서 `In Progress` **5건**. 아무도 진행하지 않는데 문서만 진행 중이라고 말하고 있었다.
+
+> **Stop hook 을 고치는 것으로는 부족하다.** 세션이 crash·kill 로 죽으면 Stop 자체가 안 돈다. 그래서 해소 주체는 사후 관측자인 watch 여야 한다. Stop hook 쪽 보강은 별건이라 이번 범위에 넣지 않았다 (§0-3 수술적 변경).
+
+### 대상에서 빠지는 것 (필수)
+
+판정은 `working_stalled` 가 SSOT 다. 여기 복붙하지 않는다.
+
+- **사용자 판단 대기 = 제외** — 문서 `상태: NeedsDecision` **과** REGISTRY `claim=needs-decision` **두 축 모두**. 상태 축만 보면 실측 2건(문서 `Pending` ↔ claim `needs-decision`)을 정체로 오분류해 건드리게 된다.
+- **종결·사용자 마감 = 제외** — `Done`/`완료`/`폐기`/`Abandoned`/`Partial`. step `Done` 은 task 종결을 기다리는 정상 상태지 정체가 아니다.
+- **`ReadyToMerge` = 제외** — B 트랙 소관. 여기서도 잡으면 매 iteration 중복 보고된다.
+
+이 제외가 없으면 실측 `Done` 32 + `Partial` 8 + `NeedsDecision` 5 = **45건**이 매번 정체로 잡혀 노이즈가 신호를 덮는다.
+
+### 정체를 나열하지 않는다 — 병목을 특정한다 (핵심)
+
+"1시간 안 움직였다" 는 것만으로는 할 일이 안 나온다. 물어야 할 것은 **"지금 tick 이 이걸 잡을 수 있나, 없다면 무엇이 막나"** 다. 그래서 `working_stalled` 는 tick 의 claim 게이트를 순서대로 물어 **첫 실패 게이트**를 낸다.
+
+| 게이트 | 막는 것 | 처리 |
+|--------|--------|------|
+| **G1 마커** | `tick: allow` 없음 → tick 화이트리스트 밖 | `report` — 자동 부착 금지(§3) |
+| **G2 사용자** | unified 가 `NeedsDecision`/`Done` → tick 2단계에서 task 통째 skip | `report` — 사용자 영역 |
+| **G3 claim** | REGISTRY `active` → `registry_claim` 이 `TAKEN` 반환 | 세션 생존 시 `none`(진행 중) / **죽었으면 `stale`** |
+| **G4 상태** | step 이 `Pending` 이 아님 → tick 진행 조건 밖 | **`pending` 복귀** |
+| **OK** | 아무것도 안 막음 | `none` — **병목 없음. 루프가 안 돌 뿐** |
+
+**`OK` 를 정체로 보고하지 않는 게 중요하다.** 2026-07-29 실측 13건 중 **11건이 OK** 였다 — tick 이 지금도 잡을 수 있는데 도는 tick 이 없었을 뿐이다. 그건 watch 가 제거할 병목이 아니라 가동 상태 보고다. 이걸 "정체 11건" 으로 내면 매 iteration 같은 목록이 반복돼 진짜 병목 2건이 묻힌다.
+
+**게이트 순서가 오조작을 막는다.** 같은 실측에서 `mod-04-chatconnect…step-04` 는 step 이 `In Progress`(G4 처럼 보임)였지만 **unified 가 `NeedsDecision`** 이라 G2 에서 걸렸다. G4 를 먼저 봤으면 사용자 결정 대기 중인 task 의 step 을 건드릴 뻔했다.
+
+### G3 — `active` orphan (claim 이 영구히 물려 있는 경우)
+
+`registry_claim` 은 **`$7=="active"` 일 때만** `TAKEN` 을 반환한다(`registry-utils.sh:169`). 그래서 `paused`·`ready-to-merge`·`stale` 은 claim 을 **전혀 막지 않는다** — 이것들을 병목으로 세면 안 된다.
+
+문제는 세션이 crash·kill 로 죽어 Stop hook 이 못 돌았을 때다. entry 가 `active` 로 남아 tick 이 그 slug 를 영원히 못 잡는다.
+
+```bash
+working_session_alive "$CLAIM_SID"    # transcript mtime < WORKING_SESSION_DEAD_SEC(기본 3600)
+```
+
+죽었으면 `registry_mark_stale {slug} {sid}` — **lock 보호 lib 함수를 쓴다.** 수동 awk+mv 로 REGISTRY 를 고치면 race orphan 이 생긴다 (메모리 `feedback_shared-pool-lib-first`).
+
+### G4 — step `In Progress` → `Pending`
+
+근본 원인은 `working-release.sh` 다. 세션 종료 시 REGISTRY 만 `paused` 로 풀고 문서 `상태:` 는 안 되돌려서, step 이 `In Progress` 로 남고 tick 진행 조건(`Pending`)에서 영구 이탈한다.
+
+새 mutation 종류를 만들지 않는다 — B 트랙 반려가 쓰는 전이와 **같은 것**이고 근거도 같다(`tick.md` §"결정 수용").
+
+```bash
+working_rejections "$STEP"     # >0 이면 반려 트랙 소관 — 정체로 다루지 않는다
+```
+
+- `### 정체 복귀 (YYYY-MM-DD · watch)` 1줄을 `머지 전 리뷰 포인트` 아래 남긴다 — **체크박스가 아니라 서술로.** `- [ ]` 로 적으면 경량 task 완료 게이트(`미체크박스 잔존`)를 막아버린다.
+- unified 인덱스 표 상태 컬럼 동기화 (step 파일이 SSOT, 표는 미러).
+- **worktree·커밋 보존.** tick 이 반려 소비 모드처럼 그 경로를 재사용한다.
+
+**연쇄 해소가 이 게이트의 진짜 값이다.** `tick.md` §2-bis 상 직접 의존 선행이 `In Progress` 면 그 step 에 의존하는 **후속 전부가 막힌다.** 죽은 `In Progress` 하나를 되돌리면 체인이 함께 풀린다.
+
+> **인덱스 표 '의존' 컬럼은 파싱하지 않는다.** 선행이 막는 유일한 해소 가능 사유가 "선행이 죽은 `In Progress`" 이고 그건 그 선행 자신이 G4 로 잡히므로, G4 를 고치면 의존 판정 없이도 체인이 풀린다. 형식 편차 큰 표를 파싱하면 파서가 곧 깨진다 — `## 변경 파일` 을 거부한 것과 같은 이유다.
+
+### 하지 않는 것 (필수)
+
+- **`tick-loop` 을 띄우지 않는다.** `OK` 건의 해법은 루프 기동이지만 그건 무인 작업 프로세스 자율 기동이라 사용자 결정이다(§3). 보고에 "claim 가능 N건 — 루프 미가동" 으로 낸다.
+- **마커를 붙이지 않는다.** 무인 허용 범위 확대 = §3.
+- **`NeedsDecision` 을 풀지 않는다.** G2 는 판단이 남은 것이지 막힌 게 아니다.
+
+> **왜 상태를 되돌리는 것이 §4.2 "audit 자동 수정 금지" 에 안 걸리는가** — 코드나 판단을 고치는 게 아니라, 세션이 비정상 종료하며 남긴 **거짓 표기**(문서는 진행 중이라는데 아무도 안 잡고 있음)를 사실에 맞추는 것이다. 작업 내용·커밋·worktree 는 그대로고, 다음 주체가 잡을 수 있는 상태가 될 뿐이다.
+
 ## mutation 경계 (필수)
 
-watch 의 쓰기는 **딱 두 가지**다. 그 밖은 전부 보고만 한다.
+watch 의 쓰기는 **딱 세 가지**다. 그 밖은 전부 보고만 한다.
 
+0. 자기 lock (`state/watch/locks/{문서}.lock`) — 쓰기 대상 문서에만, 조치 직전 획득·직후 해제
 1. 자기 스냅샷 (`state/watch/{scope}.tsv`)
 2. **B 트랙** `ReadyToMerge` 해소 — ff머지 + step `상태:` 전이 (Done / Pending) + 인덱스 표 동기화 + 반려 블록
+3. **C 트랙** 병목 제거 — (a) G4: 죽은 claim 의 step `상태: In Progress → Pending` + 인덱스 표 동기화 + 복귀 사유 1줄 (b) G3-orphan: `registry_mark_stale` 로 죽은 `active` claim 해제(lock 보호 lib 함수만). **이 둘뿐이다** — 마커 부착·`tick-loop` 기동·머지·`NeedsDecision` 해제는 하지 않는다
 
 **A 트랙은 진단 전용이다.** 상태 역행 · 근거 누락 · 문서 실종 · 미기록 커밋 · dirty 정체 · 문서 정합성 위반은 **보고만** 하고 고치지 않는다 (CLAUDE.md §4.2 "audit 결과 자동 수정 금지"). 수정은 `/taskflow:execute` 로.
 
@@ -383,10 +502,22 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
   hongcafe_global_backend              커밋 d504e63e→79a79787; 미커밋 0→1건
                                        ↳ 대응 문서 변경 없음 — 미기록 커밋 의심
 
+⏳ 병목 제거 (1h+ 무진행 13건 중 2건)
+  be-fe-full-qa/step-09                72m · claim active 인데 세션 죽음(G3) → stale 해제
+                                       ↳ TAKEN 반환으로 tick 이 영구히 못 잡던 상태였음
+  auth-refactor/step-03                25h In Progress · claim none(G4) → Pending 복귀
+                                       ↳ 세션 종료 시 상태 미복귀. 의존 후속 2건 함께 해소
+                                       ↳ 다음 tick 이 재잡이
+
+⏸️ 사용자 영역 (해소 안 함)
+  mod-04-chatconnect-…-hermes/step-04  27h · unified NeedsDecision(G2) — 판단 후 재개
+
+▫️ 병목 없음 10건 — claim 가능한데 tick 루프 미가동 (/taskflow:tick-loop 30m)
+
 스냅샷 갱신: 84건 (문서 77 / repo 7)
 ```
 
-A·B 양 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1줄. **diff 0건이어도 B 트랙에 미해소 `ReadyToMerge` 가 있으면 "변동 없음" 이 아니다.**
+A·B·C 세 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1줄. **diff 0건이어도 B 에 미해소 `ReadyToMerge` 가 있거나 C 에 정체가 있으면 "변동 없음" 이 아니다.**
 
 ## SSOT
 
@@ -396,6 +527,12 @@ A·B 양 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1�
 | 신선도 필터 | 5분 이내 수정분 제외 (`WATCH_MIN_AGE_SEC`, 기본 300초) | `hooks/lib/watch-snapshot.sh::watch_scan_now` |
 | 감시 repo 목록 | 사용자 소유 목록 (자동 갱신 안 함) | `~/.claude/state/watch/repos.txt` |
 | working/ 스캔 + 완료 게이트 | `working_scan` · `working_gate_blockers` · **`working_rejections`**(미해소 반려 수) | `hooks/lib/working-scan.sh` |
+| **정체 병목 판정** | `working_stalled` — 1h+ 무진행에 tick claim 게이트(G1~G4/OK) 적용, 첫 실패 게이트 + 처리 산출 (`WORKING_STALL_SEC`, 기본 3600) | **`hooks/lib/working-scan.sh`** |
+| 세션 생존 판정 | `working_session_alive` — transcript mtime (`WORKING_SESSION_DEAD_SEC`, 기본 3600) | `hooks/lib/working-scan.sh` |
+| **문서 단위 lock** | `watch_doc_lock_acquire`/`_release`/`watch_doc_locked` — 키=문서 경로, TTL stale 회수 (`WATCH_LOCK_TTL_MIN`, 기본 30분) | **`hooks/lib/watch-snapshot.sh`** |
+| claim 차단 조건 | `active` 일 때만 `TAKEN` — paused·ready-to-merge 는 안 막음 | `hooks/lib/registry-utils.sh:169` |
+| claim 해제 (lock 보호) | `registry_mark_stale` — 수동 awk+mv 금지 | `hooks/lib/registry-utils.sh` + 메모리 `feedback_shared-pool-lib-first` |
+| 정체 원인(문서 상태 미복귀) | Stop 시 REGISTRY 만 paused, 문서 `상태:` 불변 | `hooks/working-release.sh` |
 | 세션 관측 | transcript tail 신호 4개 | `hooks/lib/transcript-tail.py` |
 | 주기 반복 | `/loop <interval> /taskflow:watch` | harness `/loop` 스킬 |
 | **ff머지 절차** | checkout→ff-only→worktree remove→branch -D | **`custom-plugin/git/commands/merge.md`** |
@@ -426,6 +563,9 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
+- 2026-07-29: **문서 단위 lock** — `state/watch/locks/{문서}.lock` 으로 watch 동시 실행 시 **같은 문서**만 막는다. B 트랙 ff머지→`worktree remove`→`branch -D` 가 멱등이 아니라 두 세션이 같은 문서를 처리하면 깨진다(원래 있던 구멍인데 C 트랙으로 쓰기가 늘어 노출 확대). **인스턴스 통째 직렬화에서 문서 단위로 정정** — 통째로 걸면 서로 다른 문서를 보는 watch 까지 막혀 대기 물량을 하나씩밖에 못 푼다. `registry_claim` 을 안 쓰는 이유는 그게 tick 의 점유를 뺏기 때문이고, watch 전용 lock 공간은 tick 과 무관하다. 못 잡으면 그 문서만 skip. 부수 2건 — (a) lock 걸린 문서는 `watch_scan_now` 가 이전 스냅샷 값을 유지(신선도 필터 경로 재사용)해 타 인스턴스의 미검증 변경분이 확정되는 사고 차단 (b) `watch_commit` tmp 에 PID 부착(고정 이름이면 동시 쓰기로 스냅샷 파손). 12/12 검증
+- 2026-07-29: **lib 소스 가드 수정** — `watch-snapshot.sh` 가 `[ -z "$WORKING_ROOT" ]` 로 `working-scan.sh` 로드를 판정해, 소비자가 `WORKING_ROOT` 를 먼저 지정하면 lib 을 아예 안 읽어 `working_scan: command not found` 로 죽었다. 변수 존재가 아니라 **함수 존재**(`declare -F`)로 판정
+- 2026-07-29: **C 트랙 — 정체 병목 제거 (1h+ 무진행)** 신설. 정체는 아무것도 안 바뀐 상태라 A(diff)에도 안 걸리고 `ReadyToMerge` 도 아니라 B 도 안 보는 사각지대였다 (실측 방치 최장 **5.8일**). **정체를 나열하는 게 아니라 tick claim 게이트(G1 마커 / G2 사용자 / G3 claim / G4 상태)를 순서대로 물어 첫 실패 게이트를 병목으로 특정**하고, watch 권한 안(G3-orphan·G4)만 제거한다. 실측 13건 중 **11건이 `OK`(병목 없음 — tick 이 잡을 수 있는데 루프 미가동)** 여서, 나열식이면 진짜 병목 2건이 묻혔다. 게이트 순서가 오조작도 막았다 — step 이 `In Progress` 라 G4 처럼 보이던 건이 unified `NeedsDecision`(G2)이라 손대면 안 되는 것이었다. 근본 원인 = `working-release.sh` 가 세션 종료 시 REGISTRY 만 `paused` 로 풀고 문서 `상태:` 는 안 되돌림. G3 는 `registry_claim` 이 `active` 에만 `TAKEN` 을 내는 실측(`registry-utils.sh:169`)에 근거 — `paused` 를 병목으로 세지 않는다. `tick-loop` 자동 기동·마커 부착은 §3 로 제외. 탐지 SSOT = `working_stalled` (합성 픽스처 16/16)
 - 2026-07-28: **신선도 필터 (5분)** — `watch_scan_now` 가 최종 수정 5분 이내 문서를 이전 스냅샷 값으로 대체 출력(신규는 스킵)해 diff/검증 대상에서 제외. `find -mmin` 절단 대신 값 유지 방식을 택한 이유 = D(삭제) 오판 방지. `WATCH_MIN_AGE_SEC` 로 조정 가능(기본 300초). tick 의 claim 후보 필터(`working_scan ... 5`)와 같은 문제의식 — 방금 저장된 문서를 무인이 바로 채가는 경합 완화
 - 2026-07-28: **반려 왕복 정합** — (1) 미해소 반려가 남은 `ReadyToMerge` 는 리뷰·머지 skip 후 `Pending` 복귀 (실측 2건이 지적 3건씩 달고 머지 대기 중이었다. step 완료 게이트는 `상태:` 만 보므로 체크박스를 막는 주체가 watch 뿐) (2) 반려 보고를 `tick: allow` 마커로 분기 — 마커 없으면 tick 이 영원히 재잡이하지 않는데 "다음 tick 이 재잡이" 로 보고하던 거짓 약속 제거 (실측 보유 7/26) (3) 반려 step 의 worktree·커밋 보존 명문화 (tick 반려 소비 모드가 재사용)
 - 2026-07-28: repo별 착지 브랜치 정책 (`hongcafe_global_docs` → `working_docs` / `~/.claude` → 현재 브랜치 직접 / 그 외 feature 또는 PR) + cwd 비종속 명문화 (`git -C` 만, `cd` 금지)
