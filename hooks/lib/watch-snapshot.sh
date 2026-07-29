@@ -13,12 +13,21 @@
 # 성능: fork 최소화 — find/xargs stat/awk 로 프로세스 ~6개 (파일마다 stat 서브셸 금지.
 #   working-scan.sh 가 같은 이유로 재작성된 전례를 따른다).
 #
+# 신선도 필터 (WATCH_MIN_AGE_SEC, 기본 300 = 5분): 최종 수정된 지 이 시간 안인 문서는
+#   "아직 무르익지 않음"으로 보고 이전 확정 스냅샷 값을 그대로 낸다 (신규면 이번 라운드는
+#   아예 스킵). 방금 다른 세션이 저장한 문서를 바로 diff/검증 대상으로 잡지 않기 위함.
+#   find -mmin 으로 자르지 않는 이유 — 그러면 이번 스캔 결과에서 그 파일이 통째로 빠져
+#   watch_diff 의 D(삭제) 판정("스냅샷엔 있는데 지금 안 보임")이 오판한다. 값을 old 로
+#   유지하면 diff 도 안 뜨고, watch_commit 이 그 값을 그대로 재저장해 다음 라운드까지
+#   "미확정"이 이어지다가 시간이 지나면 자연히 실제 값으로 갱신된다.
+#
 # 사용:
 #   source ~/.claude/hooks/lib/watch-snapshot.sh
 #   watch_diff [scope]      # 변경분 출력 (A/M/D \t path \t 상세) — 스냅샷은 갱신 안 함
 #   watch_commit [scope]    # 현재 상태를 스냅샷으로 확정 (검증 완료 후 호출)
 
 WATCH_STATE_DIR="${WATCH_STATE_DIR:-$HOME/.claude/state/watch}"
+WATCH_MIN_AGE_SEC="${WATCH_MIN_AGE_SEC:-300}"
 _WATCH_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 [ -z "${WORKING_ROOT:-}" ] && . "$_WATCH_LIB_DIR/working-scan.sh"
@@ -69,21 +78,32 @@ watch_repo_scan() {
 
 # 현재 상태 산출 — path \t mtime \t size \t status  (+ repo 행은 HEAD \t dirty \t branch)
 watch_scan_now() {
-  local scope="${1:-all}"
+  local scope="${1:-all}" snap
   local statuses
   statuses=$(working_scan "$scope" | cut -f1,5)      # path \t status
+  snap=$(_watch_snap_path "$scope")
 
   find "$WORKING_ROOT" -mindepth 2 -maxdepth 2 -name '*.md' -print0 2>/dev/null \
     | xargs -0 -r stat -c '%n	%Y	%s' 2>/dev/null \
-    | awk -F'\t' -v st="$statuses" '
+    | awk -F'\t' -v st="$statuses" -v snap="$snap" -v minage="$WATCH_MIN_AGE_SEC" -v now="$(date +%s)" '
       BEGIN {
         n = split(st, L, "\n")
         for (i = 1; i <= n; i++) { split(L[i], P, "\t"); if (P[1] != "") S[P[1]] = P[2] }
+        while ((getline line < snap) > 0) {
+          split(line, Q, "\t")
+          if (Q[1] != "") { OM[Q[1]] = Q[2]; OS[Q[1]] = Q[3]; OST[Q[1]] = Q[4] }
+        }
+        close(snap)
       }
       {
         # working_scan 대상(날짜 prefix + product 매칭)만 추적한다 — 그 밖은 스캐너가 안 보는 파일
         if (!($1 in S)) next
-        printf "%s\t%s\t%s\t%s\n", $1, $2, $3, S[$1]
+        mtime = $2; size = $3; status = S[$1]
+        if ((now - mtime) < minage) {
+          if ($1 in OM) { mtime = OM[$1]; size = OS[$1]; status = OST[$1] }
+          else next   # 스냅샷에 없던 신규 + 신선(minage 이내) → 이번 라운드는 스킵, 다음에 재평가
+        }
+        printf "%s\t%s\t%s\t%s\n", $1, mtime, size, status
       }' \
     | sort
 

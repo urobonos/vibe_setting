@@ -11,7 +11,9 @@
 #
 # 사용:
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib/working-scan.sh"   # hooks/ 기준
-#   working_scan [product|all]
+#   working_scan [product|all] [min_age_min]
+#   - min_age_min : 생략(0) = 필터 없음(기존 동작). N>0 = 최종 수정된 지 N분 초과인 문서만
+#     (find -mmin +N). 방금 다른 세션이 저장한 문서를 무인이 바로 채가는 경합 완화용 — tick 전용.
 #
 # 출력 (TSV, 문서 1개당 1줄):
 #   파일경로 \t date(YYYY-MM-DD) \t product \t 작업명 \t status \t is_step(0|1)
@@ -25,7 +27,7 @@ WORKING_ROOT="${WORKING_ROOT:-$HOME/.claude/docs/working}"
 WORKING_SCAN_DOCS_ROOT="${WORKING_SCAN_DOCS_ROOT:-$HOME/.claude/docs}"
 
 working_scan() {
-  local filter="${1:-all}"
+  local filter="${1:-all}" min_age_min="${2:-0}"
   [ -d "$WORKING_ROOT" ] || return 0
 
   # product 목록 1회 산출 (docs/*/ basename, working·references 제외) — 파일마다 순회 안 함
@@ -33,8 +35,11 @@ working_scan() {
   prod_list=$(cd "$WORKING_SCAN_DOCS_ROOT" 2>/dev/null && ls -d */ 2>/dev/null \
     | sed 's:/$::' | grep -vxE 'working|references' | tr '\n' ' ')
 
+  local age_opt=()
+  [ "${min_age_min:-0}" -gt 0 ] 2>/dev/null && age_opt=(-mmin "+$min_age_min")
+
   # find(1) + awk(1) 단일 패스 — 파일명 파싱·product 매칭·status 첫 키워드 전부 awk 내부
-  find "$WORKING_ROOT" -mindepth 2 -maxdepth 2 -name '*.md' -print0 2>/dev/null | xargs -0 -r awk \
+  find "$WORKING_ROOT" -mindepth 2 -maxdepth 2 -name '*.md' "${age_opt[@]}" -print0 2>/dev/null | xargs -0 -r awk \
     -v filter="$filter" -v products="$prod_list" '
     function emit() {
       if (path=="" || product=="") return

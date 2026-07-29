@@ -8,6 +8,8 @@ argument-hint: "[product|all — 생략 시 all. `sessions` = 다른 세션 진�
 
 전건을 매번 재검증하지 않는다. 지난 iteration 스냅샷과 **diff 해서 바뀐 것만** 본다 (working/ 77건 기준 diff 0.5초 실측).
 
+**신선도 필터 (기본 5분, `WATCH_MIN_AGE_SEC`).** 최종 수정된 지 5분이 안 된 문서는 diff/검증 대상에서 제외한다 — 방금 다른 세션이 저장 중인 문서를 watch 가 바로 잡아채 검증하지 않기 위함. `find` 로 잘라내지 않고 `watch_scan_now`(watch-snapshot.sh) 가 그 문서의 값을 **이전 스냅샷 값 그대로** 낸다(신규면 이번 라운드 자체를 스킵) — 그래야 D(삭제) 오판이 안 나고, 5분이 지나면 자연히 실제 값으로 갱신되며 M/A 로 잡힌다.
+
 ## 1-iteration 흐름
 
 **두 트랙이 독립으로 돈다.** 변경 감지(A)와 머지 해소(B)는 서로의 결과를 기다리지 않는다.
@@ -391,6 +393,7 @@ A·B 양 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1�
 | 조각 | 역할 | SSOT |
 |------|------|------|
 | **변경 감지** | 스냅샷 diff (A/M/D) — 문서 축 + repo 축 | **`hooks/lib/watch-snapshot.sh`** |
+| 신선도 필터 | 5분 이내 수정분 제외 (`WATCH_MIN_AGE_SEC`, 기본 300초) | `hooks/lib/watch-snapshot.sh::watch_scan_now` |
 | 감시 repo 목록 | 사용자 소유 목록 (자동 갱신 안 함) | `~/.claude/state/watch/repos.txt` |
 | working/ 스캔 + 완료 게이트 | `working_scan` · `working_gate_blockers` · **`working_rejections`**(미해소 반려 수) | `hooks/lib/working-scan.sh` |
 | 세션 관측 | transcript tail 신호 4개 | `hooks/lib/transcript-tail.py` |
@@ -423,6 +426,7 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
+- 2026-07-28: **신선도 필터 (5분)** — `watch_scan_now` 가 최종 수정 5분 이내 문서를 이전 스냅샷 값으로 대체 출력(신규는 스킵)해 diff/검증 대상에서 제외. `find -mmin` 절단 대신 값 유지 방식을 택한 이유 = D(삭제) 오판 방지. `WATCH_MIN_AGE_SEC` 로 조정 가능(기본 300초). tick 의 claim 후보 필터(`working_scan ... 5`)와 같은 문제의식 — 방금 저장된 문서를 무인이 바로 채가는 경합 완화
 - 2026-07-28: **반려 왕복 정합** — (1) 미해소 반려가 남은 `ReadyToMerge` 는 리뷰·머지 skip 후 `Pending` 복귀 (실측 2건이 지적 3건씩 달고 머지 대기 중이었다. step 완료 게이트는 `상태:` 만 보므로 체크박스를 막는 주체가 watch 뿐) (2) 반려 보고를 `tick: allow` 마커로 분기 — 마커 없으면 tick 이 영원히 재잡이하지 않는데 "다음 tick 이 재잡이" 로 보고하던 거짓 약속 제거 (실측 보유 7/26) (3) 반려 step 의 worktree·커밋 보존 명문화 (tick 반려 소비 모드가 재사용)
 - 2026-07-28: repo별 착지 브랜치 정책 (`hongcafe_global_docs` → `working_docs` / `~/.claude` → 현재 브랜치 직접 / 그 외 feature 또는 PR) + cwd 비종속 명문화 (`git -C` 만, `cd` 금지)
 - 2026-07-28: **해소를 diff 에서 분리해 독립 B 트랙으로** — 변경 감지(A)와 상태 기반 해소(B)가 서로 기다리지 않는다. 해소를 A 하위 단계로 뒀더니 `ReadyToMerge` 가 스냅샷에 이미 박혀 있어 diff 0건 → 머지 대상 영구 0건이 됐다 (실측). watch 해소의 무인 허용 마커 요구도 철회 — 그 마커는 tick 전용이다
