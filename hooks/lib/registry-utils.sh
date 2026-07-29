@@ -296,3 +296,19 @@ registry_release_session() {
   echo "[registry-utils] release_session: 본 세션($sid) entry ${released}건 → $status"
   return 0
 }
+
+# orphan lock — REGISTRY 에 매칭 entry 가 없는 session lock 파일 경로를 나열한다.
+#   registry_orphan_locks   → "slug<TAB>sid<TAB>경로" 0줄 이상
+#
+# 세션이 비정상 종료하면 lock 만 남아 `/taskflow:ps` 가 orphan-lock 으로 세던 것을 함수화했다.
+#   판정식이 ps.md 와 watch.md 두 곳에 복붙되면 갈라지므로 여기가 SSOT.
+#   소비처: custom-plugin/taskflow/commands/{ps,watch}.md
+registry_orphan_locks() {
+  local lk sid slug
+  [ -d "$SESSIONS_DIR" ] || return 0
+  find "$SESSIONS_DIR" -name '*.lock' -type f 2>/dev/null | while IFS= read -r lk; do
+    sid=$(basename "$lk" .lock)
+    slug=$(basename "$(dirname "$lk")")
+    registry_find "$slug" 2>/dev/null | grep -q "$sid" || printf '%s\t%s\t%s\n' "$slug" "$sid" "$lk"
+  done
+}

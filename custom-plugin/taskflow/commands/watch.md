@@ -393,7 +393,7 @@ working_stalled "${1:-all}"        # 기본 1시간(WORKING_STALL_SEC=3600)
 | 게이트 | 막는 것 | 처리 |
 |--------|--------|------|
 | **G1 마커** | `tick: allow` 없음 → tick 화이트리스트 밖 | `report` — 자동 부착 금지(§3) |
-| **G2 사용자** | unified 가 `NeedsDecision`/`Done` → tick 2단계에서 task 통째 skip | `report` — 사용자 영역 |
+| **G2 사용자** | unified 가 `NeedsDecision`/`Done` → tick 2단계에서 task 통째 skip | `report` + **사전조사 첨부** |
 | **G3 claim** | REGISTRY `active` → `registry_claim` 이 `TAKEN` 반환 | 세션 생존 시 `none`(진행 중) / **죽었으면 `stale`** |
 | **G4 상태** | step 이 `Pending` 이 아님 → tick 진행 조건 밖 | **`pending` 복귀** |
 | **OK** | 아무것도 안 막음 | `none` — **병목 없음. 루프가 안 돌 뿐** |
@@ -401,6 +401,30 @@ working_stalled "${1:-all}"        # 기본 1시간(WORKING_STALL_SEC=3600)
 **`OK` 를 정체로 보고하지 않는 게 중요하다.** 2026-07-29 실측 13건 중 **11건이 OK** 였다 — tick 이 지금도 잡을 수 있는데 도는 tick 이 없었을 뿐이다. 그건 watch 가 제거할 병목이 아니라 가동 상태 보고다. 이걸 "정체 11건" 으로 내면 매 iteration 같은 목록이 반복돼 진짜 병목 2건이 묻힌다.
 
 **게이트 순서가 오조작을 막는다.** 같은 실측에서 `mod-04-chatconnect…step-04` 는 step 이 `In Progress`(G4 처럼 보임)였지만 **unified 가 `NeedsDecision`** 이라 G2 에서 걸렸다. G4 를 먼저 봤으면 사용자 결정 대기 중인 task 의 step 을 건드릴 뻔했다.
+
+### G2 — 사용자 결정은 **조사해서** 넘긴다 (필수)
+
+"사용자 대기" 라고만 적어 넘기지 않는다. CLAUDE.md §4.4 (3-2) escalation ladder 상 **정보 부족형(I1~I3)은 먼저 자체 해소**하고, 못 풀 때만 **조사 결과를 첨부해서** 올린다. 권한형(P1~P4)만 즉시 올린다.
+
+보고에 최소한 이 세 가지를 붙인다 — 사용자가 문서를 열어보지 않고 결정할 수 있어야 한다.
+
+| 붙일 것 | 어디서 |
+|---------|--------|
+| 무엇을 묻는가 (선택지 + 트레이드오프) | 그 문서 `## 결정 Escalation 로그` |
+| 권한형/정보 부족형 분류 | `execute.md` §"결정 escalation ladder" 판별식 |
+| 막고 있는 범위 | 그 결정에 걸린 step 수 · 의존 후속 수 |
+
+정보 부족형인데 조사가 안 돼 있으면 **watch 가 그 자리에서 조사한다** (bounded — 파일 읽기·grep 수준. 코드 수정이나 `/taskflow:plan` 재진입은 안 한다). 조사해도 안 풀리면 그 결과를 첨부해 올린다.
+
+> **결정을 대신 내리지 않는다.** 조사는 선택지를 좁히는 데까지고, 고르는 건 사용자다.
+
+### G2 판정은 문서 전체를 본다 — frontmatter 만 믿지 않는다 (필수)
+
+`working_scan` 은 **첫 `Status:`/`상태:` 줄만** 읽는데, frontmatter 와 본문이 어긋난 문서가 실재한다 (2026-07-29 실측 3건 — 예: frontmatter `NeedsDecision` ↔ 본문 `In Progress`).
+
+**어느 줄에라도 `NeedsDecision`/`Done` 이 있으면 막는 쪽으로 채택한다.** 첫 줄만 믿고 진행 판정을 내리면 결정 대기건을 무인 진행시킨다.
+
+**어느 쪽이 정본인지 판정하지 않는다.** 그건 문서 형식 추론이고, 틀렸을 때 대가가 크다(사용자 결정 대기 중인 task 를 tick 이 집어간다). 정정은 보고만 하고 사람이 한다 — tick-loop 로그가 지목한 "같은 drift 를 매번 재조사" 낭비는 보수 채택만으로 사라진다.
 
 ### G3 — `active` orphan (claim 이 영구히 물려 있는 경우)
 
@@ -432,6 +456,21 @@ working_rejections "$STEP"     # >0 이면 반려 트랙 소관 — 정체로 �
 
 > **인덱스 표 '의존' 컬럼은 파싱하지 않는다.** 선행이 막는 유일한 해소 가능 사유가 "선행이 죽은 `In Progress`" 이고 그건 그 선행 자신이 G4 로 잡히므로, G4 를 고치면 의존 판정 없이도 체인이 풀린다. 형식 편차 큰 표를 파싱하면 파서가 곧 깨진다 — `## 변경 파일` 을 거부한 것과 같은 이유다.
 
+### orphan lock 정리 (게이트 밖 — 매 iteration)
+
+REGISTRY 에 매칭 entry 가 없는 session lock 은 판정이 필요 없다. 세션이 비정상 종료하며 남긴 잔재고, 남겨둘 이유가 없다.
+
+```bash
+source ~/.claude/hooks/lib/registry-utils.sh
+registry_orphan_locks | while IFS=$'\t' read -r slug sid _; do
+  session_lock_remove "$slug" "$sid"
+done
+```
+
+`/taskflow:ps cleanup` 이 하던 것과 **같은 판정식**이다(`registry_orphan_locks` 가 SSOT). 차이는 ps 가 사용자 명시 호출 전용인 반면 watch 는 무인이라 매번 돈다는 것뿐이다.
+
+> **REGISTRY entry 는 건드리지 않는다.** 여기서 지우는 건 매칭 entry 가 **없는** lock 파일뿐이다. entry 가 있는 lock 은 그 세션 소유다.
+
 ### 하지 않는 것 (필수)
 
 - **`tick-loop` 을 띄우지 않는다.** `OK` 건의 해법은 루프 기동이지만 그건 무인 작업 프로세스 자율 기동이라 사용자 결정이다(§3). 보고에 "claim 가능 N건 — 루프 미가동" 으로 낸다.
@@ -447,7 +486,7 @@ watch 의 쓰기는 **딱 세 가지**다. 그 밖은 전부 보고만 한다.
 0. 자기 lock (`state/watch/locks/{문서}.lock`) — 쓰기 대상 문서에만, 조치 직전 획득·직후 해제
 1. 자기 스냅샷 (`state/watch/{scope}.tsv`)
 2. **B 트랙** `ReadyToMerge` 해소 — ff머지 + step `상태:` 전이 (Done / Pending) + 인덱스 표 동기화 + 반려 블록
-3. **C 트랙** 병목 제거 — (a) G4: 죽은 claim 의 step `상태: In Progress → Pending` + 인덱스 표 동기화 + 복귀 사유 1줄 (b) G3-orphan: `registry_mark_stale` 로 죽은 `active` claim 해제(lock 보호 lib 함수만). **이 둘뿐이다** — 마커 부착·`tick-loop` 기동·머지·`NeedsDecision` 해제는 하지 않는다
+3. **C 트랙** 병목 제거 — (a) G4: 죽은 claim 의 step `상태: In Progress → Pending` + 인덱스 표 동기화 + 복귀 사유 1줄 (b) G3-orphan: `registry_mark_stale` 로 죽은 `active` claim 해제(lock 보호 lib 함수만) (c) orphan lock 파일 제거(`session_lock_remove` — REGISTRY 매칭 **없는** 것만). **이 셋뿐이다** — 마커 부착·`tick-loop` 기동·머지·`NeedsDecision` 해제·상태 drift 정정은 하지 않는다
 
 **A 트랙은 진단 전용이다.** 상태 역행 · 근거 누락 · 문서 실종 · 미기록 커밋 · dirty 정체 · 문서 정합성 위반은 **보고만** 하고 고치지 않는다 (CLAUDE.md §4.2 "audit 결과 자동 수정 금지"). 수정은 `/taskflow:execute` 로.
 
@@ -509,8 +548,13 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
                                        ↳ 세션 종료 시 상태 미복귀. 의존 후속 2건 함께 해소
                                        ↳ 다음 tick 이 재잡이
 
-⏸️ 사용자 영역 (해소 안 함)
-  mod-04-chatconnect-…-hermes/step-04  27h · unified NeedsDecision(G2) — 판단 후 재개
+⏸️ 사용자 결정 (조사 첨부)
+  mod-04-chatconnect-…-hermes/step-04  27h · unified NeedsDecision(G2)
+                                       ↳ 묻는 것: HERMES env 를 dev 로 분리할지, 공용 유지할지
+                                       ↳ 분류: P3(외부 상태 변경) — 조사로 안 풀림
+                                       ↳ 막는 범위: 이 step + 의존 후속 2건
+
+🧹 orphan lock 정리 4건 (REGISTRY 매칭 없음)
 
 ▫️ 병목 없음 10건 — claim 가능한데 tick 루프 미가동 (/taskflow:tick-loop 30m)
 
@@ -532,6 +576,8 @@ A·B·C 세 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음`
 | **문서 단위 lock** | `watch_doc_lock_acquire`/`_release`/`watch_doc_locked` — 키=문서 경로, TTL stale 회수 (`WATCH_LOCK_TTL_MIN`, 기본 30분) | **`hooks/lib/watch-snapshot.sh`** |
 | claim 차단 조건 | `active` 일 때만 `TAKEN` — paused·ready-to-merge 는 안 막음 | `hooks/lib/registry-utils.sh:169` |
 | claim 해제 (lock 보호) | `registry_mark_stale` — 수동 awk+mv 금지 | `hooks/lib/registry-utils.sh` + 메모리 `feedback_shared-pool-lib-first` |
+| **orphan lock 판정** | `registry_orphan_locks` — REGISTRY 매칭 없는 lock 나열 (`ps cleanup` 과 공용) | **`hooks/lib/registry-utils.sh`** |
+| 결정 escalation 분류 | 권한형 P1~P4 / 정보 부족형 I1~I3 판별식 | `custom-plugin/taskflow/commands/execute.md` |
 | 정체 원인(문서 상태 미복귀) | Stop 시 REGISTRY 만 paused, 문서 `상태:` 불변 | `hooks/working-release.sh` |
 | 세션 관측 | transcript tail 신호 4개 | `hooks/lib/transcript-tail.py` |
 | 주기 반복 | `/loop <interval> /taskflow:watch` | harness `/loop` 스킬 |
@@ -563,6 +609,7 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
+- 2026-07-29: **G2 사전조사 + drift 보수 채택 + orphan lock 정리** — (1) 사용자 결정을 "대기" 로만 넘기지 않고 묻는 것·분류(P/I)·막는 범위를 붙인다. 정보 부족형은 bounded 조사 후 올린다 (§4.4 (3-2) ladder 정합) (2) G2 판정이 **문서 전체의 Status 줄**을 본다 — `working_scan` 은 첫 줄만 읽는데 frontmatter ↔ 본문이 어긋난 문서가 실측 3건이라, 첫 줄만 믿으면 결정 대기건을 무인 진행시킨다. 어느 줄에라도 `NeedsDecision`/`Done` 이 있으면 막는 쪽 채택. **정본 판정은 안 한다**(형식 추론이라 오판 대가가 큼) — 정정은 사람 몫이고, 보수 채택만으로 tick-loop 로그가 지목한 "같은 drift 매번 재조사" 낭비는 사라진다 (3) REGISTRY 매칭 없는 orphan lock 을 매 iteration 제거 (`registry_orphan_locks` 신설 — `ps cleanup` 과 판정식 공용, 실측 4건). 검증 2/2 + 기존 픽스처 16/16·12/12 회귀 없음
 - 2026-07-29: **문서 단위 lock** — `state/watch/locks/{문서}.lock` 으로 watch 동시 실행 시 **같은 문서**만 막는다. B 트랙 ff머지→`worktree remove`→`branch -D` 가 멱등이 아니라 두 세션이 같은 문서를 처리하면 깨진다(원래 있던 구멍인데 C 트랙으로 쓰기가 늘어 노출 확대). **인스턴스 통째 직렬화에서 문서 단위로 정정** — 통째로 걸면 서로 다른 문서를 보는 watch 까지 막혀 대기 물량을 하나씩밖에 못 푼다. `registry_claim` 을 안 쓰는 이유는 그게 tick 의 점유를 뺏기 때문이고, watch 전용 lock 공간은 tick 과 무관하다. 못 잡으면 그 문서만 skip. 부수 2건 — (a) lock 걸린 문서는 `watch_scan_now` 가 이전 스냅샷 값을 유지(신선도 필터 경로 재사용)해 타 인스턴스의 미검증 변경분이 확정되는 사고 차단 (b) `watch_commit` tmp 에 PID 부착(고정 이름이면 동시 쓰기로 스냅샷 파손). 12/12 검증
 - 2026-07-29: **lib 소스 가드 수정** — `watch-snapshot.sh` 가 `[ -z "$WORKING_ROOT" ]` 로 `working-scan.sh` 로드를 판정해, 소비자가 `WORKING_ROOT` 를 먼저 지정하면 lib 을 아예 안 읽어 `working_scan: command not found` 로 죽었다. 변수 존재가 아니라 **함수 존재**(`declare -F`)로 판정
 - 2026-07-29: **C 트랙 — 정체 병목 제거 (1h+ 무진행)** 신설. 정체는 아무것도 안 바뀐 상태라 A(diff)에도 안 걸리고 `ReadyToMerge` 도 아니라 B 도 안 보는 사각지대였다 (실측 방치 최장 **5.8일**). **정체를 나열하는 게 아니라 tick claim 게이트(G1 마커 / G2 사용자 / G3 claim / G4 상태)를 순서대로 물어 첫 실패 게이트를 병목으로 특정**하고, watch 권한 안(G3-orphan·G4)만 제거한다. 실측 13건 중 **11건이 `OK`(병목 없음 — tick 이 잡을 수 있는데 루프 미가동)** 여서, 나열식이면 진짜 병목 2건이 묻혔다. 게이트 순서가 오조작도 막았다 — step 이 `In Progress` 라 G4 처럼 보이던 건이 unified `NeedsDecision`(G2)이라 손대면 안 되는 것이었다. 근본 원인 = `working-release.sh` 가 세션 종료 시 REGISTRY 만 `paused` 로 풀고 문서 `상태:` 는 안 되돌림. G3 는 `registry_claim` 이 `active` 에만 `TAKEN` 을 내는 실측(`registry-utils.sh:169`)에 근거 — `paused` 를 병목으로 세지 않는다. `tick-loop` 자동 기동·마커 부착은 §3 로 제외. 탐지 SSOT = `working_stalled` (합성 픽스처 16/16)

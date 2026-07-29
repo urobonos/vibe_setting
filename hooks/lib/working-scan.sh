@@ -201,6 +201,13 @@ working_stalled() {
 
     uni=$(printf '%s\n' "$all_docs" | awk -F'\t' -v t="$task" -v p="$prod" '$3==p && $4==t && $6==0 {print $1"\t"$5; exit}')
     ustatus=${uni#*$'\t'}; uni=${uni%%$'\t'*}
+    # G2 는 **문서 전체의 Status/상태 줄**을 본다 — working_scan 은 첫 줄만 읽는데,
+    # frontmatter 와 본문이 어긋난 문서가 실측 3건 있다(예: frontmatter NeedsDecision ↔
+    # 본문 In Progress). 첫 줄만 믿고 진행 판정을 내리면 결정 대기건을 무인 진행시킨다.
+    # 그래서 **어느 줄에라도** NeedsDecision/Done 이 있으면 막는 쪽(보수)으로 채택한다.
+    # 어느 쪽이 정본인지 판정하지 않는다 — 그건 문서 형식 추론이라 틀리면 사고가 크다.
+    [ -n "$uni" ] && grep -qE '^(Status|상태):.*(NeedsDecision|Done)' "$uni" 2>/dev/null \
+      && ustatus="NeedsDecision"
 
     if [ -z "$uni" ] || ! grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$uni" 2>/dev/null; then
       gate="G1-마커없음";   act="report"
