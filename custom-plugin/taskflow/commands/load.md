@@ -168,6 +168,25 @@ ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${작업명
 
 > **cwd 미스매치 경고:** 본 product 와 다른 product 작업명 직접 지정 시 헤더에 `[경고] 본 cwd product=${CURRENT_PRODUCT}, 본 작업 product=${파일 product} — 작업 진행 전 cwd 확인 권장` 1줄 부착.
 
+#### 무인 마커 일시 점유 — `allow` → `pause` (2026-07-29, read-only 계약 예외)
+
+**작업명을 직접 지정한 로드는 "이 task 를 내가 처리한다" 는 명시 의도다.** 그 상태로 두면 tick 무인 루프가 같은 task 를 동시에 집어가므로, unified 마커가 `allow` 일 때만 `pause` 로 내린다.
+
+```bash
+source ~/.claude/hooks/lib/working-scan.sh
+UNIFIED=$(working_scan all | awk -F'\t' -v t="$작업명" '$4==t && $6==0 {print $1}')
+grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$UNIFIED" || exit 0   # allow 아니면 손대지 않음
+# → tick: pause (by {sid8}, {YYYY-MM-DD}) 로 교체 (전이 규약 SSOT = tick.md §pause)
+```
+
+- **`allow` 인 경우만** 쓴다. `deny`·마커 없음은 건드리지 않는다 (전이 폐쇄성 = `tick.md` §`pause` SSOT).
+- 복원은 `/taskflow:save` 가 한다. 세션이 죽어 복원이 안 되면 `watch` C 트랙이 죽은 sid 의 `pause` 를 회수한다.
+- 인자 없음·`all`·`{product}` 목록 분기는 **비대상** — 훑어보는 것과 집는 것은 다르다.
+
+> **왜 REGISTRY claim 이 아닌가.** claim 은 세션이 닫히면 `paused` 로 풀려 tick 이 즉시 재잡이한다. 세션을 껐다 켜며 task 를 하나씩 처리하는 흐름에서는 점유가 유지되지 않는다 — 마커는 문서 속성이라 세션 생명주기와 무관하다.
+>
+> **§"REGISTRY 갱신 책임 = 읽기 only" 와 상충하지 않는다.** 그 계약은 REGISTRY 를 안 건드린다는 뜻이고, 여기서 쓰는 것은 unified 마커 1줄이다. 본 슬래시의 유일한 mutation 이며 `{작업명}` 명시 지정에서만 발생한다.
+
 ### `latest` — 본 product 안 자동 선택
 
 본 product 잔존 중 mtime 최신 1건 → `{작업명}` 분기와 동일하게 본문 출력. 본 product 잔존 0건 시:
@@ -356,7 +375,9 @@ cwd 미스매치 예시 (본 cwd = `C:\Works\hongcafe_global_backend`, 본 produ
 
 ## Changelog
 
-- 2026-05-14: 신설
+- 2026-07-29: `{작업명}` 로드 시 `tick: allow` → `pause (by sid, 날짜)` 하강 (본 슬래시의 유일한 mutation). 복원 = `/taskflow:save`
+- 2026-07-22: 자동 실행 금지 명문화 — `#tag`·`{작업명}` 미지정 호출은 출력 후 정지
+- 2026-07-16: `#tag` 배타 claim·로드 흡수 (구 claim/consume)
+- 2026-06-18: cwd 필터 기본 해제 — 인자 없음 = 전 product 잔여 노출
 - 2026-06-15: 분배 풀 통합
-- 2026-06-18: cwd 필터 기본 해제 (인자 없음=전 product 잔여 노출)
-- 2026-07-22: **자동 실행 금지** 명문화 — `#tag`·`{작업명}` 미지정 호출은 출력 후 정지 (gate=2 포함, `[AUTO-ITERATE-DONE]` 부착)
+- 2026-05-14: 신설

@@ -428,13 +428,13 @@
 
 ---
 
-Status: Plan Complete
-
 > 완료 요약: {한 줄 요약 — 요약은 여기 인용문에. 아래 Status 라인엔 붙이지 않는다}
-Status: Done
+Status: {초안 | Analysis Complete | Plan Complete | In Progress | NeedsDecision | Done}
 ```
 
-> **위 `Status: Done` 은 단독 라인 예시다** — 자동 이동 hook 이 완전일치라 `Status: Done — 요약` 형태는 탈락한다(§규칙 참조). 요약은 직전 인용문(`> 완료 요약: …`)으로 분리한다.
+> **Status 라인은 문서 전체에 단 1개다** (2026-07-28 교정). 이전 템플릿은 `Status: Plan Complete` 와 `Status: Done` 을 **두 줄로 나란히** 실어 단계 전이를 예시했는데, 골격을 그대로 prepend 하는 사용 방식(§규칙) 상 두 줄이 함께 복사됐다. 여기에 작성자가 헤더 Status 를 따로 채우면서 **한 파일에 Status 가 2~3줄 생기는 drift 가 87건 누적**됐다 (`tasks/` 전수 실측, 2026-07-28 정정). `working-scan.sh` 는 첫 줄만 파싱하므로 어느 줄이 남았느냐로 tick·control 판정이 갈렸다. 단계 전이는 **줄을 추가하지 말고 그 한 줄을 덮어쓴다** (§규칙 "Status 단일 축").
+>
+> **`Status: Done` 은 단독 라인이어야 한다** — 자동 이동 hook 이 완전일치라 `Status: Done — 요약` 형태는 탈락한다(§규칙 참조). 요약은 직전 인용문(`> 완료 요약: …`)으로 분리한다.
 
 ## 등급별 워크플로우
 

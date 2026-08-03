@@ -76,6 +76,42 @@ Status: Done
 
 > **이동 확인 필수 (2026-07-09):** PostToolUse hook 자동 트리거가 미작동한 실측 사례가 있다 (memory `backlog_backlog-lifecycle-posttooluse-nomove` — 수동 호출은 정상). `Status: Done` 부착 직후 **working/ 에 파일이 잔류하는지 확인**하고, 잔류 시 `save now` 로 명시 이동한다. 잔류 방치 = 다음 세션 `/taskflow:load` 노이즈 + REGISTRY orphan 누적.
 
+#### 발주문서 옆에 통합 사이드이펙트 문서 생성 (2026-07-29, 필수)
+
+**발주문서(원본)를 근거로 만들어진 task 가 Done 이 되면, 그 작업에서 나온 사이드이펙트를 원본이 있던 자리에 남긴다.** 발주한 쪽은 `~/.claude/docs/` 를 보지 않으므로, 산출물 트리 안에만 적으면 그 사람에게는 없는 정보다.
+
+```bash
+# 원본 경로 = 태스크 문서 §"원본 추적" 테이블 (draft.md 가 박제)
+# → 그 디렉토리에 {yyyy-mm-dd}-통합사이드이펙트.md
+SRC_DIR=$(dirname "{원본 절대경로}")
+OUT="${SRC_DIR}/$(date +%Y-%m-%d)-통합사이드이펙트.md"
+```
+
+| 조건 | 동작 |
+|------|------|
+| `## 원본 추적` 있음 + 사이드이펙트 ≥ 1건 | 생성 (같은 날 파일 있으면 **append**) |
+| 사이드이펙트 0건 | **생성하지 않음** — 빈 문서를 남기지 않는다. 보고 1줄로 대체 |
+| `## 원본 추적` 없음 (`/taskflow:draft` 산출이 아님) | **비대상** — 발주문서가 없으므로 둘 곳도 없다 |
+| 원본 경로가 소실·접근 불가 | 생성 skip + 보고 (경로를 추측해 만들지 않는다) |
+
+담는 것 = **작업 범위 밖이라 손대지 않은 것들**이다. §4.5 로 backlog 격리한 항목, 리뷰 지적 중 다른 모듈 소관이라 넘긴 것, §파급면에서 발견했으나 그 step 이 흡수하지 못한 것. **고친 내용은 안 적는다** — 그건 task 문서와 커밋이 이미 갖고 있다.
+
+```markdown
+# 통합 사이드이펙트 (YYYY-MM-DD)
+
+> 발주: `{원본 파일명}` / 작업: `{작업명}` / 산출물: `docs/{product}/tasks/YYYYMMDD/{작업명}/`
+
+## {작업명}
+
+| # | 발견 | 위치 | 범위 밖 사유 | 후속 |
+|---|------|------|-------------|------|
+| 1 | {무엇} | `{file:line}` | {왜 이번에 안 고쳤나} | {backlog slug 또는 담당 넘김} |
+```
+
+**같은 날 다른 task 가 완료되면 `## {작업명}` 섹션을 append 한다** — 날짜 단위 통합 문서라 파일을 새로 만들지 않는다.
+
+> **작성 주체는 `/taskflow:save` 다.** tick 은 task 를 `Done` 으로 올리지 않으므로(tick.md §"완료 게이트") 이 지점을 가질 수 없고, watch 도 step 까지만 본다. Done 판정을 내리는 곳이 유일하게 여기다.
+
 ### 분기 B — 잔여 ≥ 1건 (`/taskflow:load` 진입점)
 
 ```markdown
@@ -142,6 +178,19 @@ bash ~/.claude/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSub
 | 분기 B (Partial) | entry status=paused 명시 갱신 | `source ~/.claude/hooks/lib/registry-utils.sh && registry_update {slug} {sid} paused` 명시 호출 |
 
 **충돌 정책:** 본 세션 외 다른 세션이 동일 slug 점유 (active) 중일 시 status=paused 갱신은 본 세션 sid entry 만 영향 — 다른 세션 active entry 는 보존.
+
+### 무인 마커 복원 — `pause` → `allow` (2026-07-29)
+
+`/taskflow:load {작업명}` 이 내려둔 `tick: pause` 를 되돌린다. **분기 A(Done)·B(Partial) 공통** — 어느 쪽이든 이 세션의 점유는 끝났으므로 무인 대상으로 복귀시킨다.
+
+```bash
+grep -qE "^(tick|무인):[[:space:]]*pause[[:space:]]*\(by ${SID8}," "$UNIFIED" || exit 0
+# → tick: allow 로 교체
+```
+
+- **본 세션 sid 가 적힌 `pause` 만** 복원한다. 다른 세션이 점유 중인 task 를 대신 풀면 그쪽 작업과 tick 이 충돌한다.
+- `deny`·마커 없음은 대상이 아니다. **복원은 `allow` 였던 것을 `allow` 로 되돌릴 뿐**이라 무인 허용 범위를 넓히지 않는다 (전이 폐쇄성 = `tick.md` §`pause` SSOT).
+- 분기 A(Done)는 문서가 `tasks/` 로 이동하므로 **이동 전에** 복원한다 — 이동 후엔 `working_scan` 대상 밖이라 마커가 그대로 박제된다.
 
 ## ④ 분배 태그 정리 (DISPATCH, 2026-06-15 신설)
 
@@ -257,6 +306,9 @@ done
 
 ## Changelog
 
-- 2026-05-14: 신설
-- 2026-06-15: 분배 정리
+- 2026-07-29: 발주문서(`## 원본 추적`) 보유 task 가 Done 되면 원본 경로에 `{yyyy-mm-dd}-통합사이드이펙트.md` 생성. 0건이면 미생성
+- 2026-07-29: 무인 마커 복원 (`pause` → `allow`) — 본 세션 sid 것만, Done 은 `tasks/` 이동 전에
+- 2026-07-16: 즉시 이동 모드 흡수 (`save now` — 구 `/taskflow:done`)
 - 2026-07-09: 정착 주체 정정
+- 2026-06-15: 분배 태그 정리 (DISPATCH)
+- 2026-05-14: 신설

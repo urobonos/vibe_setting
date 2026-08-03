@@ -115,7 +115,7 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 
 ## Changelog
 
-- 2026-07-28: **graceful stop** — `stop` 이 진행 중 tick 을 완주시키고 다음 iteration 만 막는다. `tick 종료 N/M` 진행 표시. 즉시 중단은 `stop --now`. 신호는 플래그 파일(시그널은 자식 대기 중 지연됨), 대기 중에도 1초 내 반응
-- 2026-07-28: **병렬 슬롯** — `tick-loop <간격> <N>` 으로 N 개 독립 프로세스 동시 기동. 상태를 `state/tick-loop/{슬롯}.{pid,log}` 로 분리, 빈 슬롯 자동 배정, `stop [슬롯]` 개별/전체. 상한 `min(16, cores−2)`. tick-team 대비 leader 누적 없음 + 장애 격리
-- 2026-07-28: 자식 kill 시 루프 잔존 픽스 — exit 128 이상이면 break, `trap INT TERM`, `stop` 이 자식 먼저 kill, `status` exit 0 고정
-- 2026-07-28: 신설 — `/loop` 의 컨텍스트 누적(실측 5.1배) 대안. 매 iteration 새 프로세스 + sonnet + detach
+- 2026-07-28: graceful stop — 진행 중 tick 을 완주시키고 다음 iteration 만 막는다. 즉시 중단 = `stop --now`. 시그널 대신 플래그 파일
+- 2026-07-28: 병렬 슬롯 — `tick-loop <간격> <N>`, 상태를 `state/tick-loop/{슬롯}.*` 로 분리. 상한 `min(16, cores−2)`
+- 2026-07-28: 자식 kill 시 루프 잔존 픽스 (exit ≥128 break, `trap INT TERM`, `stop` 이 자식 먼저 kill)
+- 2026-07-28: 신설 — `/loop` 의 컨텍스트 누적(실측 5.1배) 대안. 매 iteration 새 프로세스 + detach
