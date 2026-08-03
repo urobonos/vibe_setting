@@ -85,8 +85,8 @@ min_claude_md_version: "4.0"
 | B-4 | triggers 또는 적용 시점 정의 | **Medium** | `triggers:` 또는 "적용 시점" 섹션 존재 |
 | B-5 | 검사 항목/규칙 정의 | **Medium** | 테이블 또는 체크리스트 형태의 규칙 존재 |
 | B-6 | 심각도 등급 정의 | **Low** | Critical/High/Medium/Low 중 1개 이상 사용 |
-| B-7 | `version` semver 형식 (`^\d+\.\d+\.\d+$`) | **Medium** | frontmatter `version:` 값 정규식 매칭. 신규 스킬 = `1.0.0` 시작 (CLAUDE.md §5.4, 2026-05-13). 역소급 면제 — 본 룰 도입 (2026-05-13) 이전 작성 스킬은 다음 변경 시점부터 적용 |
-| B-8 | `min_claude_md_version` 호환성 (CLAUDE.md 현재 ≥ 스킬 요구) | **High** | CLAUDE.md 본문에서 현재 버전 추출 (`v\d+\.\d+`) 후 스킬 `min_claude_md_version` 과 sort -V 비교. 스킬 요구 > 현재면 FAIL (미래 요구사항 — 일괄 갱신 금지 정책, CLAUDE.md §5.4, 2026-05-13) |
+| B-7 | `version` semver 형식 (`^\d+\.\d+\.\d+$`) | **Medium** | frontmatter `version:` 값 정규식 매칭. 신규 스킬 = `1.0.0` 시작 (docs/references/skill-inventory.md §5.4, 2026-05-13). 역소급 면제 — 본 룰 도입 (2026-05-13) 이전 작성 스킬은 다음 변경 시점부터 적용 |
+| B-8 | `min_claude_md_version` 호환성 (CLAUDE.md 현재 ≥ 스킬 요구) | **High** | CLAUDE.md 본문에서 현재 버전 추출 (`v\d+\.\d+`) 후 스킬 `min_claude_md_version` 과 sort -V 비교. 스킬 요구 > 현재면 FAIL (미래 요구사항 — 일괄 갱신 금지 정책, docs/references/skill-inventory.md §5.4, 2026-05-13) |
 
 **반환 형식:**
 ```
@@ -133,7 +133,7 @@ min_claude_md_version: "4.0"
 | D-6 | 같은 게이트/룰을 정의하는 스킬이 2개 이상이면 책임 분담이 명시되어 있는가 | **Medium** | 게이트 키워드(예: "Gate-1", "Checkpoint", "타당성 검토") 추출 → 다중 정의 감지 시 분담 명시 여부 확인 |
 | D-7 | CLAUDE.md SSOT 형식(파일명 패턴, 경로 형식 등) 과 스킬 사용 형식이 일치하는가 | **High** | CLAUDE.md 코드 블록·인라인 코드의 패턴 추출 → 각 스킬에서 **명시적 산출물 경로**(예: "**산출물:** `...`", frontmatter 트리, 헤더 내 산출물 경로)가 SSOT 형식과 일치하는지 비교. **자연어 본문 내 약어 표기**(예: "analyze.md 기반으로", "result.md에 기록")는 단축 표현으로 인정하여 면제 — SSOT 와 정면 모순되는 구조적 차이만 FAIL 판정 |
 | D-8 | 스킬 본문 내 자기 모순(같은 스킬 안에서 동일 항목을 다르게 명시) | **High** | 식별자(클래스명, 경로 prefix 등) 빈도 분석 → 단일 식별자가 2개 이상 형태로 등장하면 FAIL 후보 |
-| D-9 | `depends_on` 순환 의존 (DAG / DFS) | **High** | 모든 스킬 frontmatter `depends_on` 수집 → 그래프 빌드 (A→B 엣지) → DFS 로 순환 감지. 순환 (A→B→C→A) 발견 시 FAIL (CLAUDE.md §5.4 "단방향 의존 강제 / 순환 의존 금지", 2026-05-13). 구현 = `~/.claude/bin/lint-skills.sh` L8 의 Python DFS 위임 |
+| D-9 | `depends_on` 순환 의존 (DAG / DFS) | **High** | 모든 스킬 frontmatter `depends_on` 수집 → 그래프 빌드 (A→B 엣지) → DFS 로 순환 감지. 순환 (A→B→C→A) 발견 시 FAIL (docs/references/skill-inventory.md §5.4 "단방향 의존 강제 / 순환 의존 금지", 2026-05-13). 구현 = `~/.claude/bin/lint-skills.sh` L8 의 Python DFS 위임 |
 
 **반환 형식:**
 ```
@@ -202,7 +202,7 @@ min_claude_md_version: "4.0"
 - [ ] 발견된 스킬 목록을 사용자에게 보고하고 검증 진행 승인을 받았는가
 - [ ] 4개 에이전트(Agent-A 경로, Agent-B 구조, Agent-C 정합성, Agent-D 미스매치)가 **전부** 실행되었는가 (일부 누락 금지)
   - **Why:** Agent A~D 가 서로 다른 검증 축(경로/구조/정합성/미스매치) 을 담당하므로 일부만 실행하면 해당 축의 FAIL 이 누락되어 false negative 가 발생한다.
-- [ ] 각 에이전트의 반환 결과에 모든 검사 항목(A: 4개, B: 6개, C: 8개, D: 8개)의 PASS/FAIL 판정이 포함되어 있는가
+- [ ] 각 에이전트의 반환 결과에 모든 검사 항목(A: 4개, B: 8개, C: 8개, D: 9개)의 PASS/FAIL 판정이 포함되어 있는가
 - [ ] FAIL 항목에 심각도(Critical/High/Medium/Low)가 올바르게 분류되어 있는가
 - [ ] 통합 QA 리포트가 §4의 출력 형식을 정확히 따르는가 (종합 결과 + FAIL 상세 + 미스매치 + 통계)
 - [ ] 스킬 파일을 수정하지 않았는가 (읽기 전용 검증 원칙 준수)

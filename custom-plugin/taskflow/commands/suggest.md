@@ -109,6 +109,6 @@ argument-hint: "[결정주제|backlog-slug]  # 생략 시 직전 응답·대화 
 |------|------|
 | `~/.claude/custom-plugin/taskflow/commands/suggest.md` (본 파일) | 결정 권고 진입점 — 단일 Claude 권고 4단계 |
 | `~/.claude/CLAUDE.md` §4.4 "장기 관점 추천" | 권고 양식 본 룰 (기본옵션 + 트레이드오프) SSOT — 본 커맨드는 그 명시 진입점 |
-| available-skills 카탈로그 (하니스 세션 자동 등재) | 커맨드 등록 — 플러그인 커맨드는 §5.1 인벤토리 대상 외 (`skill-inventory.md` L38 SSOT) |
+| available-skills 카탈로그 (하니스 세션 자동 등재) | 커맨드 등록 — 플러그인 커맨드는 §5.1 인벤토리 대상 외 (`skill-inventory.md` §"플러그인 이동 (2026-07-06)" SSOT) |
 | `~/.claude/custom-plugin/taskflow/commands/debate.md` | 에스컬레이션 대상 (다관점 토론) |
 | `~/.claude/custom-plugin/taskflow/commands/research.md` | mutation 금지 read-only 진입점 패턴 계보 |

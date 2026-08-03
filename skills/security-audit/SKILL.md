@@ -19,8 +19,8 @@ triggers:
   - "/security-audit"
 severity_levels:
   Critical: 즉시 Checkpoint 발동, 사용자 보고 후 수정
-  High: result.md [Security] 항목에 보고
-  Medium: result.md [Security] 항목에 참고 기록
+  High: working/ 통합 문서 §실행 [Security] 항목에 보고
+  Medium: working/ 통합 문서 §실행 [Security] 항목에 참고 기록
   Low: 권고사항으로 기록, 수정 선택적
 compatibility: >
   4등급 보안 감지 체계(Critical/High/Medium/Low)의 SSOT.
@@ -33,7 +33,7 @@ domain_triggers:
   CI/CD: 파이프라인 설정, 의존성 파일 변경 시
   Docker: Dockerfile, docker-compose.yml, docker/ 하위 설정 파일, .dockerignore 변경 시
   프로세스: 아키텍처 변경, 설계 리뷰 시
-version: 1.1.0
+version: 1.1.1
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -203,7 +203,7 @@ ARG\s+.*(PASSWORD|SECRET|KEY|TOKEN)\s*=
 FROM\s+\S+:latest
 ```
 
-### High (result.md 보고)
+### High (통합 문서 §실행 [Security] 보고)
 
 ```
 # CSRF/CORS 비활성화

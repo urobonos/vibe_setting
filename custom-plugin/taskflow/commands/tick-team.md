@@ -36,7 +36,16 @@ RESULT=$(registry_claim "{slug}" "{product}" "{sid8}" "{cwd}" "{working_file}")
 
 **subagent(워커) 도구 호출에도 PreToolUse hook 이 적용된다** — 워커의 Write 를 `worktree-enforce` 가, `rm -rf` 를 `dangerous-ops-guard` 가 차단함을 실측 확인(2026-07-23, Agent probe). 따라서 워커가 `/taskflow:tick` 을 Skill 로 호출하면 tick 명세의 claim/auto/step 로직 **+ 하니스 룰(gate·worktree·§3 가드)이 자동 상속**된다 → 워커별 룰 재구현 0. 이것이 tick-team 이 워커에게 `registry_claim` 을 직접 지시하지 않고 `/taskflow:tick` 호출만 시키는 근거다.
 
-> **카탈로그 등재 주의:** slash 를 Skill 로 호출하려면 available-skills 카탈로그에 등재돼야 하고, 카탈로그는 **세션 시작 시 로드**된다. 신규 커맨드(tick)는 생성 당일 세션엔 미등재 → 그 세션 워커는 fallback(bash 직접) 사용, 다음 세션부터 Skill 호출 가능.
+### 카탈로그 미등재 fallback (SSOT — slash·agent 공통)
+
+**카탈로그는 세션 시작 시 로드된다.** 그래서 정의를 만든 **당일 세션**에서는 신규 slash·신규 agent 가 미등재고, 다음 세션부터 정상 호출된다. 무인 루프는 그 하루를 멈출 수 없으므로 fallback 을 탄다.
+
+| 대상 | 미등재 시 |
+|------|----------|
+| **slash** (`taskflow:tick` 등 Skill 호출) | 그 커맨드 문서의 해당 단계를 `bash` 로 직접 수행 (워커의 경우 tick 1단계 = `working_scan` + `registry_claim`) |
+| **agent** (`taskflow:cold-reviewer` · `taskflow:step-developer`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 호출 파라미터로 명시** |
+
+**agent fallback 에서 `model` 을 생략하면 안 된다.** 정의를 안 타면 모델도 상속돼 무인 세션에서 sonnet 이 된다(`tick-loop.sh` 세션 기본값). 계약 없이 도는 것보다 정의 전문을 붙여 도는 편이 낫다.
 
 ## Workflow 도구 활용 (선택, 대규모)
 

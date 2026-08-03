@@ -29,7 +29,7 @@ argument-hint: "[작업 내용 — 선택]"
 |--------|----------|-----|
 | 다모듈·다파일 독립 작업 | **조건부 병렬** | `/taskflow:parallel /taskflow:auto` 결합 시 Agent 동시 spawn (race 가드 적용) |
 | Backlog 토론 위임 | **본질적 병렬** | `/taskflow:debate` 16 Agent 풀-병렬 (§"Backlog 토론 spawn 정책" 참조, 1회 cap) |
-| worktree 생성 → 코드 변경 → self-critique → QA 게이트(외부문서 시) → **verify+review(코드 변경 시 필수)** → 정착 | **직렬 필수** | 순서 강제 (§worktree-first 정책 / §"QA 게이트" / §정착 절차). QA=단일 subagent. verify+review 필수화 = `execute.md` §"코드 변경 = verify+review 필수 체인" SSOT (코드 시 `[AUTO-ITERATE-DONE]` 전 필수) |
+| worktree 생성 → 코드 변경 → self-critique → QA 게이트(외부문서 시) → **verify+review(코드 변경 시 필수)** → 정착 | **직렬 필수** | 순서 강제 (§worktree-first 정책 / §"QA 게이트" / §정착 절차). QA=단일 subagent. verify+review 필수화 = `execute.md` §"코드 변경 = verify + review 필수 체인" SSOT (코드 시 `[AUTO-ITERATE-DONE]` 전 필수) |
 | 결정 요구 발생 → 분류 → (정보 부족형) analyze → plan bounded 재진입 → 실행 복귀 | **직렬 필수** | 흐름 중단 지점에서 삽입. 권한형·판정 불확실 = 즉시 `[AUTO-ITERATE-USER-DECISION]` (ladder 미진입). 절차 = `execute.md` §"결정 escalation ladder" SSOT |
 
 ## worktree-first 정책 (필수, 2026-05-20 재정의)
@@ -169,7 +169,8 @@ git ls-files --others --exclude-standard                  # untracked 신규 →
 | **≥3팀 동일 결론 또는 4팀 만장일치** | ✓ | §3 매칭 재검사 후 실행 + sentinel `[AUTO-ITERATE-DONE]` |
 | **4팀 합의 분산 (각각 다른 결론)** | ✗ | USER-DECISION sentinel + 사용자 확인 (**재토론 금지**) |
 
-**재토론 금지 원칙 (무한 루프 방지):**
+### 재토론 금지 원칙 (무한 루프 방지)
+
 - 토론 결과가 USER-DECISION 산출 시 → 동일 `/taskflow:auto` 호출 또는 다음 `/taskflow:auto` 호출 모두 재토론 트리거 X.
 - 사용자 명시 답변 후에만 진행 (사용자 입력 = 재진입 유일 트리거).
 - Budget cap (1회/호출) + 재토론 금지 = 무한 루프 구조적 차단.

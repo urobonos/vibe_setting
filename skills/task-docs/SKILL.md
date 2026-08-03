@@ -23,15 +23,10 @@ triggers:
   - "단일 통합 문서"
   - "unified 산출물"
   - "작업 완료"
-  - "작업 완료 정리"
   - "tasks 이동"
   - "working 정리"
   - "backlog 추가"
   - "backlog 작성"
-  - "backlog 완료"
-  - "backlog 정리"
-  - "backlog 이동"
-  - "/backlog-done"
   - "SDP 작성"
   - "SRS 작성"
   - "SDD 작성"
@@ -46,7 +41,7 @@ triggers:
   - "/taskflow:review"
   - "/taskflow:deploy"
   - "/taskflow:retro"
-version: 5.1.1
+version: 6.0.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -55,7 +50,11 @@ min_claude_md_version: "4.0"
 
 # Task Docs Skill
 
-> **호출 방식:** 슬래시 — `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물) / `/taskflow:save now` (working/ 완료 → tasks/ 이동). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `작업 시작`, `작업 완료`, `working 정리`, `분석 문서 작성`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"working/ 단일 통합 워크플로우" 절차를 동일하게 따른다.
+> **호출 방식:** 슬래시 — `/task-docs` (일반 진입) / `/task-docs specs` (IEEE 산출물) / `/taskflow:save now` (working/ 완료 → tasks/ 이동). 자연어 — frontmatter `triggers` 키워드 (`플랜 작성`, `작업 시작`, `분석 문서 작성`, `작업 완료`, `backlog 추가`, `SDP/SRS/SDD/IDD/STP/STD 작성` 등) 매칭 시 자동 호출. 슬래시·자연어 모두 본문 §"산출물 네이밍 규칙" 과 §"working/ 단일 통합 워크플로우" 절차를 동일하게 따른다.
+>
+> **hook 과의 분담 (2026-08-03 실측 정정):** 두 hook 의 동작이 서로 다르므로 trigger 도 다르게 둔다.
+> - **working 계열** (`작업 완료`/`tasks 이동`/`working 정리`) = `working-lifecycle.sh` 자연어 경로는 **[가드 2] 로 대상 건수만 세고 확인을 요청한 뒤 `exit 0` — 이동하지 않는다.** 실제 이동은 사용자 승인 후 슬래시 경로(`/taskflow:save now`)가 한다. 그래서 **trigger 를 유지한다** — 이동 절차(§"working/ 단일 통합 워크플로우")가 컨텍스트에 떠 있어야 승인 직후 그대로 수행된다.
+> - **backlog 계열** (`backlog 완료`/`정리`/`이동`/`/backlog-done`) = `backlog-lifecycle.sh::move_backlog_to_tasks` 가 **직접 이동을 완료**한다. 본 스킬을 겹쳐 띄울 이유가 없어 trigger 에서 뺐다.
 
 > **[신규 정책 2026-05-12 시행]** 코드 작업 산출물은 **단일 통합 문서 1개**로 작성·보존된다 (이전 3종 분리 정책 종료, 역소급 면제 적용).
 > - **진행 중:** `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` (글로벌 통합, product 분리 없음)
@@ -89,7 +88,7 @@ min_claude_md_version: "4.0"
 | **history.md 기록** | 필수 | 선택 (규모가 크거나 의사결정 영향이 있으면 기록) |
 | **summary.md 기록** | 일일 요약에 필수 포함 | 보고용 산출물은 요약 대상 아님 |
 
-**판단 지침:** "이 프롬프트가 코드/설정을 바꾸게 하는가?" → 예 = `tasks/`, 아니오 = `output/`. 분석 후 바로 구현으로 이어지는 혼합형은 `tasks/` 로 통합해 analyze.md 에 분석을 녹이고 result.md 에 구현 결과를 기록한다. 별도 `output/` 폴더를 만들지 않는다.
+**판단 지침:** "이 프롬프트가 코드/설정을 바꾸게 하는가?" → 예 = `tasks/`, 아니오 = `output/`. 분석 후 바로 구현으로 이어지는 혼합형은 `tasks/` 로 통합해 **같은 unified 문서의 §분석 에 분석을, §실행 에 구현 결과를** 기록한다. 별도 `output/` 폴더를 만들지 않는다.
 
 **specs/** 는 IEEE 공식 산출물(SRS/SDD/IDD/SDP/STP/STD) 전용 경로로, `tasks/` · `output/` 과 별개다.
 
@@ -111,14 +110,15 @@ min_claude_md_version: "4.0"
 5. 사용자에게 보고하는 동시에 파일에도 동일 내용을 기록한다. 채팅으로만 보고하고 파일 생성을 누락하는 것은 지침 위반이다.
    > **Why:** 채팅 컨텍스트는 압축·세션 종료 시 휘발하므로, 파일로 영속화되지 않은 산출물은 history.md/summary.md 인덱싱과 추후 재개 시 복원 매체가 될 수 없다.
 5b. **사용자 보고용 경로는 OS 정합 형식으로 변환한다.** Windows = 백슬래시 + 절대 경로 (`C:\Users\PV\.claude\docs\...`), POSIX = forward slash + 홈 표기 (`~/.claude/docs/...`). 산출물 경로 보고 / `tasks/`·`output/`·`specs/` 위치 안내 / 단계 문서 경로 출력 등 사용자에게 노출되는 모든 경로에 적용. Bash 도구 `command` 파라미터·Glob/Grep 패턴은 POSIX 그대로 (도구 내부용). 글로벌 CLAUDE.md §4.4 "경로 안내 형식 (OS 정합)" SSOT.
-6. **팀 간 산출물 체이닝:** 다단계 작업에서 Team 2는 `analyze.md`를 Read한 뒤 기반으로 plan을 작성하고, Team 3는 `plan.md`를 Read한 뒤 기반으로 실행한다. 단, 분석 단독/소규모 작업은 단일 문서(예: `analyze.md`만, 또는 `result.md`만)로 완결할 수 있다. 작업 규모에 맞는 단계만 작성한다.
+6. **팀 간 산출물 체이닝:** 다단계 작업에서 Team 2는 그 unified 의 **§분석** 을 Read한 뒤 **§계획** 을 작성하고, Team 3는 **§계획**(+ step 평면 파일)을 Read한 뒤 **§실행** 을 채운다 — 파일이 아니라 **한 문서 안의 섹션**을 체이닝한다. 분석 단독/소규모 작업은 필요한 섹션만 채우고 나머지는 "해당 없음" 1행으로 둔다 (헤더 골격은 유지 — `doc-unified-check.sh V1`).
    > **Why:** Team 2/3가 선행 산출물 Read 없이 자체 컨텍스트로 진행하면 분석 단계의 트레이드오프·리스크 식별이 계획·실행에 반영되지 않아 동일 결론을 매 팀마다 재도출하는 비용이 발생하고, 의사결정 근거가 팀별로 분기된다.
-7. **체크리스트 최대 생성 원칙:** 모든 문서(analyze, plan, result)에 검증 가능한 체크리스트(`- [ ]`)를 최대한 생성한다. 분석 항목, 작업 단계, 검증 조건, 보안 점검, 테스트 케이스 등 체크박스로 표현 가능한 항목은 전부 체크리스트로 작성한다. 서술형 나열보다 체크리스트를 우선한다.
-   > **Why:** 서술형 나열은 후속 팀이 "어떤 항목이 끝났는지" 명확히 판정할 수 없어 누락·중복 작업을 유발하지만, 체크박스는 `- [x]`/`- [ ]` 상태 토글만으로 진행 상황·잔여 항목을 자동 추적 가능한 단일 매체가 된다.
+7. **골격 소진 필수 + 추가는 자유 (2026-08-03 개정):** `unified-template.md` §체크리스트 **36개 골격은 지우지 않고 전부 소진**한다 (해당 없으면 `- [x] 해당 없음 (사유)`). 그 위에 작업 고유 항목을 **더 붙이는 것은 자유**다 — 서술형 나열보다 체크박스를 우선한다. **"최대한 생성" 이 골격 대체가 아니다:** 골격을 지우고 자유 항목으로 채우면 §"단계별 산출물"(총 ≥ 30)의 슬랙 6이 사라져 tasks/ 이동 시 V4 exit 2 로 막힌다.
+   > **Why:** 서술형 나열은 후속 단계가 "어떤 항목이 끝났는지" 판정할 수 없지만, 체크박스는 `- [x]`/`- [ ]` 토글만으로 진행·잔여를 자동 추적한다. 다만 **개수를 늘리는 것 자체가 목적이 되면** 문서마다 과잉 항목이 복사돼 소진율이 떨어진다 — 그래서 하한(골격)만 강제하고 상한은 두지 않는다.
 8. **이전 문서 체크리스트 소거 의무:** 이전 팀 산출물을 참조하여 실행하는 팀은, 해당 문서의 체크리스트를 검증 후 체크 표시(`- [x]`)하고 판단 근거를 기록한다. 구체적으로:
-   - **Team 2 (Plan):** `analyze.md`의 체크리스트를 읽고, plan 수립 시 반영 여부를 `analyze.md`에 직접 체크한다. (`- [x] 항목 — plan에 반영` 또는 `- [x] 항목 — 해당 없음 (사유)`)
-   - **Team 3 (Execute):** `plan.md`의 체크리스트를 읽고, 실행 완료된 항목을 `plan.md`에 직접 체크한다. (`- [x] 항목 — 완료 (커밋 해시)` 또는 `- [x] 항목 — 스킵 (사유)`)
-   - **Result 작성 시:** `result.md`의 Self-Critique 체크리스트는 Team 3 완료 후 자체 검증하며 체크한다.
+   - **Team 2 (Plan):** §분석 체크리스트를 읽고, 계획 수립 시 반영 여부를 **그 자리에** 직접 체크한다. (`- [x] 항목 — 계획에 반영` 또는 `- [x] 항목 — 해당 없음 (사유)`)
+   - **Team 3 (Execute):** §계획 체크리스트를 읽고, 실행 완료된 항목을 **그 자리에** 직접 체크한다. (`- [x] 항목 — 완료 (커밋 해시)` 또는 `- [x] 항목 — 스킵 (사유)`)
+   - **§실행 작성 시:** Self-Critique 체크리스트는 실행 완료 후 자체 검증하며 체크한다.
+   - 세 체크리스트가 **같은 unified 문서 안**에 있으므로 파일을 오가지 않는다 (역소급 3종 문서를 이어 쓸 때만 파일 간 이동).
    - 체크되지 않은 항목(`- [ ]`)이 남아있으면 잔여 이슈로 명시한다. 미체크 항목을 무시하고 넘어가는 것은 지침 위반이다.
    > **Why:** 이전 단계 체크리스트를 소거하지 않으면 plan→execute 사이에서 어떤 항목이 의식적으로 스킵됐고 어떤 게 단순 누락인지 구분할 수 없어, 잔여 이슈가 다음 사이클로 침묵 전이된다.
 9. **기존 문서 수정 시 변경 로그 필수:** 이미 존재하는 문서를 수정할 때는 문서 마지막에 변경 로그를 추가한다. 변경 로그가 없으면 새로 생성하고, 있으면 행을 추가한다. 변경 로그 없이 기존 문서를 수정하는 것은 지침 위반이다.
@@ -164,7 +164,7 @@ min_claude_md_version: "4.0"
     - **작성자 기본값:** 프로젝트 소유자는 `jypark`(박재영)이다. 별도 지정 없으면 작성자는 `jypark`으로 기입한다.
     - **기존 문서 수정 시:** `최종 수정일`을 갱신하고, specs 문서는 `버전`도 함께 올린다.
     - **상태 전이:** 초안 → 검토중 → 승인됨. 상태 변경 시 변경 로그(규칙 9)에도 기록한다.
-11. **산출물 작성 첫 단계 = SSOT 헤더 골격 prepend 의무 (필수, 2026-05-11):** Write 도구로 `analyze.md` / `plan.md` / `result.md` 파일을 생성할 때 첫 단계로 `references/{analyze,plan,result}-template.md` 의 SSOT 헤더 골격을 그대로 복사·prepend 한 뒤 의미를 채운다. 자체 번호 헤더 (`## 2. 변경 범위`, `## 6. 변경 영향 기록` 등) 로 의미만 통합하는 자유 형식 작성은 hook 검증 우회로 간주되어 `doc-unified-check.sh V1` / `doc-unified-check.sh V4` 두 hook 가 PostToolUse exit 2 로 hard 차단한다.
+11. **산출물 작성 첫 단계 = SSOT 헤더 골격 prepend 의무 (필수, 2026-05-11):** Write 도구로 작업 문서를 생성할 때 첫 단계로 SSOT 헤더 골격을 그대로 복사·prepend 한 뒤 의미를 채운다. **신규 = `references/unified-template.md` 하나뿐이다** (`-analyze.md`/`-plan.md`/`-result.md` 신규 생성 금지 — §"단계별 산출물" 각주. 아래 3종 서술·hook 임계는 **역소급 문서를 이어 쓸 때만** 해당한다). 자체 번호 헤더 (`## 2. 변경 범위`, `## 6. 변경 영향 기록` 등) 로 의미만 통합하는 자유 형식 작성은 hook 검증 우회로 간주되어 `doc-unified-check.sh V1` / `doc-unified-check.sh V4` 두 hook 가 PostToolUse exit 2 로 hard 차단한다.
     > **Why:** 2026-05-11 audit (claude-harness / hongcafe_global_backend / infra 일주일치 79건) 결과 비면제 산출물의 plan 100% 가 SSOT 정확 헤더 (`## 수정 대상`·`## Blueprint`·`## 작업 분해 (WBS)`·`## 실행 계획`) 를 우회한 자유 형식으로 작성되어 의미 일관성은 부분 보존되었으나 hook·grep·자동 검증 정합이 깨졌다. checklist hook 이 exit 0 (경고) 에 머물러 체크리스트 0건 plan 22건 누적 발생. SSOT 골격 우선 prepend 로 작성 시점 비용을 1회 들이고, 의미 채우기는 그 위에 올린다.
     > **위반 사례 (2026-05-11 audit):**
     > - `hongcafe_global_backend/tasks/20260511/mod-02-* batch (16건)/...-plan.md` — SSOT 헤더 무시, 자체 번호 헤더로 자유 작성
@@ -172,8 +172,8 @@ min_claude_md_version: "4.0"
     > - `claude-harness/tasks/20260511/harness-cleanup/...-plan.md` — 압축형 자유 작성, 7개 섹션 헤더 미사용
     > - `infra/tasks/20260511/fe-cleanup-bugfix/...-{analyze,plan,result}.md` — 모든 강제 헤더 + 체크리스트 0건
     > **강제 hook (PostToolUse):**
-    > - `doc-unified-check.sh V1` — analyze 12 헤더 / plan 11 헤더 / result 6 헤더 + Status 그룹 grep, 미충족 시 `[BLOCKED]` + exit 2
-    > - `doc-unified-check.sh V4` — analyze≥30 / plan≥20 / result≥20, 미달 시 `[BLOCKED]` + exit 2 (역소급 면제: 생성일 < 2026-05-07 산출물은 hint 강등)
+    > - `doc-unified-check.sh V1` — unified 는 analyze+plan+result 합집합 헤더, 역소급 3종은 각 12/11/6 헤더 + Status 그룹 grep. 미충족 시 `[BLOCKED]` + exit 2
+    > - `doc-unified-check.sh V4` — **unified ≥ 30 (문서 전체 합산, 등급 스케일 없음)** / 역소급 analyze≥30·plan≥20·result≥20. 미달 시 `[BLOCKED]` + exit 2 (역소급 면제: 생성일 < 2026-05-07 은 hint 강등)
     > - `doc-unified-check.sh V3` / `doc-unified-check.sh V6` — 변경 영향 / 타당성 검토 섹션 추가 강제
 
 ## 파일 경로
@@ -218,10 +218,9 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 | 정책 | 파일명 | 용도 | references |
 |---|---|---|---|
-| **신규 Unified (2026-05-12~)** | (진행) `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` → (완료) `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` | 분석 + 계획 + 실행 단일 통합 (체크리스트 ≥ 50). working-lifecycle.sh hook 자동 이동 | `references/unified-template.md` |
-| **역소급 1. Analyze** | `{yyyy-mm-dd}-{작업명}-analyze.md` | (< 2026-05-12 보존) Team 1 분석 결과 (이슈 4단계 분류, 체크리스트 ≥ 30) | `references/analyze-template.md` |
-| **역소급 2. Plan** | `{yyyy-mm-dd}-{작업명}-plan.md` | (< 2026-05-12 보존) Team 2 실행 계획 + Blueprint + WBS (체크리스트 ≥ 20) | `references/plan-template.md` |
-| **역소급 3. Result** | `{yyyy-mm-dd}-{작업명}-result.md` | (< 2026-05-12 보존) Team 3 완료 결과 + Self-Critique ≥ 20 + 잔여 이슈 | `references/result-template.md` |
+| **Unified (신규 = 전건)** | (진행) `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` → (완료) `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` | 분석 + 계획 + 실행 단일 통합. 체크리스트 **총 ≥ 30** (`doc-unified-check.sh` V4 `unified` MIN=30 이 실제 게이트) | `references/unified-template.md` |
+
+> **역소급 3종은 열람 전용이다 (신규 생성 금지).** `-analyze.md`(≥ 30) / `-plan.md`(≥ 20) / `-result.md`(Self-Critique ≥ 20) 는 **생성일 < 2026-05-12** 산출물에만 존재하며 최신 생성분이 `20260514` 에서 끊겼다. 기존 문서를 읽거나 이어 쓸 때만 `references/{analyze,plan,result}-template.md` 를 참조하고, 새 작업은 어떤 등급이든 unified 1개다.
 
 ---
 
@@ -268,7 +267,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 이동 후 `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` 에 대해:
 - `doc-unified-check.sh V1` — `*-unified.md` 패턴 검증, 합집합 ≈ 20개 필수 헤더 (analyze 11 + plan 5 + result 4 — 통합 변경 영향 / 타당성 검토는 합쳐서 1회) 누락 시 `[BLOCKED]` exit 2
-- `doc-unified-check.sh V4` — 체크리스트 `- [ ]` + `- [x]` 합산 ≥ 30 (통합 문서 강제 하한 — 2026-05-13 ≥50 완화, 통합 문서라 중복 제거 허용)
+- `doc-unified-check.sh V4` — 체크리스트 `- [ ]` + `- [x]` **문서 전체 합산 ≥ 30** (섹션별 하한 없음. 골격은 **36개**라 슬랙 **6** — `unified-template.md` §체크리스트 SSOT)
 - `doc-unified-check.sh V3` — `## 변경 영향` 섹션 + 3열 표(변경/개선/이유) 존재
 - `doc-unified-check.sh V6` — `## 타당성 검토` 헤더 + `[Source: <name> §<id>]` 인용 ≥ 1건
 - 모두 통과 시 `tasks/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 가 영구 보존 산출물로 확정
@@ -320,11 +319,13 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 
 ### 등급별 플랜 구성 (Plan 단계)
 
-| 등급 | Plan 내용 | Team 3 구성 |
-|------|----------|------------|
-| **S** | 간략 (목표 + 수정 대상) | Lead + Worker 1 + Reviewer |
-| **M** | 표준 (목표 + Blueprint + WBS) | Lead + Worker 2 + Reviewer + Tester |
-| **L** | 상세 (전체 템플릿) | Lead + Worker 3 + Reviewer + Tester + Security + Performance |
+| 등급 | Plan 내용 |
+|------|----------|
+| **S** | 간략 (목표 + 수정 대상) |
+| **M** | 표준 (목표 + Blueprint + WBS) |
+| **L** | 상세 (전체 템플릿) |
+
+> **팀 멤버 구성은 여기 적지 않는다** — 등급별 Team 1/2/3 구성 SSOT = `orchestration` §1.2 "Task Sizing". 표를 두 벌 두면 갈린다 (실제로 L등급 Ops 가 여기서만 빠져 있었다).
 
 ### 이슈 등급 기준 (Analyze 단계)
 
@@ -375,7 +376,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 
 # Part 4. Context Persistence 연동
 
-컨텍스트 압축이 임박할 때, 작업 문서(analyze.md, plan.md, result.md)가 **진행 상황 복원의 핵심 매체** 역할을 한다.
+컨텍스트 압축이 임박할 때, **working/ 단일 통합 문서**(`{yyyy-mm-dd}-{product}-{작업명}.md`)가 진행 상황 복원의 핵심 매체 역할을 한다 (step 분해가 있으면 그 step 평면 파일까지).
 
 - **즉시 기록 원칙:** 각 팀 산출물은 팀 완료 즉시 파일에 기록한다. 메인 컨텍스트에만 보관하고 파일 생성을 미루지 않는다.
 - **복원 시 활용:** 컨텍스트 압축 후 재개 시, 메모리에 저장된 "현재 단계 + 산출물 경로"를 읽고, 해당 파일을 Read하여 작업을 이어간다.

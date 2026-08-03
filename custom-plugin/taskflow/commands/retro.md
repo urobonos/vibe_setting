@@ -107,16 +107,11 @@ argument-hint: "[작업명]  # 생략 시 본 세션 전체 회고"
 | S (단발 작업, 1~3 파일) | 면제 — `/taskflow:save` 또는 working-lifecycle 자동 이동 시 history.md 자동 1줄 추가만으로 충분 |
 | M / L | **권장** — 회고 요약 + 다음 세션 진입점 명시 |
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 시점 | 범위 |
-|--------|------|------|
-| `/taskflow:review` | §실행 직후 | Self-Critique + simplify |
-| `/taskflow:deploy` | §리뷰 통과 후 | git-push + branch-enforce 안내 |
-| **`/taskflow:retro`** | §배포 후 / 세션 마감 직전 | history.md + summary.md 기록 + 회고 요약 |
-| `/taskflow:save` | 세션 마감 직전 | worktree 정착 + 잔여 작업 통합 저장 (회고 와 보완 관계) |
-| `save now` | 작업 완료 직후 | working/ → tasks/ 단순 이동 |
+앞 = `/taskflow:deploy` / 뒤 = `/taskflow:save`(정착 + 잔여 저장 — 회고와 보완 관계). 본 슬래시 = **기록**(history.md + summary.md), save = **이동·정착**. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
 - 2026-05-15: 신설

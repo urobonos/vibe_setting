@@ -1,6 +1,6 @@
 {
   "name": "taskflow",
-  "description": "작업 문서 생명주기 통합 (task-docs 수트) — 분석·타당성·계획·실행·검증·리뷰·배포·회고 8단계 + working/ 저장·분배·재개·이동 (load/save/claim/dispatch/consume/survey/ps/draft/done) + 자동진행·조사·제안·토론 (auto/research/suggest/debate)",
+  "description": "작업 문서 생명주기 통합 (task-docs 수트) — 8단계 워크플로우 (analyze/feasibility/plan/execute/verify/review/deploy/retro) + working/ 문서·상태 관리 (load/save/draft/survey/ps/control) + 무인 루프 (tick/tick-loop/tick-team/watch/code) + 보조 (auto/research/suggest/debate/parallel)",
   "version": "0.1.0",
   "author": {
     "name": "박재영"

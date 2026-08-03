@@ -22,7 +22,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 |------|------|------|
 | ① working/ 문서 식별 + step 인덱스 확인 | 인자 매칭 또는 가장 최근 working/ 파일. `Status: Plan Complete` 마커 + §계획 "Step 분해" 인덱스 표 + step 평면 파일 존재 확인 | 대상 파일 + step 목록 |
 | ② **step 순차 소비 루프** | step 인덱스가 있으면 step-01부터 의존 순서대로 소비 (아래 §"step 순차 소비"). 인덱스 없으면 §계획 수정 대상 표 순차 실행 (기존 동작) | 변경 적용 + step별 상태 마킹 |
-| ③ §실행 섹션 채움 | 실행 요약 / 변경 내역 / Before/After 대조 / 테스트 결과 / 잔여 이슈 / 롤백 | Self-Critique ≥ 20 채움 (CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" SSOT) |
+| ③ §실행 섹션 채움 | 실행 요약 / 변경 내역 / Before/After 대조 / 테스트 결과 / 잔여 이슈 / 롤백 | Self-Critique 채움 (항목·개수 SSOT = `unified-template.md` §체크리스트 — 문서 총합 ≥ 30 이 게이트) |
 | **③.5 QA 게이트 (조건부)** | **외부 참조 문서 존재 시에만** — worktree 변경분(신규 파일 포함) ↔ 외부 문서를 단일 subagent 가 대조 (아래 §"QA 게이트"). 외부 문서 없으면 skip. Status 마킹 *전* | **PASS / skip → ④ 진행 / FAIL → §잔여 이슈 + Status: Partial** |
 | ④ Status 판정 | **QA PASS 또는 skip(사유 기록)** + 전 step Done = `Status: Done` (최후 write) / QA FAIL 또는 일부 step 미완 = `Status: Partial` + `## 잔여 작업` 섹션 (미완 step·QA findings 명시) | 자동 이동 트리거 또는 working/ 유지 |
 
@@ -98,7 +98,7 @@ FINDINGS:
 2. **`/taskflow:review`** — Self-Critique 보강 + simplify.
 
 - ③.5 comprehension-QA(변경분↔외부문서)는 **self-scoped 유지** — 외부문서 없으면 self-critique 와 중복이라 무조건화 대상 아님. 무조건화되는 것은 **verify + review**다.
-- 코드 변경 없는 작업(문서·sh 훅·commands·설정)은 §Skip 조건대로 `review` 만으로 충분(verify 면제 — verify.md L101 정합).
+- 코드 변경 없는 작업(문서·sh 훅·commands·설정)은 §Skip 조건대로 `review` 만으로 충분(verify 면제 — `verify.md` §"Skip 조건" 정합).
 - **강제 강도:** plan-before(코드 전 계획)는 `gate-enforce.sh` **hard 차단** / verify+review(코드 후 QA)는 **규율**(QA-after 천장 — hook 은 §검증 표 artifact 존재만 검사 가능, 실행 진위 강제 불가). hook 백스톱은 backlog `qa-after-stop-backstop`. SSOT = CLAUDE.md §4.3 "코드 라이프사이클 게이트".
 
 ## 결정 escalation ladder (§실행 중 결정 요구 발생 시)
@@ -198,8 +198,8 @@ step 소비 중 "사용자가 결정해야 할 것 같다"고 느끼는 지점�
 
 | Hook | 검증 | 차단 강도 |
 |------|------|----------|
-| `doc-unified-check.sh V1` | unified §실행 헤더 (실행 요약 / Self-Critique / 테스트 결과 / 잔여 이슈 / Status: Done\|Partial) L128~143 | exit 2 (tasks/ 이동 후) |
-| `doc-unified-check.sh V4` | unified 체크리스트 = 작업 등급 비례 S≥8/M≥14/L≥20 (§4.3 SSOT) | exit 2 |
+| `doc-unified-check.sh V1` | unified §실행 헤더 (실행 요약 / Self-Critique / 테스트 결과 / 잔여 이슈 / Status: Done\|Partial) — `v_template_guard` `*unified*.md` 분기 | exit 2 (tasks/ 이동 후) |
+| `doc-unified-check.sh V4` | unified 체크리스트 **문서 전체 합산 ≥ 30** — 평면값이라 등급 스케일이 없다 (§4.3 "단계 고정, 등급 무관") | exit 2 |
 | `output-naming-check.sh` | step 평면 파일 Edit = working/ DEPTH=1 통과 | exit 2 (위반 시) |
 | `working-lifecycle.sh` | `^Status:\s*Done` + `## Self-Critique` 동시 시 PostToolUse 자동 이동 — unified → tasks/, step 평면 → tasks/.../steps/NN-{slug}.md 분배 | (lifecycle 트리거) |
 | QA 행 기록 (규율) | **QA 활성 시 §실행 §테스트 결과에 `QA(문서대조): PASS\|FAIL\|해당 없음` 행 기록** (auditable claim). **hook 완전강제 없음** — working-lifecycle=전 product 영향, doc-template-guard=자동이동 mv 미발동(둘 다 부적합). fail-open 은 **self-scoping(외부 문서 시만 QA)** 으로 표면 자체를 축소해 관리 | (규율 + 표면 축소) |
@@ -233,7 +233,7 @@ Status: Done   (시작 라인)
 | `~/.claude/skills/task-docs/SKILL.md` | 본 슬래시의 본체 스킬 |
 | `~/.claude/skills/task-docs/references/unified-template.md` § 실행 | unified 양식 SSOT |
 | `~/.claude/custom-plugin/taskflow/commands/plan.md` §"step 파일 양식" | step 분해·인덱스 양식 SSOT (본 슬래시가 소비) |
-| `~/.claude/hooks/doc-unified-check.sh V1` L128~143 | unified §실행 헤더 강제 |
+| `~/.claude/hooks/doc-unified-check.sh` V1 `v_template_guard` → `*unified*.md` 분기 | unified §실행 헤더 강제 |
 | `~/.claude/hooks/working-lifecycle.sh` | Status: Done 자동 이동 + step 분배 본체 |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"QA 게이트" (본 파일) | QA 게이트 절차 SSOT (활성화 조건 / 단일 subagent / fail-closed 판정 / known-limitations) |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"결정 escalation ladder" (본 파일) | **분류 판별식 (P1~P4 / I1~I3) + fail-safe + ladder 절차 + bounded + 로그 표 SSOT** — CLAUDE.md·auto.md·reminder hook 이 참조 |
@@ -264,21 +264,47 @@ Status: Done   (시작 라인)
 | QA 게이트 (③.5) — 외부 참조 문서 없음 (자기 §계획만) | **skip** — 계획 대조는 Self-Critique + step DoD 가 커버. `QA(문서대조): 해당 없음` 행만 기록 |
 | QA 게이트 (③.5) — 외부 참조 문서 존재 (기획·제안·참조문서) | **수행** — 변경분 ↔ 외부 문서 단일 subagent 대조 (등급 무관) |
 
-## 차별점 (다른 슬래시와)
+## 워크플로우 맵 (taskflow 슬래시 전체 — 본 절이 SSOT)
 
-| 슬래시 | 시점 | 범위 |
-|--------|------|------|
-| `/taskflow:draft` | 원본 파일(기획서/스펙) 기반 시작 | working/ §분석·§계획 + 원본 지문(sha256) 박제 (짝 = execute) |
-| `/taskflow:analyze` | 작업 시작 | working/ §분석 |
-| `/taskflow:plan` | §분석 완료 후 | working/ §계획 + step-01~nn 분해 |
-| **`/taskflow:execute`** | §계획 완료 후 | step 인덱스 순차 소비 + working/ §실행 + Self-Critique + **QA 게이트(③.5)** + Status |
-| `/taskflow:verify` | §실행 도중/직후 | e2e 5점 (env / 함수 / 스키마 / curl / mock) |
-| `/taskflow:review` | §실행 직후 | Self-Critique 보강 + simplify |
+**어느 슬래시가 언제인지는 여기 한 벌뿐이다.** 각 커맨드 문서는 자기 "짝 슬래시" 1줄만 갖고 여기를 가리킨다 — 커맨드마다 이 표를 복제하면 곧 갈라진다(실제로 갈라졌다).
+
+**① 유인 파이프라인** — 하나의 working/ 통합 문서를 단계별로 채운다.
+
+| 단계 | 슬래시 | 채우는 곳 |
+|------|--------|----------|
+| 시작 | `/taskflow:draft`(원본 파일 기반 + 지문 sha256 박제) · `/taskflow:analyze`(작업명 기반) | §분석 |
+| 근거 | `/taskflow:feasibility` (§분석 도중 병행) | §타당성 검토 |
+| 계획 | `/taskflow:plan` | §계획 + step-01~nn 분해 (+ 병렬그룹 DISPATCH 등록) |
+| 실행 | **`/taskflow:execute`** | step 인덱스 순차 소비 + §실행 + Self-Critique + **QA 게이트(③.5)** + Status |
+| 검증 | `/taskflow:verify`(환경·런타임 e2e 5점) → `/taskflow:review`(코드 내부 품질 + cold 판정 1회) | §검증 / §리뷰 |
+| 마감 | `/taskflow:deploy`(push 안내 — 사용자 직접) → `/taskflow:retro`(history·summary) → `/taskflow:save`(worktree 정착 + Done/잔여 판정) | §회고 |
+| 재개 | `/taskflow:load` (다음 세션 — **잔여 미체크 `- [ ]` ≥1 문서 전건**, Status 무관 + `#tag` 배타 claim) | — |
+
+**② 무인 생산 계열** — 사람 개입 없이 working/ 문서를 소비해 **쓰기**를 한다. 셋 다 `tick: allow` 마커 화이트리스트 + claim 이 걸린다.
+
+| 슬래시 | 역할 |
+|--------|------|
+| `/taskflow:tick` | step 1건 claim → 개발 → cold 리뷰 루프 → verify → `ReadyToMerge`. 머지 안 함 |
+| `/taskflow:tick-loop` · `/taskflow:tick-team` | tick 을 매번 새 프로세스로 반복 / 워커 N개 병렬 |
+| `/taskflow:watch` | 변경분 검증 + `ReadyToMerge` 머지 해소 + 정체 병목 제거 |
+
+**③ 보조** — 파이프라인 어디에나 삽입. **마커·claim 비대상이라 ② 가 아니다.**
+
+| 슬래시 | 역할 |
+|--------|------|
+| `/taskflow:control` | ② 가 올린 대기 큐(ReadyToMerge·NeedsDecision) 리뷰 — **read-only, mutation 0.** 무인 생산의 소비 대시보드라 보는 주체가 사람이다 |
+| `/taskflow:code` | **문서·claim·상태 전이 없이** 지금 이 요청에 개발·리뷰 루프 1회 |
+| `/taskflow:auto` | 묶음 승인 모드 — 잔여 액션·인자 작업 자동 진행 |
+| `/taskflow:survey` | Plan Complete 여러 작업을 가로질러 동시진행 그룹 + 우선순위 |
+| `/taskflow:parallel` | 뒤에 오는 슬래시의 Agent spawn 강제 병렬화 |
+| `/taskflow:debate`(16 Agent) · `/taskflow:suggest`(단일 권고) | 의견 갈림 / 결정 권고 |
+| `/taskflow:research` · `/taskflow:ps` | 웹 조사 병렬 / 세션·REGISTRY orphan 조회·정리 |
 
 > **QA 게이트(③.5) vs /taskflow:verify·/taskflow:review:** QA 게이트 = "구현 ↔ **외부 문서**(기획·제안) 대조(comprehension drift)" — 외부 문서 있을 때만. `/taskflow:verify` = 환경·런타임(e2e 5점), `/taskflow:review` = 코드 내부 품질(Self-Critique·simplify). 상보적 — QA 게이트는 /taskflow:execute **내부 조건부**(Status 전, 단일 subagent), /taskflow:verify·/taskflow:review는 **별도 슬래시**.
 
 ## Changelog
 
+- 2026-08-03: **`## 워크플로우 맵` 신설 = 슬래시 배치 SSOT 로 승격.** 11개 커맨드가 각자 갖고 있던 구 `## 차별점` 표(90줄, 내용이 서로 갈려 `save.md` 의 폐기 필터 drift 를 낳았다)를 여기 1벌로 모으고 나머지는 `## 짝 슬래시` 1~2줄 포인터로 축약. 무인 계열(tick·watch·control·code)이 11벌 어디에도 없던 누락도 함께 메움. 그룹 판정 기준 = **마커·claim 유무** (read-only·claim 없는 control·code 는 ② 아님)
 - 2026-05-15: 신설
 - 2026-05-29: step 순차 소비 연동
 - 2026-06-05: QA 게이트 추가

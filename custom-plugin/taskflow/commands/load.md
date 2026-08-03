@@ -4,7 +4,7 @@ allowed-tools: Bash, Read, Glob, Grep, PowerShell, Edit
 argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음=전체 잔존 / #tag=분배 배타 claim+로드 / #tag done=완료"
 ---
 
-다음 세션 시작 직후 호출하는 잔존 작업 로드 슬래시. `/taskflow:save` 분기 B (Status: Partial + `## 잔여 작업` 섹션) 로 working/ 에 보관된 작업을 다시 컨텍스트로 끌어온다. **동시에 `/taskflow:dispatch` 가 DISPATCH 풀에 등록한 `available` 분배 작업(`#tag`)도 함께 표시** — 세션 시작 시 "내 잔존 작업 + 집어갈 분배 작업"을 한 화면에 노출한다. 분배 작업도 load 가 `#tag` 로 직접 claim 한다 (아래 §"#tag claim" 참조).
+다음 세션 시작 직후 호출하는 잔존 작업 로드 슬래시. `/taskflow:save` 분기 B (Status: Partial + `## 잔여 작업` 섹션) 로 working/ 에 보관된 작업을 다시 컨텍스트로 끌어온다. **동시에 `/taskflow:plan` 이 DISPATCH 풀에 등록한 `available` 분배 작업(`#tag`)도 함께 표시** (구 `/taskflow:dispatch` 슬래시는 plan 에 흡수·폐기) — 세션 시작 시 "내 잔존 작업 + 집어갈 분배 작업"을 한 화면에 노출한다. 분배 작업도 load 가 `#tag` 로 직접 claim 한다 (아래 §"#tag claim" 참조).
 
 **기본 전체 잔존 노출 (2026-06-18~ 변경):** 인자 없음(`/taskflow:load`) = product 구분 없이 working/ 내 **잔여 작업(미체크 `- [ ]` ≥ 1) 보유 문서 전부** 노출 (Status `Partial`/`Plan Complete`/`폐기` 무관 — 잔여가 있으면 모두). `latest` 만 `hooks/lib/product-resolver.sh` 의 `resolve_product` 로 현재 cwd → 본 product 안 자동 선택 (자동 선택은 라우팅 정확도가 중요하므로 cwd 매칭 유지). 좁혀 보려면 `/taskflow:load {product}` 명시. **Why:** 다레포 환경에서 본 product 잔존이 0건이어도 타 product 진행 작업을 한눈에 봐야 세션 연속성·작업 누락 방지가 된다 (구 cwd 1차 필터는 본 product 0건 시 빈 화면 → 누락 위험). **자동 선택(`latest`)만** cwd 라우팅을 유지해 잘못된 product 빨려듦을 방지한다.
 
@@ -185,7 +185,7 @@ grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$UNIFIED" || exit 0   # al
 
 > **왜 REGISTRY claim 이 아닌가.** claim 은 세션이 닫히면 `paused` 로 풀려 tick 이 즉시 재잡이한다. 세션을 껐다 켜며 task 를 하나씩 처리하는 흐름에서는 점유가 유지되지 않는다 — 마커는 문서 속성이라 세션 생명주기와 무관하다.
 >
-> **§"REGISTRY 갱신 책임 = 읽기 only" 와 상충하지 않는다.** 그 계약은 REGISTRY 를 안 건드린다는 뜻이고, 여기서 쓰는 것은 unified 마커 1줄이다. 본 슬래시의 유일한 mutation 이며 `{작업명}` 명시 지정에서만 발생한다.
+> **§SSOT 표의 `REGISTRY 갱신 책임 = 읽기 only` 행과 상충하지 않는다.** 그 계약은 REGISTRY 를 안 건드린다는 뜻이고, 여기서 쓰는 것은 unified 마커 1줄이다. 본 슬래시의 유일한 mutation 이며 `{작업명}` 명시 지정에서만 발생한다.
 
 ### `latest` — 본 product 안 자동 선택
 
@@ -257,7 +257,7 @@ grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$UNIFIED" || exit 0   # al
 
 **Why:** load 는 "무엇이 남았는지 보는" 진입점이다. 조회가 착수로 미끄러지면 사용자가 의도하지 않은 작업이 gate=2 아래에서 끝까지 굴러간다 — 되돌리는 비용이 조회 편의보다 훨씬 크다.
 
-## #tag — 분배 claim + 로드 (claim/consume 흡수, 2026-07-16)
+## #tag claim — 분배 claim + 로드 (claim/consume 흡수, 2026-07-16)
 
 `#tag` 인자 = 구 `/taskflow:claim` 흡수. DISPATCH 풀에서 배타적 claim 후 분배 문서 로드. **claim 은 read-only 목록과 달리 lock mutation** (load 의 유일한 mutation 분기). 짝 = plan 의 병렬 그룹 자동 등록(`plan.md §"병렬 그룹 다세션 분배"`).
 
@@ -284,7 +284,7 @@ RESULT="${OUT%%|*}"; DOC="${OUT#*|}"
 
 `/taskflow:load #consume` (권장 `/loop /taskflow:load #consume`) = available 풀을 자동 폴링·claim·소비 연속 (구 `/taskflow:consume` 흡수). 풀이 빌 때까지 건별 `dispatch_claim` → `/taskflow:execute` 위임 → `dispatch_done`. worker 세션 무인 소비.
 
-## 터미널 제목 설정 (SSOT, claim.md 이전 2026-07-16)
+## 터미널 제목 설정 (SSOT) — claim.md 이전 2026-07-16
 
 작업·분배 진행 슬래시가 진입 시 터미널 창 제목을 태스크명으로 설정한다 (다세션 병렬 창 식별). 본 섹션이 방식·형식의 단일 SSOT — `/taskflow:execute`·`/taskflow:auto`·`/taskflow:save`·`load #consume` 이 값만 다르게 참조한다.
 
@@ -364,17 +364,13 @@ cwd 미스매치 예시 (본 cwd = `C:\Works\hongcafe_global_backend`, 본 produ
 [Claude] 전체 잔존 목록 표시
 ```
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 시점 | 동작 |
-|--------|------|------|
-| `/taskflow:auto` | 작업 시작·중간 | 묶음 승인 모드 진입 (실행, mutation 허용) |
-| `/taskflow:save now` | 작업 완료 직후 | working/ → tasks/ 즉시 이동 모드, 판정 생략 (mutation) |
-| `/taskflow:save` | 세션 마감 직전 | worktree + 문서 + 잔여 저장 (mutation) |
-| **`/taskflow:load`** | **다음 세션 시작 직후 / 타 세션·에이전트** | **전체 product 잔존(잔여 미체크 ≥1, Status 무관) + DISPATCH `available`(`#tag`) 식별 + 본문 표시 + 빈 폴더 자동 정리 + `#tag` 배타적 claim(mutation: lock, 구 claim 흡수). `latest` 만 본 cwd product 자동 선택** |
+짝 = `/taskflow:save`(세션 마감 저장). 본 슬래시는 **로드 전용**이라 mutation 이 `#tag` claim lock 과 `{작업명}` 로드 시 `tick: pause` 하강 둘뿐이고, 실행은 `/taskflow:auto` 가 받는다. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + 폐기 `/taskflow:dispatch` 안내 정정(plan 흡수) + `#tag claim` 헤딩 정렬
 - 2026-07-29: `{작업명}` 로드 시 `tick: allow` → `pause (by sid, 날짜)` 하강 (본 슬래시의 유일한 mutation). 복원 = `/taskflow:save`
 - 2026-07-22: 자동 실행 금지 명문화 — `#tag`·`{작업명}` 미지정 호출은 출력 후 정지
 - 2026-07-16: `#tag` 배타 claim·로드 흡수 (구 claim/consume)

@@ -22,7 +22,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 |------|------|------|
 | ① working/ 문서 식별 | 인자 있음 = 파일명 매칭 / 없음 = 가장 최근 working/ 파일 | 대상 파일 경로 |
 | ② 양식 골격 prepend | `~/.claude/skills/task-docs/references/unified-template.md` SSOT 골격 prepend (파일 미존재 시) | `## 분석` 헤더 + 하위 표 |
-| ③ §분석 섹션 채움 | 분석 관점별 요약 / Critical~Low 4분류 / 트레이드오프 / 우선순위 권고 + § 공통 (타당성 검토 / 변경 영향 기록 / 장기 영향 / 재발 방지 / SSOT 일관성) | 분석 체크리스트 = 작업 등급 비례 (§4.3 SSOT) 충족 |
+| ③ §분석 섹션 채움 | 분석 관점별 요약 / Critical~Low 4분류 / 트레이드오프 / 우선순위 권고 + § 공통 (타당성 검토 / 변경 영향 기록 / 장기 영향 / 재발 방지 / SSOT 일관성) | 분석 체크리스트 = `unified-template.md` §체크리스트 골격 소진 (게이트는 **문서 총합 ≥ 30**, 섹션별·등급별 하한 없음) |
 | ④ Status 마커 부착 | 단독 라인 `Status: Analysis Complete` (아래 §"종료 마커") | tick 이 분석 재실행하지 않고 `/taskflow:plan` 부터 진입 |
 
 > **비필수 사이드이펙트 백로그 격리 (Critical~Low 분류 전 사전 필터):** ③ 에서 발견한 항목이 **① 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급** 3조건을 **모두** 충족하면 Critical~Low 등급 행을 **부여하지 말고** backlog 메모리(`backlog_{slug}.md` + MEMORY.md `## Backlog`)에만 기록 후 현재 분석을 계속한다. 하나라도 불충족 = 정상 4분류. **실제 버그는 경미해도 미루지 않음.** §3 매칭 항목은 사용자 보고. SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
@@ -74,7 +74,7 @@ Status: Analysis Complete
 | Hook | 검증 | 차단 강도 |
 |------|------|----------|
 | `doc-unified-check.sh V1` | unified §분석 헤더 (분석 관점별 / Critical~Low / 우선순위 권고 / 장기 영향 / 재발 방지 / SSOT 일관성) | exit 2 (working/ 경로는 면제, tasks/ 이동 후 검증) |
-| `doc-unified-check.sh V4` | unified 체크리스트 = 작업 등급 비례 S≥8 / M≥14 / L≥20 (CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" SSOT) | exit 2 |
+| `doc-unified-check.sh V4` | unified 체크리스트 **문서 전체 합산 ≥ 30** — 평면값이라 등급 스케일이 없다 (CLAUDE.md §4.3 "단계 고정, 등급 무관") | exit 2 |
 | `doc-unified-check.sh V6` | §타당성 검토 헤더 존재 시 `[Source:...]` ≥ 1건 | 경고 |
 | `doc-unified-check.sh V3` | §변경 영향 + 3열 표 | 경고 |
 
@@ -93,8 +93,8 @@ Status: Analysis Complete
 | `~/.claude/CLAUDE.md` §4.1 "장기 관점 분석·계획·실행" + §File Paths "working/ 단일 통합 문서" | 정책 SSOT |
 | `~/.claude/skills/task-docs/SKILL.md` | 본 슬래시의 본체 스킬 |
 | `~/.claude/skills/task-docs/references/unified-template.md` | 양식 SSOT (§ 분석 섹션 골격) |
-| `~/.claude/hooks/doc-unified-check.sh V1` L94~116 | unified §분석 헤더 강제 |
-| `~/.claude/hooks/doc-unified-check.sh V4` L54 | unified 체크리스트 임계 |
+| `~/.claude/hooks/doc-unified-check.sh` V1 `v_template_guard` → `*unified*.md` 분기 | unified §분석 헤더 강제 |
+| `~/.claude/hooks/doc-unified-check.sh` V4 `v_checklist_count` (:355~) | unified 체크리스트 임계 (`unified) MIN=30` 평면값) |
 | `~/.claude/hooks/doc-unified-check.sh V6` | 타당성 검토 인용 강제 |
 | **본 파일 §"단계 전이 (→ plan)"** | **순방향 전이 조건 (T1 gate=2 / T2 수정 대상 ≥1) SSOT** — CLAUDE.md·reminder hook 이 참조 |
 | **본 파일 §"종료 마커"** | **`Status: Analysis Complete` 부착 규약 SSOT** — 소비처 = `tick.md` 2단계 분기 / `working-scan.sh` 파싱 / `report-work` 진행률 |
@@ -113,15 +113,11 @@ Status: Analysis Complete
 | S | 압축 (Critical 만 / 트레이드오프·우선순위 권고 생략 가능) |
 | M / L | **필수** — 관점별 요약 + Critical~Low 4분류 + 우선순위 권고 모두 채움 |
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 시점 | 범위 |
-|--------|------|------|
-| **`/taskflow:analyze`** | 작업 시작 | working/ §분석 섹션 채움 |
-| `/taskflow:feasibility` | §분석 도중 | tools:search-docset 공식 근거 인용 ≥ 1건 |
-| `/taskflow:plan` | §분석 완료 후 | working/ §계획 섹션 채움. **T1(gate=2) ∧ T2(수정 대상 ≥1) 충족 시 본 슬래시가 자동 전이** (§"단계 전이") |
-| `/taskflow:execute` | §계획 완료 후 | working/ §실행 + Self-Critique |
+앞 = `/taskflow:draft`(원본 파일 기반 시작 시) / 뒤 = `/taskflow:plan` — **T1(gate=2) ∧ T2(수정 대상 ≥1) 충족 시 본 슬래시가 자동 전이**(§"단계 전이"). `/taskflow:feasibility` 는 §분석 도중 병행. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + V4 임계를 등급 스케일로 적던 오기 정정 (실제는 문서 총합 ≥ 30 평면값) + 하드 줄번호 → 함수명
 - 2026-05-15: 신설

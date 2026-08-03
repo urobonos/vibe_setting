@@ -162,7 +162,7 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 
 **다중 참조:** 한 plan 이 작업분석을 여러 번 받으면(재실행 누적) `출처:` backlink 가 여러 건 쌓인다. hook 은 **중복 제거 후 모든 작업분석 문서**를 갱신한다(첫 1건만 갱신 시 나머지가 `⏳ Plan` 으로 stale 잔존하는 것을 방지 — silent cap 금지).
 
-> **깨진 링크 해소가 전파의 본질:** lifecycle hook 은 완료 시 plan 을 `working/` → `tasks/.../unified.md` 로 **mv 이동**(`move_working_to_tasks` L123)한다. Phase 3 인덱스가 박은 working/ 링크는 완료 순간 깨진다 — 전파가 바로 그 링크를 tasks/ 실경로로 갱신 + 상태 `✓` 로 마킹해 마스터 인덱스를 **라이브**로 유지한다. SSOT: 본 절 + `hooks/working-lifecycle.sh` 전파 블록.
+> **깨진 링크 해소가 전파의 본질:** lifecycle hook 은 완료 시 plan 을 `working/` → `tasks/.../unified.md` 로 **mv 이동**(`working-lifecycle.sh::move_working_to_tasks`)한다. Phase 3 인덱스가 박은 working/ 링크는 완료 순간 깨진다 — 전파가 바로 그 링크를 tasks/ 실경로로 갱신 + 상태 `✓` 로 마킹해 마스터 인덱스를 **라이브**로 유지한다. SSOT: 본 절 + `hooks/working-lifecycle.sh` 전파 블록.
 
 ## 직병렬 실행 지침
 
@@ -189,14 +189,9 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 - 본 커맨드는 **분석·권고 도구** — 권고된 동시진행/우선순위의 **실제 실행(코드 변경·worktree)은 범위 밖**. 후속 `/taskflow:auto` · `/taskflow:parallel /taskflow:auto` · `/taskflow:execute` 로 분리한다.
 - 메타분석이 "이 작업들 병렬 진행" 을 권고해도, 실제 병렬 spawn·worktree·정착은 §3 보호(`worktree-enforce` / `branch-enforce` / `dangerous-ops-guard`)를 그대로 거친다. 본 커맨드가 §3 우회 통로로 작동하지 않는다.
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 대상 | 범위 |
-|--------|------|------|
-| `/taskflow:analyze` | **단일** 작업 1개 | working/ 단일 문서 §분석 채움 |
-| **`/taskflow:survey`** | **여러** 작업 (Plan Complete) | 작업 간 동시진행 그룹 + 우선순위 메타분석 → working/ 신규 + 계획문서 권고 append |
-| `/taskflow:load` | 잔존 Partial 작업 | working/ Status: Partial 로드 (read-only) |
-| `/taskflow:auto` | 잔여 액션·인자 작업 | 묶음 승인 일괄 **실행** (mutation) |
+`/taskflow:analyze` 가 **단일** 작업 1개를 보는 자리에서, 본 슬래시는 **여러** Plan Complete 작업을 가로질러 본다 (동시진행 그룹 + 우선순위). 실행은 아래 §"후속 진입점" 으로 넘긴다. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## 후속 진입점 (응집)
 
@@ -241,7 +236,7 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 | SSOT | 역할 |
 |------|------|
 | `~/.claude/custom-plugin/taskflow/commands/survey.md` (본 파일) | 자립형 진입점 — 다작업 메타분석 5-Phase 골격 |
-| available-skills 카탈로그 (하니스 세션 자동 등재) | 커맨드 등록 — 플러그인 커맨드는 §5.1 인벤토리 대상 외 (`skill-inventory.md` L38 SSOT) |
+| available-skills 카탈로그 (하니스 세션 자동 등재) | 커맨드 등록 — 플러그인 커맨드는 §5.1 인벤토리 대상 외 (`skill-inventory.md` §"플러그인 이동 (2026-07-06)" SSOT) |
 | `~/.claude/hooks/lib/product-resolver.sh` | cwd → product 산출 (Phase 0 필터) |
 | `~/.claude/custom-plugin/taskflow/commands/plan.md` §"step 파일 양식" / Status: Plan Complete | 스캔 대상 마커·WBS 구조 SSOT |
 | `~/.claude/custom-plugin/taskflow/commands/auto.md` · `~/.claude/custom-plugin/taskflow/commands/parallel.md` | 분석 결과 후속 실행 진입점 |
@@ -249,4 +244,5 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
 - 2026-06-09: 신설

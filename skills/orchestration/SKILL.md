@@ -9,7 +9,7 @@ triggers:
   - "3-Team"
   - "Analyze→Plan→Execute"
   - "/orchestration"
-version: 2.1.4
+version: 2.2.0
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -232,7 +232,7 @@ Orchestrator → Analyst Lead spawn (opus)
 **M등급:** Lead + 전원 (7명, Ops 제외)
 **L등급:** Lead + 전원 (8명, Ops 포함)
 
-**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-analyze.md`
+**산출물:** working/ 통합 문서 `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 의 **§분석** 섹션 (완료 시 `-unified.md` 로 자동 이동). **`-analyze.md` 를 새로 만들지 않는다** — 역소급 열람 전용이다 (`task-docs/SKILL.md` §"단계별 산출물").
 
 **필수 포함 섹션:**
 - **타당성 검토 (Feasibility Review):** 모든 분석 권고에 앤트로픽 공식 문서, 프레임워크/라이브러리 공식 문서, 공신력 있는 기술 채널(RFC, IEEE, OWASP 등)을 근거로 제시한다. 근거 없는 주장·권고는 지침 위반.
@@ -245,11 +245,11 @@ Orchestrator → Analyst Lead spawn (opus)
 **목적:** analyze.md 기반으로 실행 계획 수립, Blueprint 설계, 구현 가능성 검증
 
 **Lead:** Analyst (Lead Authority 주입)
-**Input:** Team 1의 analyze.md 파일 경로를 `Context_Path`로 전달. Lead가 직접 Read하여 사용.
+**Input:** Team 1 이 채운 **working/ 통합 문서 경로**를 `Context_Path` 로 전달. Lead 가 직접 Read 하여 §분석 을 사용.
 **권한:** Read-only
 
 ```
-Orchestrator → Analyst Lead spawn (opus, Context_Path: analyze.md 경로)
+Orchestrator → Analyst Lead spawn (opus, Context_Path: working/ 통합 문서 경로)
   Analyst Lead 내부:
     ├── Architect (opus)     ─── Blueprint, 디렉토리/클래스/메서드 구조
     ├── Worker (opus)        ─── 구현 실현 가능성, 작업량 추정
@@ -264,7 +264,7 @@ Orchestrator → Analyst Lead spawn (opus, Context_Path: analyze.md 경로)
 **S등급:** Lead + Architect + Worker (3명)
 **M/L등급:** Lead + Architect + Worker + Security (4명)
 
-**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-plan.md`
+**산출물:** 같은 working/ 통합 문서의 **§계획** 섹션 (+ step 분해 시 `-step-NN-{slug}.md` 평면 파일). **`-plan.md` 를 새로 만들지 않는다.**
 
 **필수 포함 섹션:**
 - **타당성 검토 (Feasibility Review):** 모든 설계·계획에 공식 문서 기반 근거를 제시한다. 근거 없는 설계 결정은 지침 위반.
@@ -277,7 +277,7 @@ Orchestrator → Analyst Lead spawn (opus, Context_Path: analyze.md 경로)
 **목적:** plan.md 기반으로 구현, 검증, 테스트 수행
 
 **Lead:** Worker (Lead Authority 주입)
-**Input:** Team 2의 plan.md 파일 경로를 `Context_Path`로 전달. Lead가 직접 Read하여 사용.
+**Input:** Team 2가 채운 **working/ 통합 문서 경로**(step 분해 시 그 step 파일 경로)를 `Context_Path` 로 전달. Lead 가 직접 Read 하여 §계획 을 사용.
 **권한:** Read-Write
 **격리:** Worktree (필수)
 
@@ -291,22 +291,18 @@ Team 3의 Worker Lead는 반드시 `isolation: "worktree"`로 spawn한다. workt
 |------|------|
 | **1. spawn** | Orchestrator가 Worker Lead를 `isolation: "worktree"`로 spawn → 격리된 복사본에서 작업 |
 | **2. 구현** | Worker Lead + 멤버들이 worktree 내에서 구현·테스트·검증 수행 |
-| **3. 보고** | Lead가 전체 diff + 테스트 결과 + result.md를 Orchestrator에 반환 |
-| **4. 머지 분기 판정** | Orchestrator가 변경 내용을 Checkpoint §3 5조건(비가역/광범위/트레이드오프/외부/권한외) 에 대조 → 5a / 5b / 5c 중 하나로 분기 |
-| **5a. Checkpoint 해당 → 승인 대기** | diff + result.md 제시 → 사용자 승인 시 merge → worktree 정리 / 거부 시 worktree 브랜치 삭제 |
-| **5b. Checkpoint 무관 + 일반 개선** | Default Accept 적용 → 별도 승인 대기 없이 merge → worktree 정리 (CLAUDE.md §4 "실행 책임 (1) 승인 대기 떠넘기기" 정합) |
-| **5c. 거부** | worktree 브랜치 삭제 → 원본 코드 무영향 |
+| **3. 보고** | Lead 가 전체 diff + 테스트 결과 + **§실행 기록**을 Orchestrator 에 반환 |
+| **4. 머지 위임** | Orchestrator 는 **머지 절차를 여기서 재정의하지 않는다** — `/git:merge` 에 위임한다 (분기·정착·worktree 정리·차단 경계 전부 그쪽 SSOT) |
+| **5. 거부** | worktree 브랜치 삭제 → 원본 코드 무영향 |
 
 **주의사항:**
+- **Checkpoint §3 5조건**(비가역 작업·3파일+ 광범위 변경·요구사항 상충 트레이드오프·외부 시스템 연동·권한 외 파일 접근) **해당 시 사용자 승인 대기 필수 — 승인 없이 merge 는 지침 위반이다.** 위임 대상(`/git:merge`)도 같은 승인을 요구하지만, 이 문장은 위임 경로를 안 타는 경우까지 덮는 안전 기본값이라 본문에 남긴다 (CLAUDE.md §4.4 "안전 기본값을 거스르는 룰은 BLOCK-path 여도 본문 산문 유지").
 - Worktree 내에서 테스트 실행이 가능하므로, 반드시 테스트 통과 후 보고한다.
-- **머지 정책 (CLAUDE.md §4 Default Accept 정합):**
-  - **Checkpoint §3 5조건 해당** (비가역 작업·3개 이상 파일 광범위 변경·요구사항 상충 트레이드오프·외부 시스템 연동·권한 외 파일 접근) → 사용자 승인 대기 필수. 승인 없이 merge 는 지침 위반.
-  - **그 외 일반 개선** (리팩토링·명명 개선·누락 처리·방어 코드 등 사용자가 diff 로 즉시 검증 가능한 변경) → Default Accept 적용. 별도 승인 대기 없이 자동 merge 진행.
-  - **Why:** 모든 Team 3 결과를 무조건 승인 대기로 묶으면 CLAUDE.md §4 "Default Accept" 와 정면 충돌하고, Worktree 사용 여부에 따라 같은 변경이 다르게 처리되는 모순이 생긴다. Worktree 격리의 가치(테스트 오염 방지·롤백 안전성)는 자동 머지 분기에서도 동일하게 유지된다.
+- **구현 제안 반영은 별도 승인 대기 없이 진행한다** (CLAUDE.md §4.2 "실행 책임 (1) 승인 대기 떠넘기기"). 단 **정착(머지)은 그 룰의 대상이 아니다** — 브랜치·worktree·push·머지 경계는 CLAUDE.md §4.3 + `worktree-enforce.sh`·`branch-enforce.sh`·`git-guard.py` 가 판정하며, 본 스킬은 그 판정을 우회하거나 요약해 옮기지 않는다.
 - Vibe Coding Group 모드에는 적용하지 않는다 (병렬 worktree 간 merge 충돌 방지).
 
 ```
-Orchestrator → Worker Lead spawn (opus, Context_Path: plan.md 경로, isolation: "worktree")
+Orchestrator → Worker Lead spawn (opus, Context_Path: working/ 통합 문서(또는 step 파일) 경로, isolation: "worktree")
   Worker Lead 내부 (격리된 worktree에서 작업):
     ├── Worker 멤버 (opus)   ─── 레이어별 구현 (Model/Service/Controller)
     ├── Reviewer (opus)      ─── 코드 리뷰
@@ -324,10 +320,8 @@ Orchestrator → Worker Lead spawn (opus, Context_Path: plan.md 경로, isolatio
     └── Lead가 구현 diff + 테스트 결과 + 이슈 대시보드 종합 → result.md → Orchestrator에 반환 → terminate
 
 Orchestrator:
-    ├── [Checkpoint §3 5조건 해당] → 사용자에게 diff + result.md 제시
-    │     ├── [승인] → worktree 브랜치 merge → 정리 → Done
-    │     └── [거부] → worktree 브랜치 삭제 → 원본 무영향
-    └── [Checkpoint 무관 + 일반 개선] → Default Accept → worktree 브랜치 merge → 정리 → Done
+    ├── [채택] → 정착은 `/git:merge` 위임 (머지 가부·절차 판정 = 그쪽 + branch-enforce)
+    └── [거부] → worktree 브랜치 삭제 → 원본 무영향
 ```
 
 **등급별 멤버 구성:**
@@ -338,7 +332,7 @@ Orchestrator:
 | **M** | Lead + Worker 2 + Reviewer + Tester |
 | **L** | Lead + Worker 3 + Reviewer + Tester + Security + Performance + Ops |
 
-**산출물:** `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-result.md`
+**산출물:** 같은 working/ 통합 문서의 **§실행** 섹션 (+ `## Self-Critique`). **`-result.md` 를 새로 만들지 않는다.**
 
 ### Feedback Loop 규칙
 - **Critical/High 1건+:** Worker 수정 → 재검증 (최대 3회). 3회 초과 → 사용자 에스컬레이션.

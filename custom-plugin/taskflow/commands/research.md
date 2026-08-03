@@ -116,6 +116,6 @@ claude.ai 웹의 **Research** 기능을 Claude Code 환경에서 재현하는 �
 | SSOT | 역할 |
 |------|------|
 | `~/.claude/custom-plugin/taskflow/commands/research.md` (본 파일) | 자립형 진입점 — Research 4-Phase 골격 |
-| available-skills 카탈로그 (하니스 세션 자동 등재) | 커맨드 등록 — 플러그인 커맨드는 §5.1 인벤토리 대상 외 (`skill-inventory.md` L38 SSOT) |
+| available-skills 카탈로그 (하니스 세션 자동 등재) | 커맨드 등록 — 플러그인 커맨드는 §5.1 인벤토리 대상 외 (`skill-inventory.md` §"플러그인 이동 (2026-07-06)" SSOT) |
 | `~/.claude/CLAUDE.md` §File Paths output `research` 카테고리 | 산출물 경로 정책 |
 | `~/.claude/custom-plugin/taskflow/commands/debate.md` | 멀티 Agent 병렬 spawn 계보 (참고) |

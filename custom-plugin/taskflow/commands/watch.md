@@ -43,11 +43,13 @@ D. 보고 + commit
 
 **C 도 같은 이유로 독립이다.** 정체는 정의상 **아무 변화가 없는 상태**라 A 의 diff 에는 영원히 안 걸리고, 상태가 `ReadyToMerge` 도 아니라 B 도 안 본다. 두 트랙 모두의 사각지대다.
 
-**D2 순서도 중요하다.** 검증 전에 스냅샷을 갱신하면 그 변경분은 영영 A 트랙 대상에서 빠진다.
+### D2 순서 — 검증 뒤에 스냅샷
 
-## cwd 에 국한되지 않는다 (필수)
+검증 전에 스냅샷을 갱신하면 그 변경분은 영영 A 트랙 대상에서 빠진다.
 
-**watch 는 호출된 위치와 무관하게 전 프로젝트를 본다.** 스캔도, 머지도, 상태 변경도 cwd 를 따르지 않는다.
+## cwd 에 국한되지 않는다 (무인 계열 cwd 규약 SSOT)
+
+**watch 는 호출된 위치와 무관하게 전 프로젝트를 본다.** 스캔도, 머지도, 상태 변경도 cwd 를 따르지 않는다. **본 절이 무인 계열(`tick`·`tick-loop`·`tick-team`·`watch`) 공통 cwd 규약의 SSOT 다** — 각 커맨드는 자기 축 표만 갖고 `cd` 금지 근거는 여기를 가리킨다.
 
 | 축 | 범위 | 근거 |
 |----|------|------|
@@ -79,18 +81,14 @@ watch_commit "${1:-all}"      # 스냅샷 확정
 
 ### 문서 단위 lock (필수)
 
-**인스턴스를 통째로 직렬화하지 않는다.** 그러면 서로 다른 문서를 보는 watch 까지 막혀서, 대기 물량이 쌓여도 한 번에 하나씩밖에 못 푼다. 잠그는 단위는 **watch 가 쓰기를 하는 문서**다.
+**인스턴스를 통째로 직렬화하지 않는다** — 그러면 서로 다른 문서를 보는 watch 까지 막혀 한 번에 하나씩밖에 못 푼다. 잠그는 단위는 **watch 가 쓰기를 하는 문서**다. 두 세션이 같은 문서를 동시에 처리하면 깨지는 이유는 **B 트랙의 ff머지 → `worktree remove` → `branch -D` 가 멱등이 아니어서**다 (C 트랙 조치는 멱등이지만 같은 lock 을 쓰는 편이 단순하다).
 
-두 세션이 `/loop 5m /taskflow:watch` 를 동시에 돌릴 때 같은 문서를 양쪽이 처리하면 깨진다 — **B 트랙의 ff머지 → `worktree remove` → `branch -D` 가 멱등이 아니라서** 두 번째가 이미 지워진 worktree·브랜치를 건드리거나, 한쪽 머지 도중 다른 쪽이 worktree 를 지운다. (C 트랙 조치는 상태 플립·`mark_stale` 이라 멱등이지만 같은 lock 을 쓰는 편이 단순하다.)
+- **`registry_claim` 을 쓰지 않는다.** 그건 tick 의 점유를 뺏어 정작 일할 주체를 막는다. lock 은 watch 전용 공간(`state/watch/locks/`)이다.
+- **못 잡으면 그 문서만 건너뛴다** — 한 문서 때문에 나머지를 세우지 않는다.
+- lock 키 = **문서 경로**(sanitize). `mkdir` 원자성 + mtime TTL stale 회수(`WATCH_LOCK_TTL_MIN`, 기본 30분, `registry_lock_acquire` 와 같은 형태) — acquire 후 프로세스가 죽으면 영구히 잠기므로 회수가 필요하다.
+- **쓰기 직전에 잡고 끝나면 바로 푼다.** iteration 전체를 감싸면 통째 lock 과 다를 게 없어진다.
 
-- **`registry_claim` 을 쓰지 않는다.** 그건 tick 의 점유를 뺏어 정작 일할 주체를 막는다. lock 은 watch 전용 공간(`state/watch/locks/`)이라 tick 과 무관하다.
-- **못 잡으면 그 문서만 건너뛴다** — 대기하지 않는다. 한 문서 때문에 나머지를 세울 이유가 없다.
-- lock 키 = **문서 경로**(파일명 안전하게 sanitize). `mkdir` 의 원자성 + mtime TTL stale 회수(`WATCH_LOCK_TTL_MIN`, 기본 30분) — `registry_lock_acquire` 와 같은 형태다. acquire 후 프로세스가 죽으면 그 문서가 영구히 잠기므로 회수가 필요하다.
-- **쓰기 직전에 잡고 끝나면 바로 푼다.** iteration 전체를 감싸지 않는다 — 읽기만 하는 문서까지 잠그면 통째 lock 과 다를 게 없어진다.
-
-> **처리 중 문서는 스냅샷에서 이전 값으로 유지된다.** 통째 lock 을 없애면 인스턴스 A 가 검증 중인 문서를 B 가 `watch_commit` 으로 확정해버려 A 의 변경분이 영영 diff 에서 빠지는 사고가 가능하다(§"D2 순서" 와 같은 종류). `watch_scan_now` 가 lock 걸린 문서를 **신선한 문서와 같게** 다뤄 이전 스냅샷 값을 내보내는 것으로 막는다 — 신선도 필터의 값-유지 경로를 그대로 재사용하고 새 장치를 만들지 않는다.
->
-> `watch_commit` 의 tmp 파일명에는 PID 가 붙는다. 동시 도달이 가능해진 뒤로 고정 이름이면 서로의 쓰기를 덮어써 스냅샷이 깨진다.
+> **처리 중 문서는 스냅샷에서 이전 값으로 유지된다** — 인스턴스 A 가 검증 중인 문서를 B 가 `watch_commit` 으로 확정하면 A 의 변경분이 영영 diff 에서 빠진다(§"D2 순서" 와 같은 종류). `watch_scan_now` 가 lock 걸린 문서를 **신선한 문서와 같게** 다뤄 막는다 — 신선도 필터의 값-유지 경로 재사용, 새 장치 0. `watch_commit` 의 tmp 파일명에 PID 가 붙는 것도 같은 이유다(고정 이름이면 서로의 쓰기를 덮어쓴다).
 
 스냅샷 = `~/.claude/state/watch/{scope}.tsv` — 문서 행(path/mtime/size/status) + **repo 행**(`repo:{경로}`/HEAD/미커밋수/브랜치). **scratchpad 가 아니라 state/** 에 둔다 — 세션이 죽어도 남아야 다음 세션 loop 가 이어서 diff 한다.
 
@@ -130,58 +128,12 @@ watch_commit "${1:-all}"      # 스냅샷 확정
 
 > **문서의 `## 변경 파일` 을 파싱해 대조하지 않는다.** 그 섹션 보유율이 **35/77건(45%)** 이라 절반이 사각지대다 (2026-07-27 실측). repo HEAD 축은 문서 형식에 의존하지 않는다.
 
-### 코드·문서 판별
+### 코드·문서 판별 — worktree ↔ 문서 대응
 
-같은 `ReadyToMerge` 라도 코드 작업과 문서 작업은 검증할 게 전혀 다르다.
-
-**문서 본문을 파싱해 판별하지 않는다 — git 에 직접 묻는다.** `## 머지 전 리뷰 포인트` 에 worktree 경로가 적힌 문서는 **20건 중 0건**이다 (2026-07-28 전수 실측). tick.md 가 기록을 명시했지만 실제 보유율은 0% 라, 이 축으로 판별하면 전건이 오분류된다. `## 변경 파일` 을 거부한 것과 같은 이유다.
+같은 `ReadyToMerge` 라도 코드 작업과 문서 작업은 검증할 게 전혀 다르다. **문서 본문 파싱으로 판별하지 않고 git 에 직접 묻는다** — `머지 전 리뷰 포인트` 의 worktree 경로 보유율이 2026-07-28 전수 실측 **20건 중 0건**이라, 이 축으로 판별하면 전건이 오분류된다 (`## 변경 파일` 을 거부한 것과 같은 이유).
 
 ```bash
-# taskflow 소유 worktree 만 — wip/{sid8}-{slug} 규약 (SSOT = git/commands/merge.md)
-# 출력: worktree경로 \t sid8 \t slug   (sid8 prefix 를 벗겨야 문서 작업명과 매칭된다)
-git -C "$REPO" worktree list --porcelain \
-  | awk '/^worktree /{w=$2}
-         /^branch refs\/heads\/wip\//{
-           sub("refs/heads/wip/","",$2)
-           i = index($2,"-")
-           print w"\t"substr($2,1,i-1)"\t"substr($2,i+1)
-         }'
-# 예: C:/Users/PV/.claude/worktrees/46299ae3-mirror-sync  46299ae3  mirror-sync
-```
-
-`wip/` 로 필터하는 게 핵심이다. 실측상 `hongcafe_global_backend` 의 worktree 3개는 전부 `worktree-agent-*` (하니스 Agent isolation 용)라 taskflow 와 무관하다 — 필터 없이 열거하면 남의 worktree 를 리뷰하게 된다.
-
-worktree 는 그 repo 안이 아니라 `~/.claude/worktrees/` 에 생기고 `worktree list` 는 **소유 repo 에서 조회**해야 나온다 (위 예시도 `hongcafe_global_docs` 에서 조회했다). 감시 repo 를 순회하며 찾는다.
-
-### worktree ↔ 문서 대응 — 문서 기록이 1순위, 없으면 내용 대조
-
-**문서의 `머지 전 리뷰 포인트` 에 worktree 가 적혀 있으면 그게 가장 정확하다.** base 브랜치와 머지 순서까지 함께 적히는 경우가 있고, 그건 git 추론으로는 얻을 수 없는 정보다.
-
-```
-- worktree: `~/.claude/worktrees/7f1eebc3-mod02-priceoptions`
-  (branch `wip/7f1eebc3-mod02-priceoptions`, base=`wip/e294a6aa-mod02-qnafcmuse` @ `f55e9eed`)
-- 머지 순서: `f55e9eed`(qnaFcmUse) → 본 브랜치. 뒤집으면 forSelf 키 카운트 단언이 어긋난다
-```
-
-**단 보유율이 고르지 않다** — 2026-07-28 실측에서 20건 중 0건이었다가 같은 날 새로 생성된 문서엔 적혀 있었다. 그러니 **있으면 쓰고, 없을 때만 아래 추론으로 내려간다.** 기록이 있는데 무시하고 git 으로 추론하면 base·순서 정보를 버리게 된다.
-
-### 기록이 없을 때 — 문자열 매칭으로 정하지 않는다 (필수)
-
-**slug 도 sid 도 1:1 규약이 아니다.** 2026-07-28 실측:
-
-```
-worktree                        문서 작업명
-7f1eebc3-mod02-priceoptions  ↔  mod-02-advisor-readback-gaps   (문자열 불일치)
-e294a6aa-mod02-qnafcmuse     ↔  mod-02-advisor-readback-gaps   (한 문서에 worktree 2개)
-e294a6aa-mod-04-viewer-role  ↔  mod-04-chat-viewer-role        (sid 하나가 두 task)
-```
-
-slug 는 사람이 자유롭게 짓고, 한 세션(sid)이 여러 task 를 거치며, 한 task 가 여러 worktree 를 쓴다. **기계적 정확 매칭은 0건**이고, REGISTRY sid 축도 다대다라 판정이 안 선다.
-
-그래서 이렇게 한다 — **기계는 후보만 뽑고, 대응은 Claude 가 내용으로 판단한다.**
-
-```bash
-# 후보 수집만 — 매칭은 하지 않는다
+# 후보 수집만 — 매칭은 하지 않는다. wip/{sid8}-{slug} 규약 SSOT = git/commands/merge.md
 working_scan all | awk -F'\t' '$5=="ReadyToMerge" {print $1"\t"$4}'          # 해소 대상
 for REPO in $(grep -vE '^\s*(#|$)' ~/.claude/state/watch/repos.txt); do      # 살아있는 wip
   git -C "$REPO" worktree list --porcelain 2>/dev/null \
@@ -189,7 +141,12 @@ for REPO in $(grep -vE '^\s*(#|$)' ~/.claude/state/watch/repos.txt); do      # �
 done
 ```
 
-대응 판정 = 그 문서의 `## 변경 파일`·§실행 기록·`머지 전 리뷰 포인트` 와 **worktree diff 의 실제 파일 목록**을 대조한다. 이름이 아니라 **무엇을 건드렸는지**가 근거다.
+- **`wip/` 필터가 핵심이다.** `hongcafe_global_backend` 의 worktree 3개는 전부 `worktree-agent-*`(하니스 Agent isolation 용)라 taskflow 와 무관하다 — 필터 없이 열거하면 남의 worktree 를 리뷰한다.
+- worktree 실체는 `~/.claude/worktrees/` 에 있지만 `worktree list` 는 **소유 repo 에서** 조회해야 나온다. 감시 repo 를 순회한다.
+
+**문서에 worktree 가 적혀 있으면 그게 1순위다** — base 브랜치·머지 순서까지 함께 적히는 경우가 있고 그건 git 추론으로 못 얻는다 (`base=wip/e294a6aa-… @ f55e9eed` · `머지 순서: f55e9eed → 본 브랜치, 뒤집으면 단언이 어긋난다`). 보유율이 고르지 않을 뿐이라 **있으면 쓰고 없을 때만 아래로 내려간다.**
+
+**기록이 없으면 문자열 매칭으로 정하지 않는다 (필수).** slug 는 사람이 자유롭게 짓고, 한 sid 가 여러 task 를 거치며, 한 task 가 worktree 를 여럿 쓴다 — 2026-07-28 실측에서 **기계적 정확 매칭 0건**이었고(`7f1eebc3-mod02-priceoptions` ↔ `mod-02-advisor-readback-gaps` 류), REGISTRY sid 축도 다대다라 판정이 안 선다. 그래서 **기계는 후보만 뽑고 대응은 Claude 가 내용으로 판단한다** — 그 문서의 `## 변경 파일`·§실행 기록과 **worktree diff 의 실제 파일 목록**을 대조한다. 이름이 아니라 **무엇을 건드렸는지**가 근거다.
 
 | 판정 | 축 | 동작 |
 |------|-----|------|
@@ -217,9 +174,11 @@ done
 
 **리뷰어는 코드를 고치지 않는다.** `cold-reviewer` 에 Edit·Write 도구가 없는 것이 그 강제다 (`dev-team` FE 멤버를 `Explore` 로 두는 것과 같은 기계적 차단 — 지시문은 어길 수 있어도 없는 도구는 못 쓴다). `simplify` 처럼 수정까지 하는 경로를 타지 않는다 — 무인 루프가 리뷰하면서 코드를 바꾸면 리뷰 대상 자체가 움직인다.
 
-> **카탈로그 미등재 fallback:** agent 정의는 세션 시작 시 로드된다. `cold-reviewer` 가 아직 등재되지 않은 세션(정의 생성 당일)에서는 `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 호출 파라미터로 명시**한다 (`tick-team.md` §"카탈로그 등재 주의" 와 같은 처리 — 정의를 안 타면 모델도 상속돼 무인 세션에서 sonnet 이 된다). 계약 없이 도는 것보다 낫다.
+> **카탈로그 미등재 fallback** = `tick-team.md` §"카탈로그 미등재 fallback" SSOT.
 
-> **watch 의 리뷰는 재확인이다 (2026-07-30~).** tick 이 그 step 안에서 이미 이 계약으로 지적 0건까지 루프를 돌린 뒤 `ReadyToMerge` 를 붙이므로, 여기서 나오는 지적은 **리뷰어 편차로 새로 드러난 것**이다. 그래도 반려 처리는 그대로 한다 — 편차로 드러난 실결함이 실재하고(`BoardController.php:947` 사례), 두 번째 눈이 이 트랙의 값이다. 대신 반려 빈도가 높게 유지되면 tick 쪽 루프가 형식적으로 도는 신호라 보고에 남긴다.
+### watch 의 리뷰는 재확인이다 (2026-07-30~)
+
+tick 이 그 step 안에서 이미 이 계약으로 지적 0건까지 루프를 돌린 뒤 `ReadyToMerge` 를 붙이므로, 여기서 나오는 지적은 **리뷰어 편차로 새로 드러난 것**이다. 그래도 반려 처리는 그대로 한다 — 편차로 드러난 실결함이 실재하고(`BoardController.php:947` 사례), 두 번째 눈이 이 트랙의 값이다. 대신 반려 빈도가 높게 유지되면 tick 쪽 루프가 형식적으로 도는 신호라 보고에 남긴다.
 
 ### 문서 축 — 정합성 검증
 
@@ -300,7 +259,7 @@ done
 |----------------|------|
 | `feature/*` 단일 | ff머지 진행 |
 | **`master`/`main` 뿐** | **repo별 착지 브랜치 정책**(아래) 적용 |
-| 후보 2개 이상 (모호) | **좁히기 재시도** — worktree diff ↔ 문서 대조(§"worktree ↔ 문서 대응")로 1개로 줄면 진행. 그래도 2개 이상이면 보고 |
+| 후보 2개 이상 (모호) | **좁히기 재시도** — worktree diff ↔ 문서 대조(§"코드·문서 판별")로 1개로 줄면 진행. 그래도 2개 이상이면 보고 |
 | 후보 0개 | **착지 브랜치 정책으로 생성 후 진행** — 정책에 없는 repo 만 보고 |
 
 ### repo별 착지 브랜치 (master 회피)
@@ -327,13 +286,13 @@ base 가 확정되면 절차는 `/git:merge` 를 그대로 탄다 (재구현 0).
 
 ### ff-only 가 깨지면 사다리를 내려간다 — 멈추지 않는다 (필수)
 
-**여러 wip 을 같은 착지 브랜치로 순차 머지하면 두 번째부터 ff-only 가 반드시 깨진다** (첫 머지로 착지 브랜치가 전진해 두 번째 wip 이 그 후손이 아니게 된다). 이건 예외가 아니라 정상 경로다 — 여기서 멈추면 대기 물량이 영영 안 빠진다.
+**여러 wip 을 같은 착지 브랜치로 순차 머지하면 두 번째부터 ff-only 가 반드시 깨진다** (첫 머지로 착지가 전진해 두 번째 wip 이 그 후손이 아니게 된다). 예외가 아니라 정상 경로다 — 여기서 멈추면 대기 물량이 영영 안 빠진다.
 
 | 단계 | 조건 | 동작 |
 |------|------|------|
 | L1 | ff-only 성공 | 완료 |
 | L2 | ff-only 실패 + wip 범위에 머지 커밋 0건 | `/git:merge` 범위 cherry-pick (`${BASE}..wip/…`) |
-| L3 | ff-only 실패 + 머지 커밋 1건 이상 | **non-merge 커밋만 개별 cherry-pick** — `git rev-list --no-merges --reverse ${BASE}..wip/…` 를 순서대로 |
+| L3 | ff-only 실패 + 머지 커밋 1건 이상 | **non-merge 커밋만 하나씩 개별 cherry-pick** — 머지 커밋은 브랜치 구조의 산물이라 착지에 재현할 필요가 없고, 섞인 범위는 통째로 안 집힌다 |
 | L4 | 위 전부 실패 / 충돌 | `cherry-pick --abort` 후 보고. **상태는 `ReadyToMerge` 유지** |
 
 ```bash
@@ -341,8 +300,6 @@ BASE=$(git -C "$REPO" merge-base "$LANDING" "wip/$SLUG")
 git -C "$REPO" rev-list --merges "${BASE}..wip/$SLUG"              # 비었으면 L2, 아니면 L3
 git -C "$REPO" rev-list --no-merges --reverse "${BASE}..wip/$SLUG" # L3 대상 커밋 목록
 ```
-
-**L3 는 커밋을 하나씩 집는다.** 머지 커밋이 섞인 범위는 통째로 cherry-pick 이 안 되지만, 그 안의 non-merge 커밋 자체는 각각 정상 패치다. 머지 커밋은 브랜치 구조의 산물이라 착지 브랜치에 재현할 필요가 없다.
 
 **충돌은 자동 해결하지 않는다.** 즉시 `--abort` 하고 충돌 파일 목록과 함께 보고한다 (`/git:merge` §충돌 시 그대로). 무인 루프가 충돌을 푸는 건 되돌리기 비싼 실수다.
 
@@ -354,9 +311,9 @@ git -C "$REPO" rev-list --no-merges --reverse "${BASE}..wip/$SLUG" # L3 대상 �
 
 ### 반려 — Pending 복귀
 
-`상태: ReadyToMerge → Pending` 으로 되돌린다. **`In Progress` 가 아니다** — tick 의 진행 가능 조건이 `Pending` + 선행 완료라, `In Progress` 로 두면 tick 이 그 step 을 **영원히 다시 잡지 않는다** (근거 SSOT = `tick.md` §"결정 수용").
+`상태: ReadyToMerge → Pending` 으로 되돌린다. **`In Progress` 가 아니다** (근거 SSOT = `tick.md` §"결정 수용" — 재잡이 조건이 `Pending` 이다).
 
-그 step 파일 `머지 전 리뷰 포인트` 섹션 아래에 반려 블록을 append 한다 (**헤더 레벨은 `##`/`###` 둘 다 실재하므로 `^#+ 머지 전 리뷰 포인트` 로 찾는다** — 2026-07-28 실측 3:3. 섹션 자체가 없으면 문서 끝에 `## 머지 전 리뷰 포인트` 로 신설):
+그 step 파일 `머지 전 리뷰 포인트` 섹션 아래에 반려 블록을 append 한다 — **본 양식이 tick·watch 공용 SSOT 다** (`working_rejections` 가 `^#+ 반려 [0-9]+회` 블록 안의 `- [ ]` 만 센다. 헤더 레벨은 `##`/`###` 둘 다 실재하므로 `^#+ 머지 전 리뷰 포인트` 로 찾고, 섹션이 없으면 문서 끝에 `## 머지 전 리뷰 포인트` 로 신설):
 
 ```markdown
 ### 반려 1회 (2026-07-28 · watch 자동 리뷰)
@@ -407,13 +364,11 @@ working_stalled "${1:-all}"        # 기본 1시간(WORKING_STALL_SEC=3600)
 
 **빈 필드가 없다는 게 계약이다.** `IFS=$'\t' read` 는 탭이 IFS 공백류라 **연속 탭을 하나로 합친다** — 빈 칸 하나가 뒤 필드를 통째로 밀어버린다. 실측에서 `claim_sid` 가 비자 `task` 가 밀려 비었고, 그 빈 값으로 unified 를 조회하니 **전건이 "마커 없음"(G1)으로 오판**됐다. 없는 값은 `-` 로 채운다.
 
-### 왜 멈추는가 — 근본 원인 (실측 규명)
+### 왜 멈추는가 — 근본 원인
 
-**`working-release.sh`(Stop hook)는 REGISTRY 만 `paused` 로 풀고 문서의 `상태:` 는 건드리지 않는다.** 그래서 세션이 끝날 때 step 이 `In Progress` 였으면 문서는 영원히 `In Progress` 로 남는데, tick 의 진행 가능 조건은 **`Pending` + 선행 완료**(`tick.md` §2-bis)라 그 step 을 **다시는 잡지 않는다**.
+**`working-release.sh`(Stop hook)는 REGISTRY 만 `paused` 로 풀고 문서의 `상태:` 는 건드리지 않는다.** 세션 종료 시 step 이 `In Progress` 였으면 문서에 그대로 남고, tick 재잡이 조건이 `Pending`(`tick.md` §2-bis)이라 **영영 안 잡힌다** (2026-07-29 실측 — REGISTRY `active` 0건 ↔ 문서 `In Progress` 5건).
 
-2026-07-29 실측이 정확히 그 모습이다 — REGISTRY `active` **0건**인데 문서 `In Progress` **5건**. 아무도 진행하지 않는데 문서만 진행 중이라고 말하고 있었다.
-
-> **Stop hook 을 고치는 것으로는 부족하다.** 세션이 crash·kill 로 죽으면 Stop 자체가 안 돈다. 그래서 해소 주체는 사후 관측자인 watch 여야 한다. Stop hook 쪽 보강은 별건이라 이번 범위에 넣지 않았다 (§0-3 수술적 변경).
+**Stop hook 을 고치는 것으로는 부족하다** — crash·kill 이면 Stop 자체가 안 돈다. 해소 주체가 사후 관측자인 watch 여야 하는 이유다.
 
 ### 대상에서 빠지는 것 (필수)
 
@@ -427,7 +382,7 @@ working_stalled "${1:-all}"        # 기본 1시간(WORKING_STALL_SEC=3600)
 
 ### 정체를 나열하지 않는다 — 병목을 특정한다 (핵심)
 
-"1시간 안 움직였다" 는 것만으로는 할 일이 안 나온다. 물어야 할 것은 **"지금 tick 이 이걸 잡을 수 있나, 없다면 무엇이 막나"** 다. 그래서 `working_stalled` 는 tick 의 claim 게이트를 순서대로 물어 **첫 실패 게이트**를 낸다.
+물어야 할 것은 "1시간 안 움직였다" 가 아니라 **"지금 tick 이 이걸 잡을 수 있나, 없다면 무엇이 막나"** 다. `working_stalled` 가 tick 의 claim 게이트를 **순서대로** 물어 첫 실패 게이트를 낸다 — 순서가 오조작을 막는다 (실측: step 이 `In Progress`(G4 처럼 보임)인데 unified 가 `NeedsDecision` 이라 G2 에서 걸린 건이 있었다. G4 를 먼저 봤으면 결정 대기 중인 task 를 건드릴 뻔했다).
 
 | 게이트 | 막는 것 | 처리 |
 |--------|--------|------|
@@ -437,11 +392,9 @@ working_stalled "${1:-all}"        # 기본 1시간(WORKING_STALL_SEC=3600)
 | **G4 상태** | step 이 `Pending` 이 아님 → tick 진행 조건 밖 | **`pending` 복귀** |
 | **OK** | 아무것도 안 막음 | `none` — **병목 없음. 루프가 안 돌 뿐** |
 
-**`OK` 를 정체로 보고하지 않는 게 중요하다.** 2026-07-29 실측 13건 중 **11건이 OK** 였다 — tick 이 지금도 잡을 수 있는데 도는 tick 이 없었을 뿐이다. 그건 watch 가 제거할 병목이 아니라 가동 상태 보고다. 이걸 "정체 11건" 으로 내면 매 iteration 같은 목록이 반복돼 진짜 병목 2건이 묻힌다.
+**`OK` 를 정체로 보고하지 않는 게 중요하다.** 2026-07-29 실측 13건 중 **11건이 OK** 였다 — 병목이 아니라 "도는 tick 이 없다" 는 가동 상태 보고다. 정체로 내면 매 iteration 같은 목록이 반복돼 진짜 병목 2건이 묻힌다.
 
-**게이트 순서가 오조작을 막는다.** 같은 실측에서 `mod-04-chatconnect…step-04` 는 step 이 `In Progress`(G4 처럼 보임)였지만 **unified 가 `NeedsDecision`** 이라 G2 에서 걸렸다. G4 를 먼저 봤으면 사용자 결정 대기 중인 task 의 step 을 건드릴 뻔했다.
-
-### G2 — 사용자 결정은 **조사해서** 넘긴다 (필수)
+### G2 — 사용자 결정은 조사해서 넘긴다 (필수)
 
 "사용자 대기" 라고만 적어 넘기지 않는다. CLAUDE.md §4.4 (3-2) escalation ladder 상 **정보 부족형(I1~I3)은 먼저 자체 해소**하고, 못 풀 때만 **조사 결과를 첨부해서** 올린다. 권한형(P1~P4)만 즉시 올린다.
 
@@ -459,29 +412,23 @@ working_stalled "${1:-all}"        # 기본 1시간(WORKING_STALL_SEC=3600)
 
 ### G2 판정은 문서 전체를 본다 — frontmatter 만 믿지 않는다 (필수)
 
-`working_scan` 은 **첫 `Status:`/`상태:` 줄만** 읽는데, frontmatter 와 본문이 어긋난 문서가 실재한다 (2026-07-29 실측 3건 — 예: frontmatter `NeedsDecision` ↔ 본문 `In Progress`).
+`working_scan` 은 **첫 `Status:`/`상태:` 줄만** 읽는데, frontmatter 와 본문이 어긋난 문서가 실재한다 (2026-07-29 실측 3건). **어느 줄에라도 `NeedsDecision`/`Done` 이 있으면 막는 쪽으로 채택한다** — 첫 줄만 믿으면 결정 대기건을 무인 진행시킨다.
 
-**어느 줄에라도 `NeedsDecision`/`Done` 이 있으면 막는 쪽으로 채택한다.** 첫 줄만 믿고 진행 판정을 내리면 결정 대기건을 무인 진행시킨다.
-
-**어느 쪽이 정본인지 판정하지 않는다.** 그건 문서 형식 추론이고, 틀렸을 때 대가가 크다(사용자 결정 대기 중인 task 를 tick 이 집어간다). 정정은 보고만 하고 사람이 한다 — tick-loop 로그가 지목한 "같은 drift 를 매번 재조사" 낭비는 보수 채택만으로 사라진다.
+**어느 쪽이 정본인지는 판정하지 않는다.** 형식 추론이고 틀렸을 때 대가가 크다. 정정은 보고만 하고 사람이 한다.
 
 ### G3 — `active` orphan (claim 이 영구히 물려 있는 경우)
 
-`registry_claim` 은 **`$7=="active"` 일 때만** `TAKEN` 을 반환한다(`registry-utils.sh:169`). 그래서 `paused`·`ready-to-merge`·`stale` 은 claim 을 **전혀 막지 않는다** — 이것들을 병목으로 세면 안 된다.
-
-문제는 세션이 crash·kill 로 죽어 Stop hook 이 못 돌았을 때다. entry 가 `active` 로 남아 tick 이 그 slug 를 영원히 못 잡는다.
+`registry_claim` 은 **`active` 일 때만** `TAKEN` 을 반환한다(`registry-utils.sh:169`) — `paused`·`ready-to-merge`·`stale` 은 claim 을 안 막으므로 병목으로 세면 안 된다. 문제는 crash·kill 로 Stop hook 이 못 돌아 entry 가 `active` 로 남은 경우다.
 
 ```bash
 working_session_alive "$CLAIM_SID"    # transcript mtime < WORKING_SESSION_DEAD_SEC(기본 3600)
 ```
 
-죽었으면 `registry_mark_stale {slug} {sid}` — **lock 보호 lib 함수를 쓴다.** 수동 awk+mv 로 REGISTRY 를 고치면 race orphan 이 생긴다 (메모리 `feedback_shared-pool-lib-first`).
+죽었으면 `registry_mark_stale {slug} {sid}` — **lock 보호 lib 함수를 쓴다.** 수동 awk+mv 는 race orphan 을 만든다 (메모리 `feedback_shared-pool-lib-first`).
 
 ### G4 — step `In Progress` → `Pending`
 
-근본 원인은 `working-release.sh` 다. 세션 종료 시 REGISTRY 만 `paused` 로 풀고 문서 `상태:` 는 안 되돌려서, step 이 `In Progress` 로 남고 tick 진행 조건(`Pending`)에서 영구 이탈한다.
-
-새 mutation 종류를 만들지 않는다 — B 트랙 반려가 쓰는 전이와 **같은 것**이고 근거도 같다(`tick.md` §"결정 수용").
+원인은 위 §"왜 멈추는가" 그대로다. 새 mutation 종류를 만들지 않는다 — B 트랙 반려가 쓰는 전이와 **같은 것**이고 근거도 같다(`tick.md` §"결정 수용").
 
 ```bash
 working_rejections "$STEP"     # >0 이면 반려 트랙 소관 — 정체로 다루지 않는다
@@ -565,11 +512,10 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
 
 ## 출력 예
 
+대표 3블록 (B 통과 · B 반려 · C 병목). 나머지 블록도 같은 `라벨 / 대상 / 판정 → 조치` + `↳ 근거` 형태다.
+
 ```
 [watch — scope=all]  변경 5건 (문서 4 / repo 1)
-
-⚠️ 판단 필요 (신규)
-  commerce-audit / step-02-rounding   상태 In Progress→NeedsDecision
 
 ✅ 머지 해소 (리뷰 클린)
   auth-refactor / step-01-token       [코드] 리뷰 0건 → ff머지 → Done
@@ -580,42 +526,15 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
                                        ↳ CallService.php:142 N+1 쿼리 · :88 미사용 import
                                        ↳ 재작업 cwd: C:\Works\hongcafe_global_backend
 
-📄 문서 정합성
-  mod-03-call-connect-docs-fix        [문서] 양식 통과 · api-docs 3-way 정합 ✓
-
-🚫 머지 불가 (상태 유지)
-  mirror-sync                          base 후보가 master 뿐 → PR 필요 (§4.3(e))
-
-♻️ 반려 소진 (리뷰 대조)
-  mod-01-join-409-langkey / step-07   지난 반려 3건 → 리뷰 재등장 0건 → 전건 소진 → L2 cherry-pick → Done
-                                       ↳ CallService.php:142 등 3건 모두 수정 확인
-  auth-refactor / step-05             지난 반려 2건 → 1건 재등장 → 1건만 소진, Pending 복귀
-                                       ↳ 잔존: TokenService.php:77 만료 검증 누락
-
-❓ 확인 필요
-  legacy-cleanup                       사라짐 — tasks/ 에서 못 찾음
-  hongcafe_global_backend              커밋 d504e63e→79a79787; 미커밋 0→1건
-                                       ↳ 대응 문서 변경 없음 — 미기록 커밋 의심
-
 ⏳ 병목 제거 (1h+ 무진행 13건 중 2건)
   be-fe-full-qa/step-09                72m · claim active 인데 세션 죽음(G3) → stale 해제
-                                       ↳ TAKEN 반환으로 tick 이 영구히 못 잡던 상태였음
   auth-refactor/step-03                25h In Progress · claim none(G4) → Pending 복귀
-                                       ↳ 세션 종료 시 상태 미복귀. 의존 후속 2건 함께 해소
-                                       ↳ 다음 tick 이 재잡이
-
-⏸️ 사용자 결정 (조사 첨부)
-  mod-04-chatconnect-…-hermes/step-04  27h · unified NeedsDecision(G2)
-                                       ↳ 묻는 것: HERMES env 를 dev 로 분리할지, 공용 유지할지
-                                       ↳ 분류: P3(외부 상태 변경) — 조사로 안 풀림
-                                       ↳ 막는 범위: 이 step + 의존 후속 2건
-
-🧹 orphan lock 정리 4건 (REGISTRY 매칭 없음)
-
-▫️ 병목 없음 10건 — claim 가능한데 tick 루프 미가동 (/taskflow:tick-loop 30m)
+                                       ↳ 의존 후속 2건 함께 해소. 다음 tick 이 재잡이
 
 스냅샷 갱신: 84건 (문서 77 / repo 7)
 ```
+
+나머지 라벨 — `⚠️ 판단 필요(신규 NeedsDecision)` · `📄 문서 정합성` · `🚫 머지 불가(상태 유지)` · `♻️ 반려 소진(리뷰 대조)` · `❓ 확인 필요(문서 실종·미기록 커밋)` · `⏸️ 사용자 결정(§"G2 — 사용자 결정은 조사해서 넘긴다" 3요소 첨부)` · `🧹 orphan lock 정리 N건` · `▫️ 병목 없음 N건(루프 미가동)`.
 
 A·B·C 세 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음` 1줄. **diff 0건이어도 B 에 미해소 `ReadyToMerge` 가 있거나 C 에 정체가 있으면 "변동 없음" 이 아니다.**
 
@@ -665,6 +584,7 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
+- 2026-08-03: **681 → 601줄 감축 + SSOT 2건 이관.** `## cwd 에 국한되지 않는다` = 무인 계열 공통 cwd 규약 SSOT 로 **선언**(tick 은 포인터), `## 카탈로그 미등재 fallback` 은 반대로 `tick-team.md` 로 **내보냄**(slash·agent 공통). 중복 제거 = worktree 판별 awk 2벌→1벌 / "보유율 0/20" 3회→1회 / 반려 블록 예시 2곳→1곳(양식 SSOT = 본 파일) / 출력 예 53줄→대표 3블록. 판정 표·계약은 전건 보존, 삭감분은 Why 산문뿐. `### D2 순서` 를 헤딩으로 승격(포인터 해결용)
 - 2026-07-31: 리뷰어를 **`cold-reviewer` 전용 agent 정의로 수렴** — 리뷰 관점·판정축·반환 양식·수정 불가(Edit/Write 부재)가 정의에 박히고, 본체가 조립하는 것은 diff+DoD 뿐. 매 spawn 프롬프트 재조립이 곧 리뷰 편차라는 §"재확인" 문단의 원인을 제거
 - 2026-07-30: §"코드 축 — 변경분 리뷰" 를 **무인 코드리뷰 계약 SSOT** 로 명시 (tick 리뷰 루프가 같은 계약을 포인터 참조). B 트랙 동작 무변경 — tick 이 클린을 만든 뒤의 **재확인** 성격만 명문화
 - 2026-07-29: 죽은 `tick: pause` → `allow` 회수 (C 트랙 게이트 밖). mutation 경계 3→4개

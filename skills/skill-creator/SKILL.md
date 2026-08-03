@@ -218,12 +218,12 @@ Full guidance in `references/claude-ai-cowork.md`.
 
 ---
 
-## 인벤토리 동기화 규칙 (CLAUDE.md §5.4 carrier)
+## 인벤토리 동기화 규칙 (docs/references/skill-inventory.md §5.4 carrier)
 
-> CLAUDE.md §5.4 가 본 절을 절차 SSOT 로 참조한다. 스킬 생성·수정·rename·삭제 시 아래를 함께 처리한다.
+> docs/references/skill-inventory.md §5.4 가 본 절을 절차 SSOT 로 참조한다. 스킬 생성·수정·rename·삭제 시 아래를 함께 처리한다.
 > **표 위치 (2026-06-23 외부화):** 아래 모든 "§5.1 표" = `~/.claude/docs/references/skill-inventory.md` 의 §5.1 표를 가리킨다 (CLAUDE.md §5 는 포인터만 보유). 표 1줄 추가/제거·자동화 컬럼·카운트 갱신은 그 reference 파일에서 수행한다.
 
-- **신규 추가:** CLAUDE.md §5.1 표에 1줄 추가 — 자동화 A/B/C 분류, 모드별 강도 상이 시 분리 표기 (`A (verify) / C (sync)` 형) + **카운트는 모드 단위** (행 단순 카운트 아님).
+- **신규 추가:** docs/references/skill-inventory.md §5.1 표에 1줄 추가 — 자동화 A/B/C 분류, 모드별 강도 상이 시 분리 표기 (`A (verify) / C (sync)` 형) + **카운트는 모드 단위** (행 단순 카운트 아님).
 - **rename:** 폴더명 + frontmatter `name` + §5.1 표 동시 갱신.
 - **삭제:** §5.1 표 제거 + `depends_on` grep 후 영향 스킬 갱신.
 - **자동화 강도 변경:** 분석 산출물 + §5.1 자동화 컬럼 + 카운트 행 갱신.

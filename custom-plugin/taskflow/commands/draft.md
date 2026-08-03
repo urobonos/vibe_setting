@@ -149,14 +149,11 @@ done
 /taskflow:draft check all                                             ← 원본 추적 보유 전체 점검
 ```
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 입력 | 산출 | 원본 추적 |
-|--------|------|------|----------|
-| `/taskflow:analyze` · `/taskflow:plan` | 작업명 (참조문서 자동 스캔) | working §분석·§계획 | 없음 (참조 출처 기록만) |
-| **`/taskflow:draft`** | **특정 원본 파일 경로** | **working §분석·§계획 + 지문 박제** | **있음 (`check` 로 변경 감지)** |
-| `/taskflow:execute` | 계획 완료 태스크 | 코드 변경 | - |
+짝 = `/taskflow:execute`(본 슬래시가 채운 §분석·§계획을 소비). `/taskflow:analyze`·`/taskflow:plan` 과의 유일한 차이는 **입력이 특정 원본 파일 경로**라 지문(sha256)이 박제되고 `check` 로 원본 drift 를 감지한다는 것이다(그쪽은 참조 출처 기록만). 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
 - 2026-06-23: 신설

@@ -90,7 +90,7 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 
 ## 로그
 
-`~/.claude/state/tick-loop.log` 에 append. headless 라 화면 출력이 없어 이 파일이 유일한 추적 수단이다. **회전하지 않으므로** 장기 운용 시 크기를 확인한다.
+슬롯별로 `~/.claude/state/tick-loop/{슬롯}.log` 에 append (`{슬롯}` = 슬롯 번호 `1`~`min(16, cores-2)`, 단발 실행은 `once`). headless 라 화면 출력이 없어 이 파일이 유일한 추적 수단이다. **회전하지 않으므로** 장기 운용 시 크기를 확인한다.
 
 ## SSOT
 

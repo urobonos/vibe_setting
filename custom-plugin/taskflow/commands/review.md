@@ -1,5 +1,5 @@
 ---
-description: 리뷰 단계 진입 — Self-Critique 체크리스트 ≥ 20 채움 + simplify 스킬 보조 호출 (CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" SSOT). 코드 재사용성·가독성·효율성 검토.
+description: 리뷰 단계 진입 — Self-Critique 체크리스트(unified 골격 10항목) 채움 + cold 판정 1회 + simplify 스킬 보조 호출. 코드 재사용성·가독성·효율성 검토.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent
 argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 ---
@@ -20,7 +20,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 | 단계 | 동작 | 결과 |
 |------|------|------|
-| ① Self-Critique 채움 | working/ §실행 §Self-Critique 체크리스트 ≥ 20 채움 (보안 / 로직 / 코드 품질 / 테스트 커버리지 / 이전 단계 검증). SSOT: CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" + doc-unified-check.sh V4 L54 (result Self-Critique ≥ 20) | 미체크 항목 처리 또는 잔여 이슈 기록 |
+| ① Self-Critique 채움 | working/ §실행 §Self-Critique 체크리스트 채움 (보안 / 로직 / 코드 품질 / 테스트 커버리지 / 이전 단계 검증). **개수 SSOT = `unified-template.md` §체크리스트** — unified 골격 10항목, 게이트는 문서 **총합 ≥ 30**(V4 `unified) MIN=30`)이라 섹션별 하한이 따로 없다 | 미체크 항목 처리 또는 잔여 이슈 기록 |
 | **①.5 cold 판정 (코드 변경 시)** | `taskflow:cold-reviewer` 1회 spawn — 변경분 ↔ §계획·DoD 대조 (아래 §"cold 판정"). 코드 변경 0 이면 skip | `VERDICT: CLEAN\|FINDINGS` + `file:line` 지적 |
 | ② simplify 스킬 호출 | 변경 파일에 대해 simplify 스킬 실행 (재사용성·가독성·효율성 리뷰) | 리뷰 결과 요약 |
 | ③ working/ § 리뷰 섹션 기록 | simplify 결과 + Self-Critique 보강 항목 § 리뷰 (Review) 섹션에 기록 | 표 + 본문 |
@@ -31,7 +31,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 `taskflow:cold-reviewer` Agent 1개를 spawn 해 변경분을 판정한다. 입력 = 변경분 diff + 그 작업의 §계획·DoD. 판정축·등급·반환 양식·"코드 수정 금지"는 **전부 agent 정의에 있다** (`custom-plugin/taskflow/agents/cold-reviewer.md`) — 여기서 다시 적지 않는다.
 
-**왜 self-critique 만으로 끝내지 않는가.** ① 은 자기가 쓴 코드를 자기가 보는 것이고, 그때 안 보이는 것이 있다. "사람이 결과를 즉시 보니 cold 가 불필요하다" 는 판단이 앞서 있었으나, 실제로 사용자는 **결과 요약을 보지 diff 전체를 읽지 않는다** — 그래서 사람 경로에도 독립 판정이 필요하다. `BoardController.php:947` [Critical] 이 `tests/Modules/Board` **199 tests green** 인 채로 통과한 것이 그 증거다.
+**왜 self-critique 만으로 끝내지 않는가.** ① 은 자기가 쓴 코드를 자기가 보는 것이고, 그때 안 보이는 것이 있다. "사람이 결과를 즉시 보니 cold 가 불필요하다" 는 판단이 앞서 있었으나, 실제로 사용자는 **결과 요약을 보지 diff 전체를 읽지 않는다** — 그래서 사람 경로에도 독립 판정이 필요하다 (근거 실측 = `tick.md` §2-bis 2, 테스트 green 인 채 통과한 [Critical]).
 
 **`simplify` 보다 먼저 돈다.** `simplify` 는 **고치는** 스킬이라(`then apply the fixes`) 뒤에 두지 않으면 리뷰 대상이 리뷰 중에 움직인다. 순서는 cold 판정 → 본체가 지적 수정 → `simplify` 로 품질 정리다.
 
@@ -42,7 +42,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 > **무인 경로와 겹치지 않는다.** `/taskflow:tick` 은 `/taskflow:review` 를 타지 않는다 (`tick.md` §"step 코드리뷰 루프"). 겹쳐 돌리면 같은 코드를 cold 로 두 번 본다.
 
-> **카탈로그 미등재 fallback:** `general-purpose` 로 spawn 하되 정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 명시한다 (`watch.md` §"코드 축" 과 같은 처리).
+> **카탈로그 미등재 fallback** = `tick-team.md` §"카탈로그 미등재 fallback" SSOT.
 
 ## 직병렬 실행 지침
 
@@ -64,7 +64,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 |------|------|
 | `simplify` | 변경된 코드의 재사용·품질·효율성 리뷰 후 이슈 픽스 |
 
-## Self-Critique 영역 (≥ 20 체크리스트 — CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" + doc-unified-check.sh V4 L54 SSOT)
+## Self-Critique 영역 (항목 SSOT = `unified-template.md` §체크리스트)
 
 | 영역 | 항목 |
 |------|------|
@@ -101,17 +101,14 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | 등급 | 진행 여부 |
 |------|----------|
 | S (단순 1~3줄 패치 / typo / 명명 변경) | 면제 — Self-Critique 인라인 1~2줄로 충분 |
-| M / L | **권장** — Self-Critique 체크리스트 ≥ 20 + simplify 호출 |
+| M / L | **권장** — Self-Critique 체크리스트 전건 + cold 판정 + simplify 호출 |
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 시점 | 범위 |
-|--------|------|------|
-| `/taskflow:verify` | §실행 도중/직후 | e2e 5점 (외부 환경 검증) |
-| **`/taskflow:review`** | §검증 후 | Self-Critique 체크리스트 + simplify (내부 품질 검증) |
-| `/taskflow:deploy` | §리뷰 통과 후 | git-push + branch-enforce 안내 |
+앞 = `/taskflow:verify`(외부 환경) / 뒤 = `/taskflow:deploy`. 본 슬래시 = **내부 품질**(Self-Critique + cold 판정 + simplify). 무인 경로에서는 `/taskflow:tick` 의 리뷰 루프가 이 자리를 대체한다. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + Self-Critique "≥ 20" 4곳 제거 (게이트 = 문서 총합 ≥ 30)
 - 2026-07-31: **①.5 cold 판정 추가** (코드 변경 시) — self-critique 만으로는 자기가 쓴 코드의 결함이 안 보인다. `simplify` 앞에 두는 것이 필수(뒤에 두면 리뷰 대상이 리뷰 중에 움직인다). 1회 판정만 — 클린까지 반복은 무인 경로 소관
 - 2026-05-15: 신설

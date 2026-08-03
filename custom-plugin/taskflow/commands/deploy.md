@@ -109,15 +109,11 @@ argument-hint: "[작업명]  # 생략 시 현재 브랜치 기준 안내"
 | `git push` / 머지 / 정착 동반 작업 | **필수** — 사용자 직접 실행 명령 안내 출력 |
 | 단순 working/ 문서·hook·skill 수정 (push 무관) | 면제 — `/taskflow:save` 또는 working-lifecycle 자동 이동만으로 종결 |
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 시점 | 범위 |
-|--------|------|------|
-| `/taskflow:review` | §실행 직후 | Self-Critique + simplify |
-| **`/taskflow:deploy`** | §리뷰 통과 후 | git-push + branch-enforce 안내 (사용자 직접) |
-| `/taskflow:retro` | §배포 후 | history.md + summary.md 기록 |
-| `/taskflow:save` | 세션 마감 직전 | worktree 정착 + 잔여 작업 통합 저장 |
+앞 = `/taskflow:review` / 뒤 = `/taskflow:retro` → `/taskflow:save`. 본 슬래시는 **절차 안내만** 한다 — 실제 push·머지는 사용자 직접(§4.3(d)(e)). 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
 - 2026-05-15: 신설

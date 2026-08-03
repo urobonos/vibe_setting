@@ -70,9 +70,9 @@ Status: Done
 
 (시작 라인) 부착 + `## Self-Critique` 보강 → `working-lifecycle.sh` PostToolUse hook 발동 → `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 이동.
 
-> **잔여 섹션 미체크박스 가드 (2026-07-23):** `move_working_to_tasks()` 는 `## 잔여/TODO/Follow-up` 섹션에 미체크박스(`- [ ]`)가 있으면 이동을 **차단**한다 (`has_residual_unchecked`, exit 없이 `return 1` + stderr). 즉 잔여가 남은 문서에 `Status: Done` 을 붙여도 자동 이동되지 않는다 — "잔여 0건" 판정을 hook 이 강제한다. 강제 이동이 필요하면 `save now`(= `/taskflow:done` 슬래시)로 우회한다 (Self-Critique 위험기록 체크박스는 잔여 섹션 밖이라 제외). SSOT = `hooks/lib/template-patterns.sh::has_residual_unchecked` + `docs/claude-harness/tasks/20260723/done-gate-residual-block/`.
+> **잔여 섹션 미체크박스 가드 (2026-07-23):** `move_working_to_tasks()` 는 `## 잔여/TODO/Follow-up` 섹션에 미체크박스(`- [ ]`)가 있으면 이동을 **차단**한다 (`has_residual_unchecked`, exit 없이 `return 1` + stderr). 즉 잔여가 남은 문서에 `Status: Done` 을 붙여도 자동 이동되지 않는다 — "잔여 0건" 판정을 hook 이 강제한다. 강제 이동이 필요하면 `save now`(구 `/taskflow:done` 흡수)로 우회한다 (Self-Critique 위험기록 체크박스는 잔여 섹션 밖이라 제외). SSOT = `hooks/lib/template-patterns.sh::has_residual_unchecked` + `docs/claude-harness/tasks/20260723/done-gate-residual-block/`.
 
-> **코드 변경 동반 시 verify+review 필수 (2026-07-14):** 마감 대상 작업이 **코드 파일(php/js/ts/py/sql)** 을 변경했다면 `Status: Done` 부착 **전** `/taskflow:verify`(e2e 5점)·`/taskflow:review` 체인 완료를 확인한다 (CLAUDE.md §4.3 "코드 라이프사이클 게이트", `execute.md:112-117` 동일 문구). 미완료 시 verify+review 먼저 수행 후 Done 판정 — QA-after 규율이 `/taskflow:save` 의 Done 경로로 우회되지 않도록. 코드 변경 없는 문서·분석 작업은 비대상.
+> **코드 변경 동반 시 verify+review 필수 (2026-07-14):** 마감 대상 작업이 **코드 파일(php/js/ts/py/sql)** 을 변경했다면 `Status: Done` 부착 **전** `/taskflow:verify`(e2e 5점)·`/taskflow:review` 체인 완료를 확인한다 (CLAUDE.md §4.3 "코드 라이프사이클 게이트" + `execute.md` §"코드 변경 = verify + review 필수 체인" 동일 문구 — 줄번호로 가리키지 않는다. 이 파일들은 배치마다 흔들려 하드 줄번호가 곧 죽는다). 미완료 시 verify+review 먼저 수행 후 Done 판정 — QA-after 규율이 `/taskflow:save` 의 Done 경로로 우회되지 않도록. 코드 변경 없는 문서·분석 작업은 비대상.
 
 > **이동 확인 필수 (2026-07-09):** PostToolUse hook 자동 트리거가 미작동한 실측 사례가 있다 (memory `backlog_backlog-lifecycle-posttooluse-nomove` — 수동 호출은 정상). `Status: Done` 부착 직후 **working/ 에 파일이 잔류하는지 확인**하고, 잔류 시 `save now` 로 명시 이동한다. 잔류 방치 = 다음 세션 `/taskflow:load` 노이즈 + REGISTRY orphan 누적.
 
@@ -157,7 +157,7 @@ working_gate_blockers "{product}" "{작업명}"
 
 ### 즉시 이동 모드 (`save now` — 구 done 흡수, 2026-07-16)
 
-`now` 인자 = 잔여 판정·Self-Critique 보강을 **생략하고 working/ → tasks/ 즉시 이동** (구 `/taskflow:done`). 긴급 정리·다중 파일 일괄 이동용. `working-lifecycle.sh` 를 done.md 와 동일한 UserPromptSubmit 경로로 직접 호출 → 이동 + **DISPATCH done 문서 일괄 정리**(`dispatch_purge_done`)까지 포함:
+`now` 인자 = 잔여 판정·Self-Critique 보강을 **생략하고 working/ → tasks/ 즉시 이동** (구 `/taskflow:done`). 긴급 정리·다중 파일 일괄 이동용. `working-lifecycle.sh` 를 UserPromptSubmit 경로로 직접 호출 → 이동 + **DISPATCH done 문서 일괄 정리**(`dispatch_purge_done`)까지 포함 (아래 heredoc 의 `"/taskflow:done"` 은 그 hook 정규식과 맞물린 **내부 프로토콜 토큰**이라 슬래시가 폐기된 뒤에도 문자열을 바꾸지 않는다):
 
 ```bash
 # 인자 없음 — 전체 일괄 즉시 이동 (판정 생략)
@@ -239,7 +239,7 @@ done
 
 ## 터미널 제목 원복 (세션 마감)
 
-세션 마감이므로 진행 중 설정됐던 `#{작업명}` 터미널 제목을 현재 폴더명으로 리셋한다 — PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = (Split-Path -Leaf $PWD)` 실행. 방식·전제 = `custom-plugin/taskflow/commands/load.md` §"터미널 제목 설정 (SSOT, claim.md 이전 2026-07-16)". 비-Windows·실패 시 무시.
+세션 마감이므로 진행 중 설정됐던 `#{작업명}` 터미널 제목을 현재 폴더명으로 리셋한다 — PowerShell 도구로 `$Host.UI.RawUI.WindowTitle = (Split-Path -Leaf $PWD)` 실행. 방식·전제 = `custom-plugin/taskflow/commands/load.md` §"터미널 제목 설정 (SSOT)". 비-Windows·실패 시 무시.
 
 ## §3 Checkpoint 우선 적용
 
@@ -295,17 +295,13 @@ done
            - 다음 세션 진입: /taskflow:load · 정착 후 push 는 사용자 직접
 ```
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 시점 | 범위 |
-|--------|------|------|
-| `/taskflow:auto` | 작업 시작·중간 | 묶음 승인 모드 진입 (실행) |
-| `save now` | 작업 완료 직후 | working/ → tasks/ 단순 이동 (분기 A 만) |
-| **`/taskflow:save`** | **세션 마감 직전** | **worktree + 문서 + 잔여 + 본 세션 claim 분배 태그 정리 (분기 A + B + worktree + DISPATCH ④)** |
-| **`/taskflow:load`** | **다음 세션 시작 직후** | **Status: Partial 잔존 작업 식별 + 재진입 안내** |
+짝 = `/taskflow:load` (다음 세션 시작 직후 재진입 — **잔여 미체크 `- [ ]` ≥1 문서를 Status 무관으로** 식별한다. 2026-06-18 이후 `Status: Partial` 필터가 아니다). 같은 파일의 `save now` = 판정 생략 즉시 이동(분기 A 만). 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + load 필터 서술 정정(Status: Partial → 잔여 미체크 ≥1, Status 무관) + 하드 줄번호 제거
 - 2026-07-29: 발주문서(`## 원본 추적`) 보유 task 가 Done 되면 원본 경로에 `{yyyy-mm-dd}-통합사이드이펙트.md` 생성. 0건이면 미생성
 - 2026-07-29: 무인 마커 복원 (`pause` → `allow`) — 본 세션 sid 것만, Done 은 `tasks/` 이동 전에
 - 2026-07-16: 즉시 이동 모드 흡수 (`save now` — 구 `/taskflow:done`)

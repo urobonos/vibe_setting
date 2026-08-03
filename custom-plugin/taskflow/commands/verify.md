@@ -80,14 +80,11 @@ e2e 5점 검증 진입 — 코드 수정 완료 판단을 위한 환경/스키�
 | 코드 (PHP / Lambda / SQL) 변경 | **필수** — 5점 (env / 함수·클래스 / DB 스키마 / curl / mock) |
 | 단순 sh hook / 문서 / commands 수정 | 면제 — Self-Critique (`/taskflow:review`) 만으로 충분 |
 
-## 차별점 (다른 슬래시와)
+## 짝 슬래시
 
-| 슬래시 | 시점 | 범위 |
-|--------|------|------|
-| `/taskflow:execute` | §계획 완료 후 | 코드 변경 + Self-Critique |
-| **`/taskflow:verify`** | §실행 도중/직후 | e2e 5점 (env/함수/스키마/curl/mock) |
-| `/taskflow:review` | §검증 후 | Self-Critique 보강 + simplify |
+앞 = `/taskflow:execute` / 뒤 = `/taskflow:review`. 본 슬래시 = **외부 환경 검증**(e2e 5점), review = 코드 내부 품질 — 상보적이라 코드 변경 시 둘 다 필수 체인이다(`execute.md` §"코드 변경 = verify + review 필수 체인"). 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + `verify + review` 포인터 리터럴 정렬
 - 2026-05-15: 신설
