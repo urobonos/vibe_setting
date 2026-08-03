@@ -172,11 +172,11 @@ PYEOF
     return 1
   }
 
-  # MEMORY.md 에서 entry 제거
-  local memory_index="$MEMORY_DIR/MEMORY.md"
-  if [ -f "$memory_index" ]; then
-    local win_index
-    win_index=$(to_win_path "$memory_index")
+  # MEMORY.md 인덱스 + BACKLOG.md 상세 양쪽에서 entry 제거 (2026-07-31 분리 이후 2파일)
+  local index_file win_index
+  for index_file in "$MEMORY_DIR/MEMORY.md" "$MEMORY_DIR/BACKLOG.md"; do
+    [ -f "$index_file" ] || continue
+    win_index=$(to_win_path "$index_file")
     python3 - "$win_index" "$slug" <<'PYEOF' 2>/dev/null
 import sys
 index_path = sys.argv[1]
@@ -191,7 +191,7 @@ try:
 except Exception:
     pass
 PYEOF
-  fi
+  done
 
   # history.md 갱신 (product 기준) — reverse chronological insert (최신 위)
   # 버그 정정 (2026-05-14): 기존 코드는 today 헤더 매칭만 검사 후 entry 를 파일 끝 append →
@@ -265,6 +265,36 @@ PYEOF
   return 0
 }
 
+# 인덱스 동기화 검증 — memory/backlog_*.md ↔ MEMORY.md 인덱스 ↔ BACKLOG.md 상세 (2026-07-31 분리 이후)
+#   MEMORY.md 만 매 세션 always-on 로드되고 BACKLOG.md 는 조회 시 로드된다. 그래서 상세를 BACKLOG.md 로 뺐고,
+#   신규 backlog 가 한쪽에만 등재되는 드리프트가 새 실패 모드로 생겼다. 본 함수가 그 차집합만 stderr 로 알린다.
+#   두 인덱스는 요약 길이가 서로 다른 판단 산물이라 기계 생성이 불가능하다 — 그래서 생성이 아니라 검증이다.
+#   비차단: 경고만 내고 exit 0 (PostToolUse).
+verify_index_sync() {
+  [ -f "$MEMORY_DIR/MEMORY.md" ] || return 0
+  [ -f "$MEMORY_DIR/BACKLOG.md" ] || return 0
+  local win_dir
+  win_dir=$(to_win_path "$MEMORY_DIR")
+  python3 - "$win_dir" <<'PYEOF'
+import os, re, sys
+d = sys.argv[1]
+try:
+    files = {f[8:-3] for f in os.listdir(d) if f.startswith('backlog_') and f.endswith('.md')}
+    def refs(name):
+        with open(os.path.join(d, name), encoding='utf-8') as fh:
+            return set(re.findall(r'backlog_(\S+?)\.md', fh.read()))
+    mem, blog = refs('MEMORY.md'), refs('BACKLOG.md')
+    for label, missing in (('MEMORY.md', files - mem), ('BACKLOG.md', files - blog)):
+        if missing:
+            print(f"[backlog-lifecycle] {label} 미등재 {len(missing)}건: {', '.join(sorted(missing))}", file=sys.stderr)
+    orphan = (mem | blog) - files
+    if orphan:
+        print(f"[backlog-lifecycle] 인덱스에만 있고 파일 없음 {len(orphan)}건: {', '.join(sorted(orphan))}", file=sys.stderr)
+except Exception:
+    pass
+PYEOF
+}
+
 # ============= PostToolUse 진입 =============
 if [ "$HOOK_EVENT" = "PostToolUse" ]; then
   # file_path 추출 — bash 내장 (python 起動 제거). tool_response.filePath 우선.
@@ -286,6 +316,8 @@ if [ "$HOOK_EVENT" = "PostToolUse" ]; then
 
   if has_done_marker "$unix_path"; then
     move_backlog_to_tasks "$unix_path"
+  else
+    verify_index_sync
   fi
 
   exit 0
