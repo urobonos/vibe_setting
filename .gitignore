@@ -96,3 +96,11 @@ Desktop.ini
 # custom-plugin: 2026-07-15 git 추적 전환 (이력·롤백 확보). 토큰류만 격리 유지.
 custom-plugin/tools/.token/
 custom-plugin/**/*.token
+
+# 무인 루프 런타임 상태 — jobs/{id}/ = 잡 상태·타임라인, state/ = watch·tick-loop·session lock 캐시.
+#   jobs/pins.json 은 설정이라 패턴에서 제외 (디렉토리만 무시).
+jobs/*/
+state/
+
+# 로컬 머신 전용 python 별칭 백업 (WindowsApps 절대경로 심볼릭 링크 — 타 머신에서 무의미)
+backup/windowsapps-python-aliases-*/
