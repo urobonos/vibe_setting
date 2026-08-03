@@ -30,7 +30,7 @@ if [ -n "$CWD" ]; then
   [ -f "$CWD/.claude/settings.local.json" ] && SETTINGS_FILES+=("$CWD/.claude/settings.local.json")
 fi
 
-hook_python
+resolve_python
 if [ -z "$HOOK_PY" ]; then
   echo "[hook-health-check] python 미검출 — 검사 SKIP" >&2
   exit 0

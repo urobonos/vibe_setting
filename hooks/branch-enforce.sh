@@ -53,11 +53,81 @@ fi
 # Why: substring 매칭은 commit 메시지·heredoc 본문·grep 인자 안의 'git push' 문자열까지 false-positive 차단함.
 # 2026-05-29~ : PUSH_EXCEPTION_ACTIVE=1 (≤2026-07-31) 이면 차단 스킵 (force push 는 dangerous-ops-guard 가 별도 차단).
 # ─────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────
+# grep 백스톱 공용부 (2026-08-03) — python 부재·실행실패(GG_ALL 공백) 시에만 쓰인다.
+#   §1 push / §1.5 master-merge / §1.6 cherry-pick 이 **같은 절-머리 정의를 공유**한다.
+#   (구조상 §1 은 인라인 리터럴, §1.5/§1.6 은 변수로 갈려 있어 한쪽만 고치면 드리프트 — F11)
+#
+#   판정 기준의 SSOT 는 lib/git-guard.py 다. 아래 목록은 그 파일에서 그대로 옮겨왔다:
+#     _KEYWORDS(then·do·else·elif·fi·done·{·}·!) / _WRAP(14종) /
+#     _GLOBAL_VAL(-C·-c·--namespace·--git-dir·--work-tree·--config-env·--attr-source) /
+#     MASTER_TARGETS(main·master × origin/·upstream/·refs/heads/)
+#   git-guard.py 의 목록을 고치면 여기도 같이 고쳐야 한다 (백스톱은 정규식 근사치 — 토큰화가 아니다).
+# ─────────────────────────────────────────────────────────
+
+# 절 분리 (awk 1회 — fork 상수). 결과는 `_BE_CLAUSES` 에 1절 1줄로 캐시한다.
+#   경계 문자 `; | & ( )` = git-guard.py:48 `_OPS` 와 동일 집합. **괄호를 빼면**
+#   `( git merge main )` · `echo $(git push)` 가 절머리에 도달하지 못해 통과한다 (F-B 실측 5형태).
+#   `||` `&&` `|&` 는 같은 문자가 2번 치환돼 빈 절이 하나 더 생길 뿐 경계는 동일하다.
+#
+#   heredoc 은 **본문 구간만** 건너뛴다 (F-C). 구현 초안은 `${COMMAND%%<<*}` 로 첫 `<<` 이후를
+#   통째로 버려서 heredoc **뒤에 오는** 절이 3개 백스톱 전부에서 사라졌다
+#   (실측: `cat <<EOF … EOF` + `git push origin feature/x` → normal 2 / degraded 0).
+#   새 lib 이 개행을 복원해 준 정보를 백스톱이 스스로 버리는 구조였다.
+#
+#   본문을 건너뛰는 이유 (F5②): 이 레포 표준 커밋은 heredoc 본문에 가드 정책을 서술하는 일이 잦아
+#   본문 줄 "git checkout main" 이 절 시작으로 오인된다. **주의: 이 완화는 백스톱 한정이다** —
+#   주 경로 git-guard.py 는 heredoc 본문도 토큰화하므로 같은 FP 가 그대로 남아 있다
+#   (실측: `printf 'cat <<EOF > /tmp/f\nhello\nEOF\ngit push …' | python git-guard.py push` → 1).
+#   즉 degraded 가 normal 보다 이 형태에서만 의도적으로 느슨하다 (tests §E 에 비대칭으로 고정).
+_BE_CLAUSES=""
+_be_build_clauses() {
+  [ -n "$_BE_CLAUSES" ] && return 0
+  _BE_CLAUSES=$(printf '%s\n' "$COMMAND" | awk '
+    BEGIN { delim = "" }
+    {
+      line = $0
+      if (delim != "") {                       # heredoc 본문 — 종료 델리미터 줄까지 skip
+        t = line
+        sub(/^[ \t]+/, "", t); sub(/[ \t\r]+$/, "", t)
+        if (t == delim) delim = ""
+        next
+      }
+      if (match(line, /<<-?[ \t]*["'"'"']?[A-Za-z_][A-Za-z0-9_]*["'"'"']?/)) {
+        d = substr(line, RSTART, RLENGTH)
+        sub(/^<<-?[ \t]*/, "", d)
+        gsub(/["'"'"']/, "", d)
+        delim = d                              # 도입부 줄 자체는 검사 대상으로 남긴다
+      }
+      n = split(line, parts, /[;|&()]/)
+      for (i = 1; i <= n; i++) if (parts[i] != "") print parts[i]
+    }
+  ')
+}
+
+_BE_NOISE='(then|do|else|elif|fi|done|\{|\}|!|sudo|xargs|command|exec|nohup|env|timeout|nice|stdbuf|ionice|setsid|time|doas|chrt|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|-[^[:space:]]+|[0-9]+)[[:space:]]+'
+_BE_GITOPT='((-C|-c|--namespace|--git-dir|--work-tree|--config-env|--attr-source)[[:space:]]+[^[:space:]]+|-[^[:space:]]+)[[:space:]]+'
+_BE_HEAD="^[[:space:]]*(${_BE_NOISE})*git[[:space:]]+(${_BE_GITOPT})*"
+_BE_REFCORE='((origin|upstream)/|refs/heads/)?(main|master)'
+_BE_REF="(\"${_BE_REFCORE}\"|'${_BE_REFCORE}'|${_BE_REFCORE})([[:space:]]|\$)"
+# checkout 전용 gap: 단독 `--` 를 소비하지 못하게 한다 — git-guard.py::detect_master_merge 가
+#   checkout 에 한해 `--` 뒤를 pathspec 으로 보고 면제하는 분기를 그대로 반영 (F5①).
+_BE_GAP_NODD='((--[^[:space:]]+|-?[^-[:space:]][^[:space:]]*|-)[[:space:]]+)*'
+
+# 어느 절이든 "절머리 + 패턴" 이 맞으면 0.
+#   절 목록을 **통째로 grep 1회에 파이프**한다 (절마다 fork 하던 구조 = F-A 회귀):
+#   절당 fork 2개면 40절 6,751ms / 300절 59,093ms 로 hook timeout(5초)을 넘겨 차단 신호가 사라진다.
+#   패턴이 `^` 앵커라 grep 은 줄(=절) 단위로 독립 판정하므로 의미는 동일하고 비용만 상수가 된다.
+_be_match() {
+  _be_build_clauses
+  grep -qE "${_BE_HEAD}$1" <<< "$_BE_CLAUSES"
+}
+
 if [ "$TOOL_NAME" = "Bash" ]; then
   hook_parse_command
   # H-2 wire-in point: push 검출 단일점 — 향후 PUSH_EXCEPTION_ACTIVE 정책 분기를 여기서 (현 behavior 불변)
   PUSH_DETECTED="0"
-  hook_python
+  resolve_python
   # 배칭: git detector 를 all 모드로 1회 호출 후 캐시 (push/master-merge/cherry-pick python 3회→1회).
   GG_ALL=""
   # shellcheck disable=SC2086  # HOOK_PY_TIMEOUT 은 "timeout 2" 두 토큰으로 분리돼야 한다 (hook-input.sh SSOT)
@@ -83,7 +153,9 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   #   (§4.3(d) 전면 금지가 fail-open 으로 뒤집힘). `dangerous-ops-guard.sh` 는 처음부터
   #   `-z "$GG_ALL"` 기준이었고, 같은 배칭 패턴에서 폴백 기준만 갈라져 있었다.
   if [ -z "$GG_ALL" ] && [ "$PUSH_DETECTED" != "1" ]; then
-    if printf '%s' "$COMMAND" | grep -qE '(^|[;&|])[[:space:]]*((sudo|env|nohup|timeout|command|exec)[[:space:]]+[^;&|]*)?git[[:space:]]+push([[:space:]]|$)'; then
+    # 2026-08-03: 인라인 리터럴 → 공용 _be_match (F11). wrapper 6종→14종·env-prefix·shell 키워드·
+    #   git 전역옵션(-c k=v 2토큰)까지 흡수하므로 구 패턴이 놓치던 형태도 잡힌다.
+    if _be_match 'push([[:space:]]|$)'; then
       PUSH_DETECTED="1"
     fi
   fi
@@ -114,6 +186,20 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   if [ -n "$HOOK_PY" ]; then
     MASTER_MERGE_DETECTED=$(gg master-merge)
   fi
+  # python 부재·**결과 부재** 시 grep 백스톱 (fail-open → fail-closed, C2 2026-08-03).
+  #   §1 push 는 2026-07-30 에 `-z "$GG_ALL"` 백스톱을 얻었는데 §1.5/§1.6 만 `[ -n "$HOOK_PY" ]`
+  #   단독 게이트로 남아 있었다 — python 이 검출되고 실행만 실패하면(Store 별칭 exit 9 · timeout kill)
+  #   GG_ALL 이 비고 `gg master-merge` 가 '0' 을 돌려줘 §4.3(e) "절대 금지" 3명령이 통과했다
+  #   (2026-08-03 감사 C2 실측: merge main / checkout main / switch master 3건 모두 exit 0).
+  #   판정은 MASTER_TARGETS(lib/git-guard.py) 8 ref 기준, 애매하면 차단(fail-closed)이 기본값.
+  if [ -z "$GG_ALL" ] && [ "$MASTER_MERGE_DETECTED" = "0" ]; then
+    # merge/switch = ref 인자 전체 스캔 / checkout = `--` 이후를 pathspec 으로 보고 제외 (git-guard.py 동형)
+    if _be_match "(merge|switch)[[:space:]]+([^[:space:]]+[[:space:]]+)*${_BE_REF}"; then
+      MASTER_MERGE_DETECTED="grep-backstop"
+    elif _be_match "checkout[[:space:]]+${_BE_GAP_NODD}${_BE_REF}"; then
+      MASTER_MERGE_DETECTED="grep-backstop"
+    fi
+  fi
   if [ "$MASTER_MERGE_DETECTED" != "0" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-merge pattern=$MASTER_MERGE_DETECTED branch=$BRANCH"
     echo "[BRANCH-GUARD] 차단: master/main 머지 절대 금지 (감지 패턴 '$MASTER_MERGE_DETECTED', 현재 분기 '$BRANCH')" >&2
@@ -139,6 +225,19 @@ if [ "$TOOL_NAME" = "Bash" ] && { [ "$BRANCH" = "main" ] || [ "$BRANCH" = "maste
   # 배칭 GG_ALL 재사용 (push 섹션에서 1회 계산)
   if [ -n "$HOOK_PY" ]; then
     CHERRY_DETECTED=$(gg cherry-pick)
+  fi
+  # grep 백스톱 (C2 2026-08-03, §1.5 와 동일 사유). --abort/--quit/--skip 복구계는 git-guard.py
+  #   detect_cherry_pick 와 같은 기준으로 면제 — 진행 중 cherry-pick 정리는 master/main 에서도 허용.
+  #   면제 판정은 **같은 절 안에서만** 본다 (F6): 명령 전체를 보면
+  #   `git cherry-pick abc && git cherry-pick --abort` 처럼 뒤 절의 복구 플래그가 앞 절까지 면제한다.
+  if [ -z "$GG_ALL" ] && [ "$CHERRY_DETECTED" != "1" ]; then
+    _be_build_clauses
+    # cherry-pick 절만 뽑고(1) 그 중 복구 플래그가 **같은 절에** 없는 것이 남으면 차단(2).
+    #   절 루프 대신 grep 2회 — F-A 와 같은 이유로 fork 를 절 수와 무관하게 만든다.
+    if grep -E "${_BE_HEAD}cherry-pick([[:space:]]|\$)" <<< "$_BE_CLAUSES" \
+       | grep -qvE '(^|[[:space:]])(--abort|--quit|--skip)([[:space:]]|$)'; then
+      CHERRY_DETECTED="1"
+    fi
   fi
   if [ "$CHERRY_DETECTED" = "1" ]; then
     command -v log_event >/dev/null 2>&1 && log_event "branch-enforce" "block" "reason=master-cherry-pick branch=$BRANCH"

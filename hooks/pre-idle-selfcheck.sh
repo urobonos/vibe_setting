@@ -12,30 +12,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   3. SELFCHECK_DONE 플래그 있음 (세션당 1회 제한) → 통과
 #   4. 위 모두 미해당 → 플래그 세팅 + stderr에 자가점검 체크리스트 주입 + exit 2
 
-STDIN_DATA=$(cat)
-
-# --- JSON 파싱: python3 우선 + grep fallback (Windows 환경 호환) ---
-PARSED=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    sid = data.get('session_id', '')
-    stop_active = data.get('stop_hook_active', False)
-    if not sid:
-        sys.exit(1)
-    print(f'SESSION_ID=\"{sid}\"')
-    print(f'STOP_HOOK_ACTIVE={str(stop_active).lower()}')
-except Exception:
-    sys.exit(1)
-" 2>/dev/null)
-if [ -n "$PARSED" ]; then
-  eval "$PARSED"
-else
-  SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-  STOP_HOOK_ACTIVE=$(echo "$STDIN_DATA" | grep -o '"stop_hook_active"[[:space:]]*:[[:space:]]*[a-z]*' | head -1 | sed 's/.*:[[:space:]]*\([a-z]*\).*/\1/')
-  SESSION_ID=${SESSION_ID:-default}
-  STOP_HOOK_ACTIVE=${STOP_HOOK_ACTIVE:-false}
-fi
+# --- JSON 파싱 — lib/hook-input.sh SSOT (M5 2026-08-03) ---
+#   구 코드는 python3 -c 블록 + `eval "$PARSED"` + grep fallback 재구현이었다. 특히 fallback 은
+#   lib 의 hook_parse_stop_active 를 그대로 복제한 것이라 두 벌이 갈릴 위험만 남았다.
+#   lib 은 bash 정규식 primary(fork 0) 이라 python·eval 둘 다 필요 없다.
+# shellcheck disable=SC1091
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
+hook_parse_session_id
+hook_parse_stop_active
 
 # --- 1. 무한루프 방지: Stop hook 재진입 상태면 통과 ---
 if [ "$STOP_HOOK_ACTIVE" = "true" ]; then

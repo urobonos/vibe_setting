@@ -27,13 +27,15 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null
 command -v log_event >/dev/null 2>&1 && log_event "script-request-enforce" "enter" "pid=$$"
 
-STDIN_DATA=$(cat)
-SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-SESSION_ID=${SESSION_ID:-default}
+# stdin 파싱 = lib/hook-input.sh SSOT (M5 2026-08-03 — grep+sed 재구현 제거, bash 정규식 primary)
+# shellcheck disable=SC1091
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
+hook_parse_session_id
 COUNTER_FILE="/tmp/claude_script_enforce_count_${SESSION_ID}"
 
 # transcript 마지막 assistant 텍스트 추출 (auto-iterate-stop-guard 동일 파서)
-TRANSCRIPT_PATH=$(echo "$STDIN_DATA" | grep -o '"transcript_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"transcript_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+TRANSCRIPT_PATH=$(hook_parse_field transcript_path)
 if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     rm -f "$COUNTER_FILE" 2>/dev/null
     exit 0   # fail-open

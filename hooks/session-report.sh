@@ -3,11 +3,14 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "session-report" "enter" "pid=$$"
 # Stop Hook: 세션 종료 시 토큰 사용량 리포트 생성
 
-STDIN_DATA=$(cat)
-
-# session_id, cwd 경량 추출 (python3 의존 제거)
-SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id" *: *"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/')
-PROJECT_CWD=$(echo "$STDIN_DATA" | grep -o '"cwd" *: *"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/')
+# session_id, cwd 추출 = lib/hook-input.sh SSOT (M5 2026-08-03 — grep+sed 재구현 제거).
+#   hook_parse_session_id 가 아니라 hook_parse_field 를 쓰는 이유: 아래 "session_id 없으면 exit 0"
+#   판정이 빈 값에 의존한다 ("default" 로 채우면 유령 리포트가 생긴다).
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/hook-input.sh"
+hook_read_stdin
+SESSION_ID=$(hook_parse_field session_id)
+PROJECT_CWD=$(hook_parse_field cwd)
 
 if [ -z "$SESSION_ID" ] || [ "$SESSION_ID" = "unknown" ]; then exit 0; fi
 
@@ -15,7 +18,13 @@ DATE=$(date +%Y-%m-%d)
 REPORT_DIR="$HOME/.claude/monitoring/reports/$DATE"
 mkdir -p "$REPORT_DIR"
 
-python3 - <<PYEOF
+# 리포트 본체 = python 필수. 실행 가능한 인터프리터가 없으면 조용히 통과한다
+#   (2026-08-03: 구 `python3 - <<PYEOF` 는 Store 별칭 상태에서 **hook exit=9** 를 그대로
+#    반환해 Stop 단계에 에러 노이즈를 냈다. 리포트는 부가 telemetry — 없으면 넘어간다.)
+resolve_python
+[ -z "$HOOK_PY" ] && exit 0
+
+"$HOOK_PY" - <<PYEOF
 import json, os
 from datetime import datetime, timezone
 session_id = r"$SESSION_ID"

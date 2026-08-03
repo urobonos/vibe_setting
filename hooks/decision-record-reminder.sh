@@ -51,8 +51,8 @@ log() {
 
 # ── 1. tool_response.answers 추출 ────────────────────────────────────────────
 DECISIONS=""
-if declare -f hook_python >/dev/null 2>&1; then
-  hook_python
+if declare -f resolve_python >/dev/null 2>&1; then
+  resolve_python
 fi
 if [ -n "${HOOK_PY:-}" ]; then
   DECISIONS=$(printf '%s' "$STDIN_DATA" | "$HOOK_PY" -c '

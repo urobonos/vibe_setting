@@ -6,7 +6,9 @@
 # 승인 키워드: 진행, 승인, 확인, 오케이, ok, yes, go, ㄱ, ㄱㄱ, 해, 해봐, 네, 넵, 좋아, lgtm, y, ㅇ, ㅇㅇ
 # 조건: 메시지 길이 50자 이하 + 승인 키워드 포함
 
-STDIN_DATA=$(cat)
+# shellcheck disable=SC1091
+source "$(dirname "$0")/lib/hook-input.sh"
+hook_read_stdin
 
 # --- 디버그 로그 설정 (2026-05-13 telemetry lib 마이그레이션) ---
 # 신규 = lib/log-helper.sh 의 log_event 사용 (~/.claude/logs/gate-approve.log ndjson)
@@ -28,43 +30,17 @@ log() {
   log_event "gate-approve" "$event" "$*"
 }
 
-# session_id와 prompt 추출 (python3 우선, 실패 시 grep/sed fallback)
-# 보안 (2026-05-13 H-1 픽스): eval 폐기. Python 이 2 줄로 분리 출력 (line 1 = sid, line 2 = prompt) →
-# command substitution 으로 받은 값은 텍스트 — `$()` / backtick / `$VAR` expansion 미발생.
-# 기존 `eval "$PARSED"` 에서 prompt 안 `$(cmd)` / backtick 이 expand 되던 injection 통로 차단.
-PARSE_OK=0
-PARSED=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    sid = data.get('session_id', '')
-    prompt = data.get('prompt', '')
-    if not sid:
-        sys.exit(2)
-    # newline 을 공백으로 치환 (2줄 분리 출력 정합)
-    safe_prompt = prompt.replace('\n', ' ').replace('\r', ' ')
-    print(sid)
-    print(safe_prompt)
-except Exception as e:
-    print(f'# parse_error: {e}', file=sys.stderr)
-    sys.exit(1)
-" 2>/dev/null | tr -d '\r')
-if [ -n "$PARSED" ]; then
-  SESSION_ID=$(printf '%s\n' "$PARSED" | sed -n '1p')
-  PROMPT=$(printf '%s\n' "$PARSED" | sed -n '2,$p' | tr '\n' ' ')
-  # trailing 공백 제거
-  PROMPT=${PROMPT% }
-  PARSE_OK=1
-fi
-
-# Fallback: python3 실패 시 grep/sed로 session_id/prompt 추출
-if [ "$PARSE_OK" -eq 0 ]; then
-  SESSION_ID=$(echo "$STDIN_DATA" | grep -o '"session_id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-  # prompt 단순 추출 (escape된 따옴표는 일단 잘릴 수 있으나 승인 키워드 매칭용으로 충분)
-  PROMPT=$(echo "$STDIN_DATA" | grep -o '"prompt"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"prompt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-  SESSION_ID=${SESSION_ID:-default}
-  log error "WARN fallback-grep used session_id=[$SESSION_ID] prompt_len=${#PROMPT}"
-fi
+# session_id / prompt 추출 — lib/hook-input.sh SSOT (M5 2026-08-03: python -c 블록 + grep fallback
+#   재구현 제거). eval 없는 값 전달(2026-05-13 H-1 픽스)은 그대로 유지 — 값은 전부 command
+#   substitution 텍스트라 `$()` / backtick expansion 이 발생하지 않는다.
+#   prompt 를 hook_json_string(awk) 우선으로 읽는 이유: 프롬프트에는 따옴표가 흔한데
+#   `"prompt"…"([^"]*)"` 정규식은 첫 `\"` 에서 잘려 승인 키워드를 놓칠 수 있다.
+hook_parse_session_id
+PROMPT=$(hook_json_string prompt)
+[ -z "$PROMPT" ] && PROMPT=$(hook_parse_field prompt)
+PROMPT="${PROMPT//$'\n'/ }"
+PROMPT="${PROMPT//$'\r'/ }"
+PROMPT="${PROMPT% }"
 
 GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
 
@@ -215,19 +191,9 @@ if [ "$APPROVED" = true ]; then
   # gate → 2 진입 시(1→2 단일승인 또는 0→2 묶음승인): 단계 문서 1종 이상 필수
   if [ "$CURRENT" -lt 2 ] && [ "$NEW_LEVEL" -eq 2 ]; then
     TODAY=$(date +%Y%m%d)
-    CWD=$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    print(data.get('cwd', '.'))
-except:
-    print('.')
-" 2>/dev/null | tr -d '\r')
-    # Fallback: python3 실패 시 grep/sed
-    if [ -z "$CWD" ] || [ "$CWD" = "." ]; then
-      CWD_FB=$(echo "$STDIN_DATA" | grep -o '"cwd"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"cwd"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-      [ -n "$CWD_FB" ] && CWD="$CWD_FB"
-    fi
+    # cwd 추출 = lib SSOT (2026-08-03 잔여 이관). 상단 파싱만 lib 로 옮기고 이 블록의
+    #   `python3 -c` + grep/sed fallback 재구현이 남아 있어 "재구현 제거" 주석과 어긋나 있었다.
+    hook_parse_cwd
     # --- 글로벌 경로 해석 ---
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     # shellcheck disable=SC1091

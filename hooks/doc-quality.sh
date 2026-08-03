@@ -14,7 +14,6 @@ if [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-SESSION_ID="default"; [[ "$STDIN_DATA" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && SESSION_ID="${BASH_REMATCH[1]}"
 CWD="."; [[ "$STDIN_DATA" =~ \"cwd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && CWD="${BASH_REMATCH[1]}"
 
 # ===== 1. 문서 체크리스트 검증 — doc-unified-check.sh V4 (v_checklist_count) 가 수행 =====
