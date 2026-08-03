@@ -1,5 +1,5 @@
 ---
-description: 태스크 감시 루프 1-iteration — working/ 문서를 스냅샷 대비 diff 해서 **변경분만** 검증한다. 코드 작업이면 코드리뷰, 문서 작업이면 정합성 검증. `ReadyToMerge` 는 리뷰가 클린이면 ff머지로 해소하고, 지적이 있으면 `Pending` 복귀시켜 재작업 대상으로 되돌린다. **1시간 이상 무진행인 문서는 tick 이 왜 못 잡는지 게이트를 특정해 병목을 제거한다** — 죽은 `active` claim 해제 · step `In Progress` → `Pending` 복귀 (사용자 판단 대기건은 제외). 변경 없으면 1줄로 종료(no-op). `/loop 5m /taskflow:watch` 로 무인 반복. 짝 = `/taskflow:control`(대기 큐) · `/taskflow:tick`(생산)
+description: 태스크 감시 루프 1-iteration — working/ 문서를 스냅샷 대비 diff 해서 **변경분만** 검증한다. 코드 작업이면 코드리뷰, 문서 작업이면 정합성 검증. `ReadyToMerge` 는 **반려 이력과 무관하게 리뷰를 먼저 돌린 뒤** 대조해서, 클린이면 머지 사다리(ff-only→범위 cherry-pick→non-merge 개별)로 끝까지 정착시키고 지적이 있으면 `Pending` 복귀시켜 재작업 대상으로 되돌린다. **1시간 이상 무진행인 문서는 tick 이 왜 못 잡는지 게이트를 특정해 병목을 제거한다** — 죽은 `active` claim 해제 · step `In Progress` → `Pending` 복귀 (사용자 판단 대기건은 제외). 변경 없으면 1줄로 종료(no-op). `/loop 5m /taskflow:watch` 로 무인 반복. 짝 = `/taskflow:control`(대기 큐) · `/taskflow:tick`(생산)
 allowed-tools: Bash, Read, Glob, Grep, Skill, Edit, Agent
 argument-hint: "[product|all — 생략 시 all. `sessions` = 다른 세션 진행 관측]"
 ---
@@ -24,8 +24,9 @@ A. 변경 트랙 (diff 기반)
 
 B. 해소 트랙 (상태 기반 — diff 와 무관하게 매 iteration 실행)
   B1. 수집   : working_scan 으로 ReadyToMerge 전건 (변경 여부 안 봄)
-  B2. 리뷰   : 코드 축 → 변경분 리뷰 / 문서 축 → 정합성 검증
-  B3. 해소   : 지적 0건 → ff머지 + Done / 지적 1건 이상 → Pending 복귀
+  B2. 리뷰   : **무조건 먼저 실행** — 코드 축 → 변경분 리뷰 / 문서 축 → 정합성 검증
+  B3. 대조   : 리뷰 결과 ↔ 기존 반려 블록 file:line 대조 → 재등장분만 살린다
+  B4. 해소   : 잔존 0건 → 머지 사다리 + Done / 1건 이상 → Pending 복귀
 
 C. 정체 트랙 (경과 기반 — 1시간 무진행. diff·상태 어느 쪽도 안 잡는 축)
   C1. 수집   : working_stalled {scope} → 결정 대기·종결·ReadyToMerge 제외 후보
@@ -202,15 +203,23 @@ done
 >
 > **앞으로의 매칭 비용을 줄이려면** tick 이 step 완료 시 `머지 전 리뷰 포인트` 에 worktree 경로를 실제로 적어야 한다 (tick.md 4단계 3에 이미 명시돼 있으나 실측 보유율 0/20). 그게 지켜지면 이 판정은 기계화된다.
 
-### 코드 축 — 변경분 리뷰
+### 코드 축 — 변경분 리뷰 (무인 코드리뷰 계약 SSOT)
 
-`general-purpose` Agent 1개를 spawn 해 **변경분만** 리뷰한다 (전체 코드베이스 감사 아님).
+**본 절이 무인 코드리뷰 계약의 SSOT 다 — `/taskflow:tick` 의 리뷰 루프도 같은 계약을 쓴다** (`tick.md` §"step 코드리뷰 루프" 는 여기 포인터). 계약이 두 곳에 복붙되면 갈라지고, 갈라지는 순간 tick 이 통과시킨 것을 watch 가 **다른 기준으로** 반려해 왕복이 되살아난다.
 
-- 입력 = worktree diff 또는 커밋 범위 + 그 step 문서의 §계획·DoD.
-- 판정 = Critical / High / Medium / Low + 각 지적의 `file:line`.
-- 리뷰 관점은 `/taskflow:review` 와 같다 — 재사용성·가독성·효율성 + DoD 충족 여부. 보안 냄새가 있으면 `security-audit` 스킬로 넘긴다.
+**`cold-reviewer` Agent 1개**를 spawn 해 **변경분만** 리뷰한다 (`subagent_type: taskflow:cold-reviewer` — 플러그인 agent 는 `plugin:name` 형식이다. 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`). 전체 코드베이스 감사가 아니다.
 
-**리뷰는 코드를 고치지 않는다.** `simplify` 처럼 수정까지 하는 경로를 타지 않는다 — 무인 루프가 리뷰하면서 코드를 바꾸면 리뷰 대상 자체가 움직인다.
+- **본체가 조립하는 것은 입력뿐이다** — worktree diff(또는 커밋 범위) + 그 step 문서의 §계획·DoD.
+- 리뷰 관점(**기능 오류 → 보안 → 품질** 7축, 순서가 곧 우선순위)·판정 등급·"코드 수정 금지"·반환 양식은 **전부 agent 정의에 박혀 있다**. 여기서 다시 적지 않는다.
+- 반환 = `VERDICT: CLEAN | FINDINGS` + Critical~Low 지적의 `file:line` (양식 SSOT = agent 정의).
+
+**왜 프롬프트가 아니라 agent 정의인가.** 계약을 매번 프롬프트로 조립하면 라운드마다 문구가 달라지고 그 편차가 곧 리뷰 편차다(아래 §"watch 의 리뷰는 재확인이다" 가 인정하는 그 편차). 정의에 박아두면 spawn 마다 변하는 것이 diff 하나뿐이 된다.
+
+**리뷰어는 코드를 고치지 않는다.** `cold-reviewer` 에 Edit·Write 도구가 없는 것이 그 강제다 (`dev-team` FE 멤버를 `Explore` 로 두는 것과 같은 기계적 차단 — 지시문은 어길 수 있어도 없는 도구는 못 쓴다). `simplify` 처럼 수정까지 하는 경로를 타지 않는다 — 무인 루프가 리뷰하면서 코드를 바꾸면 리뷰 대상 자체가 움직인다.
+
+> **카탈로그 미등재 fallback:** agent 정의는 세션 시작 시 로드된다. `cold-reviewer` 가 아직 등재되지 않은 세션(정의 생성 당일)에서는 `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 호출 파라미터로 명시**한다 (`tick-team.md` §"카탈로그 등재 주의" 와 같은 처리 — 정의를 안 타면 모델도 상속돼 무인 세션에서 sonnet 이 된다). 계약 없이 도는 것보다 낫다.
+
+> **watch 의 리뷰는 재확인이다 (2026-07-30~).** tick 이 그 step 안에서 이미 이 계약으로 지적 0건까지 루프를 돌린 뒤 `ReadyToMerge` 를 붙이므로, 여기서 나오는 지적은 **리뷰어 편차로 새로 드러난 것**이다. 그래도 반려 처리는 그대로 한다 — 편차로 드러난 실결함이 실재하고(`BoardController.php:947` 사례), 두 번째 눈이 이 트랙의 값이다. 대신 반려 빈도가 높게 유지되면 tick 쪽 루프가 형식적으로 도는 신호라 보고에 남긴다.
 
 ### 문서 축 — 정합성 검증
 
@@ -240,18 +249,27 @@ working_scan all | awk -F'\t' '$5=="ReadyToMerge" {print $1"\t"$4"\t"$6}'   # �
 
 `ReadyToMerge` 가 아닌 상태(In Progress·NeedsDecision·Pending)는 A 트랙에서 검증·보고만 하고 손대지 않는다.
 
-### 선행 필터 — 미해소 반려가 남은 `ReadyToMerge` 는 머지하지 않는다 (필수)
+### 반려는 리뷰로 소진한다 — 리뷰를 건너뛰지 않는다 (필수)
 
-리뷰를 돌리기 **전에** 거른다. 지난 iteration 이 반려한 지적이 안 지워졌는데 이번 리뷰가 클린으로 나오면 그대로 머지되기 때문이다 (2026-07-28 실측 — `ReadyToMerge` 2건이 각각 미해소 지적 3건을 달고 머지 대기 중이었다).
+**`ReadyToMerge` 면 미해소 반려가 남아 있어도 리뷰를 먼저 돌린다.** 반려 블록은 "지난번에 이런 지적이 있었다" 는 이력이지 현재 코드의 상태가 아니다 — 그 사이 tick 이 고쳤을 수 있고, 체크박스를 안 지운 것뿐일 수 있다. 리뷰 없이 되돌리면 **이미 고쳐진 작업이 영원히 왕복**한다.
 
 ```bash
 source ~/.claude/hooks/lib/working-scan.sh
-working_rejections "$DOC"          # 미해소 반려 지적 수 (tick 반려 소비 모드와 같은 판정식)
+working_rejections "$DOC"          # 미해소 반려 지적 수 — 차단이 아니라 대조 입력으로 쓴다
 ```
 
-**> 0 이면 리뷰도 머지도 하지 않고 `상태: Pending` 으로 되돌린다** + "반려 미해소 N건 — 재작업 필요" 보고. 리뷰 Agent 를 다시 띄우지 않는 게 핵심이다 — 같은 코드에 같은 지적이 또 나오거나(중복 반려), 리뷰어가 달라져 클린이 나오면(지적 증발) 둘 다 틀린다.
+리뷰 결과와 기존 반려를 **`file:line` 으로 대조**해서 잔존 여부를 정한다.
 
-**단 `상태:` 가 `ReadyToMerge` 로 되돌려져 있는 경우**(다른 세션이 반려를 drift 로 오판) 도 같은 처리다. 상태보다 반려 블록이 우선한다.
+| 기존 반려 | 이번 리뷰 | 판정 |
+|-----------|----------|------|
+| 있음 | 같은 `file:line` 재등장 | **잔존** — 체크박스 유지, Pending 복귀 |
+| 있음 | 재등장 안 함 | **해소** — 그 체크박스를 `- [x]` 로 소진 + 소진 근거 1줄 |
+| — | 신규 지적 | **잔존** — 새 반려 블록 append, Pending 복귀 |
+| 있음 | 리뷰 전건 클린 | 전건 소진 → 머지 사다리 진행 |
+
+**소진은 리뷰가 근거일 때만 한다.** 리뷰를 안 돌렸거나 Agent 가 실패했으면 체크박스를 건드리지 않는다 — 그 경우는 판정 불가라 상태 유지 후 보고다.
+
+> **지적 증발 위험은 대조가 받는다.** 리뷰어가 달라져 클린이 나오는 편차는 실재하지만, 그걸 이유로 리뷰 자체를 막으면 고쳐진 작업까지 무한 반려된다. `file:line` 대조 + 소진 근거 기록으로 어느 지적이 왜 사라졌는지 추적 가능하게 남긴다.
 
 > 왜 상태가 아니라 체크박스가 근거인가 — `working_gate_blockers` 는 step 파일에서 **`상태:` 만** 본다(미체크박스 검사는 `is_step=0` 전용). 그래서 step 의 반려 체크박스는 완료 게이트를 전혀 막지 못한다. watch 가 이 축을 보는 유일한 주체다.
 
@@ -259,7 +277,7 @@ working_rejections "$DOC"          # 미해소 반려 지적 수 (tick 반려 �
 
 | 축 | 검증 결과 | 동작 |
 |----|-----------|------|
-| 코드 | 지적 0건 | ff머지(**base 판별 통과 시**) → step `상태: Done` |
+| 코드 | 지적 0건 (기존 반려 전건 소진 포함) | **머지 사다리 L1~L3** → step `상태: Done` |
 | 코드 | **지적 ≥ 1건** (severity 무관) | step `상태: Pending` 복귀 + 반려 사유 기록 — 머지 안 함 |
 | 문서 | 정합성 위반 0건 | 머지 대상 없음 → step `상태: Done` (머지 단계만 skip) |
 | 문서 | 위반 ≥ 1건 | step `상태: Pending` 복귀 + 반려 사유 기록 |
@@ -282,8 +300,8 @@ done
 |----------------|------|
 | `feature/*` 단일 | ff머지 진행 |
 | **`master`/`main` 뿐** | **repo별 착지 브랜치 정책**(아래) 적용 |
-| 후보 2개 이상 (모호) | 머지 금지 — 후보 목록과 함께 보고. 상태 유지 |
-| 후보 0개 | 머지 대상 없음으로 보고 |
+| 후보 2개 이상 (모호) | **좁히기 재시도** — worktree diff ↔ 문서 대조(§"worktree ↔ 문서 대응")로 1개로 줄면 진행. 그래도 2개 이상이면 보고 |
+| 후보 0개 | **착지 브랜치 정책으로 생성 후 진행** — 정책에 없는 repo 만 보고 |
 
 ### repo별 착지 브랜치 (master 회피)
 
@@ -305,9 +323,30 @@ git -C "$REPO" checkout working_docs
 
 **PR 보고로 빠지는 경우엔 상태를 되돌리지 않는다.** 코드 자체엔 문제가 없으므로 `Pending` 반려가 아니라 `ReadyToMerge` 를 유지한 채 사용자에게 넘긴다.
 
-> **여러 wip 을 같은 착지 브랜치로 순차 머지하면 두 번째부터 ff-only 가 깨진다** (첫 머지로 착지 브랜치가 전진하므로 두 번째 wip 이 그 후손이 아니게 된다). 그때는 `/git:merge` 의 cherry-pick fallback 을 탄다 — **범위 cherry-pick 전에 `git rev-list --merges` 로 머지 커밋 유무를 먼저 확인**하고, 1건이라도 있으면 시작하지 않고 보고한다.
-
 base 가 확정되면 절차는 `/git:merge` 를 그대로 탄다 (재구현 0). 4개 명령 **개별 Bash 호출**, `&&`/`;` 결합 금지 — 결합하면 `dangerous-ops-guard.sh` 의 `git branch -D wip/…` 면제가 매칭에 실패해 차단된다.
+
+### ff-only 가 깨지면 사다리를 내려간다 — 멈추지 않는다 (필수)
+
+**여러 wip 을 같은 착지 브랜치로 순차 머지하면 두 번째부터 ff-only 가 반드시 깨진다** (첫 머지로 착지 브랜치가 전진해 두 번째 wip 이 그 후손이 아니게 된다). 이건 예외가 아니라 정상 경로다 — 여기서 멈추면 대기 물량이 영영 안 빠진다.
+
+| 단계 | 조건 | 동작 |
+|------|------|------|
+| L1 | ff-only 성공 | 완료 |
+| L2 | ff-only 실패 + wip 범위에 머지 커밋 0건 | `/git:merge` 범위 cherry-pick (`${BASE}..wip/…`) |
+| L3 | ff-only 실패 + 머지 커밋 1건 이상 | **non-merge 커밋만 개별 cherry-pick** — `git rev-list --no-merges --reverse ${BASE}..wip/…` 를 순서대로 |
+| L4 | 위 전부 실패 / 충돌 | `cherry-pick --abort` 후 보고. **상태는 `ReadyToMerge` 유지** |
+
+```bash
+BASE=$(git -C "$REPO" merge-base "$LANDING" "wip/$SLUG")
+git -C "$REPO" rev-list --merges "${BASE}..wip/$SLUG"              # 비었으면 L2, 아니면 L3
+git -C "$REPO" rev-list --no-merges --reverse "${BASE}..wip/$SLUG" # L3 대상 커밋 목록
+```
+
+**L3 는 커밋을 하나씩 집는다.** 머지 커밋이 섞인 범위는 통째로 cherry-pick 이 안 되지만, 그 안의 non-merge 커밋 자체는 각각 정상 패치다. 머지 커밋은 브랜치 구조의 산물이라 착지 브랜치에 재현할 필요가 없다.
+
+**충돌은 자동 해결하지 않는다.** 즉시 `--abort` 하고 충돌 파일 목록과 함께 보고한다 (`/git:merge` §충돌 시 그대로). 무인 루프가 충돌을 푸는 건 되돌리기 비싼 실수다.
+
+**L4 로 빠져도 `Pending` 반려가 아니다.** 리뷰는 통과했고 정착 방법만 못 찾은 상태이므로 `ReadyToMerge` 를 유지한 채 사용자에게 넘긴다. wip worktree·브랜치도 그대로 보존한다.
 
 머지 후 그 step 파일 `상태: ReadyToMerge → Done` + unified §계획 인덱스 표 상태 컬럼 동기화 + 정착 후 reachable 해시 기록 (`git rev-parse {feature}` — wip 해시를 인용하면 orphan 이 된다).
 
@@ -471,10 +510,25 @@ done
 
 > **REGISTRY entry 는 건드리지 않는다.** 여기서 지우는 건 매칭 entry 가 **없는** lock 파일뿐이다. entry 가 있는 lock 은 그 세션 소유다.
 
+### 죽은 `tick: pause` 회수 (게이트 밖 — 매 iteration)
+
+`/taskflow:load {작업명}` 은 그 task 를 직접 처리하는 동안 마커를 `tick: pause (by {sid8}, {날짜})` 로 내리고 `/taskflow:save` 가 `allow` 로 되돌린다. **세션이 crash·kill 로 죽으면 그 복원이 안 돌아** `pause` 가 영구히 남고, 그 task 는 무인 대상에서 영영 이탈한다 — C 트랙이 다루는 "세션이 남긴 거짓 표기" 와 정확히 같은 종류다(G4 의 `In Progress` 잔존과 동형).
+
+```bash
+source ~/.claude/hooks/lib/working-scan.sh
+# unified 에서 pause 마커 + 그 sid 추출 → 세션 생존 판정
+working_session_alive "$PAUSE_SID"    # 죽었으면 tick: allow 로 복원
+```
+
+- **죽은 세션의 `pause` 만** 되돌린다. 살아 있으면 그 세션이 지금 처리 중이므로 손대지 않는다.
+- `deny`·마커 없음은 대상이 아니다. 복원 목적지는 언제나 `allow` 뿐이다.
+
+> **이건 "마커를 붙이지 않는다" 예외가 아니다.** `pause` 는 정의상 `allow` 에서만 만들어지므로(전이 폐쇄성 = `tick.md` §`pause`), 되돌린 결과는 **사용자가 이미 허용해 둔 값**이다. 새로 무인 대상을 넓히는 게 아니라 중단된 왕복을 완결시키는 것이라 §3 에 걸리지 않는다. 마커가 **없던** 문서에 `allow` 를 붙이는 것은 여전히 금지다.
+
 ### 하지 않는 것 (필수)
 
 - **`tick-loop` 을 띄우지 않는다.** `OK` 건의 해법은 루프 기동이지만 그건 무인 작업 프로세스 자율 기동이라 사용자 결정이다(§3). 보고에 "claim 가능 N건 — 루프 미가동" 으로 낸다.
-- **마커를 붙이지 않는다.** 무인 허용 범위 확대 = §3.
+- **마커를 신규로 붙이지 않는다.** 무인 허용 범위 확대 = §3. 죽은 `pause` → `allow` 회수는 예외가 아니다 — 원래 `allow` 였던 값의 복원이라 범위가 넓어지지 않는다.
 - **`NeedsDecision` 을 풀지 않는다.** G2 는 판단이 남은 것이지 막힌 게 아니다.
 
 > **왜 상태를 되돌리는 것이 §4.2 "audit 자동 수정 금지" 에 안 걸리는가** — 코드나 판단을 고치는 게 아니라, 세션이 비정상 종료하며 남긴 **거짓 표기**(문서는 진행 중이라는데 아무도 안 잡고 있음)를 사실에 맞추는 것이다. 작업 내용·커밋·worktree 는 그대로고, 다음 주체가 잡을 수 있는 상태가 될 뿐이다.
@@ -485,8 +539,8 @@ watch 의 쓰기는 **딱 세 가지**다. 그 밖은 전부 보고만 한다.
 
 0. 자기 lock (`state/watch/locks/{문서}.lock`) — 쓰기 대상 문서에만, 조치 직전 획득·직후 해제
 1. 자기 스냅샷 (`state/watch/{scope}.tsv`)
-2. **B 트랙** `ReadyToMerge` 해소 — ff머지 + step `상태:` 전이 (Done / Pending) + 인덱스 표 동기화 + 반려 블록
-3. **C 트랙** 병목 제거 — (a) G4: 죽은 claim 의 step `상태: In Progress → Pending` + 인덱스 표 동기화 + 복귀 사유 1줄 (b) G3-orphan: `registry_mark_stale` 로 죽은 `active` claim 해제(lock 보호 lib 함수만) (c) orphan lock 파일 제거(`session_lock_remove` — REGISTRY 매칭 **없는** 것만). **이 셋뿐이다** — 마커 부착·`tick-loop` 기동·머지·`NeedsDecision` 해제·상태 drift 정정은 하지 않는다
+2. **B 트랙** `ReadyToMerge` 해소 — 머지 사다리(L1~L3) + step `상태:` 전이 (Done / Pending) + 인덱스 표 동기화 + 반려 블록 append **및 리뷰로 확인된 반려 체크박스 소진**(`- [x]` + 근거 1줄 — 리뷰가 실제로 돈 경우만)
+3. **C 트랙** 병목 제거 — (a) G4: 죽은 claim 의 step `상태: In Progress → Pending` + 인덱스 표 동기화 + 복귀 사유 1줄 (b) G3-orphan: `registry_mark_stale` 로 죽은 `active` claim 해제(lock 보호 lib 함수만) (c) orphan lock 파일 제거(`session_lock_remove` — REGISTRY 매칭 **없는** 것만) (d) 죽은 세션이 남긴 `tick: pause` → `allow` 회수(`working_session_alive` 로 사망 판정된 sid 것만). **이 넷뿐이다** — 마커 신규 부착·`tick-loop` 기동·머지·`NeedsDecision` 해제·상태 drift 정정은 하지 않는다
 
 **A 트랙은 진단 전용이다.** 상태 역행 · 근거 누락 · 문서 실종 · 미기록 커밋 · dirty 정체 · 문서 정합성 위반은 **보고만** 하고 고치지 않는다 (CLAUDE.md §4.2 "audit 결과 자동 수정 금지"). 수정은 `/taskflow:execute` 로.
 
@@ -532,9 +586,11 @@ python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
 🚫 머지 불가 (상태 유지)
   mirror-sync                          base 후보가 master 뿐 → PR 필요 (§4.3(e))
 
-🔒 반려 미해소 (리뷰 skip)
-  mod-01-join-409-langkey / step-07   ReadyToMerge 인데 지난 반려 3건 미소진 → Pending 복귀
-                                       ↳ 다음 tick 이 반려 소비 모드로 재작업
+♻️ 반려 소진 (리뷰 대조)
+  mod-01-join-409-langkey / step-07   지난 반려 3건 → 리뷰 재등장 0건 → 전건 소진 → L2 cherry-pick → Done
+                                       ↳ CallService.php:142 등 3건 모두 수정 확인
+  auth-refactor / step-05             지난 반려 2건 → 1건 재등장 → 1건만 소진, Pending 복귀
+                                       ↳ 잔존: TokenService.php:77 만료 검증 누락
 
 ❓ 확인 필요
   legacy-cleanup                       사라짐 — tasks/ 에서 못 찾음
@@ -609,13 +665,17 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
-- 2026-07-29: **G2 사전조사 + drift 보수 채택 + orphan lock 정리** — (1) 사용자 결정을 "대기" 로만 넘기지 않고 묻는 것·분류(P/I)·막는 범위를 붙인다. 정보 부족형은 bounded 조사 후 올린다 (§4.4 (3-2) ladder 정합) (2) G2 판정이 **문서 전체의 Status 줄**을 본다 — `working_scan` 은 첫 줄만 읽는데 frontmatter ↔ 본문이 어긋난 문서가 실측 3건이라, 첫 줄만 믿으면 결정 대기건을 무인 진행시킨다. 어느 줄에라도 `NeedsDecision`/`Done` 이 있으면 막는 쪽 채택. **정본 판정은 안 한다**(형식 추론이라 오판 대가가 큼) — 정정은 사람 몫이고, 보수 채택만으로 tick-loop 로그가 지목한 "같은 drift 매번 재조사" 낭비는 사라진다 (3) REGISTRY 매칭 없는 orphan lock 을 매 iteration 제거 (`registry_orphan_locks` 신설 — `ps cleanup` 과 판정식 공용, 실측 4건). 검증 2/2 + 기존 픽스처 16/16·12/12 회귀 없음
-- 2026-07-29: **문서 단위 lock** — `state/watch/locks/{문서}.lock` 으로 watch 동시 실행 시 **같은 문서**만 막는다. B 트랙 ff머지→`worktree remove`→`branch -D` 가 멱등이 아니라 두 세션이 같은 문서를 처리하면 깨진다(원래 있던 구멍인데 C 트랙으로 쓰기가 늘어 노출 확대). **인스턴스 통째 직렬화에서 문서 단위로 정정** — 통째로 걸면 서로 다른 문서를 보는 watch 까지 막혀 대기 물량을 하나씩밖에 못 푼다. `registry_claim` 을 안 쓰는 이유는 그게 tick 의 점유를 뺏기 때문이고, watch 전용 lock 공간은 tick 과 무관하다. 못 잡으면 그 문서만 skip. 부수 2건 — (a) lock 걸린 문서는 `watch_scan_now` 가 이전 스냅샷 값을 유지(신선도 필터 경로 재사용)해 타 인스턴스의 미검증 변경분이 확정되는 사고 차단 (b) `watch_commit` tmp 에 PID 부착(고정 이름이면 동시 쓰기로 스냅샷 파손). 12/12 검증
-- 2026-07-29: **lib 소스 가드 수정** — `watch-snapshot.sh` 가 `[ -z "$WORKING_ROOT" ]` 로 `working-scan.sh` 로드를 판정해, 소비자가 `WORKING_ROOT` 를 먼저 지정하면 lib 을 아예 안 읽어 `working_scan: command not found` 로 죽었다. 변수 존재가 아니라 **함수 존재**(`declare -F`)로 판정
-- 2026-07-29: **C 트랙 — 정체 병목 제거 (1h+ 무진행)** 신설. 정체는 아무것도 안 바뀐 상태라 A(diff)에도 안 걸리고 `ReadyToMerge` 도 아니라 B 도 안 보는 사각지대였다 (실측 방치 최장 **5.8일**). **정체를 나열하는 게 아니라 tick claim 게이트(G1 마커 / G2 사용자 / G3 claim / G4 상태)를 순서대로 물어 첫 실패 게이트를 병목으로 특정**하고, watch 권한 안(G3-orphan·G4)만 제거한다. 실측 13건 중 **11건이 `OK`(병목 없음 — tick 이 잡을 수 있는데 루프 미가동)** 여서, 나열식이면 진짜 병목 2건이 묻혔다. 게이트 순서가 오조작도 막았다 — step 이 `In Progress` 라 G4 처럼 보이던 건이 unified `NeedsDecision`(G2)이라 손대면 안 되는 것이었다. 근본 원인 = `working-release.sh` 가 세션 종료 시 REGISTRY 만 `paused` 로 풀고 문서 `상태:` 는 안 되돌림. G3 는 `registry_claim` 이 `active` 에만 `TAKEN` 을 내는 실측(`registry-utils.sh:169`)에 근거 — `paused` 를 병목으로 세지 않는다. `tick-loop` 자동 기동·마커 부착은 §3 로 제외. 탐지 SSOT = `working_stalled` (합성 픽스처 16/16)
-- 2026-07-28: **신선도 필터 (5분)** — `watch_scan_now` 가 최종 수정 5분 이내 문서를 이전 스냅샷 값으로 대체 출력(신규는 스킵)해 diff/검증 대상에서 제외. `find -mmin` 절단 대신 값 유지 방식을 택한 이유 = D(삭제) 오판 방지. `WATCH_MIN_AGE_SEC` 로 조정 가능(기본 300초). tick 의 claim 후보 필터(`working_scan ... 5`)와 같은 문제의식 — 방금 저장된 문서를 무인이 바로 채가는 경합 완화
-- 2026-07-28: **반려 왕복 정합** — (1) 미해소 반려가 남은 `ReadyToMerge` 는 리뷰·머지 skip 후 `Pending` 복귀 (실측 2건이 지적 3건씩 달고 머지 대기 중이었다. step 완료 게이트는 `상태:` 만 보므로 체크박스를 막는 주체가 watch 뿐) (2) 반려 보고를 `tick: allow` 마커로 분기 — 마커 없으면 tick 이 영원히 재잡이하지 않는데 "다음 tick 이 재잡이" 로 보고하던 거짓 약속 제거 (실측 보유 7/26) (3) 반려 step 의 worktree·커밋 보존 명문화 (tick 반려 소비 모드가 재사용)
-- 2026-07-28: repo별 착지 브랜치 정책 (`hongcafe_global_docs` → `working_docs` / `~/.claude` → 현재 브랜치 직접 / 그 외 feature 또는 PR) + cwd 비종속 명문화 (`git -C` 만, `cd` 금지)
-- 2026-07-28: **해소를 diff 에서 분리해 독립 B 트랙으로** — 변경 감지(A)와 상태 기반 해소(B)가 서로 기다리지 않는다. 해소를 A 하위 단계로 뒀더니 `ReadyToMerge` 가 스냅샷에 이미 박혀 있어 diff 0건 → 머지 대상 영구 0건이 됐다 (실측). watch 해소의 무인 허용 마커 요구도 철회 — 그 마커는 tick 전용이다
-- 2026-07-28: 축별 검증(코드=리뷰 / 문서=정합성) + `ReadyToMerge` 자동 해소 — 리뷰 클린이면 ff머지→Done, 지적 ≥1건이면 Pending 복귀. read-only 계약 해제 (mutation 경계 = §"mutation 경계")
+- 2026-07-31: 리뷰어를 **`cold-reviewer` 전용 agent 정의로 수렴** — 리뷰 관점·판정축·반환 양식·수정 불가(Edit/Write 부재)가 정의에 박히고, 본체가 조립하는 것은 diff+DoD 뿐. 매 spawn 프롬프트 재조립이 곧 리뷰 편차라는 §"재확인" 문단의 원인을 제거
+- 2026-07-30: §"코드 축 — 변경분 리뷰" 를 **무인 코드리뷰 계약 SSOT** 로 명시 (tick 리뷰 루프가 같은 계약을 포인터 참조). B 트랙 동작 무변경 — tick 이 클린을 만든 뒤의 **재확인** 성격만 명문화
+- 2026-07-29: 죽은 `tick: pause` → `allow` 회수 (C 트랙 게이트 밖). mutation 경계 3→4개
+- 2026-07-29: B 트랙 = 리뷰 선행 + 머지 사다리 (L1 ff-only → L2 범위 cherry-pick → L3 non-merge 개별 → L4 보고). **선행 필터(반려 있으면 리뷰 skip) 철회**
+- 2026-07-29: G2 사전조사 첨부 + Status drift 보수 채택(어느 줄에라도 `NeedsDecision`/`Done` 이면 막는 쪽) + orphan lock 매 iteration 제거
+- 2026-07-29: 문서 단위 lock (`state/watch/locks/`). **인스턴스 통째 직렬화 철회** — 다른 문서를 보는 watch 까지 막혔다
+- 2026-07-29: `watch-snapshot.sh` lib 로드 판정을 변수 존재 → 함수 존재(`declare -F`)로 수정
+- 2026-07-29: C 트랙 신설 — 1h+ 무진행에 tick claim 게이트(G1~G4/OK) 적용해 첫 실패 게이트만 제거. 나열식 보고는 채택 안 함(실측 13건 중 11건이 OK 라 진짜 병목이 묻힌다)
+- 2026-07-28: 신선도 필터 5분 (`WATCH_MIN_AGE_SEC`). `find -mmin` 절단 대신 값 유지 방식
+- 2026-07-28: 반려 왕복 정합 — 반려 보고를 `tick: allow` 마커로 분기, 반려 step 의 worktree·커밋 보존
+- 2026-07-28: repo별 착지 브랜치 정책 + cwd 비종속 (`git -C` 만, `cd` 금지)
+- 2026-07-28: 해소를 독립 B 트랙으로 분리. **A 하위 단계 배치 철회** — `ReadyToMerge` 가 스냅샷에 박혀 있어 머지 대상이 영구 0건이 됐다
+- 2026-07-28: 축별 검증(코드=리뷰 / 문서=정합성) + `ReadyToMerge` 자동 해소. read-only 계약 해제
 - 2026-07-27: 신설 — 스냅샷 diff 기반 변경분 검증 + sessions 관측 모드

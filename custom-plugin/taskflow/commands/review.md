@@ -21,10 +21,28 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | 단계 | 동작 | 결과 |
 |------|------|------|
 | ① Self-Critique 채움 | working/ §실행 §Self-Critique 체크리스트 ≥ 20 채움 (보안 / 로직 / 코드 품질 / 테스트 커버리지 / 이전 단계 검증). SSOT: CLAUDE.md §4.3 "doc-unified-check.sh V4 임계" + doc-unified-check.sh V4 L54 (result Self-Critique ≥ 20) | 미체크 항목 처리 또는 잔여 이슈 기록 |
+| **①.5 cold 판정 (코드 변경 시)** | `taskflow:cold-reviewer` 1회 spawn — 변경분 ↔ §계획·DoD 대조 (아래 §"cold 판정"). 코드 변경 0 이면 skip | `VERDICT: CLEAN\|FINDINGS` + `file:line` 지적 |
 | ② simplify 스킬 호출 | 변경 파일에 대해 simplify 스킬 실행 (재사용성·가독성·효율성 리뷰) | 리뷰 결과 요약 |
 | ③ working/ § 리뷰 섹션 기록 | simplify 결과 + Self-Critique 보강 항목 § 리뷰 (Review) 섹션에 기록 | 표 + 본문 |
 
 > **비필수 사이드이펙트 백로그 격리:** Self-Critique·simplify 가 짚은 항목이 (① 필수요소 아님 + ② 문제·버그 아님 + ③ 사이드이펙트급) 3조건을 모두 충족하면 즉시 픽스하지 말고 backlog 메모리에만 기록. **보안·로직 결함 등 실제 문제는 경미해도 backlog 가 아니라 정상 처리** (②가 안전장치). SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
+
+## cold 판정 (단계 ①.5 — 코드 변경이 있을 때만, 2026-07-31~)
+
+`taskflow:cold-reviewer` Agent 1개를 spawn 해 변경분을 판정한다. 입력 = 변경분 diff + 그 작업의 §계획·DoD. 판정축·등급·반환 양식·"코드 수정 금지"는 **전부 agent 정의에 있다** (`custom-plugin/taskflow/agents/cold-reviewer.md`) — 여기서 다시 적지 않는다.
+
+**왜 self-critique 만으로 끝내지 않는가.** ① 은 자기가 쓴 코드를 자기가 보는 것이고, 그때 안 보이는 것이 있다. "사람이 결과를 즉시 보니 cold 가 불필요하다" 는 판단이 앞서 있었으나, 실제로 사용자는 **결과 요약을 보지 diff 전체를 읽지 않는다** — 그래서 사람 경로에도 독립 판정이 필요하다. `BoardController.php:947` [Critical] 이 `tests/Modules/Board` **199 tests green** 인 채로 통과한 것이 그 증거다.
+
+**`simplify` 보다 먼저 돈다.** `simplify` 는 **고치는** 스킬이라(`then apply the fixes`) 뒤에 두지 않으면 리뷰 대상이 리뷰 중에 움직인다. 순서는 cold 판정 → 본체가 지적 수정 → `simplify` 로 품질 정리다.
+
+- 지적은 **본체가** 고친다. 리뷰어는 Edit·Write 가 없어 고칠 수 없다.
+- 수정 범위 = 지적 항목 + 그 심볼의 호출부 전건 (부분 적용이 가장 위험하다).
+- **루프를 돌리지 않는다.** 여기는 1회 판정이다 — 사람이 결과를 보고 다음을 정한다. 클린까지 자동 반복은 무인 경로(`/taskflow:tick`) 소관이다.
+- 지적이 §3 매칭이거나 계획 자체를 바꾸면 고치지 말고 사용자에게 보고한다.
+
+> **무인 경로와 겹치지 않는다.** `/taskflow:tick` 은 `/taskflow:review` 를 타지 않는다 (`tick.md` §"step 코드리뷰 루프"). 겹쳐 돌리면 같은 코드를 cold 로 두 번 본다.
+
+> **카탈로그 미등재 fallback:** `general-purpose` 로 spawn 하되 정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 명시한다 (`watch.md` §"코드 축" 과 같은 처리).
 
 ## 직병렬 실행 지침
 
@@ -32,8 +50,9 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 | 태스크 | 직렬·병렬 | 방법 |
 |--------|----------|-----|
-| ① Self-Critique 채움 + ② simplify 호출 | **병렬 가능** | 체크리스트 작성과 simplify 스킬 호출은 독립 → 동시 진행 |
-| ③ § 리뷰 기록 | **직렬** | ①② 결과 종합 후 기록 (양쪽 출력에 의존) |
+| ① Self-Critique 채움 + **①.5 cold 판정** | **병렬 가능** | 체크리스트 작성과 리뷰어 spawn 은 독립 → 동시 진행 |
+| ①.5 → ② simplify | **직렬 필수** | `simplify` 는 코드를 고치므로 cold 판정보다 뒤여야 한다 (리뷰 대상이 움직이면 판정이 무의미) |
+| ③ § 리뷰 기록 | **직렬** | ①·①.5·② 결과 종합 후 기록 |
 
 ## 자연어 trigger
 
@@ -68,6 +87,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 |------|------|
 | `~/.claude/CLAUDE.md` §4.1 "Validation (No Test, No Merge)" | 정책 SSOT |
 | `simplify` skill (Anthropic plugin, 글로벌 카탈로그 등재 — `~/.claude/skills/` 본체 없음) | 코드 품질 리뷰 진입점 (Skill 도구로 호출) |
+| `custom-plugin/taskflow/agents/cold-reviewer.md` | **cold 판정 계약** — 판정축 5 · 등급 기준 · 반환 양식 · Edit/Write 부재 · `model: opus` |
 | `~/.claude/skills/task-docs/references/unified-template.md` § 실행 §Self-Critique + § 리뷰 | 양식 SSOT |
 
 ## §3 Checkpoint 우선 적용
@@ -93,4 +113,5 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 ## Changelog
 
+- 2026-07-31: **①.5 cold 판정 추가** (코드 변경 시) — self-critique 만으로는 자기가 쓴 코드의 결함이 안 보인다. `simplify` 앞에 두는 것이 필수(뒤에 두면 리뷰 대상이 리뷰 중에 움직인다). 1회 판정만 — 클린까지 반복은 무인 경로 소관
 - 2026-05-15: 신설

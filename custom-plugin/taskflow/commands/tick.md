@@ -1,5 +1,5 @@
 ---
-description: 무인 loop 1-iteration 러너 — **cwd 무관 전체 스캔**으로 진행 가능 step 1건 claim → Status 분기 → 개발+verify+review → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
+description: 무인 loop 1-iteration 러너 — **cwd 무관 전체 스캔**으로 진행 가능 step 1건 claim → Status 분기 → 개발 → **cold Agent 코드리뷰 루프(클린까지)** → verify → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent, PowerShell
 argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명] | deny [작업명]"
 ---
@@ -25,8 +25,10 @@ argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명]
 2. 분기    : unified Status 판정 (아래 표)
 2-bis 하강 : working-scan 으로 다음 진행 가능한 step(Pending + 선행 Done) 선택
 2-ter 환경 : dev-stack.sh up (검증 환경 보장 — §"dev 스택 보장". 실패 시 NeedsDecision)
-3. step 실행: 개발 → verify(e2e 5점) → review → 그 step 파일에 Status: ReadyToMerge 부착
+3. step 실행: 개발(Agent 위임) → 코드리뷰 루프(cold Agent — 지적 0건까지) → verify(e2e 5점)
+              → 그 step 파일에 Status: ReadyToMerge 부착
               (머지 안 함. §계획 인덱스 표 상태도 ReadyToMerge 로 갱신)
+              └ 리뷰 5회 소진해도 지적 잔존 → 반려 블록 + Pending 유지 (ReadyToMerge 부착 X)
               └ P1~P4 권한형/판정 불확실 → unified Status: NeedsDecision + §결정 로그 → 마감
 4. 반복/정지: 다음 tick = 다음 step. 모든 step ReadyToMerge → tick 정지
               (사용자가 control 로 보고 step별 머지 + 완료 게이트 → task Done)
@@ -63,8 +65,26 @@ argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명]
 | 호출 | 동작 |
 |------|------|
 | `/taskflow:tick allow {작업명}` | 그 task 의 unified 에 `tick: allow` 삽입 (이미 있으면 값 교체) |
-| `/taskflow:tick deny {작업명}` | `tick: deny` 로 교체 — 무인 대상에서 뺀다 |
+| `/taskflow:tick deny {작업명}` | `tick: deny` 로 교체 — 무인 대상에서 **영구히** 뺀다 |
+| `/taskflow:tick pause {작업명}` | `tick: pause (by {sid8}, {YYYY-MM-DD})` 로 교체 — **일시 점유**. `allow` 였던 것만 대상 |
 | `/taskflow:tick allow` (인자 없음) | 현재 허용된 task 목록 조회 (mutation 0) |
+
+### `pause` — 사용자가 그 task 를 직접 처리하는 동안 (2026-07-29)
+
+**`deny` 와 값을 나눈 이유는 복원 때문이다.** `deny` 로 덮으면 사용자가 원래 걸어둔 `deny` 와 구분되지 않아, 나중에 `allow` 로 되돌릴 때 무인 대상이 아니었던 task 까지 함께 올라간다 — 무인 허용 범위 확대는 §3 이라 그 사고가 조용히 나면 안 된다.
+
+**전이는 `allow ↔ pause` 만 왕복한다.**
+
+| 원래 값 | `pause` 요청 | `save` 복원 |
+|---------|-------------|------------|
+| `allow` | → `pause (by sid, 날짜)` | → `allow` |
+| `deny` / 마커 없음 | **건드리지 않음** | 대상 아님 |
+
+이 폐쇄성이 안전장치다. `pause` 는 `allow` 에서만 만들어지고 `allow` 로만 되돌아가므로, 복원이 무인 허용 범위를 **넓히는 일이 없다**(사용자가 이미 허용해 둔 것으로 되돌릴 뿐).
+
+**sid·날짜를 같이 적는 이유는 회수다.** 세션이 crash·kill 로 죽으면 `/taskflow:save` 가 안 돌아 `pause` 가 영구히 남고, 그 task 는 무인 대상에서 영영 이탈한다. sid 가 있어야 `working_session_alive` 로 죽은 세션의 `pause` 를 판정해 되돌릴 수 있다 (회수 주체 = `watch` C 트랙).
+
+정규식(`^(tick|무인):[[:space:]]*(allow|허용)`)은 바꾸지 않는다 — `pause` 는 매칭에서 자연히 빠져 tick 0단계·watch B 게이트 양쪽에서 동시에 제외된다.
 
 대상 unified 탐색은 `working_scan` 재사용 — **`is_step=0` 인 행만** 잡는다 (step 파일에 박아도 무시되므로 애초에 대상에서 뺀다).
 
@@ -119,7 +139,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
    - **우회 (필수):** 앞 step 이 막혀 있어도 **그 step 에 의존하지 않는 독립 step 은 계속 진행**한다 ("앞이 막히면 뒤도 전혀 진행 안 함" 방지). 진행 가능 여부는 전체 순번이 아니라 **직접 의존 선행**만으로 판단한다.
    - **필수 블로커:** 직접 의존 선행이 `NeedsDecision`/`In Progress` 면 그 step 은 **진행 불가** (선행 결과에 실제로 의존하므로).
    - 진행 가능 step **0** → 전부 `ReadyToMerge`/`Done` 이면 **4단계 정지** / 블록(의존 선행 미해결)만 남으면 **task 정지**(사용자 판단 필요).
-2. **착수 전 반려 검사 (필수)** — `Pending` 은 "미착수" 만 뜻하지 않는다. `/taskflow:watch` 가 리뷰 지적으로 반려한 step 도 `Pending` 이라, 구분 없이 `/taskflow:auto` 를 태우면 **이미 커밋된 작업을 백지에서 재수행**한다.
+2. **착수 전 반려 검사 (필수)** — `Pending` 은 "미착수" 만 뜻하지 않는다. **리뷰 지적으로 반려된 step 도 `Pending`** 이라(주체 둘 — `/taskflow:watch` 반려 · tick 자체 리뷰 5회 소진), 구분 없이 `/taskflow:auto` 를 태우면 **이미 커밋된 작업을 백지에서 재수행**한다.
 
    ```bash
    source ~/.claude/hooks/lib/working-scan.sh
@@ -128,7 +148,20 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 
    **> 0 이면 반려 소비 모드**로 진입한다 (신규 개발 아님):
    - **worktree 를 새로 만들지 않는다.** `## 머지 전 리뷰 포인트` 의 worktree 경로·wip 브랜치를 **재사용**한다 (`auto.md` §worktree 적용 절차 skip). 그 경로가 `git worktree list` 에 없으면 진행하지 말고 보고 — 커밋을 잃은 상태라 판단이 필요하다.
-   - 작업 범위 = **미해소 체크박스 그것뿐**. 해소한 항목은 `- [x]` 로 소진하고 §실행에 대응 커밋을 기록한다.
+   - **반려분 커밋을 되돌리지 않는다.** 그 위에 수정 커밋을 얹는다 — 이력에 "구현 → 반려 해소" 가 남는 건 의도다. 사람이 안 보는 루프라 **커밋 이력이 무인 진행의 유일한 증거**고, `reset` 으로 지우면 되짚을 수단이 사라진다(reflog 는 90일 뒤 GC). 커밋이 지저분한 건 가역이라 정착 시점(PR squash)에 해결한다 — 발생 시점에 막을 문제가 아니다 (CLAUDE.md §4.4 "가역은 사후 처리, 선제 강제 비추천"). 2026-07-31 검토 후 채택 안 함.
+   - 작업 범위 = **미해소 체크박스 + 그 수정이 건드리는 심볼의 호출부 전건**. 해소한 항목은 `- [x]` 로 소진하고 §실행에 대응 커밋을 기록한다.
+
+     **시그니처·저장 형식을 바꾸면 고치기 전에 호출부를 전수로 뽑는다** (§3 광범위 매칭 시 승인 우선):
+
+     ```bash
+     git -C "$REPO" grep -n '{메서드명}\|{컬럼명}'      # 호출부·참조부 전수
+     ```
+
+     **이 전수 결과는 본체가 뽑아 개발 Agent 프롬프트에 첨부한다** (§"step 개발"). 반려 소비는 기존 커밋을 이어받는 작업이라 컨텍스트가 얕으면 형제 호출부를 놓치는데, 본체가 grep 을 선행해 넘기면 그 위험이 오히려 신규 개발보다 낮아진다 — 전수를 **강제로** 뽑게 되기 때문이다.
+
+     지적 항목만 국소 수정하고 형제 호출부를 빠뜨리면 **반려 해소가 새 반려를 만든다.** 2026-07-29 실측 — `BoardController.php:947` [Critical] 의 원인이 반려 1회 해소 커밋 `d4a30077` 자신이었다. 시그니처를 2인자로 넓히며 `createPosting`(`:876`)만 고치고 `updatePosting`(`:947`)을 빠뜨려 라이브 EP 2개가 무조건 500 이 됐고, `tests/Modules/Board` **199 tests green** 인 채로 통과했다. 좁은 범위가 안전한 게 아니라 **부분 적용이 가장 위험하다**.
+
+     호출부가 그 step 범위를 명백히 넘으면(다른 모듈·다른 task 소관) 고치지 말고 그 사실을 지적으로 append 한 뒤 `NeedsDecision` 마감한다 — 조용히 남겨두지 않는다.
    - 전건 소진 후에만 `ReadyToMerge` 재부착. 하나라도 남으면 `Pending` 유지.
    - 지적이 §3 매칭이거나 계획 자체를 바꾸면 개발하지 말고 `NeedsDecision` 마감 (escalation ladder).
 
@@ -171,6 +204,72 @@ e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`hongcafe:ph
 
 **`/taskflow:tick-loop` 과 `/taskflow:tick-team` 은 별도 처리가 없다** — 둘 다 결국 tick 을 호출하므로 이 규약을 그대로 상속한다. 세 곳에 각각 넣으면 drift 가 생긴다.
 
+## step 개발 (Agent 위임 — 본체는 코드를 쓰지 않는다, 필수)
+
+step 개발은 **`step-developer` Agent 1개**에 위임하고(`subagent_type: taskflow:step-developer` — 플러그인 agent 는 `plugin:name` 형식이다. 정의 = `custom-plugin/taskflow/agents/step-developer.md`), tick 본체는 **지휘·기록·상태 전이만** 한다. 개발자와 "리뷰 지적 수정자" 가 같은 인격이면 자기가 고친 것을 자기가 통과시키는 확인 편향이 남는다 — 리뷰를 cold 로 뺀 것과 같은 이유다.
+
+**코드를 쓰는 기준(단순성·재사용·"돌려봐야 검증"·호출부 전수·범위 고수)·금지사항·반환 양식은 agent 정의에 있다.** 리뷰어와 같은 이유로 프롬프트에 매번 적지 않는다. 본체가 조립하는 것은 **worktree 경로 + 그 step 의 §계획·DoD + (반려 소비 시) 호출부 grep 결과** 뿐이다.
+
+| 주체 | 하는 일 |
+|------|--------|
+| tick 본체 | claim · worktree 생성 · 개발 Agent 지휘 · 리뷰어 spawn · 문서 기록 · 상태 전이 |
+| **개발 Agent** (warm, 1개) | 코드 작성 + 리뷰 지적 수정 |
+| 리뷰 Agent (cold, 라운드마다 신규) | 판정만 · 코드 수정 금지 (§"step 코드리뷰 루프") |
+
+**개발 Agent 는 라운드마다 새로 뜨지 않는다.** 최초 1회 spawn 하고 리뷰 지적은 `SendMessage` 로 **같은 Agent** 에 이어 보낸다. 새로 띄우면 §계획·DoD·이미 쓴 코드를 매 라운드 다시 읽어야 하고, 리뷰 한도가 5회라 최악에 5회 재구축이다. 갈아끼우는 쪽은 리뷰어뿐이다.
+
+**`isolation: worktree` 를 쓰지 않는다 (필수).** 본체가 만든 worktree 경로를 프롬프트로 넘겨 **그 안에서** 작업시킨다. isolation 을 켜면 하니스가 별도 worktree 를 파서 커밋이 그 step 의 `wip/*` 가 아닌 곳에 쌓이고, `머지 전 리뷰 포인트` 에 적은 경로와 실제 커밋 위치가 갈라진다 — watch 의 머지 사다리가 그 경로를 믿고 정착시키므로 어긋남이 조용히 진행된다. tick 은 단일 워커라 격리가 애초에 불필요하다 (`tick-team` 은 워커가 N개라 필요).
+
+**Agent 는 코드만 쓴다.** §실행·`## 변경 영향 기록`·Before/After 는 **본체가** Agent 반환(`FILES`/`TESTS`/`NOTES`)으로 쓴다 (§"step 상세 기록" 재사용 — Agent 에 문서 양식을 가르치지 않는다).
+
+**커밋도 본체가 한다.** 리뷰어가 보는 입력이 **미커밋 diff** 라 개발 Agent 가 중간에 커밋하면 리뷰어에게 빈 diff 가 간다. 커밋은 리뷰 루프가 클린이 된 뒤 4단계에서 본체가 한다 (`머지 전 리뷰 포인트` 기록과 같은 시점).
+
+**두 Agent 모두 `model: opus`** 로 정의에 고정돼 있다. `tick-loop.sh:29` 의 세션 기본값이 `sonnet` 이라(`${TICK_LOOP_MODEL:-sonnet}`) **모델을 생략하면 무인 경로에서만 sonnet 을 상속**한다 — `orchestration` §1.1 이 전제하는 "생략 = opus 상속" 이 여기서만 깨진다. 본체(claim·문서 기록·상태 전이)는 기계적이라 sonnet 으로 충분하지만 개발·리뷰는 판단이 결과를 좌우하므로 정의에서 못박는다. 팀 내 모델 통일(§1.1)도 이로써 유지된다.
+
+**라운드 종료마다 변경 실재를 확인한다.** Agent 가 코드를 쓰지 않고 텍스트만 돌려주는 실패 모드가 실재한다.
+
+```bash
+git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰로 넘기지 않는다)
+```
+
+빈 결과를 그대로 리뷰에 넘기면 `cold-reviewer` 가 빈 diff 를 `[High]` 판정 불가로 되돌려 라운드만 소진된다.
+
+**hook 은 자동 상속된다** (`tick-team.md` §"하니스 자동 상속" 실측). 개발 Agent 의 Write·Bash 에도 worktree-enforce·dangerous-ops-guard·§3 가드가 걸리므로 룰 재주입이 불요하다.
+
+> **카탈로그 미등재 fallback (개발자·리뷰어 공통):** agent 정의는 세션 시작 시 로드된다. 아직 등재되지 않은 세션에서는 `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 Agent 호출 파라미터로 명시**한다 (정의를 안 타면 모델도 상속돼 sonnet 이 된다). 리뷰어 쪽 서술 = `watch.md` §"코드 축".
+
+## step 코드리뷰 루프 (cold Agent — 지적 0건까지, 필수)
+
+**개발이 끝나면 그 자리에서 클린이 될 때까지 리뷰를 돌린다.** 자기검열(`/taskflow:review` = Self-Critique + simplify)로 끝내지 않는다 — 자기가 쓴 코드를 자기가 보면 안 보이는 게 있고, 그 미검출이 `watch` 반려로 되돌아와 왕복이 된다. 2026-07-29 실측이 정확히 그 모습이다: `BoardController.php:947` [Critical] 이 `tests/Modules/Board` **199 tests green** 인 채로 tick 을 통과하고 cold context 가 잡았다.
+
+**리뷰 계약은 `watch.md` §"코드 축 — 변경분 리뷰" 가 SSOT 다.** 여기서 다시 정의하지 않는다 — 두 곳에 적으면 곧 갈라지고, 계약이 갈라지는 순간 tick 이 통과시킨 것을 watch 가 **다른 기준으로** 반려해 왕복이 되살아난다. 없애려는 것이 바로 그 왕복이다.
+
+| 라운드 결과 | 동작 |
+|------------|------|
+| 지적 0건 | 루프 종료 → verify 로 |
+| 지적 ≥ 1건 (severity 무관) | **개발 Agent 가 수정**(본체가 `SendMessage` 로 전달) → 새 리뷰어로 재리뷰 |
+| 5회 소진 + 잔존 | 반려 블록 append + `상태: Pending` 유지 — **`ReadyToMerge` 부착 금지** |
+
+- **라운드마다 `cold-reviewer` Agent 를 새로 spawn 한다** (`subagent_type: taskflow:cold-reviewer` — 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`, 미등재 세션 fallback 은 watch 계약 참조). 입력 = worktree diff **현재 상태** + 그 step 의 §계획·DoD. 같은 리뷰어를 이어 쓰면 자기가 낸 지적과 그 수정을 함께 보게 되어 "고쳤다" 는 확인 편향이 들어간다 — cold 라는 게 이 계약의 값 전부다.
+- **리뷰어는 코드를 고치지 않는다** (watch 계약 그대로 — `cold-reviewer` 에 Edit·Write 가 없다). 고치는 주체는 **개발 Agent** 다 (§"step 개발" — 본체가 `SendMessage` 로 지적을 전달). 리뷰어가 고치면 리뷰 대상이 리뷰 중에 움직인다.
+- **수정 범위 = 지적 항목 + 그 심볼의 호출부 전건.** §2-bis 2 반려 소비 모드와 같은 규칙이고 근거도 같다 — 부분 적용이 가장 위험하다.
+- **한도 = 5회.** 신규 상한을 만들지 않고 self-critique 루프 한도(CLAUDE.md §4.4 (3)(b))를 그대로 쓴다.
+- **`auto`/`execute` 의 `/taskflow:review` 는 무인 경로에서 타지 않는다.** `execute.md` §"코드 변경 = verify+review 필수 체인" 의 **review 자리를 본 루프가 대체**한다 (verify 는 그대로 필수). `/taskflow:review` 도 2026-07-31 부터 cold 판정을 타므로(`review.md` ①.5), 무인이 review 를 함께 돌리면 **같은 코드를 cold 로 두 번** 보게 된다 — 이 배제는 그래서 더 강해졌다. 사람 경로에서는 review 가 그 cold 자리를 맡는다.
+- 지적이 §3 매칭이거나 계획 자체를 바꾸면 고치지 말고 `NeedsDecision` 마감 (escalation ladder — §3단계).
+
+**verify 는 리뷰 루프가 끝난 뒤 1회 돈다.** 루프 안에서 코드가 계속 바뀌므로 앞에 두면 마지막 수정분이 미검증으로 남고, 매 라운드 돌리면 e2e 5점(curl·DB)이 라운드마다 반복돼 비싸다. 코드가 더 안 바뀌는 시점에 검증해야 **검증 대상과 최종 산출물이 일치한다** (199 tests green 사례가 그 불일치였다).
+
+5회를 소진해도 지적이 남으면 그 step 파일 `머지 전 리뷰 포인트` 아래에 반려 블록을 남기고 `Pending` 을 유지한다 — 다음 tick 이 §2-bis 2 반려 소비 모드로 이어받는다.
+
+```markdown
+### 반려 1회 (2026-07-30 · tick 자체 리뷰 5회 소진)
+- [ ] [High] `app/Modules/Board/Services/BoardService.php:142` — N+1 쿼리
+```
+
+**형식은 watch 반려 블록과 같아야 한다.** `working_rejections` 는 `^#+ 반려 [0-9]+회` 블록 안의 `- [ ]` 만 센다(`working-scan.sh:88`) — 헤더 문구를 바꾸면 다음 tick 이 반려를 못 보고 **백지에서 재수행**한다.
+
+**리뷰 라운드 기록을 생략하지 않는다.** 무인이라 이게 유일한 근거다 — 각 라운드의 지적 수와 무엇을 고쳤는지를 그 step 파일 §실행에 남긴다 (§"step 상세 기록" 재사용, 신규 양식 0).
+
 ## 3단계 — 판단 필요 시 문서 기록 후 마감
 
 분류·마감은 **`execute.md` §"결정 escalation ladder" SSOT**. 요지:
@@ -199,11 +298,11 @@ registry_update "{작업명}" "{sid8}" active     # 3. needs-decision → active
 
 ## 4단계 — step ReadyToMerge (머지 준비, 정지)
 
-step 이 개발→verify→review 를 통과하면:
+step 이 개발 → 코드리뷰 루프(지적 0건) → verify 를 통과하면:
 
 1. **머지 안 함** — 정착(`/git:merge`) 하지 않는다. wip/* worktree 그대로. 커밋만 누적.
 2. 그 step 파일 frontmatter 상태를 **`상태: ReadyToMerge`** 로 갱신 (plan.md step 규약 = 한글 `상태:` 라벨. unified 는 `Status:`. working-scan 은 `Status`/`상태` 둘 다 인식하므로 어느 쪽이든 잡힌다). 인덱스 표 상태 컬럼도 갱신.
-3. `## 머지 전 리뷰 포인트`(step 파일) 기록 — worktree 경로 + 핵심 변경 + verify/review 결과.
+3. `## 머지 전 리뷰 포인트`(step 파일) 기록 — worktree 경로 + 핵심 변경 + 리뷰 루프 라운드 결과 + verify 5점. **커밋은 여기서 1회** — 리뷰 루프가 클린이 된 뒤라 그 step 의 신규 개발분이 단일 커밋으로 남는다 (§"step 개발" 커밋 주체).
 4. 다음 진행 가능 step 으로 계속. **모든 step 이 ReadyToMerge 면 tick 정지** — `[AUTO-ITERATE-USER-DECISION]`(사용자 step 머지 대기).
 
 > `ReadyToMerge` 는 종결 정규식 비대상이라 step 파일도 working/ 에 잔류한다 (자동이동 안 됨 = 의도).
@@ -227,10 +326,10 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 |------|------|----------|
 | `Pending` | plan 이 step 분해 생성 | `/taskflow:plan` |
 | `In Progress` | tick 이 그 step claim + 착수 | `/taskflow:tick` |
-| `ReadyToMerge` | 개발+verify+review 완료 (머지 준비) | `/taskflow:tick` |
+| `ReadyToMerge` | 개발 + **리뷰 루프 지적 0건** + verify 완료 (머지 준비) | `/taskflow:tick` |
 | `NeedsDecision` | 판단 필요로 마감 (그 step 한정) | `/taskflow:tick` |
 | `Pending` (결정 복귀) | 사용자 결정 입력 → 재잡이 가능 상태로 되돌림 | Claude 본체 (§"결정 수용") |
-| **`Pending` (반려 복귀)** | **watch 리뷰 지적 ≥ 1건 → 재작업 대상으로 되돌림** | **`/taskflow:watch`** (§"반려 — Pending 복귀") |
+| **`Pending` (반려 복귀)** | **리뷰 지적 ≥ 1건 → 재작업 대상으로 되돌림** — tick 자체 리뷰 5회 소진분 · watch 반려분 | **`/taskflow:tick`**(§"step 코드리뷰 루프") · **`/taskflow:watch`**(§"반려 — Pending 복귀") |
 | `Done` | 사용자가 그 step 머지 | `/taskflow:save` |
 
 > **`Pending` 은 단일 의미가 아니다 — 진입로가 셋이다** (미착수 / 결정 복귀 / 반려 복귀). 상태 값만 보고 "아직 안 한 step" 으로 단정하면 반려 재작업이 신규 개발로 뒤바뀐다. 착수 전에 **반드시** §2-bis 2 의 반려 검사를 돌린다. **상태 축을 늘려 구분하지 않는 이유:** `working_scan` KW 목록·`working_gate_blockers`·control·watch 가 전부 이 어휘를 공유해서, 값 하나 추가가 4곳 동시 개정이 된다. 문서 안 반려 블록으로 판별하는 편이 싸다.
@@ -242,7 +341,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 
 ## step 상세 기록 (무인 필수)
 
-무인이라 기록이 유일한 리뷰 근거다. 각 step 파일 §실행/§QA 에 생략 없이 (기존 §4.1 강제 재사용, 신규 룰 0): `## 변경 영향 기록`(무엇/개선점/왜) · `## Before/After 대조` · verify 5점 + review Self-Critique · `## 결정 Escalation 로그`(판단 걸린 것).
+무인이라 기록이 유일한 리뷰 근거다. 각 step 파일 §실행/§QA 에 생략 없이 (기존 §4.1 강제 재사용, 신규 룰 0): `## 변경 영향 기록`(무엇/개선점/왜) · `## Before/After 대조` · **리뷰 루프 라운드별 지적 수·해소 내역** + verify 5점 · `## 결정 Escalation 로그`(판단 걸린 것).
 
 ## §3 Checkpoint 우선 적용
 
@@ -255,7 +354,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 |------|------|------|
 | 주기 반복 | `/loop <interval> /taskflow:tick` | harness `/loop` 스킬 |
 | claim | **cwd 무관 전체 스캔** / #tag | `custom-plugin/taskflow/commands/load.md` |
-| 실행 관통 | worktree → 개발 → QA → verify → review | `custom-plugin/taskflow/commands/auto.md` |
+| 실행 관통 | worktree → 개발 → QA → verify | `custom-plugin/taskflow/commands/auto.md` (**개발 자리는 §"step 개발" 이 Agent 로 위임 · review 자리는 §"step 코드리뷰 루프" 가 대체** — 무인은 self review 를 타지 않는다. worktree 생성·정착·문서 기록은 본체 소관 그대로) |
 | 결정 마감 | escalation ladder P1~P4 / I1~I3 | `execute.md` §"결정 escalation ladder" |
 | step 순차 소비 | step-01~nn 의존 순서 | `execute.md` + `plan.md` §"step 파일 양식" |
 | **step 스캔 + 완료 게이트** | working/ 훑기 · `working_gate_blockers` · **`working_rejections`**(반려 소비 모드 판정) | **`hooks/lib/working-scan.sh`** |
@@ -263,7 +362,12 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | ReadyToMerge = 비종결 | 자동이동 안 됨 | `hooks/working-lifecycle.sh:54` |
 | step 머지 + 완료 판정 | 사용자 | `custom-plugin/taskflow/commands/save.md` |
 | 대기 큐 리뷰 | step ReadyToMerge + NeedsDecision | `custom-plugin/taskflow/commands/control.md` |
+| **문서 없는 단발 실행** | 같은 개발·리뷰 루프를 claim·상태 전이 없이 1회 (대조 기준 = 호출자 확정 성공 기준) | `custom-plugin/taskflow/commands/code.md` |
+| **무인 코드리뷰 계약** | 입력(diff+DoD) 조립 · 리뷰어 spawn 규약 | **`custom-plugin/taskflow/commands/watch.md`** (§"코드 축 — 변경분 리뷰") |
+| **개발자 정의** | 코드 기준(단순성·재사용·검증·호출부 전수·범위 고수) · 문서·커밋 금지 · 반환 양식(`FILES`/`TESTS`/`NOTES`) · `model: opus` | **`custom-plugin/taskflow/agents/step-developer.md`** |
+| **리뷰어 정의** | 리뷰 관점 · 판정축(Critical~Low + `file:line`) · 반환 양식 · **Edit/Write 부재 = 수정 불가** · `model: opus` | **`custom-plugin/taskflow/agents/cold-reviewer.md`** |
 | **반려 생산** | 리뷰 지적 → `Pending` 복귀 + 반려 블록 append | **`custom-plugin/taskflow/commands/watch.md`** (§"반려 — Pending 복귀") |
+| 반려 블록 형식 | `^#+ 반려 [0-9]+회` 블록 안 `- [ ]` 카운트 (tick·watch 공용) | `hooks/lib/working-scan.sh::working_rejections` |
 
 ## 호출 예
 
@@ -280,7 +384,8 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 ```
 [tick] load → commerce-audit (Plan Complete, step 3개)
   2-bis → step-01 (Pending, 선행 없음) 선택
-  3 → 개발·verify 5/5·review 통과 → step-01 Status: ReadyToMerge (머지 X)
+  3 → 개발 → 리뷰 1회차 지적 2건 → 수정 → 2회차 0건 → verify 5/5
+      → step-01 Status: ReadyToMerge (머지 X)
   → [AUTO-ITERATE-DONE]  (다음 tick 이 step-02)
 [tick] → step-02 ReadyToMerge …
 [tick] → step-03 ReadyToMerge → 모든 step ReadyToMerge → 정지
@@ -289,8 +394,14 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 
 ## Changelog
 
-- 2026-07-29: **EC2 조회계 SSM 허용** — verify 에서 `send-command` 조회계(hook 기계 판정 `[SSM-READONLY-OK]`)를 승인 없이 실행. 변경계·판정 불가는 fail-closed 로 사용자 승인 유지. "무인 루프는 EC2 를 안 건드린다" 를 "기동·변경 안 함 / 조회는 함" 으로 좁혔다. SSOT = `dangerous-ops-guard.sh` + `prod-debug` SKILL
-- 2026-07-28: **신선도 필터 (5분)** — claim 후보 산출 시 `working_scan {product|all} 5` 로 호출, 최종 수정 5분 이내 문서/step 은 후보에서 제외. 방금 다른 세션이 저장한 문서를 무인이 바로 채가는 경합 완화. `working_gate_blockers`(완료 게이트)는 최신 상태를 봐야 하므로 필터 미적용
-- 2026-07-28: **반려 소비 모드 (2-bis 2)** — `Pending` 진입로가 셋(미착수/결정 복귀/**watch 반려**)인데 라이프사이클 표에 반려가 없어, tick 이 반려 step 을 미착수로 읽고 `/taskflow:auto` 를 태우면 새 wip 브랜치를 파 **이미 커밋된 작업을 백지 재수행**했다. 착수 전 반려 블록 검사 → worktree 재사용 + 지적만 처리. 상태 값은 늘리지 않는다(4곳 동시 개정 회피)
-- 2026-07-28: **무인 허용 마커 화이트리스트 (0단계)** — unified frontmatter `tick: allow` 가 있는 task 만 무인 자동 선택 대상. 인자 명시 호출은 면제. `/taskflow:watch` 해소 게이트도 같은 마커 공유. 마커 조작 = `allow`/`deny` 서브명령
-- 2026-07-23: 신설 → step 단위 ReadyToMerge + 완료 게이트 재설계
+- 2026-07-31: 반려 재작업 시 `reset --soft` 로 커밋을 되돌리는 안 **검토 후 채택 안 함** (2-bis 2에 사유 명시). 근거 = (a) `머지 전 리뷰 포인트` 기록 실측 보유율 0/20 이라 base 해시도 안 남을 공산이 크고 (b) 커밋 지저분함은 가역이라 PR squash 로 사후 해결되며 (c) 무인 루프는 커밋 이력이 유일한 추적 수단
+- 2026-07-31: 개발자도 전용 정의(`step-developer`)로 분리 + **두 Agent `model: opus` 명시**. `tick-loop.sh` 세션 기본값이 sonnet 이라 모델 생략 시 무인 경로에서만 sonnet 을 상속하던 갭을 막는다. 커밋 주체 = 본체(개발 Agent 가 중간 커밋하면 리뷰어에게 빈 diff 가 간다)
+- 2026-07-31: **개발도 Agent 위임** (본체는 지휘·기록·상태 전이만) + 리뷰어를 `cold-reviewer` 전용 정의로 수렴. 개발 Agent 는 `SendMessage` 로 warm 유지(라운드마다 재구축 회피), 리뷰어만 매 라운드 cold 신규. `isolation: worktree` 금지 — 본체 worktree 밖에 커밋이 쌓여 머지 사다리가 어긋난다
+- 2026-07-30: **review = cold Agent 루프(지적 0건까지, 5회 한도)로 교체** + verify 를 리뷰 뒤로 이동. 자기검열(`/taskflow:review` = Self-Critique+simplify)만으로 `ReadyToMerge` 를 붙여 watch 가 첫 독립 판정을 하던 구조가 반려 왕복의 원인이었다. 계약 SSOT = `watch.md` §"코드 축". 사람 경로(`execute.md`)는 무변경
+- 2026-07-29: `pause` 마커 값 + `allow ↔ pause` 폐쇄 전이. `deny` 와 값을 분리(복원 시 무인 범위 확대 방지)
+- 2026-07-29: 반려 소비 범위 = 지적 + 그 심볼의 호출부 전건. **"미해소 체크박스 그것뿐" 철회**
+- 2026-07-29: EC2 조회계 SSM 을 승인 없이 허용 (변경계·판정 불가는 fail-closed 유지)
+- 2026-07-28: 신선도 필터 5분 — claim 후보만 적용, 완료 게이트는 미적용
+- 2026-07-28: 반려 소비 모드 (2-bis 2) — 착수 전 반려 검사 후 worktree 재사용. 상태 값은 늘리지 않음
+- 2026-07-28: 무인 허용 마커 화이트리스트 (`tick: allow`). 인자 명시 호출은 면제
+- 2026-07-23: 신설 — step 단위 ReadyToMerge + 완료 게이트 재설계

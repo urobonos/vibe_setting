@@ -18,7 +18,7 @@ argument-hint: "[N — 최대 동시 워커 수. 생략 시 min(진행가능 slu
 1. **leader**: `working_scan all` 로 진행 가능 step **수**만 파악 (N 결정용 — slug 목록을 leader 가 분배하지 않는다. 분배는 워커 자율 claim).
 2. **동시 상한 N** = `min(진행가능 step 수, min(16, cores-2))` (기본) 또는 인자 N.
 3. **워커 spawn** (N개, `isolation: worktree`) — 프롬프트는 **`/taskflow:tick` Skill 호출**만:
-   > `Skill` 도구로 `taskflow:tick` 을 호출해라. tick 이 `working_scan` → `registry_claim`(원자 자율 점유) → 개발+verify+review → step `상태: ReadyToMerge` 까지 전부 수행한다. claim 가능 step 이 없으면 "진행 가능 없음" 반환 후 종료. **하니스 hook(gate/worktree-enforce/dangerous-ops/§3 가드)은 subagent 도구 호출에도 적용되므로(아래 §"하니스 자동 상속" 실측) tick 명세의 룰이 자동 상속된다 — 워커별 재구현 0.**
+   > `Skill` 도구로 `taskflow:tick` 을 호출해라. tick 이 `working_scan` → `registry_claim`(원자 자율 점유) → 개발 → **cold Agent 코드리뷰 루프(지적 0건까지)** → verify → step `상태: ReadyToMerge` 까지 전부 수행한다. claim 가능 step 이 없으면 "진행 가능 없음" 반환 후 종료. **하니스 hook(gate/worktree-enforce/dangerous-ops/§3 가드)은 subagent 도구 호출에도 적용되므로(아래 §"하니스 자동 상속" 실측) tick 명세의 룰이 자동 상속된다 — 워커별 재구현 0.**
    > **fallback:** tick 이 available-skills 미등재 세션(신규 커맨드 → 세션 재시작 전)이면 `bash` 로 tick 1단계(`working_scan` + `registry_claim`)를 직접 수행.
 4. **수합·유동**: 워커 완료 수합. 진행 가능 step 남으면 빈 슬롯에 추가 spawn. **0** → 종료. (워커가 각자 자율 claim 하므로 leader 는 수만 세고 spawn/kill 만 조율)
 
