@@ -33,6 +33,16 @@ hook_init() {
 # hook_python
 # ---------------------------------------------------------------------------
 # python3 우선 검출, 없으면 python fallback. HOOK_PY 변수 캐시.
+#
+# HOOK_PY_TIMEOUT (2026-07-30): python 호출을 감싸는 `timeout N` prefix.
+#   Why: hook 이 자체 timeout(3~5초)으로 kill 되면 Windows 에는 프로세스 그룹 kill 도
+#   SIGPIPE 도 없어 파이프 안의 python 손자가 남고, stdout reader 가 사라진 write 에서
+#   영구 블록한다 (2026-07-29 실측 — 14시간에 9건 잔존, `python3 git-guard.py all` 6건 +
+#   인라인 `json.load(sys.stdin)` 3건). `timeout` 을 끼우면 부모가 죽어도 손자가 N초 뒤
+#   스스로 회수된다 (부모 강제 kill 재현 후 검증 — 래핑 없음 = 잔존 / 래핑 = 3초 후 소멸).
+#   값 2초 = git-guard.py 실측 308~1215ms 위 마진 + branch-enforce hook timeout(5초) 안.
+#   사용 시 **unquoted** 로 전개해야 두 토큰으로 분리된다: `$HOOK_PY_TIMEOUT "$HOOK_PY" …`
+#   timeout 부재 환경은 빈 문자열 → 기존 동작 그대로 (fallback 패턴 = HOOK_PY 와 동일).
 hook_python() {
   if [ -n "$HOOK_PY" ]; then
     return 0
@@ -43,6 +53,11 @@ hook_python() {
     HOOK_PY="python"
   else
     HOOK_PY=""
+  fi
+  if command -v timeout >/dev/null 2>&1; then
+    HOOK_PY_TIMEOUT="timeout ${HOOK_PY_TIMEOUT_SEC:-2}"
+  else
+    HOOK_PY_TIMEOUT=""
   fi
 }
 

@@ -71,14 +71,23 @@ is_exempt_path() {
 _WT_PY=""
 command -v python3 >/dev/null 2>&1 && _WT_PY=python3
 [ -z "$_WT_PY" ] && command -v python >/dev/null 2>&1 && _WT_PY=python
+# python 호출 timeout prefix (2026-07-30) — hook 이 자체 timeout(3초)으로 kill 될 때 파이프 안
+#   python 손자가 Windows 에서 고아로 남는 것을 막는다. Why·실측 = hooks/lib/hook-input.sh
+#   §HOOK_PY_TIMEOUT SSOT. 본 파일 L104(shlex 파서)·L75(tool_name) 형태가 실측 잔존분에 있었다.
+#   본 hook 의 python 호출 4곳 전부에 적용한다 — 1곳만 감싸면 나머지가 계속 고아를 만든다.
+#   unquoted 전개 필수 ("timeout 2" 두 토큰).
+_WT_TO=""
+command -v timeout >/dev/null 2>&1 && _WT_TO="timeout 2"
 TOOL_NAME=""
-[ -n "$_WT_PY" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
+# shellcheck disable=SC2086  # _WT_TO 는 "timeout 2" 두 토큰으로 분리돼야 한다
+[ -n "$_WT_PY" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | $_WT_TO "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
 [ -z "$TOOL_NAME" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
 
 case "$TOOL_NAME" in
   Edit|Write|MultiEdit)
     FILE_PATH=""
-    [ -n "$_WT_PY" ] && FILE_PATH=$(printf '%s' "$PAYLOAD" | "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); ti=d.get('tool_input',{}); print(ti.get('file_path') or ti.get('notebook_path') or '')" 2>/dev/null)
+    # shellcheck disable=SC2086
+    [ -n "$_WT_PY" ] && FILE_PATH=$(printf '%s' "$PAYLOAD" | $_WT_TO "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); ti=d.get('tool_input',{}); print(ti.get('file_path') or ti.get('notebook_path') or '')" 2>/dev/null)
     # python 파싱 실패 시 grep 백스톱 (fail-open 차단, H1 2026-06-16)
     if [ -z "$FILE_PATH" ]; then
       FILE_PATH=$(printf '%s' "$PAYLOAD" | grep -oE '"(file_path|notebook_path)"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
@@ -87,7 +96,8 @@ case "$TOOL_NAME" in
     FILE_PATH=$(echo "$FILE_PATH" | sed 's|\\|/|g')
     ;;
   Bash)
-    COMMAND=$(echo "$PAYLOAD" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('command',''))" 2>/dev/null)
+    # shellcheck disable=SC2086
+    COMMAND=$(echo "$PAYLOAD" | $_WT_TO python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('command',''))" 2>/dev/null)
     # 파일 시스템 mutation 만 검사 (git 명령은 branch-enforce 잔존 영역).
     # raw glob → shlex 토큰화 (2026-06-04, v5c): 명령 텍스트(echo 문자열·주석) 내 '>'/'rm' false-positive 방지.
     #   - operator(|/||/&&/;/&/()/|&) 뒤 토큰 = 명령 위치 → mutation 명령 감지 (단일 | 누수 방지, re.split 미사용)
@@ -101,7 +111,8 @@ case "$TOOL_NAME" in
     #   - 미해석 토큰($VAR/명령치환/backtick)·`..` traversal·대상 미추출(dd·옵션만·trailing redirect)·파서 실패
     #     = __UNRESOLVED__ → 종전대로 pwd 기준 차단 (fail-closed 불변)
     #   - 출력 양식: 1행 = '1'/'0' (mutation 여부), 2행~ = 대상 경로 (또는 __UNRESOLVED__)
-    PARSE=$(printf '%s' "$COMMAND" | python3 -c "
+    # shellcheck disable=SC2086
+    PARSE=$(printf '%s' "$COMMAND" | $_WT_TO python3 -c "
 import sys, shlex, re
 cmd = sys.stdin.read().replace('\n', ' ; ')   # 따옴표 밖 newline = 절 분리 (따옴표 안은 shlex 보존)
 MUT = {'rm','mv','cp','mkdir','touch','tee','dd','truncate'}

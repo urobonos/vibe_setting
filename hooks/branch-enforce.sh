@@ -21,18 +21,16 @@ hook_read_stdin
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 [ -z "$BRANCH" ] && exit 0
 
-# tool_name 추출 (Edit / Write / Bash 분기)
-TOOL_NAME=""
-if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
-  hook_python
-  TOOL_NAME=$(echo "$STDIN_DATA" | "$HOOK_PY" -c "
-import json, sys
-try:
-    print(json.load(sys.stdin).get('tool_name', ''))
-except Exception:
-    print('')
-" 2>/dev/null)
-fi
+# tool_name 추출 (Edit / Write / Bash 분기) — hook_parse_field 3단 백스톱 사용 (2026-07-30)
+#   구 코드는 python 단독이라 python 실행이 실패하면(hook 자체 timeout kill·크래시)
+#   TOOL_NAME="" 이 되고, L58 `[ "$TOOL_NAME" = "Bash" ]` 가 거짓이 되어 **push 검사 전체를
+#   건너뛰고 exit 0** 했다 — §4.3(d) 전면 금지가 조용히 fail-open. 2026-07-30 실증(HOOK_PY
+#   주입으로 python 실패 재현 → exit 0).
+#   `worktree-enforce.sh` L69-76 은 같은 구멍을 2026-06-16 에 grep 백스톱으로 막았는데 본
+#   hook 만 남아 있었다. 백스톱을 여기 복붙하지 않고 lib 함수(bash 정규식 primary → python →
+#   grep+sed)로 수렴시켜 drift 를 없앤다.
+#   부수 효과: bash 정규식이 primary 라 정상 경로에서 python 起動이 사라진다 (고아 원인 제거).
+TOOL_NAME=$(hook_parse_field tool_name)
 
 # ─────────────────────────────────────────────────────────
 # 기한부 push 예외 (2026-05-29 사용자 결정 / 전 프로젝트 / ~2026-07-31 자동 만료)
@@ -62,7 +60,8 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   hook_python
   # 배칭: git detector 를 all 모드로 1회 호출 후 캐시 (push/master-merge/cherry-pick python 3회→1회).
   GG_ALL=""
-  [ -n "$HOOK_PY" ] && GG_ALL=$(printf '%s' "$COMMAND" | "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" all 2>/dev/null)
+  # shellcheck disable=SC2086  # HOOK_PY_TIMEOUT 은 "timeout 2" 두 토큰으로 분리돼야 한다 (hook-input.sh SSOT)
+  [ -n "$HOOK_PY" ] && GG_ALL=$(printf '%s' "$COMMAND" | $HOOK_PY_TIMEOUT "$HOOK_PY" "$(dirname "$0")/lib/git-guard.py" all 2>/dev/null)
   GG_ALL="${GG_ALL//$'\r'/}"   # Windows python CRLF 제거 (라인 매칭 정확성)
   gg() {
     local w=$'\n'"$GG_ALL"$'\n' r
@@ -74,9 +73,16 @@ if [ "$TOOL_NAME" = "Bash" ]; then
   if [ -n "$HOOK_PY" ]; then
     PUSH_DETECTED=$(gg push)
   fi
-  # python 부재 시 grep 백스톱 (fail-open → fail-closed, H1 2026-06-16): 절(;/&&/||/|/&) 분리 후
-  #   첫 git 토큰이 push 인 절 차단. python 가용 시엔 git-guard.py(정확) 단독 — FP(commit 메시지 등) 회귀 0.
-  if [ -z "$HOOK_PY" ] && [ "$PUSH_DETECTED" != "1" ]; then
+  # python 부재·**결과 부재** 시 grep 백스톱 (fail-open → fail-closed, H1 2026-06-16): 절(;/&&/||/|/&) 분리 후
+  #   첫 git 토큰이 push 인 절 차단. GG_ALL 이 채워졌을 때만 git-guard.py(정확) 단독 — FP(commit 메시지 등) 회귀 0.
+  #
+  # 조건이 `-z "$HOOK_PY"` 가 아니라 `-z "$GG_ALL"` 인 이유 (2026-07-30):
+  #   python 이 **존재하는데 실행이 실패**하는 경로가 실재한다 — hook 자체 timeout kill,
+  #   HOOK_PY_TIMEOUT 만료, python 크래시. 그 경우 HOOK_PY 는 채워진 채 GG_ALL 만 비고,
+  #   `gg push` 가 '0' 을 반환한다. 구 조건은 백스톱을 건너뛰어 **git push 가 통과**했다
+  #   (§4.3(d) 전면 금지가 fail-open 으로 뒤집힘). `dangerous-ops-guard.sh` 는 처음부터
+  #   `-z "$GG_ALL"` 기준이었고, 같은 배칭 패턴에서 폴백 기준만 갈라져 있었다.
+  if [ -z "$GG_ALL" ] && [ "$PUSH_DETECTED" != "1" ]; then
     if printf '%s' "$COMMAND" | grep -qE '(^|[;&|])[[:space:]]*((sudo|env|nohup|timeout|command|exec)[[:space:]]+[^;&|]*)?git[[:space:]]+push([[:space:]]|$)'; then
       PUSH_DETECTED="1"
     fi

@@ -52,6 +52,12 @@ if [[ "$TOOL_NAME" != "Bash" ]]; then
   exit 0
 fi
 
+# python 호출 timeout prefix (2026-07-30) — hook 이 kill 될 때 파이프 안 python 손자가
+#   Windows 에서 고아로 남는 것을 막는다. Why·실측 = hooks/lib/hook-input.sh §HOOK_PY_TIMEOUT SSOT.
+#   본 파일은 hook-input.sh 를 source 하지 않는 자체 검출 경로라 지역 변수로 둔다.
+_TO=""
+command -v timeout >/dev/null 2>&1 && _TO="timeout 2"
+
 # command 추출 — bash 내장 primary (python 起動 회피). escape 된 따옴표 가능 → STDIN 에 \" 흔적 있으면 python 재파싱(정확성 우선).
 COMMAND=""
 [[ "$STDIN_DATA" =~ \"command\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && COMMAND="${BASH_REMATCH[1]}"
@@ -60,7 +66,8 @@ if [ -z "$COMMAND" ] || [[ "$STDIN_DATA" == *'\"'* ]]; then
   if command -v python3 >/dev/null 2>&1; then _PY=python3
   elif command -v python >/dev/null 2>&1; then _PY=python; fi
   if [ -n "$_PY" ]; then
-    _pc=$(echo "$STDIN_DATA" | "$_PY" -c "
+    # shellcheck disable=SC2086  # _TO 는 "timeout 2" 두 토큰으로 분리돼야 한다
+    _pc=$(echo "$STDIN_DATA" | $_TO "$_PY" -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
@@ -92,7 +99,8 @@ elif command -v python >/dev/null 2>&1; then GG_PY=python; fi
 #   GG_ALL 빈 문자열(python 부재/실패) → gg_detect 전부 0 → 기존 grep 백스톱 단독 작동 (회귀 0, 원 동작 보존).
 GG_ALL=""
 if [ -n "$GG_PY" ]; then
-  GG_ALL=$(printf '%s' "$COMMAND" | "$GG_PY" "$GG_LIB" all 2>/dev/null)
+  # shellcheck disable=SC2086  # _TO 는 "timeout 2" 두 토큰으로 분리돼야 한다
+  GG_ALL=$(printf '%s' "$COMMAND" | $_TO "$GG_PY" "$GG_LIB" all 2>/dev/null)
   GG_ALL="${GG_ALL//$'\r'/}"   # Windows python stdout CRLF(\r\n) → LF. 없으면 라인매칭 '=1\n' 이 '=1\r\n' 에 빗나감.
 fi
 # GG_ALL 캐시 조회 — return 0/1 (subshell $() 없이 if 로 직접 호출, fork 0)
