@@ -68,7 +68,7 @@ min_claude_md_version: "4.0"
 - **effort 파라미터 없음:** Agent 도구는 `model` 만 지정한다 — reasoning effort 파라미터가 없다. effort 차등이 필요하면 Workflow `agent()` 경로에서만 가능하다.
 - **sonnet 예외는 강제 아님:** 경량 멤버에 sonnet 을 쓸지는 Lead 판단. 정확성 우선이면 opus 유지가 안전한 기본값이다.
 - Explore 에이전트는 `subagent_type: "Explore"` 사용, 시스템 기본값.
-- **현재 기준 모델 (2026-06 기준):** `opus` = Opus 4.8 (1M context, knowledge cutoff 2026-01), `sonnet` = Sonnet 4.6, `haiku` = Haiku 4.5. 모델군이 교체되면 본 항목을 갱신한다.
+- **모델은 계열명(`opus`/`sonnet`/`haiku`)으로만 지정한다.** 버전·context·cutoff 를 본문에 박지 않는다 — 모델군 교체마다 갱신해야 하는 부채가 되고, 하니스가 실제로 쓰는 것은 계열명뿐이다.
 
 ## 1.2. Task Sizing
 
