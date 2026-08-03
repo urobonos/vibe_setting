@@ -8,8 +8,8 @@
 #   L3. frontmatter 권장 필드: version / user-invocable / depends_on / conflicts_with / min_claude_md_version / triggers
 #   L4. references/ 매핑: 본문 참조 references/{file}.md 가 실제 존재
 #   L5. Why: 라인 짝지움 — 강제 어휘 빈도 vs Why: 라인 빈도 (목표 30% 이상)
-#   L6. depends_on 의 모든 스킬 실재 (글로벌 스킬 폴더 기준)
-#   L7. conflicts_with 의 모든 스킬 실재 + 자기 참조 경고
+#   L6. depends_on 의 모든 스킬 실재 (글로벌 스킬 폴더 + `{plugin}:{skill}` 네임스페이스)
+#   L7. conflicts_with 의 모든 스킬 실재 + 자기 참조 경고 (L6 과 동일 네임스페이스 해석)
 #   L8. depends_on 순환 의존 감지 (DAG 그래프 + DFS, 2026-05-13 신규, CLAUDE.md §5.4)
 #   L9. version semver 형식 검증 (^\d+\.\d+\.\d+$, 2026-05-13 신규, CLAUDE.md §5.4)
 #   L10. min_claude_md_version 호환성 검증 (CLAUDE.md 현재 버전과 대조, 2026-05-13 신규)
@@ -21,6 +21,7 @@
 #   bash ~/.claude/bin/lint-skills.sh --json             # JSON 출력 (스크립트 통합용)
 
 SKILLS_DIR="${HOME}/.claude/skills"
+PLUGINS_DIR="${HOME}/.claude/custom-plugin"
 TARGET_SKILL=""
 STRICT=0
 JSON=0
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --strict) STRICT=1; shift ;;
     --json) JSON=1; shift ;;
     --skills-dir) SKILLS_DIR="$2"; shift 2 ;;
+    --plugins-dir) PLUGINS_DIR="$2"; shift 2 ;;
     -h|--help)
       grep '^#' "$0" | head -25
       exit 0
@@ -83,12 +85,12 @@ for skill in skill_names:
     m = re.search(r'^depends_on:[ \t]*\[([^\]]*)\]', content, re.MULTILINE)
     deps = []
     if m:
-        deps = re.findall(r'[a-z][a-z0-9_-]+', m.group(1))
+        deps = re.findall(r'[a-z][a-z0-9_:-]+', m.group(1))
     else:
         m2 = re.search(r'^depends_on:[ \t]*\n((?:[ \t]+-[ \t]*[^\n]+\n?)+)', content, re.MULTILINE)
         if m2:
             for line in m2.group(1).splitlines():
-                t = re.search(r'-[ \t]*"?([a-z][a-z0-9_-]+)"?', line)
+                t = re.search(r'-[ \t]*"?([a-z][a-z0-9_:-]+)"?', line)
                 if t:
                     deps.append(t.group(1))
     graph[skill] = deps
@@ -142,6 +144,21 @@ fi
 [ -z "$CLAUDE_MD_VERSION" ] && CLAUDE_MD_VERSION="4.0"
 # semver 형식 (X.Y) → X.Y.0 보정 (sort -V 호환성)
 echo "$CLAUDE_MD_VERSION" | grep -qE '^[0-9]+\.[0-9]+$' && CLAUDE_MD_VERSION="${CLAUDE_MD_VERSION}.0"
+
+# --- 스킬 참조 해석 (L6/L7 공용) ---
+# 글로벌 스킬 폴더 + `{plugin}:{skill}` 네임스페이스 (custom-plugin/{plugin}/skills/{skill}/SKILL.md).
+# Why: 플러그인 이동(2026-07-15) 후에도 해석기가 글로벌 폴더만 조회해 `hongcafe:mysql8` 이 상시
+#      L6-FAIL -> lint 가 항상 exit 1 = 신호 자체가 죽었다. frontmatter 가 아니라 해석기가 틀렸다.
+skill_ref_exists() {
+  local ref="$1"
+  echo "$ALL_SKILLS" | grep -qx "$ref" && return 0
+  case "$ref" in
+    *:*)
+      [ -f "$PLUGINS_DIR/${ref%%:*}/skills/${ref##*:}/SKILL.md" ] && return 0
+      ;;
+  esac
+  return 1
+}
 
 lint_skill() {
   local skill_name="$1"
@@ -234,7 +251,7 @@ lint_skill() {
       if [ -z "$dep" ]; then
         continue
       fi
-      if ! echo "$ALL_SKILLS" | grep -qx "$dep"; then
+      if ! skill_ref_exists "$dep"; then
         missing_deps+=("$dep")
       fi
     done <<< "$deps"
@@ -258,7 +275,7 @@ lint_skill() {
         self_ref=1
         continue
       fi
-      if ! echo "$ALL_SKILLS" | grep -qx "$cw"; then
+      if ! skill_ref_exists "$cw"; then
         missing_cwiths+=("$cw")
       fi
     done <<< "$cwiths"
