@@ -143,7 +143,7 @@ multi-repo 4 worktree 풀운영 = 머지 4× 마찰. 권고 패턴:
 산출: {수정 파일 list + AWS 리소스 변경 안 / 사용자 승인 필요 항목}
 제약:
   - AWS 변경계 명령 (deploy / put / delete) = 사용자 명시 승인 후
-  - Lambda Python 런타임 버전 = 사용자 확인 (aws §"Lambda")
+  - Lambda Python 런타임 버전 = 사용자 확인 (aws §"Checkpoint 필수")
 ```
 
 ### 4.3 문서 멤버 (general-purpose)

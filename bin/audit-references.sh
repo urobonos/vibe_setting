@@ -138,6 +138,10 @@ section_exists() {
   grep -qE "^#{1,6}[[:space:]]+(§)?${section_re}(\.|-|\b|[[:space:]])" "$file" && return 0
   # 패턴 2: ### {제목} (N) / (N-M) — 라벨 형식
   grep -qE "^#{1,6}[[:space:]]+.*\(${section_re}(-[0-9]+)?\)" "$file" && return 0
+  # 패턴 3: 줄머리 번호 + 굵은글씨 `4. **제목:**` — 헤더가 아닌 절 앵커
+  #   인용형이 bold run 을 앵커로 인정하는 것과 같은 논리 (본 하니스의 절은 헤더 아닌 굵은글씨가 많다).
+  #   굵은글씨를 요구해 단순 나열(`4. foo`)과 분리 — 아무 번호 리스트나 통과시키면 죽은 참조를 놓친다.
+  grep -qE "^[[:space:]]*${section_re}\.[[:space:]]+\*\*" "$file" && return 0
   return 1
 }
 
@@ -147,10 +151,13 @@ section_exists() {
 #   (CLAUDE.md `- **룰명:**` / aws `> **[실행 주체]**` / auto.md `**재토론 금지 원칙 (...):**`).
 #   헤더만 인정하면 살아있는 포인터 3건이 FAIL 로 잡혀 신호가 죽는다 (lint L6 상시 FAIL 과 같은 실패형).
 #   축자 부분일치라 `verify+review` vs `verify + review` 같은 표기 불일치는 그대로 잡힌다.
+#   단 백틱은 비교 전 양쪽에서 제거한다 — 참조는 §"output/ 경로 Gate-0 직행" 로 쓰지만
+#   앵커 원문은 `- **`output/` 경로 Gate-0 직행:**` 라 코드 마크업만으로 축자 매칭이 깨진다.
 section_named_exists() {
   local file="$1" name="$2"
   [ -f "$file" ] || return 1
   awk -v needle="$name" '
+    function strip(s) { gsub(/`/, "", s); return s }
     function bold_run(l,   p, q, rest) {
       if (l !~ /^[ \t]*([>*+-][ \t]+)*\*\*/) return ""
       p = index(l, "**")
@@ -159,8 +166,9 @@ section_named_exists() {
       if (q == 0) return ""
       return substr(rest, 1, q - 1)
     }
-    substr($0,1,1) == "#" && index($0, needle) > 0 { found = 1; exit }
-    { b = bold_run($0); if (b != "" && index(b, needle) > 0) { found = 1; exit } }
+    BEGIN { needle = strip(needle) }
+    substr($0,1,1) == "#" && index(strip($0), needle) > 0 { found = 1; exit }
+    { b = bold_run($0); if (b != "" && index(strip(b), needle) > 0) { found = 1; exit } }
     END { exit found ? 0 : 1 }
   ' "$file"
 }

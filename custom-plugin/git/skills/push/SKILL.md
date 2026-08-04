@@ -89,7 +89,7 @@ BREAKING CHANGE: 기존 session 기반 인증이 제거됨
 
 ## 규칙
 
-1. **[Critical · 2026-05-07 갱신] 자동 원격 push 전면 금지** — Claude 는 Bash 도구로 `git push` 를 직접 호출하지 않는다. 모든 분기(feature / source / personal / backup / relay) · 모든 옵션(`--force` / `--force-with-lease` / `--delete` / refspec push 등) 예외 0. `branch-enforce.sh` PreToolUse hook 이 모든 분기에서 `git push` 명령을 exit 2 차단한다. 본 룰은 종전 "승인 후 직접 실행" 정책을 폐기한다 (글로벌 CLAUDE.md §"자동 원격 push 전면 금지" 결정 우선).
+1. **[Critical · 2026-05-07 갱신] 자동 원격 push 전면 금지** — Claude 는 Bash 도구로 `git push` 를 직접 호출하지 않는다. 모든 분기(feature / source / personal / backup / relay) · 모든 옵션(`--force` / `--force-with-lease` / `--delete` / refspec push 등) 예외 0. `branch-enforce.sh` PreToolUse hook 이 모든 분기에서 `git push` 명령을 exit 2 차단한다. 본 룰은 종전 "승인 후 직접 실행" 정책을 폐기한다 (글로벌 CLAUDE.md §"git push 전면 금지" 결정 우선).
 2. **사용자 직접 실행 안내** — 사용자가 push 를 원하면 다음 두 경로 중 하나를 안내한다.
    - `! git push ...` (Bash prompt prefix `!` — hook 미적용)
    - PowerShell 셸에서 `git push ...` 직접 입력
