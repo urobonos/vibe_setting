@@ -285,7 +285,7 @@ Status: Done   (시작 라인)
 | 슬래시 | 역할 |
 |--------|------|
 | `/taskflow:tick` | step 1건 claim → 개발 → cold 리뷰 루프 → verify → `ReadyToMerge`. 머지 안 함 |
-| `/taskflow:tick-loop` · `/taskflow:tick-team` | tick 을 매번 새 프로세스로 반복 / 워커 N개 병렬 |
+| `/taskflow:tick-loop` | tick 을 매번 새 프로세스로 반복 (`N` 지정 시 슬롯 N개 병렬 — 컨텍스트 누적 0) |
 | `/taskflow:watch` | 변경분 검증 + `ReadyToMerge` 머지 해소 + 정체 병목 제거 |
 
 **③ 보조** — 파이프라인 어디에나 삽입. **마커·claim 비대상이라 ② 가 아니다.**

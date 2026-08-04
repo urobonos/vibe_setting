@@ -68,16 +68,20 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 
 **동시 상한은 `min(16, cores−2)`** — §4.2 병렬 fan-out 과 같은 식이다(새 기준을 만들지 않는다). 초과 요청은 상한으로 줄이고 그 사실을 알린다.
 
-### `tick-team` 과 언제 갈리나
+### 왜 `tick-team` 이 없어졌나 (2026-08-04 폐기, 재제안 방지 기록)
 
-| | `tick-loop N` | `tick-team N` |
+**"leader 가 워커 Agent 를 spawn 해 병렬로 돌린다" 는 설계를 다시 제안하지 마라.** `/taskflow:tick-team` 이 정확히 그거였고, 아래 4축 실측 대조에서 3축이 열세라 §3 승인으로 폐기했다.
+
+| | **`tick-loop N`** (채택) | `tick-team N` (폐기) |
 |---|---|---|
 | 워커 단위 | **독립 프로세스** | leader 프로세스 안의 subagent |
-| leader 컨텍스트 | 없음 | **누적** (워커 보고를 계속 받는다) |
-| 장애 격리 | 하나 죽어도 무관 | **leader 죽으면 전부 죽는다** |
-| 기동 비용 | 슬롯마다 세션 시작 컨텍스트 | worktree 격리 200~500ms/워커 |
+| leader 컨텍스트 | **없음** | **누적** (워커 보고를 계속 받는다) |
+| 장애 격리 | **하나 죽어도 무관** | **leader 죽으면 전부 죽는다** |
+| 기동 비용 | 슬롯마다 세션 시작 컨텍스트 | worktree 격리 200~500ms/워커 (유일한 우위) |
 
-**장시간 무인 운용은 `tick-loop N`** 이 낫다 — leader 누적이 없고 장애가 번지지 않는다. `tick-team` 은 한 번에 몰아서 끝내는 단발 병렬에 맞는다.
+**결정적인 것은 leader 컨텍스트 누적이다.** 무인 루프의 존재 이유가 "컨텍스트 누적 0" 인데 leader 를 두는 순간 그 축이 무너진다 — 워커 보고가 leader 에 쌓여 장시간 운용에서 leader 가 먼저 한계에 닿는다. 기동 비용 우위(200~500ms)는 30분 주기 루프에서 무의미하다.
+
+**병렬 자체는 사라지지 않았다** — 위 §"병렬 실행" 이 같은 축을 슬롯(독립 프로세스)으로 재구현했고, 배타 점유는 어느 쪽이든 `registry_claim` 원자성이 보장한다. 즉 tick-team 의 고유 payload 는 **병렬 축에 한해** 폐기 시점에 이미 없었다 (SSOT 2개 — §"하니스 자동 상속"·§"카탈로그 미등재 fallback" — 은 실재했고 `tick.md` 로 이관했다).
 
 > **worktree 는 N 배로 늘어난다.** 각 tick 이 자기 worktree 를 만들므로 진행 가능 step 보다 많은 슬롯은 전부 "진행 가능 없음" 으로 헛돌며 시작 컨텍스트만 태운다. `/taskflow:control` 로 대기 물량을 보고 N 을 정한다.
 
@@ -98,7 +102,6 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 |------|------|
 | **러너 본체** | `~/.claude/bin/tick-loop.sh` |
 | iteration 1회분 로직 | `custom-plugin/taskflow/commands/tick.md` |
-| 병렬 상위 (워커 팀) | `custom-plugin/taskflow/commands/tick-team.md` |
 | 대기 큐 소비 | `custom-plugin/taskflow/commands/control.md` |
 | 정지 금지 근거 | 메모리 `feedback_no-autonomous-loop-kill` |
 
@@ -115,6 +118,7 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 
 ## Changelog
 
+- 2026-08-04: **`/taskflow:tick-team` 폐기 흡수 (§3 사용자 승인).** 병렬 축은 본 커맨드의 슬롯(독립 프로세스)이 이미 대체하고 있었고, 4축 대조 3축 열세(워커 단위·leader 컨텍스트 누적·장애 격리)가 근거. 대조표는 §"왜 `tick-team` 이 없어졌나" 로 남겨 재제안을 막는다. tick-team 이 갖고 있던 SSOT 2개(`하니스 자동 상속`·`카탈로그 미등재 fallback`)는 `tick.md` 로 이관
 - 2026-07-28: graceful stop — 진행 중 tick 을 완주시키고 다음 iteration 만 막는다. 즉시 중단 = `stop --now`. 시그널 대신 플래그 파일
 - 2026-07-28: 병렬 슬롯 — `tick-loop <간격> <N>`, 상태를 `state/tick-loop/{슬롯}.*` 로 분리. 상한 `min(16, cores−2)`
 - 2026-07-28: 자식 kill 시 루프 잔존 픽스 (exit ≥128 break, `trap INT TERM`, `stop` 이 자식 먼저 kill)

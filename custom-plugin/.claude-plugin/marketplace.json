@@ -17,7 +17,7 @@
     {
       "name": "taskflow",
       "source": "./taskflow",
-      "description": "작업 문서 생명주기 통합 (task-docs 수트) — 8단계 워크플로우 (analyze~retro) + working/ 문서·상태 관리 (load/save/draft/survey/ps/control) + 무인 루프 (tick/tick-loop/tick-team/watch/code) + 보조 (auto/research/suggest/debate/parallel)"
+      "description": "작업 문서 생명주기 통합 (task-docs 수트) — 8단계 워크플로우 (analyze~retro) + working/ 문서·상태 관리 (load/save/draft/survey/ps/control) + 무인 루프 (tick/tick-loop/watch/code) + 보조 (auto/research/suggest/debate/parallel)"
     },
     {
       "name": "git",

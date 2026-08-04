@@ -71,8 +71,7 @@
 | 슬래시 | 역할 |
 |--------|------|
 | `/taskflow:tick` | 1-iteration 러너 — cwd 무관 전체 스캔 → step 1건 claim → 개발 → **cold Agent 코드리뷰 루프(클린까지)** → verify → `Status: ReadyToMerge`. 머지·push 안 함 |
-| `/taskflow:tick-loop` | tick 을 **매번 새 프로세스**로 반복 기동 (컨텍스트 누적 0). detach 라 호출 세션 비블로킹 |
-| `/taskflow:tick-team` | 병렬 오케스트레이터 — leader 가 워커를 동적 spawn/kill, 각 워커가 `registry_claim`(원자) 으로 step 자율 점유 |
+| `/taskflow:tick-loop` | tick 을 **매번 새 프로세스**로 반복 기동 (컨텍스트 누적 0). detach 라 호출 세션 비블로킹. `N` 지정 시 슬롯 N개 병렬 |
 | `/taskflow:watch` | 감시 루프 — 스냅샷 대비 diff 로 **변경분만** 검증, `ReadyToMerge` 는 리뷰 후 머지 사다리(ff-only → 범위 cherry-pick → 개별)로 정착, 지적 시 `Pending` 복귀. 1시간+ 무진행 병목 해소 |
 | `/taskflow:control` | 대기 큐 대시보드 (read-only) — `ReadyToMerge` step + `NeedsDecision` task + 완료 게이트 상태 |
 | `/taskflow:code` | 분리 루프 1회 — `step-developer` 가 worktree 에서 구현, `cold-reviewer` 가 클린까지 판정. 짠 쪽과 본 쪽 분리가 값 |
@@ -118,10 +117,10 @@
 - **`hongcafe:mirror-be-claude`** `A·C` — be CLAUDE.md ↔ 글로벌 미러 + api-docs 3-way 정합. verify / sync-from-be / sync-from-global
 - **`hongcafe:global-context`** (internal) — 다국가 서비스 컨텍스트(국가코드·Country Resolver·Feature Flag·i18n·타임존)
 
-### `custom-plugin/taskflow` — 워크플로우 (스킬 1 + 커맨드 24)
+### `custom-plugin/taskflow` — 워크플로우 (스킬 1 + 커맨드 23)
 
 - **`taskflow:debate`** `A` — 4 에이전트팀 × 4명 = **16 Agent** 풀-병렬 spawn 토론. 각 팀원 cold context 독립 spawn, Lead 종합. 토론만 수행(구현·커밋 별도)
-- 커맨드 24종 = 위 [워크플로우 두 축](#워크플로우--두-축) 참조
+- 커맨드 23종 = 위 [워크플로우 두 축](#워크플로우--두-축) 참조
 
 ### `custom-plugin/tools` — 유틸리티 6종
 

@@ -181,7 +181,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 | **작업 repo** | **claim 한 step 의 product** (cwd 아님) |
 | worktree 생성 | 그 product repo 에서 `git -C {repo} worktree add` |
 
-**`cd` 로 옮겨다니지 않는다.** `git -C` 로만 대상 repo 를 조작한다 — `cd` 는 이후 hook 의 판정 컨텍스트(product 판정·worktree 면제)를 바꾸고, 무인 루프가 지금 어디에 서 있는지 추적을 어렵게 만든다. `watch.md` 가 같은 규약을 쓴다(2026-07-28 실측으로 `git -C` 경유 브랜치 생성·ff머지·worktree remove 가 전부 hook 통과 확인).
+**`cd` 로 옮겨다니지 않는다 — `git -C` 로만 대상 repo 를 조작한다** (규약·근거 SSOT = `watch.md` §"cwd 에 국한되지 않는다").
 
 > **러너 쪽도 cwd 를 고정한다.** `tick-loop.sh` 는 `claude` 를 띄우기 전에 `~/.claude` 로 이동한다. 그러지 않으면 부모 셸의 cwd 를 그대로 상속해 product 판정이 호출 위치에 좌우된다 — 실측으로 `~/.claude/docs/...` 하위에서 돈 세션들이 남았고, 그 부작용을 막은 것이 `product-resolver` 의 self-nesting 가드다.
 
@@ -202,7 +202,7 @@ e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`hongcafe:ph
 
 **단 EC2 조회는 허용된다 (2026-07-29~).** verify 단계에서 서버 상태 확인이 필요하면 `aws ssm send-command` 로 **조회계 명령**을 승인 없이 실행할 수 있다 — `hooks/dangerous-ops-guard.sh` 가 조회계로 판정하면 `[SSM-READONLY-OK]` 를 낸다. 변경계·판정 불가는 그대로 사용자 승인 대기(`NeedsDecision` 마감)다. 판정식 SSOT = 그 hook + `hongcafe:prod-debug` §"조회계 send-command 자동 판정". **서버 수정은 여전히 금지** — 무인 루프는 읽기만 한다.
 
-**`/taskflow:tick-loop` 과 `/taskflow:tick-team` 은 별도 처리가 없다** — 둘 다 결국 tick 을 호출하므로 이 규약을 그대로 상속한다. 세 곳에 각각 넣으면 drift 가 생긴다.
+**`/taskflow:tick-loop` 은 별도 처리가 없다** — 결국 tick 을 호출하므로 이 규약을 그대로 상속한다. 양쪽에 각각 넣으면 drift 가 생긴다.
 
 ## step 개발 (Agent 위임 — 본체는 코드를 쓰지 않는다, 필수)
 
@@ -218,7 +218,7 @@ step 개발은 **`step-developer` Agent 1개**에 위임하고(`subagent_type: t
 
 **개발 Agent 는 라운드마다 새로 뜨지 않는다.** 최초 1회 spawn 하고 리뷰 지적은 `SendMessage` 로 **같은 Agent** 에 이어 보낸다. 새로 띄우면 §계획·DoD·이미 쓴 코드를 매 라운드 다시 읽어야 하고, 리뷰 한도가 5회라 최악에 5회 재구축이다. 갈아끼우는 쪽은 리뷰어뿐이다.
 
-**`isolation: worktree` 를 쓰지 않는다 (필수).** 본체가 만든 worktree 경로를 프롬프트로 넘겨 **그 안에서** 작업시킨다. isolation 을 켜면 하니스가 별도 worktree 를 파서 커밋이 그 step 의 `wip/*` 가 아닌 곳에 쌓이고, `머지 전 리뷰 포인트` 에 적은 경로와 실제 커밋 위치가 갈라진다 — watch 의 머지 사다리가 그 경로를 믿고 정착시키므로 어긋남이 조용히 진행된다. tick 은 단일 워커라 격리가 애초에 불필요하다 (`tick-team` 은 워커가 N개라 필요).
+**`isolation: worktree` 를 쓰지 않는다 (필수).** 본체가 만든 worktree 경로를 프롬프트로 넘겨 **그 안에서** 작업시킨다. isolation 을 켜면 하니스가 별도 worktree 를 파서 커밋이 그 step 의 `wip/*` 가 아닌 곳에 쌓이고, `머지 전 리뷰 포인트` 에 적은 경로와 실제 커밋 위치가 갈라진다 — watch 의 머지 사다리가 그 경로를 믿고 정착시키므로 어긋남이 조용히 진행된다. tick 은 단일 워커라 격리가 애초에 불필요하다 — 병렬이 필요하면 `tick-loop N` 이 **슬롯마다 독립 프로세스**를 띄우므로 프로세스 경계가 격리를 대신한다.
 
 **Agent 는 코드만 쓴다.** §실행·`## 변경 영향 기록`·Before/After 는 **본체가** Agent 반환(`FILES`/`TESTS`/`NOTES`)으로 쓴다 (§"step 상세 기록" 재사용 — Agent 에 문서 양식을 가르치지 않는다).
 
@@ -234,13 +234,28 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 
 빈 결과를 그대로 리뷰에 넘기면 `cold-reviewer` 가 빈 diff 를 `[High]` 판정 불가로 되돌려 라운드만 소진된다.
 
-**hook 은 자동 상속된다** (`tick-team.md` §"하니스 자동 상속" 실측). 개발 Agent 의 Write·Bash 에도 worktree-enforce·dangerous-ops-guard·§3 가드가 걸리므로 룰 재주입이 불요하다.
+**hook 은 자동 상속된다** (아래 §"하니스 자동 상속"). 개발 Agent 의 Write·Bash 에도 worktree-enforce·dangerous-ops-guard·§3 가드가 걸리므로 룰 재주입이 불요하다. 미등재 세션 대응은 §"카탈로그 미등재 fallback".
 
-> **카탈로그 미등재 fallback (개발자·리뷰어 공통):** agent 정의는 세션 시작 시 로드된다. 아직 등재되지 않은 세션에서는 `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 Agent 호출 파라미터로 명시**한다 (정의를 안 타면 모델도 상속돼 sonnet 이 된다). 리뷰어 쪽 서술 = `watch.md` §"코드 축".
+## 하니스 자동 상속 (2026-07-23 실측)
+
+**subagent 도구 호출에도 PreToolUse hook 이 적용된다** — subagent 의 Write 를 `worktree-enforce` 가, `rm -rf` 를 `dangerous-ops-guard` 가 차단함을 실측 확인(2026-07-23, Agent probe). 따라서 tick 이 spawn 하는 개발·리뷰 Agent 에도 하니스 룰(gate·worktree·§3 가드)이 **자동 상속**되고, Skill 도구로 `/taskflow:tick` 을 호출하는 쪽(`tick-loop` 의 자식 세션)도 tick 명세의 claim/auto/step 로직을 그대로 물려받는다 → **호출자별 룰 재구현 0.**
+
+이것이 무인 경로가 "§3 우회 통로" 가 아닌 기계적 근거다 — 지시문이 아니라 hook 이 막는다.
+
+## 카탈로그 미등재 fallback (SSOT — slash·agent 공통)
+
+**카탈로그는 세션 시작 시 로드된다.** 그래서 정의를 만든 **당일 세션**에서는 신규 slash·신규 agent 가 미등재고, 다음 세션부터 정상 호출된다. 무인 루프는 그 하루를 멈출 수 없으므로 fallback 을 탄다.
+
+| 대상 | 미등재 시 |
+|------|----------|
+| **slash** (`taskflow:tick` 등 Skill 호출) | 그 커맨드 문서의 해당 단계를 `bash` 로 직접 수행 (예: tick 1단계 = `working_scan` + `registry_claim`) |
+| **agent** (`taskflow:cold-reviewer` · `taskflow:step-developer`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 호출 파라미터로 명시** |
+
+**agent fallback 에서 `model` 을 생략하면 안 된다.** 정의를 안 타면 모델도 상속돼 무인 세션에서 sonnet 이 된다(`tick-loop.sh` 세션 기본값). 계약 없이 도는 것보다 정의 전문을 붙여 도는 편이 낫다.
 
 ## step 코드리뷰 루프 (cold Agent — 지적 0건까지, 필수)
 
-**개발이 끝나면 그 자리에서 클린이 될 때까지 리뷰를 돌린다.** 자기검열(`/taskflow:review` = Self-Critique + simplify)로 끝내지 않는다 — 자기가 쓴 코드를 자기가 보면 안 보이는 게 있고, 그 미검출이 `watch` 반려로 되돌아와 왕복이 된다. 2026-07-29 실측이 정확히 그 모습이다: `BoardController.php:947` [Critical] 이 `tests/Modules/Board` **199 tests green** 인 채로 tick 을 통과하고 cold context 가 잡았다.
+**개발이 끝나면 그 자리에서 클린이 될 때까지 리뷰를 돌린다.** 자기검열(`/taskflow:review` = Self-Critique + simplify)로 끝내지 않는다 — 자기가 쓴 코드를 자기가 보면 안 보이는 게 있고, 그 미검출이 `watch` 반려로 되돌아와 왕복이 된다. §2-bis 2 의 실측이 정확히 그 모습이다 (테스트 green 인 채 tick 을 통과하고 cold context 가 잡았다).
 
 **리뷰 계약은 `watch.md` §"코드 축 — 변경분 리뷰" 가 SSOT 다.** 여기서 다시 정의하지 않는다 — 두 곳에 적으면 곧 갈라지고, 계약이 갈라지는 순간 tick 이 통과시킨 것을 watch 가 **다른 기준으로** 반려해 왕복이 되살아난다. 없애려는 것이 바로 그 왕복이다.
 
@@ -250,23 +265,16 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 | 지적 ≥ 1건 (severity 무관) | **개발 Agent 가 수정**(본체가 `SendMessage` 로 전달) → 새 리뷰어로 재리뷰 |
 | 5회 소진 + 잔존 | 반려 블록 append + `상태: Pending` 유지 — **`ReadyToMerge` 부착 금지** |
 
-- **라운드마다 `cold-reviewer` Agent 를 새로 spawn 한다** (`subagent_type: taskflow:cold-reviewer` — 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`, 미등재 세션 fallback 은 watch 계약 참조). 입력 = worktree diff **현재 상태** + 그 step 의 §계획·DoD. 같은 리뷰어를 이어 쓰면 자기가 낸 지적과 그 수정을 함께 보게 되어 "고쳤다" 는 확인 편향이 들어간다 — cold 라는 게 이 계약의 값 전부다.
+- **라운드마다 `cold-reviewer` Agent 를 새로 spawn 한다** (`subagent_type: taskflow:cold-reviewer` — 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`, 미등재 세션 fallback 은 아래 §"카탈로그 미등재 fallback"). 입력 = worktree diff **현재 상태** + 그 step 의 §계획·DoD. 같은 리뷰어를 이어 쓰면 자기가 낸 지적과 그 수정을 함께 보게 되어 "고쳤다" 는 확인 편향이 들어간다 — cold 라는 게 이 계약의 값 전부다.
 - **리뷰어는 코드를 고치지 않는다** (watch 계약 그대로 — `cold-reviewer` 에 Edit·Write 가 없다). 고치는 주체는 **개발 Agent** 다 (§"step 개발" — 본체가 `SendMessage` 로 지적을 전달). 리뷰어가 고치면 리뷰 대상이 리뷰 중에 움직인다.
 - **수정 범위 = 지적 항목 + 그 심볼의 호출부 전건.** §2-bis 2 반려 소비 모드와 같은 규칙이고 근거도 같다 — 부분 적용이 가장 위험하다.
 - **한도 = 5회.** 신규 상한을 만들지 않고 self-critique 루프 한도(CLAUDE.md §4.4 (3)(b))를 그대로 쓴다.
-- **`auto`/`execute` 의 `/taskflow:review` 는 무인 경로에서 타지 않는다.** `execute.md` §"코드 변경 = verify+review 필수 체인" 의 **review 자리를 본 루프가 대체**한다 (verify 는 그대로 필수). `/taskflow:review` 도 2026-07-31 부터 cold 판정을 타므로(`review.md` ①.5), 무인이 review 를 함께 돌리면 **같은 코드를 cold 로 두 번** 보게 된다 — 이 배제는 그래서 더 강해졌다. 사람 경로에서는 review 가 그 cold 자리를 맡는다.
+- **`auto`/`execute` 의 `/taskflow:review` 는 무인 경로에서 타지 않는다.** `execute.md` §"코드 변경 = verify + review 필수 체인" 의 **review 자리를 본 루프가 대체**한다 (verify 는 그대로 필수). `/taskflow:review` 도 2026-07-31 부터 cold 판정을 타므로(`review.md` ①.5), 무인이 review 를 함께 돌리면 **같은 코드를 cold 로 두 번** 보게 된다 — 이 배제는 그래서 더 강해졌다. 사람 경로에서는 review 가 그 cold 자리를 맡는다.
 - 지적이 §3 매칭이거나 계획 자체를 바꾸면 고치지 말고 `NeedsDecision` 마감 (escalation ladder — §3단계).
 
-**verify 는 리뷰 루프가 끝난 뒤 1회 돈다.** 루프 안에서 코드가 계속 바뀌므로 앞에 두면 마지막 수정분이 미검증으로 남고, 매 라운드 돌리면 e2e 5점(curl·DB)이 라운드마다 반복돼 비싸다. 코드가 더 안 바뀌는 시점에 검증해야 **검증 대상과 최종 산출물이 일치한다** (199 tests green 사례가 그 불일치였다).
+**verify 는 리뷰 루프가 끝난 뒤 1회 돈다.** 루프 안에서 코드가 계속 바뀌므로 앞에 두면 마지막 수정분이 미검증으로 남고, 매 라운드 돌리면 e2e 5점(curl·DB)이 라운드마다 반복돼 비싸다. 코드가 더 안 바뀌는 시점에 검증해야 **검증 대상과 최종 산출물이 일치한다** (§2-bis 2 실측이 그 불일치였다).
 
-5회를 소진해도 지적이 남으면 그 step 파일 `머지 전 리뷰 포인트` 아래에 반려 블록을 남기고 `Pending` 을 유지한다 — 다음 tick 이 §2-bis 2 반려 소비 모드로 이어받는다.
-
-```markdown
-### 반려 1회 (2026-07-30 · tick 자체 리뷰 5회 소진)
-- [ ] [High] `app/Modules/Board/Services/BoardService.php:142` — N+1 쿼리
-```
-
-**형식은 watch 반려 블록과 같아야 한다.** `working_rejections` 는 `^#+ 반려 [0-9]+회` 블록 안의 `- [ ]` 만 센다(`working-scan.sh:88`) — 헤더 문구를 바꾸면 다음 tick 이 반려를 못 보고 **백지에서 재수행**한다.
+5회를 소진해도 지적이 남으면 그 step 파일 `머지 전 리뷰 포인트` 아래에 반려 블록을 남기고 `Pending` 을 유지한다 — 다음 tick 이 §2-bis 2 반려 소비 모드로 이어받는다. **블록 양식은 `watch.md` §"반려 — Pending 복귀" SSOT 를 그대로 쓴다** (사유 문구만 `tick 자체 리뷰 5회 소진`). 헤더 문구를 바꾸면 `working_rejections` 가 못 세서 다음 tick 이 **백지에서 재수행**한다.
 
 **리뷰 라운드 기록을 생략하지 않는다.** 무인이라 이게 유일한 근거다 — 각 라운드의 지적 수와 무엇을 고쳤는지를 그 step 파일 §실행에 남긴다 (§"step 상세 기록" 재사용, 신규 양식 0).
 

@@ -4,7 +4,7 @@ allowed-tools: Bash, Read, Glob, Grep, Agent, Skill, PowerShell
 argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 을 쓰려면 /taskflow:tick 을 쓴다"
 ---
 
-**짠 쪽과 본 쪽을 갈라놓는 루프**를 지금 이 요청에 1회 돌린다. 페르소나가 값이 아니다 — 본체는 이미 같은 사고방식을 갖고 있고(`PERSONA.md` 매 턴 주입), 그럼에도 자기가 방금 쓴 코드에서는 과설계가 안 보인다. `BoardController.php:947` 이 `tests/Modules/Board` **199 tests green** 인 채로 통과한 게 그 증거다.
+**짠 쪽과 본 쪽을 갈라놓는 루프**를 지금 이 요청에 1회 돌린다. 페르소나가 값이 아니다 — 본체는 이미 같은 사고방식을 갖고 있고(CLAUDE.md §0 상속), 그럼에도 자기가 방금 쓴 코드에서는 과설계가 안 보인다 (근거 실측 = `tick.md` §2-bis 2).
 
 ## 무엇을 하지 않는가
 
@@ -57,7 +57,7 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
 
 ## §3 Checkpoint 우선 적용
 
-- 본 커맨드는 §3 우회 통로가 아니다. 개발 Agent 의 Write·Bash 에도 `worktree-enforce`·`dangerous-ops-guard`·`branch-enforce` 가 그대로 걸린다 (`tick-team.md` §"하니스 자동 상속" 실측).
+- 본 커맨드는 §3 우회 통로가 아니다. 개발 Agent 의 Write·Bash 에도 `worktree-enforce`·`dangerous-ops-guard`·`branch-enforce` 가 그대로 걸린다 (`tick.md` §"하니스 자동 상속" 실측).
 - **머지·push·master/main 접근은 하지 않는다.** worktree 정착은 사용자 명시 승인 후 `/git:create`·`/git:merge`.
 
 ## 호출 예

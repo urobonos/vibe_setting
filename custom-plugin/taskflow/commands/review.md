@@ -42,7 +42,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 > **무인 경로와 겹치지 않는다.** `/taskflow:tick` 은 `/taskflow:review` 를 타지 않는다 (`tick.md` §"step 코드리뷰 루프"). 겹쳐 돌리면 같은 코드를 cold 로 두 번 본다.
 
-> **카탈로그 미등재 fallback** = `tick-team.md` §"카탈로그 미등재 fallback" SSOT.
+> **카탈로그 미등재 fallback** = `tick.md` §"카탈로그 미등재 fallback" SSOT.
 
 ## 직병렬 실행 지침
 
