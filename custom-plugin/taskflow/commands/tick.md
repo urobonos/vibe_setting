@@ -208,7 +208,7 @@ e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`hongcafe:ph
 
 step 개발은 **`step-developer` Agent 1개**에 위임하고(`subagent_type: taskflow:step-developer` — 플러그인 agent 는 `plugin:name` 형식이다. 정의 = `custom-plugin/taskflow/agents/step-developer.md`), tick 본체는 **지휘·기록·상태 전이만** 한다. 개발자와 "리뷰 지적 수정자" 가 같은 인격이면 자기가 고친 것을 자기가 통과시키는 확인 편향이 남는다 — 리뷰를 cold 로 뺀 것과 같은 이유다.
 
-**코드를 쓰는 기준(단순성·재사용·"돌려봐야 검증"·호출부 전수·범위 고수)·금지사항·반환 양식은 agent 정의에 있다.** 리뷰어와 같은 이유로 프롬프트에 매번 적지 않는다. 본체가 조립하는 것은 **worktree 경로 + 그 step 의 §계획·DoD + (반려 소비 시) 호출부 grep 결과** 뿐이다.
+**코드를 쓰는 기준(단순성·재사용·"돌려봐야 검증"·호출부 전수·범위 고수)·금지사항·반환 양식은 agent 정의에 있다.** 리뷰어와 같은 이유로 프롬프트에 매번 적지 않는다. 본체가 조립하는 것은 **worktree 경로 + 그 step 의 §계획·§파급면·§결함면·DoD + (반려 소비 시) 호출부 grep 결과** 뿐이다.
 
 | 주체 | 하는 일 |
 |------|--------|
@@ -265,7 +265,7 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 | 지적 ≥ 1건 (severity 무관) | **개발 Agent 가 수정**(본체가 `SendMessage` 로 전달) → 새 리뷰어로 재리뷰 |
 | 5회 소진 + 잔존 | 반려 블록 append + `상태: Pending` 유지 — **`ReadyToMerge` 부착 금지** |
 
-- **라운드마다 `cold-reviewer` Agent 를 새로 spawn 한다** (`subagent_type: taskflow:cold-reviewer` — 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`, 미등재 세션 fallback 은 아래 §"카탈로그 미등재 fallback"). 입력 = worktree diff **현재 상태** + 그 step 의 §계획·DoD. 같은 리뷰어를 이어 쓰면 자기가 낸 지적과 그 수정을 함께 보게 되어 "고쳤다" 는 확인 편향이 들어간다 — cold 라는 게 이 계약의 값 전부다.
+- **라운드마다 `cold-reviewer` Agent 를 새로 spawn 한다** (`subagent_type: taskflow:cold-reviewer` — 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`, 미등재 세션 fallback 은 아래 §"카탈로그 미등재 fallback"). 입력 = worktree diff **현재 상태** + 그 step 의 §계획·§파급면·§결함면·DoD (파급면·결함면은 리뷰어 §"1. 기능 오류"·§"5. 호출부 전수" 의 대조 기준 — 원문을 넘겨야 축별 판정이 선다). 같은 리뷰어를 이어 쓰면 자기가 낸 지적과 그 수정을 함께 보게 되어 "고쳤다" 는 확인 편향이 들어간다 — cold 라는 게 이 계약의 값 전부다.
 - **리뷰어는 코드를 고치지 않는다** (watch 계약 그대로 — `cold-reviewer` 에 Edit·Write 가 없다). 고치는 주체는 **개발 Agent** 다 (§"step 개발" — 본체가 `SendMessage` 로 지적을 전달). 리뷰어가 고치면 리뷰 대상이 리뷰 중에 움직인다.
 - **수정 범위 = 지적 항목 + 그 심볼의 호출부 전건.** §2-bis 2 반려 소비 모드와 같은 규칙이고 근거도 같다 — 부분 적용이 가장 위험하다.
 - **한도 = 5회.** 신규 상한을 만들지 않고 self-critique 루프 한도(CLAUDE.md §4.4 (3)(b))를 그대로 쓴다.

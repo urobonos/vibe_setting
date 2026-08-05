@@ -23,9 +23,25 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | ① working/ 문서 식별 | 인자 있음 = 파일명 매칭 / 없음 = 가장 최근 working/ 파일 | 대상 파일 경로 |
 | ② 양식 골격 prepend | `~/.claude/skills/task-docs/references/unified-template.md` SSOT 골격 prepend (파일 미존재 시) | `## 분석` 헤더 + 하위 표 |
 | ③ §분석 섹션 채움 | 분석 관점별 요약 / Critical~Low 4분류 / 트레이드오프 / 우선순위 권고 + § 공통 (타당성 검토 / 변경 영향 기록 / 장기 영향 / 재발 방지 / SSOT 일관성) | 분석 체크리스트 = `unified-template.md` §체크리스트 골격 소진 (게이트는 **문서 총합 ≥ 30**, 섹션별·등급별 하한 없음) |
+| ③-2 **변경 표면 인벤토리** | 수정 대상 ≥ 1건이면 호출부·read 경로 / 회귀 기준선 / 재사용 자산 / 테스트 커버 4종을 `git grep` 실측 (아래 §"변경 표면 인벤토리") | plan 이 step §파급면·§결함면·DoD 검증을 채울 원재료 |
 | ④ Status 마커 부착 | 단독 라인 `Status: Analysis Complete` (아래 §"종료 마커") | tick 이 분석 재실행하지 않고 `/taskflow:plan` 부터 진입 |
 
 > **비필수 사이드이펙트 백로그 격리 (Critical~Low 분류 전 사전 필터):** ③ 에서 발견한 항목이 **① 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급** 3조건을 **모두** 충족하면 Critical~Low 등급 행을 **부여하지 말고** backlog 메모리(`backlog_{slug}.md` + MEMORY.md `## Backlog`)에만 기록 후 현재 분석을 계속한다. 하나라도 불충족 = 정상 4분류. **실제 버그는 경미해도 미루지 않음.** §3 매칭 항목은 사용자 보고. SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
+
+## 변경 표면 인벤토리 (수정 대상 ≥ 1건일 때 필수)
+
+§분석은 판정(Critical~Low)을 만들지만, `/taskflow:plan` 이 step §파급면·§결함면·재사용·DoD 검증을 채우려면 **심볼 단위 실측**이 있어야 한다. 없으면 plan 은 추측으로 쓰거나 `해당 없음` 으로 넘긴다 — 2026-08-05 실측에서 파급면 누락 step 이 정확히 그 경로였다 (`plan.md` §"§파급면을 계획 시점에 적는 이유").
+
+| 항목 | 무엇을 실측하는가 | plan 의 소비처 |
+|------|-----------------|--------------|
+| **호출부·read 경로** | 변경 대상 심볼·컬럼을 `git grep` 전건. write 쪽만이 아니라 그 값을 **읽어 응답하는** EP·포맷터·DTO 까지 | step §파급면 |
+| **회귀 기준선** | 바꾸려는 동작의 **현재** 값·형식·응답 (before). 코드 인용 또는 실행 결과 | step §결함면 회귀 축 — `cold-reviewer` 의 "그게 의도인가" 판정 근거 |
+| **재사용 자산** | 같은 판정·변환을 이미 하는 기존 함수·lib·SSOT | step §작업 내용 (두 벌 만들지 않게) |
+| **테스트 커버** | 이 영역을 덮는 기존 테스트 파일·필터 명령. 없으면 `없음` 명시 | step DoD 검증 명령 |
+
+> **진단성 분석(수정 대상 0건)은 생략한다** — 고칠 게 없으면 표면도 없다 (§"단계 전이" T2 와 동일 조건).
+> **등급 비례:** S = 호출부·read 경로만 / M·L = 4종 전부.
+> **`해당 없음` 은 실측 후에만 쓴다.** grep 을 안 돌리고 비운 칸과 돌려서 0건인 칸을 구분하는 것이 이 표의 값 전부다.
 
 ## 종료 마커
 
@@ -97,6 +113,7 @@ Status: Analysis Complete
 | `~/.claude/hooks/doc-unified-check.sh` V4 `v_checklist_count` (:355~) | unified 체크리스트 임계 (`unified) MIN=30` 평면값) |
 | `~/.claude/hooks/doc-unified-check.sh V6` | 타당성 검토 인용 강제 |
 | **본 파일 §"단계 전이 (→ plan)"** | **순방향 전이 조건 (T1 gate=2 / T2 수정 대상 ≥1) SSOT** — CLAUDE.md·reminder hook 이 참조 |
+| **본 파일 §"변경 표면 인벤토리"** | **plan 원재료 4종 SSOT** — 소비처 = `plan.md` §"파급면·결함면 — 골격 무관 공통" + DoD 검증 행 |
 | **본 파일 §"종료 마커"** | **`Status: Analysis Complete` 부착 규약 SSOT** — 소비처 = `tick.md` 2단계 분기 / `working-scan.sh` 파싱 / `report-work` 진행률 |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"결정 escalation ladder" | 역방향 분류 판별식 SSOT — 본 슬래시의 짝 (execute 중 결정 막힘 시 L1 재진입 대상) |
 
@@ -119,5 +136,6 @@ Status: Analysis Complete
 
 ## Changelog
 
+- 2026-08-05: `## 변경 표면 인벤토리` 신설 (호출부·read 경로 / 회귀 기준선 / 재사용 자산 / 테스트 커버 4종, 수정 대상 ≥1 조건부) + 동작 표 ③-2 행. 근거 = plan 의 §파급면·§결함면·DoD 검증이 심볼 단위 실측을 전제하는데 analyze 가 판정만 넘겨 plan 이 추측하거나 `해당 없음` 으로 비우던 경로 (`plan.md` 2026-08-05 정정과 짝)
 - 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + V4 임계를 등급 스케일로 적던 오기 정정 (실제는 문서 총합 ≥ 30 평면값) + 하드 줄번호 → 함수명
 - 2026-05-15: 신설
