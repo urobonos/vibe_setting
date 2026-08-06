@@ -66,6 +66,14 @@ has_completion_markers() {
   has_status_done "$1" && has_self_critique_h2 "$1"
 }
 
+# 날짜 폴더(YYYYMMDD) 판정 — fork 0 (basename+grep 대체, 2026-08-06).
+# allow-list SSOT = load.md:97 basename+^[0-9]{8}$ 형태와 동일 정규식 유지, 평가 기구만 내장으로 교체.
+is_date_dir() {
+  local base="${1%/}"
+  base="${base##*/}"
+  [[ "$base" =~ ^[0-9]{8}$ ]]
+}
+
 # ============= 헬퍼: working 파일 → tasks 이동 =============
 move_working_to_tasks() {
   local working_file="$1"
@@ -383,6 +391,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
       pending_names=""
       for dir in "$working_root"/*/; do
         [ -d "$dir" ] || continue
+        is_date_dir "$dir" || continue   # 날짜 폴더만 대상 (backlog/ 등 비-날짜 폴더 제외)
         for f in "$dir"*.md; do
           [ -f "$f" ] || continue
           basename "$f" | grep -qE -- '-step-[0-9]+-' && continue   # step 평면 파일 제외
@@ -406,8 +415,26 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
     [ -d "$working_root" ] || exit 0
 
     skipped_count=0
+    excluded_dir_md_count=0
+    excluded_breakdown=""   # "backlog:25, 20260806x:1" 형태 — 상주(backlog) vs 신규 잠식(오타 폴더) 구분 (리뷰 반영, 2026-08-06)
     for dir in "$working_root"/*/; do
       [ -d "$dir" ] || continue
+      if ! is_date_dir "$dir"; then
+        # 비-날짜 폴더(backlog/ 등) — 이동 대상은 아니지만 잠식 방지 위해 .md 보유분만 집계
+        # (폴더별 개별 메시지는 금지 — backlog/dispatch 상시 존재로 매번 노이즈가 된다. 대신
+        #  요약 1줄 안에 폴더:건수 breakdown 을 실어 상주분과 신규분을 구분한다)
+        dir_md_count=0
+        for f in "$dir"*.md; do
+          [ -f "$f" ] || continue
+          dir_md_count=$((dir_md_count + 1))
+        done
+        if [ "$dir_md_count" -gt 0 ]; then
+          dir_base="${dir%/}"; dir_base="${dir_base##*/}"
+          excluded_breakdown="${excluded_breakdown}${excluded_breakdown:+, }${dir_base}:${dir_md_count}"
+          excluded_dir_md_count=$((excluded_dir_md_count + dir_md_count))
+        fi
+        continue
+      fi
       for f in "$dir"*.md; do
         [ -f "$f" ] || continue
         if ! has_completion_markers "$f"; then
@@ -428,8 +455,14 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
       done
     done
 
-    if [ "$moved_count" -gt 0 ] || [ "$skipped_count" -gt 0 ]; then
-      echo "[working-lifecycle] 명시 키워드 트리거 — 이동 ${moved_count}건 / 스킵 ${skipped_count}건 (Partial 보존)" >&2
+    if [ "$moved_count" -gt 0 ] || [ "$skipped_count" -gt 0 ] || [ "$excluded_dir_md_count" -gt 0 ]; then
+      summary_line="[working-lifecycle] 명시 키워드 트리거 — 이동 ${moved_count}건 / 스킵 ${skipped_count}건"
+      # excluded 절은 스킵(날짜폴더 후보 중 마커 미충족)과 분모가 다른 별도 집합이라 0건이면 절 자체를 생략한다.
+      # 폴더 수 상한 미적용 — working/ 비-날짜 폴더는 코드가 만드는 고정 소수 특수 폴더(backlog/dispatch 등)만
+      # 존재하고 사용자가 임의로 늘릴 경로가 없어(설계상 폐집합) 줄 길이 팽창 시나리오가 성립하지 않는다.
+      [ "$excluded_dir_md_count" -gt 0 ] && summary_line="${summary_line} / 비-날짜폴더 제외 ${excluded_dir_md_count}건 (${excluded_breakdown})"
+      summary_line="${summary_line} (Partial 보존)"
+      echo "$summary_line" >&2
     fi
 
     # dispatch done 문서 정리 (2026-06-15 — /taskflow:done 통합)
