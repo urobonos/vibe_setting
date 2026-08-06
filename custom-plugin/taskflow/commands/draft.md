@@ -73,10 +73,12 @@ echo "원본: $SRC_ABS | sha256:$HASH | ${SIZE}B | $MTIME"
 # 대상 문서 수집: 작업명 매칭(working/+tasks/) 또는 all(## 원본 추적 보유 전체)
 set -- $ARGUMENTS                           # $ARGUMENTS → 위치 토큰 ($1=check, $2=작업명/all)
 ARG="${2:-all}"
+# working/ 스캔 루트 — 날짜 폴더(YYYYMMDD)만. working/backlog/ 등 비-날짜 폴더는 제외 (load.md 와 동일 형태)
+WORKING_GLOB="$HOME/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
 if [ "$ARG" = "all" ]; then
-  DOCS=$(grep -lE '^## 원본 추적' ~/.claude/docs/working/*/*.md ~/.claude/docs/*/tasks/*/*/*.md 2>/dev/null)
+  DOCS=$(grep -lE '^## 원본 추적' $WORKING_GLOB/*.md ~/.claude/docs/*/tasks/*/*/*.md 2>/dev/null)
 else
-  DOCS=$(ls ~/.claude/docs/working/*/*-${ARG}.md ~/.claude/docs/*/tasks/*/${ARG}/*.md 2>/dev/null)
+  DOCS=$(ls $WORKING_GLOB/*-${ARG}.md ~/.claude/docs/*/tasks/*/${ARG}/*.md 2>/dev/null)
 fi
 
 for DOC in $DOCS; do
@@ -155,5 +157,6 @@ done
 
 ## Changelog
 
+- 2026-08-06: working/ 스캔 루트를 날짜 폴더(YYYYMMDD)로 한정 — backlog/·dispatch/ 등 비-날짜 폴더 제외 (선행 `working-scan.sh` a7081c6 · `working-lifecycle.sh` 7a5512a 와 동일 축)
 - 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
 - 2026-06-23: 신설

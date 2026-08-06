@@ -50,9 +50,11 @@ esac
 # Plan Complete 문서 수집 — tasks/ + working/ 양쪽 (위치 라벨)
 #  tasks/ : ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/*.md
 #  working/: ~/.claude/docs/working/YYYYMMDD/*.md  (미실행 계획은 대개 여기 잔존)
+# working/ 스캔 루트 — 날짜 폴더(YYYYMMDD)만. working/backlog/ 등 비-날짜 폴더는 제외 (load.md 와 동일 형태)
+WORKING_GLOB="$HOME/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
 grep -lE '^Status:\s*Plan Complete' \
   ~/.claude/docs/*/tasks/*/*/*.md \
-  ~/.claude/docs/working/*/*.md 2>/dev/null \
+  $WORKING_GLOB/*.md 2>/dev/null \
   | while read f; do
       case "$f" in
         */working/*) loc="working" ;;
@@ -244,5 +246,6 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 
 ## Changelog
 
+- 2026-08-06: working/ 스캔 루트를 날짜 폴더(YYYYMMDD)로 한정 — backlog/·dispatch/ 등 비-날짜 폴더 제외 (선행 `working-scan.sh` a7081c6 · `working-lifecycle.sh` 7a5512a 와 동일 축)
 - 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
 - 2026-06-09: 신설
