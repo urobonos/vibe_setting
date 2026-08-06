@@ -64,7 +64,7 @@ min_claude_md_version: "4.0"
 | 추론·검증·구현·분석 (대부분) | `opus` | 기본값. 생략 시 부모(opus) 상속과 동일 |
 | 단발 조회·기계적 패턴 매칭 (경량) | `sonnet` (선택) | Lead 재량 — 추론 깊이가 결과에 영향 없을 때만 |
 
-- **팀 내 모델 통일 (핵심):** 한 팀 멤버 간 모델을 섞지 않는다. 멤버별 추론 깊이가 다르면 가설·우선순위 비교가 무의미해지기 때문이다 (`hongcafe:api-team` SKILL §[실행 주체] 근거 정합).
+- **팀 내 모델 통일 (핵심):** 한 팀 멤버 간 모델을 섞지 않는다. 멤버별 추론 깊이가 다르면 가설·우선순위 비교가 무의미해지기 때문이다 (`hongcafe:api-team` SKILL §[실행 주체] 근거 정합). **적용 대상 = 같은 문제를 각자 풀어 결과를 대조하는 병렬 멤버** (`api-team`·`debate`·3-Team). 생산자↔검수자처럼 **직렬로 물리는 역할은 애초에 비교 대상이 아니라 통일 대상도 아니다** — `tick` 루프의 개발자 `sonnet` / 리뷰어 `opus` 비대칭이 그 사례다 (SSOT = `custom-plugin/taskflow/commands/tick.md` §"step 개발").
 - **effort 파라미터 없음:** Agent 도구는 `model` 만 지정한다 — reasoning effort 파라미터가 없다. effort 차등이 필요하면 Workflow `agent()` 경로에서만 가능하다.
 - **sonnet 예외는 강제 아님:** 경량 멤버에 sonnet 을 쓸지는 Lead 판단. 정확성 우선이면 opus 유지가 안전한 기본값이다.
 - Explore 에이전트는 `subagent_type: "Explore"` 사용, 시스템 기본값.

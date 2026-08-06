@@ -224,7 +224,7 @@ step 개발은 **`step-developer` Agent 1개**에 위임하고(`subagent_type: t
 
 **커밋도 본체가 한다.** 리뷰어가 보는 입력이 **미커밋 diff** 라 개발 Agent 가 중간에 커밋하면 리뷰어에게 빈 diff 가 간다. 커밋은 리뷰 루프가 클린이 된 뒤 4단계에서 본체가 한다 (`머지 전 리뷰 포인트` 기록과 같은 시점).
 
-**두 Agent 모두 `model: opus`** 로 정의에 고정돼 있다. `tick-loop.sh:29` 의 세션 기본값이 `sonnet` 이라(`${TICK_LOOP_MODEL:-sonnet}`) **모델을 생략하면 무인 경로에서만 sonnet 을 상속**한다 — `orchestration` §1.1 이 전제하는 "생략 = opus 상속" 이 여기서만 깨진다. 본체(claim·문서 기록·상태 전이)는 기계적이라 sonnet 으로 충분하지만 개발·리뷰는 판단이 결과를 좌우하므로 정의에서 못박는다. 팀 내 모델 통일(§1.1)도 이로써 유지된다.
+**두 Agent 모두 모델이 정의에 고정돼 있다 — 리뷰어 `opus`, 개발자 `sonnet`.** `tick-loop.sh:29` 의 세션 기본값이 `sonnet` 이라(`${TICK_LOOP_MODEL:-sonnet}`) **모델을 생략하면 무인 경로에서만 sonnet 을 상속**한다 — `orchestration` §1.1 이 전제하는 "생략 = opus 상속" 이 여기서만 깨진다. 본체(claim·문서 기록·상태 전이)는 기계적이라 sonnet 으로 충분하다. **비대칭은 의도다** — 개발자는 §계획·DoD 라는 대조 기준을 받고 들어가지만 리뷰어는 그것을 만들어내야 하고, 놓친 결함은 리뷰어 쪽에서만 최종적으로 새어 나간다. 개발자 하향은 반려 라운드 수로 측정 중이다 (Changelog 2026-08-06).
 
 **라운드 종료마다 변경 실재를 확인한다.** Agent 가 코드를 쓰지 않고 텍스트만 돌려주는 실패 모드가 실재한다.
 
@@ -249,9 +249,9 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 | 대상 | 미등재 시 |
 |------|----------|
 | **slash** (`taskflow:tick` 등 Skill 호출) | 그 커맨드 문서의 해당 단계를 `bash` 로 직접 수행 (예: tick 1단계 = `working_scan` + `registry_claim`) |
-| **agent** (`taskflow:cold-reviewer` · `taskflow:step-developer`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model: opus` 를 호출 파라미터로 명시** |
+| **agent** (`taskflow:cold-reviewer` · `taskflow:step-developer`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model` 을 호출 파라미터로 명시** — 리뷰어 = `opus`, 개발자 = `sonnet` |
 
-**agent fallback 에서 `model` 을 생략하면 안 된다.** 정의를 안 타면 모델도 상속돼 무인 세션에서 sonnet 이 된다(`tick-loop.sh` 세션 기본값). 계약 없이 도는 것보다 정의 전문을 붙여 도는 편이 낫다.
+**agent fallback 에서 `model` 을 생략하면 안 된다.** 정의를 안 타면 모델도 세션 기본값을 상속한다(`tick-loop.sh` = sonnet). 개발자는 우연히 목표값과 같아지지만 **리뷰어가 조용히 sonnet 으로 떨어지고**, 세션 기본값이 바뀌면 양쪽 다 흔들린다. 상속에 기대지 말고 두 값을 각각 적는다. 계약 없이 도는 것보다 정의 전문을 붙여 도는 편이 낫다.
 
 ## step 코드리뷰 루프 (cold Agent — 지적 0건까지, 필수)
 
@@ -372,7 +372,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | 대기 큐 리뷰 | step ReadyToMerge + NeedsDecision | `custom-plugin/taskflow/commands/control.md` |
 | **문서 없는 단발 실행** | 같은 개발·리뷰 루프를 claim·상태 전이 없이 1회 (대조 기준 = 호출자 확정 성공 기준) | `custom-plugin/taskflow/commands/code.md` |
 | **무인 코드리뷰 계약** | 입력(diff+DoD) 조립 · 리뷰어 spawn 규약 | **`custom-plugin/taskflow/commands/watch.md`** (§"코드 축 — 변경분 리뷰") |
-| **개발자 정의** | 코드 기준(단순성·재사용·검증·호출부 전수·범위 고수) · 문서·커밋 금지 · 반환 양식(`FILES`/`TESTS`/`NOTES`) · `model: opus` | **`custom-plugin/taskflow/agents/step-developer.md`** |
+| **개발자 정의** | 코드 기준(단순성·재사용·검증·호출부 전수·범위 고수) · 문서·커밋 금지 · 반환 양식(`FILES`/`TESTS`/`NOTES`) · `model: sonnet` | **`custom-plugin/taskflow/agents/step-developer.md`** |
 | **리뷰어 정의** | 리뷰 관점 · 판정축(Critical~Low + `file:line`) · 반환 양식 · **Edit/Write 부재 = 수정 불가** · `model: opus` | **`custom-plugin/taskflow/agents/cold-reviewer.md`** |
 | **반려 생산** | 리뷰 지적 → `Pending` 복귀 + 반려 블록 append | **`custom-plugin/taskflow/commands/watch.md`** (§"반려 — Pending 복귀") |
 | 반려 블록 형식 | `^#+ 반려 [0-9]+회` 블록 안 `- [ ]` 카운트 (tick·watch 공용) | `hooks/lib/working-scan.sh::working_rejections` |
@@ -402,6 +402,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 
 ## Changelog
 
+- 2026-08-06: **개발자만 `sonnet` 으로 하향** (리뷰어는 `opus` 유지). 07-31 의 opus 고정은 계획↔개발↔리뷰 판정축이 정렬되기 전 판단이었고, `78f0a8d`(08-03)로 `step-developer` 가 `cold-reviewer` 판정축을 작성 기준으로 선반영하면서 전제가 바뀌었다. 정렬 이후 반려 실측은 아직 0건 — **하향 근거도 유지 근거도 없는 상태에서 측정을 택했다.** 판정 지표 = 반려 라운드 수(`working_rejections`), 관측 대상 = 08-06 athena cdn-purge step-01~09(성격 분산). 라운드가 유의미하게 늘면 되돌린다
 - 2026-07-31: 반려 재작업 시 `reset --soft` 로 커밋을 되돌리는 안 **검토 후 채택 안 함** (2-bis 2에 사유 명시). 근거 = (a) `머지 전 리뷰 포인트` 기록 실측 보유율 0/20 이라 base 해시도 안 남을 공산이 크고 (b) 커밋 지저분함은 가역이라 PR squash 로 사후 해결되며 (c) 무인 루프는 커밋 이력이 유일한 추적 수단
 - 2026-07-31: 개발자도 전용 정의(`step-developer`)로 분리 + **두 Agent `model: opus` 명시**. `tick-loop.sh` 세션 기본값이 sonnet 이라 모델 생략 시 무인 경로에서만 sonnet 을 상속하던 갭을 막는다. 커밋 주체 = 본체(개발 Agent 가 중간 커밋하면 리뷰어에게 빈 diff 가 간다)
 - 2026-07-31: **개발도 Agent 위임** (본체는 지휘·기록·상태 전이만) + 리뷰어를 `cold-reviewer` 전용 정의로 수렴. 개발 Agent 는 `SendMessage` 로 warm 유지(라운드마다 재구축 회피), 리뷰어만 매 라운드 cold 신규. `isolation: worktree` 금지 — 본체 worktree 밖에 커밋이 쌓여 머지 사다리가 어긋난다

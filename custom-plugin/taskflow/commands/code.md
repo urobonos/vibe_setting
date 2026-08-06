@@ -29,7 +29,7 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
 
 | 조각 | SSOT |
 |------|------|
-| 개발 Agent 계약 (코드 기준·금지사항·반환 양식·`model: opus`) | `custom-plugin/taskflow/agents/step-developer.md` |
+| 개발 Agent 계약 (코드 기준·금지사항·반환 양식·`model: sonnet`) | `custom-plugin/taskflow/agents/step-developer.md` |
 | 리뷰어 계약 (판정축·등급·반환 양식·수정 불가) | `custom-plugin/taskflow/agents/cold-reviewer.md` |
 | 루프 운영 (warm 유지·`isolation` 금지·변경 실재 확인·5회 한도) | `custom-plugin/taskflow/commands/tick.md` §"step 개발" + §"step 코드리뷰 루프" |
 | worktree 생성·정착 절차 | `custom-plugin/git/commands/{create,merge}.md` |
