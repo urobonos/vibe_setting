@@ -50,11 +50,10 @@ esac
 # Plan Complete 문서 수집 — tasks/ + working/ 양쪽 (위치 라벨)
 #  tasks/ : ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/*.md
 #  working/: ~/.claude/docs/working/YYYYMMDD/*.md  (미실행 계획은 대개 여기 잔존)
-# working/ 스캔 루트 — 날짜 폴더(YYYYMMDD)만. working/backlog/ 등 비-날짜 폴더는 제외 (load.md 와 동일 형태)
-WORKING_GLOB="$HOME/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
+#  날짜 폴더(YYYYMMDD)만 — load.md WORKING_GLOB 과 동일 표현 재사용 (backlog/·dispatch/ 등 비-날짜 폴더 배제)
 grep -lE '^Status:\s*Plan Complete' \
   ~/.claude/docs/*/tasks/*/*/*.md \
-  $WORKING_GLOB/*.md 2>/dev/null \
+  ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*.md 2>/dev/null \
   | while read f; do
       case "$f" in
         */working/*) loc="working" ;;

@@ -71,14 +71,15 @@ echo "원본: $SRC_ABS | sha256:$HASH | ${SIZE}B | $MTIME"
 
 ```bash
 # 대상 문서 수집: 작업명 매칭(working/+tasks/) 또는 all(## 원본 추적 보유 전체)
+# working/ 은 날짜 폴더(YYYYMMDD)만 — load.md WORKING_GLOB 과 동일 표현 재사용 (backlog/·dispatch/ 배제)
 set -- $ARGUMENTS                           # $ARGUMENTS → 위치 토큰 ($1=check, $2=작업명/all)
 ARG="${2:-all}"
 # working/ 스캔 루트 — 날짜 폴더(YYYYMMDD)만. working/backlog/ 등 비-날짜 폴더는 제외 (load.md 와 동일 형태)
 WORKING_GLOB="$HOME/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
 if [ "$ARG" = "all" ]; then
-  DOCS=$(grep -lE '^## 원본 추적' $WORKING_GLOB/*.md ~/.claude/docs/*/tasks/*/*/*.md 2>/dev/null)
+  DOCS=$(grep -lE '^## 원본 추적' ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*.md ~/.claude/docs/*/tasks/*/*/*.md 2>/dev/null)
 else
-  DOCS=$(ls $WORKING_GLOB/*-${ARG}.md ~/.claude/docs/*/tasks/*/${ARG}/*.md 2>/dev/null)
+  DOCS=$(ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${ARG}.md ~/.claude/docs/*/tasks/*/${ARG}/*.md 2>/dev/null)
 fi
 
 for DOC in $DOCS; do

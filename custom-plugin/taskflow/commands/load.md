@@ -12,7 +12,7 @@ argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음
 
 | 단계 | 동작 | 결과 |
 |------|------|------|
-| ① 잔존 작업 스캔 + 분배 풀 조회 + 빈 폴더 정리 | `~/.claude/docs/working/YYYYMMDD/` 전체 스캔 → `## 잔여 작업` 섹션의 미체크 `- [ ]` ≥1 보유 파일 추출 (Status 무관) → **인자 product 필터 (인자 없음 = 전체, 필터 없음)**. **+ DISPATCH 풀 `dispatch_list available` 조회 (`#tag` 표시, product 필터 동일).** **금일(`date +%Y%m%d`) 이전 폴더 중 `*.md` 파일 0건이면 해당 폴더 자동 삭제** (working/ → tasks/ 이동 후 남은 빈 껍데기 정리). | 전체 잔존 + 분배(`#tag`) 목록 + 빈 폴더 0건 |
+| ① 잔존 작업 스캔 + 분배 풀 조회 + 빈 폴더 정리 | `~/.claude/docs/working/YYYYMMDD/` 전체 스캔 → `## 잔여 작업` 섹션의 미체크 `- [ ]` ≥1 보유 파일 추출 (Status 무관) → **인자 product 필터 (인자 없음 = 전체, 필터 없음)**. **+ DISPATCH 풀 `dispatch_list available` 조회 (`#tag` 표시, product 필터 동일).** **+ `working/backlog/` 중 `status: done` 아닌 문서 조회 (product 필터 미적용).** **금일(`date +%Y%m%d`) 이전 폴더 중 `*.md` 파일 0건이면 해당 폴더 자동 삭제** (working/ → tasks/ 이동 후 남은 빈 껍데기 정리). | 전체 잔존 + 분배(`#tag`) 목록 + backlog 목록 + 빈 폴더 0건 |
 | ② 인자 분기 처리 | 인자 없음 = 전체 목록 (=all) / `{작업명}` = 본문 출력 / `latest` = 본 product 가장 최근 1건 / `all` = 전체 product / `{product}` = 특정 product 잔존 | 본문 또는 목록 |
 | ③ 재진입 안내 | 잔여 항목 미체크 박스 추출 + `/taskflow:auto {요약}` **제안까지만** (후속 슬래시 자동 호출 금지 — 아래 §"자동 실행 금지") | 다음 액션 결정 = 사용자 |
 
@@ -48,8 +48,16 @@ case "$ARG" in
   ""|"all")     TARGET_PRODUCT="" ;;  # 인자 없음 = 전체 (2026-06-18 cwd 필터 기본 해제) / all = 동일
   "latest")     TARGET_PRODUCT="$CURRENT_PRODUCT" ;;  # latest 자동 선택만 본 product (라우팅 정확도 유지)
   *)
-    # 작업명 매칭 시도 — 파일명 prefix `{yyyy-mm-dd}-{product}-${ARG}.md` 1건이라도 있으면 작업명 모드
-    if compgen -G "$WORKING_GLOB/*-${ARG}.md" >/dev/null 2>&1; then
+    # 작업명 매칭 시도 — 파일명 prefix `{yyyy-mm-dd}-{product}-${ARG}.md` 1건이라도 있으면 작업명 모드.
+    # backlog slug 도 함께 확인한다(콜드리뷰 M8) — backlog 는 날짜 폴더 밖(working/backlog/)이라 위
+    # 글롭에 안 걸려서 이전엔 product 명으로 오분류 → 빈 목록으로 막다른 길이 됐다(실측
+    # `get-ip-address-undefined-fatal`).
+    # backlog glob 은 slug 전문을 날짜 바로 뒤에 앵커링한다(콜드리뷰 R5 M1) — `*-${ARG}.md` 는 `*` 가
+    # 임의 접두를 삼켜 ARG 가 slug 의 **접미사**에만 우연히 일치해도 매칭된다. 실측 충돌: product 명
+    # `infra` 로 `/taskflow:load infra` 호출 시 이관된 `{date}-ses-email-infra.md` 가 `*-infra.md` 에
+    # 걸려 product 필터가 조용히 풀린다. `[0-9]{4}-[0-9]{2}-[0-9]{2}-` 로 날짜를 고정해 ARG 가 slug
+    # 전체와 일치할 때만 작업명 모드로 전환되게 한다.
+    if compgen -G "$WORKING_GLOB/*-${ARG}.md" >/dev/null 2>&1 || compgen -G "$HOME/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${ARG}.md" >/dev/null 2>&1; then
       TARGET_PRODUCT=""  # 작업명 직접 매칭 → product 필터 해제 (인자 분기 ②에서 처리)
     else
       TARGET_PRODUCT="$ARG"  # product 명으로 간주
@@ -103,6 +111,56 @@ for dir in ~/.claude/docs/working/*/; do
   fi
 done
 
+# 3-bis) backlog 잔존 스캔 — working/backlog/*.md 중 status: done 이 아닌 문서 (product 필터 미적용,
+#   backlog 는 product 무분리 — hooks/backlog-lifecycle.sh 와 동일 소스 디렉토리 재사용)
+#   done 판정은 frontmatter(첫 `---` ~ 다음 `---`) 범위로 한정한다(콜드리뷰 H2) — 이전엔 파일 전체를
+#   grep 해 본문 코드블록 안 `status: done` 예시 텍스트에도 반응, hook 의 has_done_marker()(frontmatter
+#   전용)와 판정이 갈라져 실제로는 pending 인 문서가 목록에서 무경고로 사라졌다.
+#   name:/description: 앵커도 status: 와 동일하게 `^[[:space:]]*` 로 통일한다(콜드리뷰 M6) — status: 만
+#   들여쓰기 허용이면 frontmatter 가 `metadata:` 하위로 정규화되는 순간 이름/설명 추출만 조용히 깨진다.
+BACKLOG_DIR="$HOME/.claude/docs/working/backlog"
+BACKLOG_CNT=0
+if [ -d "$BACKLOG_DIR" ]; then
+  for bf in "$BACKLOG_DIR"/*.md; do
+    [ -f "$bf" ] || continue
+    bf_base=$(basename "$bf")
+    # 이동 불가 파일명은 done 여부와 무관하게 항상 노출한다(콜드리뷰 R5 M7) — hook(move_backlog_to_tasks)
+    # 이 스킵하는 형식(날짜 미부합·빈 slug)이 status:done 과 겹치면 "done 이라 목록 제외" + "형식오류라
+    # hook 도 이동 안 함" 두 조건이 합쳐져 영구 은닉된다(실측: 구 경로 rename 실패분 이미 5건 존재).
+    case "$bf_base" in
+      [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-?*.md) ;;
+      *)
+        echo "[backlog 잔존·이동불가] $bf_base — 파일명 형식 불일치({yyyy-mm-dd}-{slug}.md 필요), 자동 이동 안 됨 — 수동 rename 필요"
+        BACKLOG_CNT=$((BACKLOG_CNT + 1))
+        continue
+        ;;
+    esac
+    name=$(grep -m1 -E '^[[:space:]]*name:' "$bf" | sed -E 's/^[[:space:]]*name:[[:space:]]*//')
+    # 종료 `---` 를 못 만나면 frontmatter 미완결로 보고 pending 취급한다(콜드리뷰 M3) — 이전엔
+    # `infm` 이 파일 끝까지 안 꺼져 본문 전체(코드블록 예시 `  status: done` 예시 텍스트)를 frontmatter 로
+    # 오인했다. hook 의 has_done_marker()(정규식이 닫는 `---` 매칭을 요구)와 판정이 이 형태로 갈렸었다.
+    if awk '
+          NR==1 && /^---[[:space:]]*$/ { infm=1; next }
+          infm && /^---[[:space:]]*$/ { infm=0; closed=1; exit }
+          infm { l=tolower($0); if (l ~ /^[[:space:]]*status:[[:space:]]*done[[:space:]]*$/) found=1 }
+          END { if (!closed) found=0; exit !found }
+        ' "$bf"; then
+      # 파일명 형식은 정상인데 status:done 이면서 여전히 여기 물리적으로 남아 있다(콜드리뷰 R6 M3) —
+      # 이건 정상 종료가 아니라 **이동 실패 신호**다: mkdir -p/mv 실패, 도구 이벤트를 안 거치는 쓰기
+      # (cp·git checkout·외부 편집), PostToolUse 미발화 중 하나만 있어도 이 상태가 된다. 이전엔
+      # "done 이니까 정상 제외" 로 무경고 스킵해 사용자가 'backlog 완료' 키워드를 칠 때까지 어디에도
+      # 안 보였다. `[backlog 잔존·이동불가]`(파일명 형식 오류) 와 별도 라벨로 항상 노출한다.
+      echo "[backlog 잔존·이동실패] ${name:-$bf_base} | $bf_base — status:done 인데 아직 working/backlog/ 에 있음(원인: mv 실패·비도구 쓰기·PostToolUse 미발화 등), 원인 확인 필요"
+      BACKLOG_CNT=$((BACKLOG_CNT + 1))
+      continue
+    fi
+    desc=$(grep -m1 -E '^[[:space:]]*description:' "$bf" | sed -E 's/^[[:space:]]*description:[[:space:]]*//; s/^"//; s/"$//')
+    echo "[backlog 잔존] ${name:-$bf_base} | ${desc:-(설명 없음)} | $bf_base"
+    BACKLOG_CNT=$((BACKLOG_CNT + 1))
+  done
+fi
+[ "$BACKLOG_CNT" -gt 0 ] && echo "[backlog 잔존] 총 ${BACKLOG_CNT}건 (product 무분리 · status: done 제외 + 이동불가/이동실패는 done 무관 항상 포함) — 상세는 각 파일 직접 열람"
+
 # 4) DISPATCH 분배 풀 조회 — claim 가능(available) (여기는 목록 조회만 read-only; claim 은 #tag 분기)
 source ~/.claude/hooks/lib/dispatch-utils.sh
 # available 표시 — 분배 작업은 #tag prefix. product = 표 4번째 컬럼($4), working 잔존과 동일 필터(TARGET_PRODUCT)
@@ -152,6 +210,12 @@ CLAIMED_CNT=$(dispatch_list claimed | grep -cE '^\|')
 
   #mod20-sns-token-svc | gantt-progress | available → /taskflow:load #mod20-sns-token-svc
 
+        backlog 잔존 (product 무분리, status: done 제외):
+
+  ep-cleanup-fe-be-404-blockers | FE↔BE 404 3건 | 2026-07-20-ep-cleanup-fe-be-404-blockers.md
+  get-ip-address-undefined-fatal | get_ip_address() 미정의, 라이브 5EP fatal | 2026-07-21-get-ip-address-undefined-fatal.md
+        (총 2건)
+
   본 cwd product 안 가장 최근만 자동 선택: /taskflow:load latest
   특정 product 로 좁히기:                 /taskflow:load infra
   분배 작업 claim:                        /taskflow:load #mod20-sns-token-svc
@@ -162,6 +226,10 @@ CLAIMED_CNT=$(dispatch_list claimed | grep -cE '^\|')
 ```bash
 # 파일명 매칭 — product 필터 해제 (직접 작업명 지정 = 명시 의도). 날짜 폴더만 (dispatch/ 제외)
 ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${작업명}.md 2>/dev/null
+# 잔존 작업에 없으면 backlog 매칭 시도(콜드리뷰 M8) — backlog slug 는 날짜 폴더 밖(working/backlog/)
+# 이라 위 글롭에 안 걸린다. 잔존·분배 목록은 둘 다 진입 경로를 주는데 backlog 만 막다른 길이었다.
+# slug 전문을 날짜 바로 뒤에 앵커링(콜드리뷰 R5 M1) — `*-${작업명}.md` 는 접미사만 일치해도 매칭된다.
+ls ~/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${작업명}.md 2>/dev/null
 ```
 
 전체 본문 출력 후 `## 잔여 작업` 섹션 부각 + 재진입 제안.

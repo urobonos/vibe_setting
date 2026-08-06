@@ -422,6 +422,375 @@ done
 rm "$H_GATE" 2>/dev/null
 
 # ═══════════════════════════════════════════════════════════════════
+# I. working_scan — 날짜 폴더(YYYYMMDD) 판정 회귀 (2026-08-06, backlog/ 경로 이관 부수 검증)
+#    hooks/lib/working-scan.sh 는 `pp[n-1] !~ /^[0-9]{8}$/` 로 root 직속 폴더가 8자리 숫자인지만
+#    본다(문자열 "backlog" 매칭이 아니다). 이 방식이 실제로 (a) working/backlog/ 를 배제하고
+#    (b) 정상 날짜폴더 파일명에 우연히 '-backlog-' 토큰이 섞여도 안 죽고 (c) WORKING_ROOT 자신의
+#    경로에 'backlog' 세그먼트가 있어도 오배제하지 않는지를 고정한다. (b)(c) 가 없으면 "backlog
+#    문자열을 path 에서 grep 으로 거른" 구현으로 되돌아가도 (a) 만 보는 매트릭스는 초록으로 남는다.
+# ═══════════════════════════════════════════════════════════════════
+printf '\n=== I. working_scan 날짜 폴더 판정 (backlog/ 배제 · 경계값) ===\n'
+# shellcheck disable=SC1091
+source "$HOOKS_DIR/lib/working-scan.sh"
+
+WSCAN_ROOT="$TMP/wscan_root"
+mkdir -p "$WSCAN_ROOT/working/20260805" "$WSCAN_ROOT/working/backlog" "$WSCAN_ROOT/wsp"
+printf 'Status: In Progress\n' > "$WSCAN_ROOT/working/20260805/2026-08-05-wsp-normal-task.md"
+printf 'Status: In Progress\n' > "$WSCAN_ROOT/working/20260805/2026-08-05-wsp-my-backlog-cleanup.md"
+printf 'status: pending\n' > "$WSCAN_ROOT/working/backlog/2026-08-05-some-backlog-item.md"
+
+OUT=$(WORKING_ROOT="$WSCAN_ROOT/working" WORKING_SCAN_DOCS_ROOT="$WSCAN_ROOT" working_scan all)
+
+# I-0. 기준선 — 정상 날짜폴더 태스크는 스캔된다 (아래 배제 결과가 "전부 0건" 착시가 아님을 보장)
+BASE_MATCH=$(printf '%s\n' "$OUT" | grep -c "wsp-normal-task" || true)
+if [ "$BASE_MATCH" -eq 1 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[I-0] 기준 정상 태스크 미스캔 — 매치=${BASE_MATCH}"); fi
+
+# I-1. 배제 방향 — working/backlog/*.md 는 working_scan all 결과에 0건
+BACKLOG_MATCH=$(printf '%s\n' "$OUT" | grep -c "some-backlog-item" || true)
+if [ "$BACKLOG_MATCH" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[I-1] working/backlog/*.md 배제 실패 — ${BACKLOG_MATCH}건 노출"); fi
+
+# I-2. 보존 방향 — 날짜폴더 안 파일명에 '-backlog-' 토큰이 있어도 문자열 매칭이 아니라 폴더 판정이므로 생존
+NORMAL_MATCH=$(printf '%s\n' "$OUT" | grep -c "wsp-my-backlog-cleanup" || true)
+if [ "$NORMAL_MATCH" -eq 1 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[I-2] 날짜폴더 내 '-backlog-' 토큰 파일이 문자열매칭식 구현으로 되돌아가 배제됨 — 매치=${NORMAL_MATCH}"); fi
+
+# I-3. 경계 — WORKING_ROOT 끝 슬래시 0/1/2개 무관 동일 결과
+for suf in "" "/" "//"; do
+  CNT=$(WORKING_ROOT="${WSCAN_ROOT}/working${suf}" WORKING_SCAN_DOCS_ROOT="$WSCAN_ROOT" working_scan all | grep -c "wsp-normal-task" || true)
+  if [ "$CNT" -eq 1 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[I-3] WORKING_ROOT trailing-slash '${suf}'(길이 ${#suf}) 판정 실패 — 매치=${CNT}"); fi
+done
+
+# I-4. 경계 — WORKING_ROOT 경로 자신의 조상 세그먼트에 'backlog' 가 있어도 root 직속 날짜폴더는 정상 스캔
+#   (working-scan.sh 헤더 주석이 `find -not -path` 대신 pp[n-1] 직접 판정을 쓰는 이유로 든 케이스)
+WSCAN_ROOT2="$TMP/backlog/wscan_root2"
+mkdir -p "$WSCAN_ROOT2/working/20260805" "$WSCAN_ROOT2/wsp2"
+printf 'Status: In Progress\n' > "$WSCAN_ROOT2/working/20260805/2026-08-05-wsp2-task-in-backlog-ancestor.md"
+CNT2=$(WORKING_ROOT="$WSCAN_ROOT2/working" WORKING_SCAN_DOCS_ROOT="$WSCAN_ROOT2" working_scan all | grep -c "task-in-backlog-ancestor" || true)
+if [ "$CNT2" -eq 1 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[I-4] WORKING_ROOT 조상 경로 'backlog' 세그먼트로 오배제 — 매치=${CNT2}"); fi
+
+# ═══════════════════════════════════════════════════════════════════
+# J. backlog-lifecycle.sh — mv + 인덱스 삭제 회귀 (콜드리뷰 M5, 2026-08-06 · R4 라운드 H1~H3 실데이터 픽스처 보강)
+#    섹션 I 는 working_scan 판정만 고정한다. 실제 파괴적 경로(파일 mv + MEMORY.md/BACKLOG.md 라인
+#    삭제)는 지금까지 수동 실측에만 의존했다 — 최소한 앵커 우회(상대경로·하위폴더)와 인덱스 오삭제
+#    (동명 slug 의 무관 Project entry 보존)를 payload 주입으로 고정한다. H1(href 합집합 매칭 — 실
+#    MEMORY.md 34자 절단 링크 텍스트 픽스처)·H2(`·` 병합 라인 형제 entry 보존)·H3(verify_index_sync
+#    전 project 합산)·M2(product 경로 traversal 차단) 수정분도 덮는다.
+#    HOME 을 fakehome 으로 override 해 실제 projects/*/memory 를 절대 건드리지 않는다(규율).
+#    fakehome 은 $TMP(TMPDIR 경유 /c/... 루트) 하위라 python(native) 이 경로를 읽을 수 있다.
+#    BACKLOG_INDEX_LOCK 도 $TMP 하위로 override(콜드리뷰 R4 M5) — 기본값(/tmp/claude-backlog-index.lock.d)
+#    은 실세션과 공유되는 프로덕션 lock 경로라, override 안 하면 테스트가 실세션과 최대 5초
+#    상호 대기하거나 중단 시 lock 잔류로 실세션이 TTL 2분까지 stale 경고를 문다. $TMP 하위라 트랩의
+#    generic find-delete 가 자동으로 회수한다(별도 cleanup 등재 불요).
+# ═══════════════════════════════════════════════════════════════════
+printf '\n=== J. backlog-lifecycle.sh 회귀 (앵커 우회 · 인덱스 오삭제 · H1 · H2 · H3 · M2) ===\n'
+export BACKLOG_INDEX_LOCK="$TMP/bl.lock.d"
+to_win_test() {
+  local v="$1"
+  case "$v" in
+    /c/*) v="C:/${v#/c/}" ;;
+  esac
+  echo "${v//\//\\}"
+}
+backlog_payload() {  # $1=posix file path → $TMP/p.json (PostToolUse Write, file_path=Windows 경로)
+  local win
+  win=$(to_win_test "$1")
+  printf '{"session_id":"blt","hook_event_name":"PostToolUse","cwd":"C:\\\\x","tool_name":"Write","tool_input":{"file_path":"%s","content":"x"},"tool_response":{"filePath":"%s"}}' \
+    "$(json_escape "$win")" "$(json_escape "$win")" > "$TMP/p.json"
+}
+
+FH="$TMP/backlog_fakehome"
+mkdir -p "$FH/.claude/docs/working/backlog" "$FH/.claude/projects"
+
+# J-1. 앵커 우회 — 하위폴더 파일은 이동되면 안 된다
+mkdir -p "$FH/.claude/docs/working/backlog/sub"
+cat > "$FH/.claude/docs/working/backlog/sub/2026-08-01-subfoldertest.md" <<'EOF'
+---
+name: subfoldertest
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/sub/2026-08-01-subfoldertest.md"
+HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/null 2>&1
+if [ -f "$FH/.claude/docs/working/backlog/sub/2026-08-01-subfoldertest.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-1] 하위폴더 파일이 이동됨(앵커 우회)"); fi
+
+# J-2. 앵커 우회 — '..' 상위경로 traversal 로 표기된 경로는 이동되면 안 된다
+mkdir -p "$FH/.claude/docs/working/elsewhere"
+cat > "$FH/.claude/docs/working/elsewhere/2026-08-01-traversaltest.md" <<'EOF'
+---
+name: traversaltest
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/../elsewhere/2026-08-01-traversaltest.md"
+HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/null 2>&1
+if [ -f "$FH/.claude/docs/working/elsewhere/2026-08-01-traversaltest.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-2] '..' traversal 경로 파일이 이동됨(앵커 우회)"); fi
+
+# J-3. 인덱스 오삭제 방지 — 실제 backlog entry 는 지우고 (a) 같은 slug 텍스트를 우연히 공유하는
+#   무관 Project entry(backlog_/backlog/ 참조 없음, AND 조건 판정, 콜드리뷰 R2 High-1) 와 (b) Backlog
+#   섹션 **밖**에서 우연히 같은 href 를 인용하는 교차참조(콜드리뷰 R6 H2, 섹션 스코핑) 는 보존해야 한다.
+#   **헤더는 실 production 표기를 그대로 사본으로 사용한다** — 손으로 "## Backlog" 단순형만 쓰면 실
+#   표기(제목 뒤 부연 `## Backlog (게이트·§3·…)`) 를 재현 못 해 스코핑 회귀를 못 잡는다(R3~R6 4라운드
+#   연속 지적 — 표기 차이를 실 파일에서 그대로 떠서 픽스처에 자동 반영시킨다).
+mkdir -p "$FH/.claude/projects/projA/memory"
+REAL_BACKLOG_HEADER=$(grep -m1 -E '^## Backlog\b' "$HOME/.claude/projects/C--Works-hongcafe-global-backend/memory/MEMORY.md" 2>/dev/null)
+[ -z "$REAL_BACKLOG_HEADER" ] && REAL_BACKLOG_HEADER='## Backlog (게이트·§3·P0/P1·harness만 / 상세=각 파일 / 전량=`Glob backlog_*.md`)'
+{
+  echo "# Memory"
+  echo "$REAL_BACKLOG_HEADER"
+  echo "- [samenameslug](backlog/2026-08-01-samenameslug.md) — real backlog entry (should be removed)"
+  echo "## Project"
+  echo "- [samenameslug](project_namespace_collision.md) — unrelated project doc, no href (should be preserved)"
+  echo "## Reference"
+  echo "- [crossref](backlog_samenameslug.md) — 섹션 밖 교차참조, 실 href 보유 (섹션 스코핑으로 보존돼야 함)"
+} > "$FH/.claude/projects/projA/memory/MEMORY.md"
+cat > "$FH/.claude/docs/working/backlog/2026-08-01-samenameslug.md" <<'EOF'
+---
+name: samenameslug
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-01-samenameslug.md"
+HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/null 2>&1
+MEM_J3="$FH/.claude/projects/projA/memory/MEMORY.md"
+if ! grep -qF 'backlog/2026-08-01-samenameslug.md' "$MEM_J3"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3a] 실제 backlog entry 가 제거되지 않음"); fi
+if grep -qF 'project_namespace_collision.md' "$MEM_J3"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3b] 동명 슬러그의 무관 Project entry 가 함께 삭제됨(오삭제)"); fi
+if grep -qF 'backlog_samenameslug.md' "$MEM_J3" && grep -qF '## Reference' "$MEM_J3"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3c] Backlog 섹션 밖 교차참조가 삭제됨(H2 섹션 스코핑 회귀) — 실 헤더 표기: $REAL_BACKLOG_HEADER"); fi
+
+# J-4. H1 — index entry 가 harness-home 이 아닌 별도 project(projB)에만 있어도 제거돼야 한다
+mkdir -p "$FH/.claude/projects/projB/memory"
+cat > "$FH/.claude/projects/projB/memory/MEMORY.md" <<'EOF'
+# Memory
+## Backlog
+- [multiprojslug](backlog/2026-08-01-multiprojslug.md) — entry only in projB
+EOF
+cat > "$FH/.claude/docs/working/backlog/2026-08-01-multiprojslug.md" <<'EOF'
+---
+name: multiprojslug
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-01-multiprojslug.md"
+J4_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if ! grep -qF 'multiprojslug' "$FH/.claude/projects/projB/memory/MEMORY.md"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4] harness-home 아닌 별도 project(projB) index entry 가 제거 안 됨"); fi
+if ! echo "$J4_OUT" | grep -qF '전 project index'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4] 정상 제거됐는데 aggregate notfound 경고가 오탐으로 뜸"); fi
+
+# J-3b. H1(R4) — 실 MEMORY.md 표기 재현: 링크 텍스트가 34자로 절단돼 slug 와 다른 항목도 href 로 제거돼야 한다
+#   (실측 사례: `[api-keys-unset-all-envs-pbx-blocke](backlog_api-keys-unset-all-envs-pbx-blocked.md)`)
+mkdir -p "$FH/.claude/projects/projTrunc/memory"
+cat > "$FH/.claude/projects/projTrunc/memory/MEMORY.md" <<'EOF'
+# Memory
+## Backlog
+- [truncatedlinktextexampleslugnam](backlog_truncatedlinktextexampleslugname.md) — link text truncated, slug has trailing 'e'
+EOF
+cat > "$FH/.claude/docs/working/backlog/2026-08-01-truncatedlinktextexampleslugname.md" <<'EOF'
+---
+name: truncatedlinktextexampleslugname
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-01-truncatedlinktextexampleslugname.md"
+J3B_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if ! grep -qF 'truncatedlinktextexampleslugname' "$FH/.claude/projects/projTrunc/memory/MEMORY.md"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3b] 링크 텍스트 절단된 entry 가 href 매칭으로 제거되지 않음(H1 회귀)"); fi
+if echo "$J3B_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3b] 정상 제거됐는데 ✓ 마커가 안 뜸(M7)"); fi
+
+# J-3c. H2(R4) — 실 MEMORY.md 표기 재현: `·` 로 병합된 2개 bullet 라인은 형제 entry 를 보존해야 한다
+#   (실측: img-server-const-undefined-fatal done 처리 시 같은 줄의 naver-api-const-undefined-fatal 소실)
+mkdir -p "$FH/.claude/projects/projMerge/memory"
+cat > "$FH/.claude/projects/projMerge/memory/MEMORY.md" <<'EOF'
+# Memory
+## Backlog
+- [img-server-const-undefined-fatal](backlog_img-server-const-undefined-fatal.md)·[naver-api-const-undefined-fatal](backlog_naver-api-const-undefined-fatal.md) — merged bullet line
+EOF
+cat > "$FH/.claude/docs/working/backlog/2026-08-01-img-server-const-undefined-fatal.md" <<'EOF'
+---
+name: img-server-const-undefined-fatal
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-01-img-server-const-undefined-fatal.md"
+J3C_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+MEM_J3C="$FH/.claude/projects/projMerge/memory/MEMORY.md"
+if grep -qF 'naver-api-const-undefined-fatal' "$MEM_J3C"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3c] '·' 병합 라인에서 형제 entry(naver-api) 가 침묵 소실됨(H2 회귀)"); fi
+if grep -qF 'img-server-const-undefined-fatal' "$MEM_J3C"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3c] 병합 라인 자체가 사라짐(manual 보류 실패)"); fi
+if echo "$J3C_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3c] 인덱스 미정리인데 △ 마커가 안 뜸(M7)"); fi
+
+# J-6. High(R5) — verify_index_sync 는 "인덱스에 있는데 본문 없음"(죽은 링크) 축만 봐야 한다.
+#   실 조건 3개(BACKLOG.md 는 11 project 중 1곳에만 존재 · 본문이 index 없는 project 에도 흩어짐 ·
+#   MEMORY.md 는 큐레이션 인덱스라 미등재가 정상) 를 비대칭으로 재현한다.
+mkdir -p "$FH/.claude/projects/projMemOnlyA/memory" "$FH/.claude/projects/projMemOnlyB/memory" "$FH/.claude/projects/projBodyOnly/memory"
+# projMemOnlyA/B — MEMORY.md 만 있고 BACKLOG.md 없음(실측 11 project 중 10곳 형태). 본문 참조 없음
+# (큐레이션 정상 상태 = index 에서 완전히 빠짐, 그래서 이 두 MEMORY.md 는 Backlog 섹션이 비어 있다).
+# projMemOnlyA 는 j6athenashaped 를 참조하는 entry 도 하나 갖는다(M2 픽스처).
+cat > "$FH/.claude/projects/projMemOnlyA/memory/MEMORY.md" <<'EOF'
+# Memory
+## Backlog
+- [j6athenashaped](backlog_j6athenashaped.md) — 본문이 index 없는 다른 project 에 있음(M2)
+EOF
+cat > "$FH/.claude/projects/projMemOnlyB/memory/MEMORY.md" <<'EOF'
+# Memory
+## Backlog
+EOF
+# 본문은 있는데 어느 index 에도 참조가 없는 경우(정상, 미등재 축 삭제로 오탐 없어야 함)
+cat > "$FH/.claude/projects/projMemOnlyB/memory/backlog_j6bodyonlynoindex.md" <<'EOF'
+legacy body with no index reference anywhere — normal state after H1 fix
+EOF
+cat > "$FH/.claude/docs/working/backlog/2026-08-01-j6bodyonlynoindex2.md" <<'EOF'
+---
+name: j6bodyonlynoindex2
+metadata:
+  status: pending
+  product: testprod
+---
+new-path body with no index reference anywhere — also normal
+EOF
+# projBodyOnly — MEMORY.md/BACKLOG.md 가 **아예 없이** 본문만 있는 memory 디렉토리(콜드리뷰 R6 M2,
+# 실측 C--Works-hongcafe-global-athena 형태). all_index_files() 로는 이 디렉토리가 절대 안 잡힌다 —
+# all_memory_dirs() 로 직접 조회해야만 이 본문이 "존재하는 파일" 로 카운트돼, projMemOnlyA 의 참조가
+# 죽은 링크로 오탐되지 않는다.
+cat > "$FH/.claude/projects/projBodyOnly/memory/backlog_j6athenashaped.md" <<'EOF'
+legacy body in a memory dir with no MEMORY.md/BACKLOG.md at all (athena-shaped, M2)
+EOF
+# 진짜 죽은 링크 — index 에 참조가 있는데 본문이 어디에도 없음(실제 drift, 잡혀야 함)
+cat > "$FH/.claude/projects/projMemOnlyA/memory/BACKLOG.md" <<'EOF'
+# Backlog detail (harness-home 형태로 1곳에만 존재)
+- [j6genuinedeadlink](backlog_j6genuinedeadlink.md) — 본문 파일이 실제로 없음
+- 코드블록 예시: `Glob backlog_*.md` 같은 허수 slug 도 여기서 같이 검증
+EOF
+# 아무 pending 파일 저장으로 verify_index_sync 트리거 (전역 스캔이라 특정 파일과 무관)
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-01-j6bodyonlynoindex2.md"
+J6_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if ! echo "$J6_OUT" | grep -qF '미등재'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-6a] '미등재' 축이 부활함(High 회귀) — 출력: $J6_OUT"); fi
+if ! echo "$J6_OUT" | grep -qF 'j6bodyonlynoindex'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-6c] 인덱스 없는 정상 본문(j6bodyonlynoindex, 큐레이션 정상 상태)이 오탐으로 뜸"); fi
+if echo "$J6_OUT" | grep -qF 'j6genuinedeadlink'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-6d] 진짜 죽은 링크(j6genuinedeadlink)가 감지되지 않음(검증 무력화)"); fi
+if ! echo "$J6_OUT" | grep -qE '(^|[^A-Za-z0-9_-])\*([^A-Za-z0-9_-]|$)'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-6e] 코드블록 glob 예시(*)가 허수 slug 로 죽은 링크에 섞여 나옴 — 출력: $J6_OUT"); fi
+if ! echo "$J6_OUT" | grep -qF 'j6athenashaped'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-6f] index 파일이 없는 memory 디렉토리(athena 형태)의 본문이 죽은 링크로 오탐됨(M1 회귀) — 출력: $J6_OUT"); fi
+
+# J-5. M2 — frontmatter product: 값의 경로 traversal 은 차단되고 claude-harness 로 대체돼야 한다
+cat > "$FH/.claude/docs/working/backlog/2026-08-01-travproducttest.md" <<'EOF'
+---
+name: travproducttest
+metadata:
+  status: done
+  product: ../../../pwned
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-01-travproducttest.md"
+J5_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if [ ! -d "$FH/pwned" ] && [ ! -d "$TMP/pwned" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-5] product traversal 로 fakehome/docs 바깥에 폴더 생성됨"); fi
+if compgen -G "$FH/.claude/docs/claude-harness/tasks/*/backlog/2026-08-01-travproducttest.md" >/dev/null 2>&1; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-5] 무효 product 대체(claude-harness) 후 정상 위치 이동 실패"); fi
+if echo "$J5_OUT" | grep -qF '허용 문자'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-5] product 대체 경고가 stderr 에 없음"); fi
+
+# J-7. M6(R5) — UserPromptSubmit 일괄 경로 무테스트였다: 키워드 트리거 → done 만 이동, pending 은
+#   스킵, moved_count 정확히 계상돼야 한다.
+uprompt_payload() {  # $1=prompt text → $TMP/p.json
+  printf '{"session_id":"blt-uprompt","hook_event_name":"UserPromptSubmit","prompt":"%s"}' \
+    "$(json_escape "$1")" > "$TMP/p.json"
+}
+cat > "$FH/.claude/docs/working/backlog/2026-08-02-j7donefile.md" <<'EOF'
+---
+name: j7donefile
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+cat > "$FH/.claude/docs/working/backlog/2026-08-02-j7pendingfile.md" <<'EOF'
+---
+name: j7pendingfile
+metadata:
+  status: pending
+  product: testprod
+---
+x
+EOF
+uprompt_payload "backlog 완료 처리해줘"
+J7_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-02-j7donefile.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-7a] UserPromptSubmit 키워드에도 done 파일이 이동 안 됨"); fi
+if [ -f "$FH/.claude/docs/working/backlog/2026-08-02-j7pendingfile.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-7b] pending 파일이 배치 처리 중 잘못 이동됨"); fi
+if echo "$J7_OUT" | grep -qE '1건 working/backlog'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-7c] moved_count 가 1건으로 정확히 보고되지 않음 — 출력: $J7_OUT"); fi
+
+# J-8. M6(R5) — completed: 삽입이 metadata: 하위 들여쓰기를 유지하는지, history.md/summary.md 가
+#   실제로 갱신되는지(전부 무테스트였다) 고정.
+cat > "$FH/.claude/docs/working/backlog/2026-08-02-j8writeeffects.md" <<'EOF'
+---
+name: j8writeeffects
+metadata:
+  status: done
+  product: testprodj8
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-j8writeeffects.md"
+HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/null 2>&1
+TODAY8=$(date +%Y%m%d)
+J8_MOVED="$FH/.claude/docs/testprodj8/tasks/$TODAY8/backlog/2026-08-02-j8writeeffects.md"
+if grep -qE '^  completed: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$J8_MOVED" 2>/dev/null; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-8a] completed: 필드가 metadata: 들여쓰기(2칸)를 유지하지 않음"); fi
+if grep -qF 'j8writeeffects' "$FH/.claude/docs/testprodj8/tasks/history.md" 2>/dev/null; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-8b] history.md 가 갱신되지 않음"); fi
+if grep -qF 'j8writeeffects' "$FH/.claude/docs/testprodj8/tasks/$TODAY8/summary.md" 2>/dev/null; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-8c] summary.md 가 갱신되지 않음"); fi
+
+# J-9. M4(R6) — index lock 획득 실패 시에도 index_incomplete 가 세워져 △ 마커가 떠야 한다
+# (이전엔 lock 실패로 무보호 강행했는데 최종 마커는 ✓ 였다 — △/✓ 를 가르는 목적과 어긋났다).
+mkdir -p "$FH/.claude/projects/projJ9/memory"
+cat > "$FH/.claude/projects/projJ9/memory/MEMORY.md" <<'EOF'
+# Memory
+## Backlog
+- [j9locktest](backlog/2026-08-02-j9locktest.md) — lock failure marker test
+EOF
+cat > "$FH/.claude/docs/working/backlog/2026-08-02-j9locktest.md" <<'EOF'
+---
+name: j9locktest
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+mkdir -p "$TMP/j9held.lock.d"  # 미리 점유된(fresh, stale 아님) lock — TTL 을 길게 줘서 회수 안 되게 함
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-j9locktest.md"
+J9_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/j9held.lock.d" BACKLOG_INDEX_LOCK_TTL_MIN=60 BACKLOG_INDEX_LOCK_RETRIES=2 BACKLOG_INDEX_LOCK_SLEEP=0.05 \
+  bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if echo "$J9_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-9] lock 획득 실패인데 △ 대신 다른 마커가 뜸 — 출력: $J9_OUT"); fi
+if ! echo "$J9_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-9] lock 획득 실패인데 ✓ 이동으로 성공 보고됨(M4 회귀)"); fi
+rmdir "$TMP/j9held.lock.d" 2>/dev/null
+
+# J-10. M5(R6) — 앵커 비교가 드라이브 문자 뒤 세그먼트의 대소문자 불일치에도 통과해야 한다
+# (to_win_path 는 드라이브 문자만 통일, 나머지 세그먼트는 원본 그대로라 완전일치 비교면 스킵됐다).
+cat > "$FH/.claude/docs/working/backlog/2026-08-02-j10casetest.md" <<'EOF'
+---
+name: j10casetest
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+J10_SRC="$FH/.claude/docs/working/backlog/2026-08-02-j10casetest.md"
+J10_WIN_LC=$(echo "$J10_SRC" | sed 's|^/c/|C:/|' | tr '[:upper:]' '[:lower:]' | sed 's|^c:|C:|')
+printf '{"session_id":"blt-j10","hook_event_name":"PostToolUse","cwd":"C:\\\\x","tool_name":"Write","tool_input":{"file_path":"%s","content":"x"},"tool_response":{"filePath":"%s"}}' \
+  "$(json_escape "$J10_WIN_LC")" "$(json_escape "$J10_WIN_LC")" > "$TMP/p.json"
+HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/null 2>&1
+if [ ! -f "$J10_SRC" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-10] 소문자 세그먼트 페이로드가 앵커 불일치로 스킵됨(M5 회귀) — 파일이 원 위치에 그대로 남음"); fi
+
+# ═══════════════════════════════════════════════════════════════════
 printf '\n────────────────────────────────────────\n'
 if [ ${#fail_lines[@]} -gt 0 ]; then
   printf 'FAIL 상세:\n'
