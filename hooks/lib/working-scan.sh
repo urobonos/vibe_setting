@@ -55,6 +55,16 @@ working_scan() {
       emit()
       seen=FILENAME; path=FILENAME
       n=split(FILENAME, pp, "/"); fname=pp[n]
+      # 날짜 폴더(YYYYMMDD)만 태스크로 본다 — backlog/·dispatch/ 등 비-날짜 폴더는 사용자 관리
+      #   잔여물이지 tick 이 claim 할 대상이 아니다. product 매칭에 기댈 수 없다 — 파일명 규약
+      #   `{yyyy-mm-dd}-{slug}.md` 에 product 토큰이 없는데 slug 앞머리가 docs/ 디렉토리명과
+      #   겹치면 통과한다(실측: `hooks-guard-followups` → product=hooks). `^[0-9]{8}$` 는 이미
+      #   working-heartbeat.sh·working-lifecycle.sh·working-register.sh·output-naming-check.sh·
+      #   load.md 5곳이 쓰는 판정식 — 그대로 재사용해 극성이 갈라지는 걸 막는다.
+      #   find 의 -not -path 가 아니라 여기서 거르는 이유: root 자신에 backlog 성분이 있으면
+      #   (예: WORKING_ROOT=…/backlog/working) find 패턴이 전 태스크를 조용히 삼킨다(실측).
+      #   -mindepth/-maxdepth 2 라 pp[n-1] 은 항상 root 직속 폴더다.
+      if (pp[n-1] !~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]$/) { path=""; next }
       if (fname ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/) { date=substr(fname,1,10) } else { path=""; next }
       rest=substr(fname,12); sub(/\.md$/,"",rest)
       is_step=(fname ~ /-step-[0-9]+-/)?1:0
