@@ -17,6 +17,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || exit 0
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/product-resolver.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 
@@ -42,7 +44,11 @@ esac
 # product = docs 직속 디렉토리명
 PRODUCT=$(echo "$FILE_PATH_NORM" | sed -E 's#.*/\.claude/docs/([^/]+)/.*#\1#')
 [ -z "$PRODUCT" ] && exit 0
-case "$PRODUCT" in indexing|references) exit 0 ;; esac
+# 공용 예약이름 목록 사용(2026-08-07 콜드리뷰 R3 M9) — 이전엔 `indexing|references` 2개만 하드코딩해
+# `backlog-lifecycle.sh` 의 8개 예약이름 목록과 따로 놀았다(같은 사실이 다른 곳에서 갈라지면 한쪽만
+# 갱신되고 다른 쪽은 stale 해진다). `product-resolver.sh::is_reserved_docs_name()` 공용 상수로 통일 —
+# 위 :38-40 의 indexing/references 경로 우선 차단은 그대로 둔다(빠른 조기 종료, 이 검사의 부분집합).
+is_reserved_docs_name "$PRODUCT" 2>/dev/null && exit 0
 
 DOCS_ROOT=$(echo "$FILE_PATH_NORM" | sed -E 's#(.*/\.claude/docs)/.*#\1#')
 PRODUCT_DIR="$DOCS_ROOT/$PRODUCT"

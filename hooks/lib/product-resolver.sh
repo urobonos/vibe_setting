@@ -91,3 +91,19 @@ product_output_dir() {
 product_specs_dir() {
   echo "$(product_docs_root "${1:-$PWD}")/specs"
 }
+
+# 예약된 비-product docs/ 하위 디렉토리 이름(2026-08-07 콜드리뷰 R3 M9) — `backlog-lifecycle.sh` 의
+# product 예약이름 차단(8개)과 `doc-index-maintain.sh` 의 자기제외(2개)가 같은 사실("docs/ 아래 이
+# 이름들은 실제 product 트리가 아니라 공용 SSOT 디렉토리")을 서로 다른 목록으로 인코딩하고 있어
+# 하나가 늘어도 다른 쪽이 안 따라가면 곧 갈라진다. 공용 상수 1곳으로 올리고 양쪽이 참조한다.
+RESERVED_DOCS_NAMES="working indexing references hooks scripts share source_tree 참조문서"
+
+# 대소문자 무관 비교(참조문서는 대소문자 개념이 없어 영향 없음) — 호출부가 원본 표기를 그대로 넘기면
+# 된다. 반환: 0=예약 이름(product 로 쓸 수 없음) / 1=아님.
+is_reserved_docs_name() {
+  local name="${1,,}" n
+  for n in $RESERVED_DOCS_NAMES; do
+    [ "$name" = "$n" ] && return 0
+  done
+  return 1
+}

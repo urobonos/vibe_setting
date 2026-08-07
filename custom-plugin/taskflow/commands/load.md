@@ -138,7 +138,7 @@ if [ -d "$BACKLOG_DIR" ] && compgen -G "$BACKLOG_DIR/*.md" >/dev/null 2>&1; then
     function emit() {
       if (base == "") return
       if (!valid_name) { printf "[backlog 잔존·이동불가] %s — 파일명 형식 불일치({yyyy-mm-dd}-{slug}.md 필요), 자동 이동 안 됨 — 수동 rename 필요\n", base; cnt++; return }
-      if (is_done && closed) { printf "[backlog 잔존·이동실패] %s | %s — status:done 인데 아직 working/backlog/ 에 있음(원인: mv 실패·비도구 쓰기·PostToolUse 미발화 등), 원인 확인 필요\n", (name!=""?name:base), base; cnt++; return }
+      if (is_done && closed) { printf "[backlog 잔존·이동실패] %s | %s — status:done 인데 아직 working/backlog/ 에 있음(원인: mv 실패·비도구 쓰기·PostToolUse 미발화·product 디렉토리 미실재로 스킵 등), 원인 확인 필요\n", (name!=""?name:base), base; cnt++; return }
       cnt++; normal_cnt++
       if (normal_cnt <= 8) printf "[backlog 잔존] %s | %s | %s\n", (name!=""?name:base), (desc!=""?desc:"(설명 없음)"), base
     }

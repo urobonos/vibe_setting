@@ -356,6 +356,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 
 - 경로: `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` (단일 파일, product 무분리, slug = kebab-case, 날짜 prefix = 생성일)
 - frontmatter: `name` / `description` (1줄) / `type: backlog` / `status: pending|in_progress|done` / `source` / `target_date` (선택) / `product` (기본 claude-harness) / `created` / `completed` (status=done 시 hook 자동 채움)
+- **`product:` 실재 전제(2026-08-07 콜드리뷰 S2/M9):** status=done 자동 이동 시 `product:` 값은 `~/.claude/docs/{product}/` 가 **이미 실재해야** 한다(`claude-harness` 는 예외 — 항상 자기부트스트랩). 미실재·오탈자면 이동이 스킵되고 원본이 `working/backlog/` 에 남는다(유령 트리 생성 방지, 조용한 오귀속 방지). `working`/`indexing`/`references`/`hooks`/`scripts`/`share`/`source_tree`/`참조문서` 는 product 가 아닌 공용 SSOT 예약 이름이라 값으로 쓸 수 없다. SSOT = `hooks/backlog-lifecycle.sh::move_backlog_to_tasks()`.
 - 발생 project 의 `MEMORY.md` `## Backlog` 섹션에 entry 1줄 추가 필수 — `- [slug](../../../docs/working/backlog/{yyyy-mm-dd}-{slug}.md) — 한 줄 요약` (href = MEMORY.md 위치 `.claude/projects/{project}/memory/` 기준 상대경로)
 - **파일명 충돌 규약(2026-08-07, 298건 이관 중 4쌍 실측 — product 무분리 + 날짜 prefix 구조상 서로 다른
   project 가 같은 날 같은 slug 를 쓰면 충돌한다)**: 저장 직전 `{yyyy-mm-dd}-{slug}.md` 가 이미 존재하면

@@ -18,8 +18,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   frontmatter 구조(`metadata:` 하위 `status: pending|done`)는 불변.
 #   **MEMORY.md/BACKLOG.md 인덱스 entry 제거 판정 (콜드리뷰 R5 M2, 3라운드 만에 정정 — always-on 헤더가
 #   구현과 반대로 적혀 다음 라운드를 또 뒤집게 만들었었다):** href 토큰 합집합(구 `backlog_{slug}.md`
-#   ∪ 신 `backlog/{yyyy-mm-dd}-{slug}.md`)을 **1차 매칭 키**로 쓴다. 링크 텍스트(`[{slug}]`) 단독
-#   매칭은 실 MEMORY.md 링크 37건 중 9건(24%)이 표시 목적으로 34자 절단돼 있어(예:
+#   ∪ 신 `backlog/{yyyy-mm-dd}-{slug}.md`)을 **1차 매칭 키**로 쓴다. **`{yyyy-mm-dd}` 는 와일드카드가
+#   아니라 이동 대상 파일명의 날짜로 정확히 고정된다(2026-08-07 S1, 콜드리뷰 M10)** — 같은 slug 가
+#   날짜만 다르게 중복 존재할 때(실측 4쌍) 형제 entry 를 오삭제하는 걸 막기 위해서다. 단 삭제 판정과
+#   별개로, "이 라인이 형제인지" 식별에는 여전히 날짜 무관(옛 와일드카드와 동형) 매칭을 쓴다 —
+#   매칭되면 `noref`(정정 필요) 가 아니라 `sibling`(정상 보존, ✓) 로 보고한다. 링크 텍스트(`[{slug}]`)
+#   단독 매칭은 실 MEMORY.md 링크 37건 중 9건(24%)이 표시 목적으로 34자 절단돼 있어(예:
 #   `[api-keys-unset-all-envs-pbx-blocke]` vs slug `...-blocked`) 못 쓴다 — href 는 축약되지 않고
 #   항상 slug 전문을 담는다. 링크 텍스트는 href 가 전혀 없을 때만 "noref"(보류 신호)로 격하한다.
 #   상세 근거·판별식은 `move_backlog_to_tasks()` 본문 주석 SSOT.
@@ -38,7 +42,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #
 # 이동 절차:
 #   1. 파일명 파싱 — {yyyy-mm-dd}-{slug}.md → slug 추출 (파일명 자체는 생성일 prefix 유지한 채 그대로 이동)
-#   2. frontmatter `product:` 필드 추출 (없으면 "claude-harness" 기본)
+#   2. frontmatter `product:` 필드 추출 (없으면 "claude-harness" 기본). **`product:` 실재 전제
+#      (2026-08-07 S2, 콜드리뷰 M9)**: 값이 유효 문자(영숫자/_/-)라도 `~/.claude/docs/{product}/` 가
+#      실재하지 않으면 이동을 스킵한다(`claude-harness` 는 예외 — 항상 실재로 취급). `working`/
+#      `indexing`/`references`/`hooks`/`scripts`/`share`/`source_tree`/`참조문서` 는 공용 SSOT
+#      예약 이름이라 product 값으로 거부한다. 스킵 시 원본은 `working/backlog/` 에 남고 stderr 로
+#      원인을 안내한다 — 조용한 오귀속(유령 트리) 방지가 목적. SSOT = 본 함수 아래 실재 검증 블록.
 #   3. frontmatter `completed:` 필드 = 오늘(완료일) 자동 채움 (없을 시)
 #   4. 대상 경로 = ~/.claude/docs/{product}/tasks/{YYYYMMDD(완료일=오늘)}/backlog/{yyyy-mm-dd}-{slug}.md.
 #      **폴더는 완료일**(콜드리뷰 High-3) — backlog 는 생성~완료 간극이 수개월인 사례가 실측돼(2026-05·07
@@ -51,6 +60,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || true
+# shellcheck disable=SC1091
+source "$(dirname "${BASH_SOURCE[0]}")/lib/product-resolver.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 DOCS_ROOT="$HOME/.claude/docs"
@@ -215,6 +226,10 @@ move_backlog_to_tasks() {
   slug="${filename:11}"
   slug="${slug%.md}"
 
+  # file_date — 파일명 자체의 생성일 prefix(선두 10자, YYYY-MM-DD). 인덱스 href 매칭을 이 값으로
+  # 고정한다(2026-08-07 S1 수정) — 아래 href_b_re/target_link_re 참조.
+  local file_date="${filename:0:10}"
+
   # 경계값: {yyyy-mm-dd}-.md (slug 없이 날짜+대시만) 도 위 case 가드를 통과한다 — `*.md` 가 빈 문자열도
   # 매칭하기 때문. slug 가 비면 MEMORY.md/BACKLOG.md 인덱스 제거 매칭 키가 `[]`(빈 대괄호)가 되어
   # 무관한 라인과 우연히 충돌할 위험이 생긴다. 여기서 명시 차단한다 (실측: 2026-08-06 e2e 검증).
@@ -248,6 +263,28 @@ except Exception:
 PYEOF
 )
   [ -z "$product" ] && product="claude-harness"
+
+  # 비-product 예약 이름 차단(2026-08-07 콜드리뷰 M7, R2 M3 재정정 — 화이트리스트보다 먼저 검사) —
+  # docs/ 하위엔 product 트리 말고도 공용 SSOT 디렉토리가 실재한다(working/indexing/references/hooks/
+  # scripts/share/source_tree/참조문서, 2026-08-07 실측 `ls docs/*/`). 이 이름들은 "디렉토리 존재"만
+  # 보는 실재 검사를 그냥 통과해버려 `product: references` 같은 오값이 공용 SSOT 디렉토리에
+  # tasks/history.md 를 써넣을 수 있다(현재 라이브 0건, 잠재 위험) — product 값으로는 거부한다.
+  # **아래 화이트리스트보다 먼저 검사한다(R2 M3)** — 순서가 반대였을 때 `참조문서`(비-ASCII) 는
+  # 화이트리스트가 먼저 `claude-harness` 로 치환해버려 이 case 의 `참조문서` arm 이 도달 불가였다
+  # (실측: `product: 참조문서` 가 스킵되지 않고 `claude-harness/tasks/…` 로 이동됨 — SKILL.md/헤더가
+  # 적어놓은 "값으로 쓸 수 없다/이동 스킵" 과 반대로 동작). 여기서 먼저 걸러 8개 예약 이름을 동일하게
+  # (문자셋 무관) 스킵시킨다 — 이제 문서와 동작이 일치한다.
+  # **대소문자 무관 비교(2026-08-07 콜드리뷰 R3 H2)** — 아래 실재 검증(`find -iname`, R2 M4)이
+  # 대소문자 무관으로 실제 디스크 표기에 정규화한다. 이 예약이름 검사가 소문자 정확 일치만 보면
+  # `product: Working`/`References`/... 가 이 검사를 그냥 통과한 뒤 `find -iname` 이 실물 소문자
+  # 디렉토리(`docs/working/`)로 정규화해 공용 SSOT 안에 tasks/history.md 를 써넣는다 — M4 가 대소문자
+  # 무관 매칭을 들여오면서 M7 이 막던 구멍이 다시 열렸다. `is_reserved_docs_name()`(product-resolver.sh,
+  # 콜드리뷰 R3 M9 공용 상수) 이 이미 `${1,,}` 로 소문자화해 비교한다.
+  if is_reserved_docs_name "$product" 2>/dev/null; then
+    echo "[backlog-lifecycle] $filename — product '$product' 은 공용 SSOT 예약 디렉토리(product 아님), frontmatter product: 값 정정 필요 — 이동 스킵" >&2
+    return 1
+  fi
+
   # 보안: frontmatter `product:` 화이트리스트 검증(콜드리뷰 M2) — 이 값은 검증 없이 mkdir -p/mv 의
   # 대상 경로(target_dir/history/summary)에 그대로 들어간다. `product: ../../../pwned` 처럼 경로
   # 구분자·traversal 세그먼트가 섞이면 $DOCS_ROOT 바깥으로 파일이 반출된다. PostToolUse 게이트는
@@ -260,6 +297,76 @@ PYEOF
       product="claude-harness"
       ;;
   esac
+
+  # product 실재 검증(2026-08-07 S2) — 위 화이트리스트는 유효 문자 집합만 본다(영숫자/_/-). 실재하지
+  # 않는 product 값(오탈자·구 표기)도 문자만 유효하면 통과해 docs/{product}/ 를 새로 만들 **뻔했다**
+  # (2026-08-07 콜드리뷰 M13 정정 — 실측 5건은 전부 pending/in_progress 라 실제 생성된 유령 트리는
+  # 0개다. "완료 시 생성됐을 상태" 였을 뿐 이미 생성된 게 아니다. 다음 라운드가 존재하지 않는 트리를
+  # 청소하러 헤매지 않도록 여기서 명확히 한다). 사례: `hongcafe-global-docs`/`hongcafe-global-backend`
+  # 하이픈 오표기 — 정본은 각각 `hongcafe_global_docs`/`hongcafe_global_backend` 언더스코어,
+  # `hongcafe3` — 정본 미확정. 완료됐다면 각자 자기 tasks/history.md 를 가져 이력이 갈렸을 것이다.
+  # fallback 으로 claude-harness 에 조용히 합류시키지 않는다 — 그것도 원 product 정보를 잃는 또 다른
+  # 형태의 오귀속이다(어느 실제 product 문서였는지 추적 불가해진다). 대신 이동을 보류하고 경고만
+  # 남긴다 — source 는 docs/working/backlog/ 에 그대로 남아 frontmatter 정정 후 재시도를 기다린다.
+  # **`claude-harness` 는 검증 면제(2026-08-07 콜드리뷰 M5)** — `product:` 필드 자체가 없어 기본값이
+  # 채워진 케이스(위 분기, 40건 실측) + 화이트리스트 위반으로 대체된 케이스가 전부 이 값으로 수렴한다.
+  # `~/.claude/docs/` 는 git 추적 밖(gitignore)이라 새 설치·복구 환경엔 `docs/claude-harness/` 가 아직
+  # 없을 수 있다 — 무가드로 존재를 요구하면 그 40+건이 영구 스킵된다. claude-harness 는 하니스 자기소유
+  # 경로라 항상 유효하므로 검사에서 면제하고, 아래 `mkdir -p "$target_dir"`(기존 로직)가 자기부트스트랩한다.
+  if [ "$product" != "claude-harness" ]; then
+    # 대소문자 정규화(2026-08-07 콜드리뷰 R2 M4) — `[ -d ]` 는 Windows(NTFS) 에서 대소문자를 무시한다.
+    # `product: TestProd` + `docs/testprod/` 만 존재해도 단순 `-d` 검사는 통과하는데, 그 뒤
+    # target_dir/history.md/stderr 는 원본 표기(`TestProd`) 를 그대로 써 실제 물리 디렉토리(`testprod`)
+    # 표기와 어긋난다. 같은 입력이 POSIX(대소문자 구분 파일시스템) 에서는 애초에 스킵돼 **S2 판정이
+    # 플랫폼별로 갈렸다**. 대소문자 무관 조회 후 실제 디스크 표기로 `product` 를 맞춘다 — 두 플랫폼
+    # 모두 같은 규칙을 쓰게 되어 판정이 일치한다(대소문자가 이미 일치하는 값은 no-op).
+    # **`[ -d ]` 우선 분기를 쓰지 않는다(2026-08-07 콜드리뷰 R3 자체발견)** — Windows 에서는 `[ -d ]`
+    # 자체가 이미 대소문자 무관이라(OS 레벨) "정확 일치를 먼저 시도" 하는 의도로 넣은 `[ -d
+    # "$DOCS_ROOT/$product" ]` 분기가 `docs/testprod`·`docs/TestProd` 가 공존해도 **항상 참**이 되어
+    # 아래 타이브레이크 경고(M10)를 완전히 우회했다(실측: `product: TESTPROD` 가 경고 없이
+    # `TESTPROD/tasks/...` 로 그대로 이동 — 정규화도 타이브레이크도 작동 안 함). `find -iname` 조회
+    # 결과 안에서 **문자열 완전일치**를 우선하는 방식으로 바꾼다 — OS stat 의미론에 의존하지 않아
+    # 플랫폼 무관하게 결정적이다.
+    # **`-mindepth 1` 필수(콜드리뷰 R3 H1)** — 없으면 depth 0(=`$DOCS_ROOT` 자기 자신, basename
+    # "docs")도 후보에 들어간다. `product: docs`(대소문자 무관이라 `Docs`/`DOCS` 도)면 `$DOCS_ROOT`
+    # 자신이 매칭돼 "실재 확인"을 통과하고, 실재하지 않던 `$DOCS_ROOT/docs/tasks/...` 를 만들며
+    # `✓ 이동` 으로 오보고한다. **`-L` 필수(M11)** — 없으면 `-type d` 가 lstat 기준이라 dir 심링크를
+    # 거짓으로 판정해, 심링크로 둔 정상 product 를 영구 스킵시킨다(헤더 `:139` 가 project 디렉토리명
+    # 대소문자·구분자 실측 혼재를 스스로 기록해뒀다 — 불가능한 상황이 아니다).
+    local actual_product_dir=""
+    local ci_matches match_count
+    ci_matches=$(find -L "$DOCS_ROOT" -mindepth 1 -maxdepth 1 -iname "$product" -type d 2>/dev/null)
+    # `grep -c` 는 0건이어도 "0" 을 정상 출력한다(exit 1 은 매칭 0건 신호일 뿐 출력 실패가 아니다) —
+    # `|| echo 0` fallback 을 붙이면 grep 이 이미 찍은 "0" 뒤에 fallback 의 "0" 이 또 붙어
+    # `match_count`="0\n0" 이 되고 `-gt` 비교가 "integer expression expected" 로 죽는다(실측, 제거).
+    match_count=$(printf '%s\n' "$ci_matches" | grep -c .)
+    if [ "$match_count" -gt 1 ]; then
+      # **문자열 완전일치 우선(2026-08-07 콜드리뷰 R3 M10)** — 대소문자 무관 매칭이 여러 개라도, 그중
+      # basename 이 `$product` 와 정확히 같은 게 있으면 모호하지 않다(진짜 정확 매칭). 없을 때만
+      # readdir 순서 의존 임의선택 위험이 실재하므로 경고 후 스킵한다(보수적).
+      local cand exact_match=""
+      while IFS= read -r cand; do
+        [ "$(basename "$cand")" = "$product" ] && exact_match="$cand" && break
+      done <<< "$ci_matches"
+      if [ -n "$exact_match" ]; then
+        actual_product_dir="$exact_match"
+      else
+        echo "[backlog-lifecycle] $filename — product '$product' 대소문자 무관 매칭이 2건 이상($DOCS_ROOT 하위 공존, 임의 선택 대신 스킵): $(printf '%s ' $ci_matches)" >&2
+      fi
+    elif [ "$match_count" -eq 1 ]; then
+      actual_product_dir="$ci_matches"
+    fi
+    if [ -n "$actual_product_dir" ]; then
+      product=$(basename "$actual_product_dir")
+    else
+      # M6(2026-08-07 콜드리뷰) — "정정 필요" 는 오탈자를 전제한다. 하지만 docs/{product}/ 는 지연
+      # 생성(코드 편집이 있었던 세션에서만 만들어짐, `session-completeness-check.sh` 참조)이라, 코드
+      # 편집 없이 backlog 부터 만든 신규 repo 는 값이 **맞아도** 트리가 아직 없을 수 있다. 두 원인을
+      # 메시지에 함께 남긴다 — 오탈자로 오판해 정정을 강요하지 않는다.
+      echo "[backlog-lifecycle] $filename — product '$product' 디렉토리($DOCS_ROOT/$product)가 실재하지 않음(frontmatter product: 오탈자 또는 이 product 의 docs 트리가 아직 생성되지 않음) — 이동 스킵" >&2
+      return 1
+    fi
+  fi
 
   # yyyymmdd = 완료일(오늘, 폴더 결정용) — 파일명 자체는 생성일 prefix 를 그대로 유지한다.
   # (콜드리뷰 High-3: backlog 생성~완료 간극이 수개월인 사례가 실측돼, 파일명 날짜를 폴더로 쓰면
@@ -318,7 +425,12 @@ except Exception:
     pass
 PYEOF
 
-  # 이동
+  # 이동 — lock 밖(콜드리뷰 R2 M7 잔여 위험 주석) — 아래 sibling 파일존재 검증(index lock 안, python)
+  # 은 이 시점 이후의 backlog_src_dir 스냅샷을 본다. 두 세션이 같은 중복 slug 쌍을 동시에 done
+  # 처리하면, A 의 sibling 검증 시점에 B 가 이미 자기 형제 파일을 mv 해가 A 입장에선 "형제 없음" 으로
+  # 뒤바뀔 수 있다(→ noref 오안내 + △, index lock 은 인덱스 쓰기 자체는 지키므로 데이터 손실은 아니고
+  # 오분류·오안내 뿐). best-effort 판정이라는 사실을 여기 명시한다 — 두 세션이 동시에 같은 slug 쌍을
+  # 완료 처리하는 빈도가 낮아 별도 스냅샷/사전검증 구조 변경은 이번 범위 밖으로 둔다.
   mv "$backlog_file" "$target_file" 2>/dev/null || {
     echo "[backlog-lifecycle] $filename — 이동 실패: $backlog_file → $target_file" >&2
     return 1
@@ -373,17 +485,62 @@ PYEOF
     for wf in "${index_files_arr[@]}"; do
       win_index_files+=("$(to_win_path "$wf")")
     done
+    # backlog 소스 디렉토리도 넘긴다(2026-08-07 콜드리뷰 High 재정정) — sibling 판정을 텍스트
+    # 패턴만으로 하면 "다른 날짜 href 문자열이 있다" 와 "그 날짜에 실제 파일이 있다" 를 구분 못 해,
+    # 진짜 형제(파일 존재)와 단순 오탈자·이관 오차(파일 없음, J-14 케이스)를 같은 걸로 취급한다.
+    # 실제 파일 존재를 근거로 검증해야 두 경우가 갈린다.
+    local win_backlog_src_dir
+    win_backlog_src_dir=$(to_win_path "$BACKLOG_SRC_DIR")
     local idx_out
-    idx_out=$(python3 - "$slug" "${win_index_files[@]}" <<'PYEOF' 2>/dev/null
-import re, sys
+    idx_out=$(python3 - "$slug" "$file_date" "$win_backlog_src_dir" "${win_index_files[@]}" <<'PYEOF' 2>/dev/null
+import os, re, sys
 slug = sys.argv[1]
-index_paths = sys.argv[2:]
+file_date = sys.argv[2]
+backlog_src_dir = sys.argv[3]
+index_paths = sys.argv[4:]
 
 href_a_token = f"backlog_{slug}.md"
-href_b_re = re.compile(r'backlog/\d{4}-\d{2}-\d{2}-' + re.escape(slug) + r'\.md')
+
+# 단일 빌더(2026-08-07 콜드리뷰 R2 M8) — href_b_re/sibling_re/any_link_re/target_link_re 4벌이 전부
+# "backlog/{date}-{slug}.md" 조각을 따로 조립하고 있었다. 이번에 sibling_re 로 다섯 번째... 가 아니라
+# 네 번째 벌이 늘며 lockstep 위험이 커져(SKILL.md 의 `--{product}` suffix 규약처럼 이 계열 파일명
+# 문법이 확장될 때마다 4곳을 동시에 고쳐야 한다) 하나로 접는다. `verify_index_sync()`(별도 함수, 다른
+# 실패 축 comparing 목적) 2벌과 테스트 픽스처 1벌은 경로가 다르고 지금 건드리면 회귀 위험이 커 범위
+# 밖으로 남긴다(콜드리뷰 지시).
+def backlog_href_frag(date_pattern, slug_pattern):
+    return r'backlog/' + date_pattern + '-' + slug_pattern + r'\.md'
+
+DATE_EXACT = re.escape(file_date)
+DATE_WILD = r'\d{4}-\d{2}-\d{2}'
+DATE_WILD_CAP = r'(\d{4}-\d{2}-\d{2})'
+SLUG_EXACT = re.escape(slug)
+SLUG_ANY = r'[^\s\]\)]+'
+
+# 날짜를 고정한다(2026-08-07 S1 수정 — 콜드리뷰) — 이전엔 `\d{4}-\d{2}-\d{2}` 와일드카드였다.
+# 이 hook 은 이동 대상 파일의 정확한 날짜(file_date, 파일명 선두 10자)를 이미 안다 — 와일드카드로
+# 아무 날짜나 받을 이유가 없다. 같은 slug 가 날짜만 다르게 두 번 존재하면(중복 slug 8쌍 실측,
+# 예: ratelimit-double-count-explicit-routes 07-29/07-30) 와일드카드는 살아있는 형제 backlog 의
+# 인덱스 entry 까지 함께 지웠다(형제도 slug 는 같고 날짜만 다르므로 매칭됨). href_a_token(구 경로
+# 형태, 날짜 없음)은 그대로 둔다 — 이관 전 형태라 날짜 개념이 없다.
+# **잔여 위험(2026-08-07 콜드리뷰 M11)**: href_a_token 은 substring 매칭이라 날짜 개념이 아예 없으므로,
+# 중복 slug 가 구 경로(`backlog_{slug}.md`) 형태로 남아 있으면 **여전히 형제를 오삭제한다** — S1 은
+# 이 형태를 닫지 않았다(현재 라이브 0건, 구 경로 잔존은 전량 신 경로로 이관 완료돼 이 형태의 href 를
+# 가진 살아있는 중복 slug 쌍이 없다). 다음 라운드는 "형제 오삭제는 S1 로 완전히 닫혔다" 로 읽지 말 것.
+href_b_re = re.compile(backlog_href_frag(DATE_EXACT, SLUG_EXACT))
+# sibling_re(2026-08-07 콜드리뷰 High, 텍스트만으론 부족해 M3 라운드에서 파일존재 검증 추가) —
+# href_b_re 가 매칭 안 하는 라인이라도 **같은 slug 를 다른 날짜로 참조하는 backlog href** 는 진짜
+# 죽은 참조(noref)가 아니라 S1 이 보존하려는 형제 entry 일 수 있다. 단 **텍스트 패턴만으론 "진짜
+# 형제(그 날짜에 파일이 실재)" 와 "단순 오탈자·이관 오차(그 날짜엔 파일이 없음)" 를 구분 못 한다** —
+# 날짜 그룹을 캡처해 backlog_src_dir 에서 그 (date, slug) 조합 파일이 실재하는지 확인한 뒤에만
+# sibling 으로 판정한다(아래 사용처). 파일이 없으면 noref 로 남는다 — 이게 정확히 사용자에게
+# "href 를 정정하라" 고 안내해야 하는 케이스다(반대로 파일이 있으면 정정 유도 시 데이터 손실 재현).
+# **한 라인에 매치가 2개 이상일 수 있다(2026-08-07 콜드리뷰 R2 M1)** — `search()` 는 첫 매치만 보므로
+# 그 날짜에 파일이 없고 두 번째 매치 날짜엔 파일이 있으면 noref 로 잘못 떨어졌다(형제가 실제로 살아
+# 있는데도 "정정 필요" 오안내 재발). 아래 사용처에서 `finditer()` 로 전부 검사한다.
+sibling_re = re.compile(backlog_href_frag(DATE_WILD_CAP, SLUG_EXACT))
 marker = f"[{slug}]"
 # 슬러그 무관 전 backlog href 토큰 — 라인에 몇 개의 서로 다른 backlog entry 가 섞였는지 판별용(High-2)
-any_link_re = re.compile(r'backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s\]\)]+\.md')
+any_link_re = re.compile(r'backlog_' + SLUG_ANY + r'\.md|' + backlog_href_frag(DATE_WILD, SLUG_ANY))
 # 그룹라벨 대표줄 판별(2026-08-07 High) — href 개수만으로는 "- 🟠 인프라·메시징·위생군 — [slug](href)…"
 # 같은 표기를 못 잡는다. 이 줄은 href 가 1개뿐이라 link_count>1 분기를 안 타고 그대로 삭제됐다(오삭제).
 # 실제 문제는 개수가 아니라 "이 href 의 markdown 링크 뒤에 자기 요약(`—`)이 붙어 있는가" — 그룹라벨줄은
@@ -397,7 +554,7 @@ any_link_re = re.compile(r'backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s
 # 매칭이라 prefix 유무와 무관했지만, 이 정규식만 `](` 에 직접 anchor 돼 있었다.
 target_link_re = re.compile(
     r'\[[^\]]*\]\([^)]*' + re.escape(href_a_token) + r'\)'
-    r'|\[[^\]]*\]\([^)]*backlog/\d{4}-\d{2}-\d{2}-' + re.escape(slug) + r'\.md\)'
+    r'|\[[^\]]*\]\([^)]*' + backlog_href_frag(DATE_EXACT, SLUG_EXACT) + r'\)'
 )
 own_summary_re = re.compile(r'^\s*—')
 
@@ -413,6 +570,10 @@ section_header_re = re.compile(r'^##\s')
 results = []
 for index_path in index_paths:
     status = "error"
+    # try 블록 밖(2026-08-07 콜드리뷰 R3 M8 파생) — 아래 results.append 가 try/except 밖에서 항상
+    # sibling_dates 를 참조하므로, open() 실패 등으로 try 진입 직후 예외가 나도 NameError 없이 빈
+    # set 을 보고할 수 있어야 한다.
+    sibling_dates = set()
     try:
         with open(index_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -430,6 +591,8 @@ for index_path in index_paths:
         manual_multi = False
         manual_grouplabel = False
         noref = False
+        sibling = False
+        # sibling_dates 는 try 블록 밖(위)에서 이미 초기화됨 — 여기서 재선언하지 않는다(R3 M8).
         for l in lines:
             if has_backlog_header and section_header_re.match(l):
                 in_backlog_section = bool(backlog_header_re.match(l))
@@ -444,7 +607,26 @@ for index_path in index_paths:
                 out.append(l)
                 continue
             if not has_href:
-                noref = True
+                # sibling 판별(2026-08-07 콜드리뷰 High) — 이 라인의 href 는 이번 처리 대상(file_date)
+                # 과는 매칭 안 했지만, 같은 slug 를 다른 날짜로 참조하는 backlog href 가 있다면 그건
+                # 진짜 죽은 참조가 아니라 S1 이 보존해야 하는 형제 entry 다. "href 정정 필요" 로
+                # 안내하면 사용자가 정정하는 순간 형제가 방금 이동된 파일을 가리키게 되어 데이터
+                # 손실이 재현된다 — noref 와 분리한다. **파일 실재 검증 필수(2026-08-07 M3)** — 텍스트
+                # 패턴만 보면 "그 날짜에 파일이 없는 단순 오탈자"(J-14 케이스)도 sibling 으로 오판해
+                # 정작 필요한 noref 경고를 삼킨다. 그 날짜의 파일이 backlog_src_dir 에 실재할 때만
+                # sibling 이다. **한 라인에 매치가 여러 개일 수 있다(콜드리뷰 R2 M1)** — 첫 매치만
+                # 확인하면 그 날짜엔 파일이 없고 두 번째 매치 날짜에 있는 경우를 noref 로 잘못 떨어뜨린다
+                # (형제가 실제로 살아있는데도 "정정 필요" 오안내 재발) — finditer 로 전부 검사한다.
+                line_sibling_date = None
+                for sm in sibling_re.finditer(l):
+                    if os.path.isfile(os.path.join(backlog_src_dir, f"{sm.group(1)}-{slug}.md")):
+                        line_sibling_date = sm.group(1)
+                        break
+                if line_sibling_date:
+                    sibling = True
+                    sibling_dates.add(line_sibling_date)
+                else:
+                    noref = True
                 out.append(l)
                 continue
             # set() 필수(콜드리뷰 R5 M3) — findall() 는 등장 횟수를 센다. 한 entry 가 자기 href 를
@@ -483,12 +665,21 @@ for index_path in index_paths:
         elif changed:
             status = "removed"
         elif noref:
+            # noref 가 sibling 보다 우선(2026-08-07 콜드리뷰 High) — 한 파일 안에 진짜 죽은 참조와
+            # 형제 entry 가 같이 있으면, 형제(정상)로 조용히 덮여 진짜 문제(noref)가 숨으면 안 된다.
             status = "noref"
+        elif sibling:
+            status = "sibling"
         else:
             status = "notfound"
     except Exception:
         status = "error"
-    results.append(index_path + "\t" + status)
+    # sibling 은 배타 상태값이 아니라 별도 필드로 항상 보고한다(2026-08-07 콜드리뷰 R3 M8) — 이전엔
+    # `elif sibling` 이 최하단이라, 같은 파일의 다른 라인이 changed/manual 을 만들면(가장 흔한 경로 —
+    # 자기 entry 는 지워지고 형제는 같은 파일의 다른 줄에 남는 경우) sibling_dates 가 있어도 최종
+    # status 는 "removed"/"manual" 등으로만 찍혀 M9 가 추가한 추적 근거(날짜)가 사라졌다. status 와
+    # 무관하게 sibling_dates 를 항상 3번째 필드로 함께 보낸다.
+    results.append(index_path + "\t" + status + "\t" + ",".join(sorted(sibling_dates)))
 
 print("\n".join(results))
 PYEOF
@@ -499,8 +690,8 @@ PYEOF
     # per-project 침묵 — 전체 스캔 후 any_found 로만 집계한다.
     # **`✓ 이동` vs `△ 이동`(콜드리뷰 R4 M7)** — mv 는 이미 성공했는데 인덱스 정리가 실패/보류되면
     # index_incomplete 를 세워 맨 아래 최종 보고 줄의 마커를 갈라 훑어보기만 해도 구분되게 한다.
-    local out_index_file idx_result
-    while IFS=$'\t' read -r out_index_file idx_result; do
+    local out_index_file idx_result idx_sibling_dates
+    while IFS=$'\t' read -r out_index_file idx_result idx_sibling_dates; do
       [ -n "$out_index_file" ] || continue
       # 실측 발견(2026-08-06, 다중 index 파일 통합 python 호출 검증 중, 콜드리뷰 R6 L2 설명 정정) —
       # Windows 네이티브 python3 의 print() 는 매 줄에 \r\n 을 쓴다(text-mode 개행 변환) — 이 \r\n 은
@@ -512,15 +703,35 @@ PYEOF
       # catch-all(에러)로 떨어졌다 — index 파일이 2개 이상이면 항상 재현된다(단일 파일 테스트로는
       # 절대 안 잡힌다, M6 통합 이전엔 파일당 단일 호출이라 은폐돼 있었다).
       idx_result="${idx_result%$'\r'}"
+      idx_sibling_dates="${idx_sibling_dates%$'\r'}"
       case "$idx_result" in
         removed) any_found=1 ;;
         removed_partial) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 일부 라인 제거됨, 나머지는 다른 backlog entry 와 같은 라인이라 보류 — 수동 분리 필요" >&2 ;;
         manual) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인에 다른 backlog entry 공존, 자동 삭제 안 함 — 수동 분리 필요" >&2 ;;
         manual_grouplabel) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인이 그룹라벨 대표항목이거나 href 가 markdown 링크 형식이 아님(href 뒤 개별 요약 확인 안 됨), 자동 삭제 안 함 — 라벨/요약/href 형식 직접 확인 필요" >&2 ;;
         noref) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인은 있으나 backlog 참조(backlog_ 또는 backlog/)가 없어 미삭제 — href 를 신 경로로 정정 필요" >&2 ;;
+        # sibling(2026-08-07 콜드리뷰 High) — index_incomplete 를 세우지 않는다: 이 라인은 같은 slug 를
+        # 다른 날짜로 참조하는 **정상 보존된 형제 entry** 다. 인덱스는 정확히 정리된 상태이므로 최종
+        # 마커도 ✓ 여야 한다(noref 와 반대로 "정정 필요" 안내를 하지 않는다 — 정정하면 형제가 방금
+        # 이동된 파일을 가리키게 되어 S1 이 막은 데이터 손실이 재현된다).
+        # **`any_found` 는 세우지 않는다(2026-08-07 콜드리뷰 R2 M2)** — sibling 은 "이 slug 문자열의
+        # 어떤 entry" 를 찾은 것이지 "이 backlog(오늘 done 처리한 그 파일) 자신의 entry" 를 찾은 게
+        # 아니다. any_found 로 같이 세면, 이 backlog 자신의 entry 가 인덱스 어디에도 없는데 형제만
+        # 있어도 "미발견" 경고(아래 any_found==0 분기)가 조용히 삼켜진다 — 서로 다른 두 backlog 를
+        # 하나로 세는 것과 같다. index_incomplete 를 안 세우는 효과만 남기고(sibling 자체는 정상이므로)
+        # any_found 갱신에서는 분리한다. 메시지 자체는 아래 공통 블록(M8)에서 status 무관하게 낸다.
+        sibling) ;;
         notfound) ;;
         *) index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 인덱스 처리 실패(읽기/인코딩 오류 가능) — 수동 확인 필요" >&2 ;;
       esac
+      # sibling 보고는 status 와 무관하게 항상 낸다(2026-08-07 콜드리뷰 R3 M8) — 이전엔 python 쪽
+      # status 결정에서 `elif sibling` 이 최하단이라, 같은 파일의 다른 라인이 changed/manual 을
+      # 만들면(자기 entry 는 지워지고 형제는 같은 파일의 다른 줄에 남는, 가장 흔한 경로) sibling_dates
+      # 가 있어도 최종 status 는 "removed"/"manual" 등으로만 찍혀 보고가 빠졌다. python 이 status 와
+      # 무관하게 sibling_dates 를 3번째 필드로 항상 보내므로, 여기서도 status 분기와 별개로 확인한다.
+      if [ -n "$idx_sibling_dates" ]; then
+        echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인은 형제 backlog entry(${idx_sibling_dates} 날짜) 라 보존함" >&2
+      fi
     done <<< "$idx_out"
   fi
   [ "$index_locked" -eq 1 ] && backlog_index_lock_release
@@ -631,6 +842,10 @@ PYEOF
 #   사고(mv 는 됐는데 인덱스 entry 가 안 지워짐)와 정확히 같은 형태라 실제 drift 다. all_index_files()
 #   합집합을 그대로 쓰되, 코드블록 안 `` `backlog_*.md` `` 같은 glob 예시 문자열이 slug="*" 로 오추출
 #   되는 허수를 걸러낸다(실 slug 화이트리스트 [A-Za-z0-9_-]+ 만 허용, product 검증과 동일 문자셋).
+#   **신 경로(날짜 포함)는 (date, slug) 쌍으로 비교한다(2026-08-07 S1 이후, 콜드리뷰 M12)** — slug
+#   단독 비교는 같은 slug 의 파일이 어느 날짜로든 하나만 있어도 "파일 있음" 으로 오판해, href 날짜
+#   자체가 잘못된 경우(수동 편집·이관 오차)를 죽은 링크로 못 잡았다. 구 경로(날짜 없음)는 여전히
+#   slug 단독 비교(M11 잔여 위험과 동일 경계 — 애초 날짜 개념이 없다).
 #   비차단: 경고만 내고 exit 0 (PostToolUse).
 verify_index_sync() {
   local index_files_arr=()
@@ -662,39 +877,53 @@ rest = sys.argv[3:]
 index_paths = rest[:n_index]
 mem_dirs = rest[n_index:]
 try:
-    files = set()
+    # (date, slug) 쌍 비교(2026-08-07 콜드리뷰 M12) — S1 이 삭제 판정을 date-exact 로 좁히면서 새
+    # 실패 축이 생겼다: "href 날짜가 파일명 날짜와 어긋나면(수동 편집·이관 오차) 형제가 몇 개 존재하든
+    # 그 href 는 영원히 어떤 파일과도 매칭되지 않는다." 이전엔 slug 만(날짜 버리고 tail 만) 비교해서,
+    # 같은 slug 의 파일이 **어느 날짜로든** 하나라도 존재하면 "파일 있음" 으로 오판했다 — 잘못된 날짜의
+    # href 도 이 blind spot 에 가려 죽은 링크로 안 잡혔다(현재 date mismatch 0건 = 이전엔 무감시였다).
+    # 신 경로(날짜 포함) 는 (date, slug) 쌍으로, 구 경로(날짜 없음, `backlog_{slug}.md`) 는 여전히
+    # slug 단독으로 비교한다 — 구 형태엔 애초 날짜 개념이 없어 쌍 비교가 성립하지 않는다(M11 잔여 위험과
+    # 동일 경계).
+    files_dated = set()
+    files_dateless = set()
     if os.path.isdir(new_dir):
         for f in os.listdir(new_dir):
-            m = re.match(r'^\d{4}-\d{2}-\d{2}-(.+)\.md$', f)
+            m = re.match(r'^(\d{4}-\d{2}-\d{2})-(.+)\.md$', f)
             if m:
-                files.add(m.group(1))
+                files_dated.add((m.group(1), m.group(2)))
     for d in mem_dirs:
         try:
             for f in os.listdir(d):
                 if f.startswith('backlog_') and f.endswith('.md'):
-                    files.add(f[8:-3])
+                    files_dateless.add(f[8:-3])
         except Exception:
             pass
 
     def refs():
-        s = set()
+        dated = set()
+        dateless = set()
         for p in index_paths:
             try:
                 with open(p, encoding='utf-8') as fh:
                     text = fh.read()
             except Exception:
                 continue
-            s |= set(re.findall(r'backlog_([^\s\]\)]+)\.md', text))
-            for _date, tail in re.findall(r'backlog/(\d{4}-\d{2}-\d{2})-([^\s\]\)]+)\.md', text):
-                s.add(tail)
-        return s
+            dateless |= set(re.findall(r'backlog_([^\s\]\)]+)\.md', text))
+            for date, tail in re.findall(r'backlog/(\d{4}-\d{2}-\d{2})-([^\s\]\)]+)\.md', text):
+                dated.add((date, tail))
+        return dated, dateless
 
     valid_slug = re.compile(r'^[A-Za-z0-9_-]+$')
-    orphan = {s for s in (refs() - files) if valid_slug.match(s)}
-    if orphan:
-        shown = sorted(orphan)[:20]
-        more = f" 외 {len(orphan)-20}건" if len(orphan) > 20 else ""
-        print(f"[backlog-lifecycle] 인덱스에만 있고 파일 없음(죽은 링크, 전 project 합산) {len(orphan)}건: {', '.join(shown)}{more}", file=sys.stderr)
+    refs_dated, refs_dateless = refs()
+    orphan_dated = {(d, s) for (d, s) in (refs_dated - files_dated) if valid_slug.match(s)}
+    orphan_dateless = {s for s in (refs_dateless - files_dateless) if valid_slug.match(s)}
+    orphan_labels = sorted(f"{d}-{s}" for d, s in orphan_dated) + sorted(orphan_dateless)
+    total = len(orphan_dated) + len(orphan_dateless)
+    if orphan_labels:
+        shown = orphan_labels[:20]
+        more = f" 외 {total-20}건" if total > 20 else ""
+        print(f"[backlog-lifecycle] 인덱스에만 있고 파일 없음(죽은 링크, 날짜 불일치 포함, 전 project 합산) {total}건: {', '.join(shown)}{more}", file=sys.stderr)
 except Exception:
     pass
 PYEOF
