@@ -790,6 +790,54 @@ printf '{"session_id":"blt-j10","hook_event_name":"PostToolUse","cwd":"C:\\\\x",
 HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/null 2>&1
 if [ ! -f "$J10_SRC" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-10] 소문자 세그먼트 페이로드가 앵커 불일치로 스킵됨(M5 회귀) — 파일이 원 위치에 그대로 남음"); fi
 
+# J-11. High(2026-08-07) — "href 개수" 가 아니라 "href 의 markdown 링크 뒤에 자기 요약(`—`)이
+#   있는가" 로 판별해야 한다. 그룹라벨 대표줄(href 는 1개, 뒤에 요약 없이 `…`만) 은 manual 보류돼야
+#   하고, 상태배지 라인(href 뒤에 정상 요약 있음) 은 배지 유무와 무관하게 정상 제거돼야 한다(오탐 방지).
+#   픽스처는 손으로 재현하지 않고 실 production MEMORY.md 에서 grep 으로 그대로 뜬다 — 손으로 재현한
+#   픽스처가 5라운드 연속 실 표기를 놓친 전례가 있다.
+mkdir -p "$FH/.claude/projects/projLabel/memory"
+REAL_GROUP_LABEL_LINE=$(grep -m1 -F 'infra-local-copy-stale](backlog_infra-local-copy-stale.md)' "$HOME/.claude/projects/C--Works-hongcafe-global-backend/memory/MEMORY.md" 2>/dev/null)
+[ -z "$REAL_GROUP_LABEL_LINE" ] && REAL_GROUP_LABEL_LINE='- 🟠 인프라·메시징·위생군 — [infra-local-copy-stale](backlog_infra-local-copy-stale.md)…'
+REAL_BADGE_LINE=$(grep -m1 -F 'step-developer-sonnet-measure](backlog_step-developer-sonnet-measure.md)' "$HOME/.claude/projects/C--Users-PV--claude/memory/MEMORY.md" 2>/dev/null)
+[ -z "$REAL_BADGE_LINE" ] && REAL_BADGE_LINE='- `[조건부]` [step-developer-sonnet-measure](backlog_step-developer-sonnet-measure.md) — step-developer sonnet 하향 후 반려 라운드 측정'
+{
+  echo "# Memory"
+  echo "## Backlog"
+  echo "$REAL_GROUP_LABEL_LINE"
+  echo "$REAL_BADGE_LINE"
+} > "$FH/.claude/projects/projLabel/memory/MEMORY.md"
+MEM_J11="$FH/.claude/projects/projLabel/memory/MEMORY.md"
+
+# J-11a. 그룹라벨 대표줄 — done 처리해도 라인이 그대로 남아야 한다(manual 보류)
+cat > "$FH/.claude/docs/working/backlog/2026-08-02-infra-local-copy-stale.md" <<'EOF'
+---
+name: infra-local-copy-stale
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-infra-local-copy-stale.md"
+J11A_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if grep -qF 'infra-local-copy-stale](backlog_infra-local-copy-stale.md)' "$MEM_J11"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] 그룹라벨 대표줄이 오삭제됨(High 회귀) — 실 표기: $REAL_GROUP_LABEL_LINE"); fi
+if echo "$J11A_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] manual 보류인데 △ 마커가 안 뜸 — 출력: $J11A_OUT"); fi
+
+# J-11b. 상태배지 라인 — href 뒤 정상 요약이 있으므로 배지(`[조건부]`) 유무와 무관하게 정상 제거돼야 한다
+cat > "$FH/.claude/docs/working/backlog/2026-08-02-step-developer-sonnet-measure.md" <<'EOF'
+---
+name: step-developer-sonnet-measure
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-step-developer-sonnet-measure.md"
+J11B_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if ! grep -qF 'step-developer-sonnet-measure](backlog_step-developer-sonnet-measure.md)' "$MEM_J11"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11b] 상태배지 라인이 정상 제거되지 않음(오탐 차단 회귀) — 실 표기: $REAL_BADGE_LINE"); fi
+if echo "$J11B_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11b] 정상 제거됐는데 ✓ 마커가 안 뜸 — 출력: $J11B_OUT"); fi
+
 # ═══════════════════════════════════════════════════════════════════
 printf '\n────────────────────────────────────────\n'
 if [ ${#fail_lines[@]} -gt 0 ]; then

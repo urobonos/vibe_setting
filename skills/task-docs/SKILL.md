@@ -5,7 +5,7 @@ description: >
   신규(2026-05-12~)=working/ 단일 통합 문서 진행 후 완료 시 tasks/ 자동 이동(working-lifecycle.sh),
   기존(<2026-05-12)=analyze/plan/result 3종 분리 보존.
   보고용=output/{category}/, IEEE 산출물(SDP/SRS/SDD/IDD/STP/STD)=specs/.
-  backlog 메모리(잔여·후속·시간 트리거)=memory/backlog_{slug}.md, status:done 시 자동 이동.
+  backlog 메모리(잔여·후속·시간 트리거)=docs/working/backlog/{yyyy-mm-dd}-{slug}.md, status:done 시 자동 이동.
   경로·규칙 상세는 글로벌 CLAUDE.md §File Paths 참조.
 triggers:
   - "/task-docs"
@@ -348,9 +348,9 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 
 ### 파일 양식
 
-- 경로: `~/.claude/projects/C--Users-PV--claude/memory/backlog_{slug}.md` (단일 파일, slug = kebab-case)
+- 경로: `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` (단일 파일, product 무분리, slug = kebab-case, 날짜 prefix = 생성일)
 - frontmatter: `name` / `description` (1줄) / `type: backlog` / `status: pending|in_progress|done` / `source` / `target_date` (선택) / `product` (기본 claude-harness) / `created` / `completed` (status=done 시 hook 자동 채움)
-- MEMORY.md `## Backlog` 섹션에 entry 1줄 추가 필수 — `- [slug](backlog_{slug}.md) — 한 줄 요약`
+- 발생 project 의 `MEMORY.md` `## Backlog` 섹션에 entry 1줄 추가 필수 — `- [slug](../../../docs/working/backlog/{yyyy-mm-dd}-{slug}.md) — 한 줄 요약` (href = MEMORY.md 위치 `.claude/projects/{project}/memory/` 기준 상대경로)
 - **별도 경량 backlog 신설 금지** — 본 양식 외 임시 메모·인라인 TODO 로 대체하지 않는다.
 
 ### 비필수 사이드이펙트 격리 판단 (코드 작업 중, CLAUDE.md §4.5)
@@ -369,7 +369,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 ### 완료 → tasks/ 자동 이동
 
 - `status: done` 마커 → `backlog-lifecycle.sh` (PostToolUse) 가 `~/.claude/docs/{product}/tasks/{YYYYMMDD}/backlog/{yyyy-mm-dd}-{slug}.md` 로 자동 이동 + MEMORY.md entry 제거 + history.md / summary.md 갱신
-- 사용자 명시 키워드 (`backlog 완료` / `backlog 정리` / `backlog 이동` / `/backlog-done`) → memory 디렉토리 일괄 스캔 이동
+- 사용자 명시 키워드 (`backlog 완료` / `backlog 정리` / `backlog 이동` / `/backlog-done`) → `docs/working/backlog/` 디렉토리 일괄 스캔 이동
 - §3 Checkpoint 우선 적용
 
 ---

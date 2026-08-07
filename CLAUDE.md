@@ -144,7 +144,7 @@
 ### §4.5 산출물 생명주기
 
 - **working/ 자동 이동 3 진입점 (필수):** (1) 정상 마감 = `/taskflow:save` (정착 안내 + Done/Partial 잔여 판정) / (2) 긴급 단순 이동 = `/taskflow:save now` (판정 생략, 이동만) / (3) 자동 = `working-lifecycle.sh` (`Status: Done` + `## Self-Critique` 동시 존재 시). 선택 기준·절차 = `custom-plugin/taskflow/commands/save.md` §"즉시 이동 모드" + `hooks/working-lifecycle.sh` SSOT.
-- **backlog 메모리 정책 (필수):** 본 세션 잔여 후속·시간 트리거·사용자 결정 보류 = `~/.claude/projects/.../memory/backlog_{slug}.md` 단일 파일 + MEMORY.md `## Backlog` entry. 트리거 키워드 = `backlog 완료`/`backlog 정리`/`backlog 이동`/`/backlog-done`. frontmatter 양식·자동 이동 절차 = `hooks/backlog-lifecycle.sh` + `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" SSOT. §3 Checkpoint 우선 적용.
+- **backlog 메모리 정책 (필수):** 본 세션 잔여 후속·시간 트리거·사용자 결정 보류 = `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` 단일 파일 (2026-08-06 경로 이관, product 무분리) + 발생 project 의 `MEMORY.md` `## Backlog` entry(인덱스는 project 별 그대로, href 만 신 경로 상대참조). 트리거 키워드 = `backlog 완료`/`backlog 정리`/`backlog 이동`/`/backlog-done`. frontmatter 양식·자동 이동 절차 = `hooks/backlog-lifecycle.sh` + `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" SSOT. §3 Checkpoint 우선 적용.
 - **비필수 사이드이펙트 백로그 격리 (필수):** 코드 작업 중 발견 항목이 **① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급(부수적·경미)** 3조건을 **모두** 충족할 때만 working/ 본문·코드 TODO 로 끌어올리지 않고 **backlog 메모리에만 기록** 후 현재 작업 계속 (별도 경량 backlog 신설 금지). 하나라도 불충족 = Critical~Low 정상 분류. **실제 버그·문제는 경미해 보여도 절대 backlog 로 미루지 않는다 (②가 안전장치).** §3 매칭 항목은 크기 무관 사용자 보고. 세부·Why = `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" SSOT.
 
 ---

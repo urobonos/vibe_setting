@@ -24,7 +24,7 @@ argument-hint: "[결정주제|backlog-slug]  # 생략 시 직전 응답·대화 
 ## 인자
 
 - `{결정주제|backlog-slug}` = (선택) 결정 대상.
-  - **backlog slug 매칭 시** → `~/.claude/projects/*/memory/backlog_{slug}.md` 읽어 "사용자 결정 영역" / "## 사용자 결정 영역" 섹션 추출.
+  - **backlog slug 매칭 시** → `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` 읽어 "사용자 결정 영역" / "## 사용자 결정 영역" 섹션 추출.
   - **일반 주제** → 직전 맥락 + 필요 시 코드/문서 read 로 결정 지점 도출.
 - 생략 (`/taskflow:suggest`) = 직전 응답·대화에서 결정 항목 자동 추출.
 

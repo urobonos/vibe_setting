@@ -383,6 +383,17 @@ href_b_re = re.compile(r'backlog/\d{4}-\d{2}-\d{2}-' + re.escape(slug) + r'\.md'
 marker = f"[{slug}]"
 # 슬러그 무관 전 backlog href 토큰 — 라인에 몇 개의 서로 다른 backlog entry 가 섞였는지 판별용(High-2)
 any_link_re = re.compile(r'backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s\]\)]+\.md')
+# 그룹라벨 대표줄 판별(2026-08-07 High) — href 개수만으로는 "- 🟠 인프라·메시징·위생군 — [slug](href)…"
+# 같은 표기를 못 잡는다. 이 줄은 href 가 1개뿐이라 link_count>1 분기를 안 타고 그대로 삭제됐다(오삭제).
+# 실제 문제는 개수가 아니라 "이 href 의 markdown 링크 뒤에 자기 요약(`—`)이 붙어 있는가" — 그룹라벨줄은
+# 링크 뒤에 개별 요약 없이 `…`만 남아 있다. 상태배지 라인(`` `[조건부]` [slug](href) — 요약 ``)은 href
+# 뒤에 정상 요약이 붙어 있어 이 판별식으로는 영향받지 않는다(라벨 자체를 기준으로 삼으면 이 26건이
+# 오탐으로 막혔을 것 — 그래서 "링크 앞 라벨" 이 아니라 "링크 뒤 요약 유무" 를 본다).
+target_link_re = re.compile(
+    r'\[[^\]]*\]\(' + re.escape(href_a_token) + r'\)'
+    r'|\[[^\]]*\]\(backlog/\d{4}-\d{2}-\d{2}-' + re.escape(slug) + r'\.md\)'
+)
+own_summary_re = re.compile(r'^\s*—')
 
 # `\b`(콜드리뷰 R6 H1) — `\s*$` 는 헤더가 정확히 "## Backlog" 로 끝날 때만 매칭한다. 실 production
 # 인덱스(C--Works-hongcafe-global-backend/memory/MEMORY.md:45)는
@@ -433,6 +444,14 @@ for index_path in index_paths:
             # "서로 다른 backlog entry 개수" 라는 판별 의도를 정확히 구현하려면 distinct 카운트다.
             link_count = len(set(any_link_re.findall(l)))
             if link_count > 1:
+                manual = True
+                out.append(l)
+                continue
+            # 그룹라벨 대표줄 보류 — href 는 1개(위 link_count 판정 통과)지만 그 href 의 markdown
+            # 링크 뒤에 자기 요약(`—`)이 없으면 이 slug 만의 entry 가 아니라 그룹 대표 예시일 가능성이
+            # 높다. 오탐(과소삭제)이 오삭제(그룹라벨 소실)보다 싸다는 기존 방침과 동일하게 manual 로 민다.
+            tm = target_link_re.search(l)
+            if not tm or not own_summary_re.match(l[tm.end():]):
                 manual = True
                 out.append(l)
                 continue

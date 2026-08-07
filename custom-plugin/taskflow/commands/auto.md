@@ -117,7 +117,7 @@ git ls-files --others --exclude-standard                  # untracked 신규 →
 
 ## Backlog 토론 spawn 정책 (bounded, 2026-05-19 신설)
 
-본 slash 진입 시 backlog 발견 (MEMORY.md `## Backlog` 섹션 + `~/.claude/projects/*/memory/backlog_*.md`) → 다음 4 안전장치 적용 후 `/taskflow:debate` (4 팀 × 4 Agent = 16 Agent 풀-병렬 spawn) 1회 호출.
+본 slash 진입 시 backlog 발견 (MEMORY.md `## Backlog` 섹션 + `~/.claude/docs/working/backlog/*.md`) → 다음 4 안전장치 적용 후 `/taskflow:debate` (4 팀 × 4 Agent = 16 Agent 풀-병렬 spawn) 1회 호출.
 
 ### Pre-filter (토론 대상 분류)
 
@@ -150,7 +150,7 @@ git ls-files --others --exclude-standard                  # untracked 신규 →
 
 ### 진행 순서
 
-1. MEMORY.md `## Backlog` 섹션 + `~/.claude/projects/*/memory/backlog_*.md` 일괄 read
+1. MEMORY.md `## Backlog` 섹션 + `~/.claude/docs/working/backlog/*.md` 일괄 read
 2. 각 backlog 본문 / frontmatter 분석 → pre-filter 적용
 3. 토론 대상 분류 표 응답에 포함 (사용자에게 가시화)
 4. 통과 backlog ≥ 1 건 시 `/taskflow:debate` 1회 spawn (16 Agent)
