@@ -1,7 +1,8 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "backlog-lifecycle" "enter" "pid=$$"
-# backlog-lifecycle.sh — working backlog 완료 시 tasks/ 자동 이동 (2026-05-13 시행, 2026-08-06 경로 이관)
+# backlog-lifecycle.sh — working backlog 완료 시 tasks/ 자동 이동 (2026-05-13 시행, 2026-08-06 경로 배선,
+#   2026-08-07 실 데이터 298건 이관 실행 — 콜드리뷰 L1: 배선일과 실행일을 혼용하지 않는다)
 #
 # SSOT: CLAUDE.md §4 "backlog 메모리 정책" + skills/task-docs/SKILL.md §"backlog 메모리 워크플로우"
 #
@@ -12,7 +13,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   미루지 않음 = ②가 안전장치). 격리 판단은 Claude 본체 (judgment 룰 → 기계 강제 불가).
 #   본 hook 은 그렇게 기록된 backlog 의 status:done → tasks/ 자동 이동만 담당한다.
 #
-# 경로 이관 (2026-08-06): 본문 저장처가 `memory/backlog_{slug}.md` → `docs/working/backlog/{yyyy-mm-dd}-{slug}.md`
+# 경로 이관 (2026-08-06 배선 / 2026-08-07 실 데이터 이관 완료): 본문 저장처가 `memory/backlog_{slug}.md` → `docs/working/backlog/{yyyy-mm-dd}-{slug}.md`
 #   로 바뀌었다 (사용자 직접 열람 경로 통일). 신 경로만 지원(진입 게이트 기준) — 구 경로는 처리 대상 아님.
 #   frontmatter 구조(`metadata:` 하위 `status: pending|done`)는 불변.
 #   **MEMORY.md/BACKLOG.md 인덱스 entry 제거 판정 (콜드리뷰 R5 M2, 3라운드 만에 정정 — always-on 헤더가
@@ -389,9 +390,14 @@ any_link_re = re.compile(r'backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s
 # 링크 뒤에 개별 요약 없이 `…`만 남아 있다. 상태배지 라인(`` `[조건부]` [slug](href) — 요약 ``)은 href
 # 뒤에 정상 요약이 붙어 있어 이 판별식으로는 영향받지 않는다(라벨 자체를 기준으로 삼으면 이 26건이
 # 오탐으로 막혔을 것 — 그래서 "링크 앞 라벨" 이 아니라 "링크 뒤 요약 유무" 를 본다).
+# `[^)]*` prefix 필수(2026-08-07 콜드리뷰 Critical) — 최초 패치는 `](` 바로 뒤에 backlog_/backlog/
+# 가 오는 것만 매칭했다. 실 href 는 이관 후 전부 `](../../../docs/working/backlog/{date}-{slug}.md)`
+# 처럼 상대경로 prefix 를 달고 있어 두 대안 모두 불일치 → tm 이 항상 None → 174라인 중 167라인이
+# manual 로 격하됐다(전 slug 공통 회귀, 실측). href_a_token/href_b_re/any_link_re 는 원래 substring
+# 매칭이라 prefix 유무와 무관했지만, 이 정규식만 `](` 에 직접 anchor 돼 있었다.
 target_link_re = re.compile(
-    r'\[[^\]]*\]\(' + re.escape(href_a_token) + r'\)'
-    r'|\[[^\]]*\]\(backlog/\d{4}-\d{2}-\d{2}-' + re.escape(slug) + r'\.md\)'
+    r'\[[^\]]*\]\([^)]*' + re.escape(href_a_token) + r'\)'
+    r'|\[[^\]]*\]\([^)]*backlog/\d{4}-\d{2}-\d{2}-' + re.escape(slug) + r'\.md\)'
 )
 own_summary_re = re.compile(r'^\s*—')
 
@@ -421,6 +427,8 @@ for index_path in index_paths:
         out = []
         changed = False
         manual = False
+        manual_multi = False
+        manual_grouplabel = False
         noref = False
         for l in lines:
             if has_backlog_header and section_header_re.match(l):
@@ -445,6 +453,7 @@ for index_path in index_paths:
             link_count = len(set(any_link_re.findall(l)))
             if link_count > 1:
                 manual = True
+                manual_multi = True
                 out.append(l)
                 continue
             # 그룹라벨 대표줄 보류 — href 는 1개(위 link_count 판정 통과)지만 그 href 의 markdown
@@ -453,16 +462,24 @@ for index_path in index_paths:
             tm = target_link_re.search(l)
             if not tm or not own_summary_re.match(l[tm.end():]):
                 manual = True
+                manual_grouplabel = True
                 out.append(l)
                 continue
             changed = True
         if changed:
             with open(index_path, 'w', encoding='utf-8') as f:
                 f.writelines(out)
+        # manual 사유 분기(2026-08-07 콜드리뷰 M1) — multi(다른 entry 와 같은 줄 공존) 와 grouplabel
+        # (href 뒤 개별 요약 없음, 그룹 대표줄)은 사용자가 취해야 할 조치가 다르다. multi 는 실제로
+        # 존재하는 형제 entry 를 찾아 분리해야 하고, grouplabel 은 애초에 분리할 형제 entry 가 없다 —
+        # 하나의 "다른 backlog entry 공존" 메시지로 합치면 grouplabel 케이스에서 사용자가 존재하지
+        # 않는 형제를 찾아 헤매게 된다. 둘 다 트리거된 라인이 있으면 multi 를 우선한다(더 명확한 원인).
         if manual and changed:
             status = "removed_partial"
-        elif manual:
+        elif manual_multi:
             status = "manual"
+        elif manual_grouplabel:
+            status = "manual_grouplabel"
         elif changed:
             status = "removed"
         elif noref:
@@ -499,6 +516,7 @@ PYEOF
         removed) any_found=1 ;;
         removed_partial) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 일부 라인 제거됨, 나머지는 다른 backlog entry 와 같은 라인이라 보류 — 수동 분리 필요" >&2 ;;
         manual) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인에 다른 backlog entry 공존, 자동 삭제 안 함 — 수동 분리 필요" >&2 ;;
+        manual_grouplabel) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인이 그룹라벨 대표항목이거나 href 가 markdown 링크 형식이 아님(href 뒤 개별 요약 확인 안 됨), 자동 삭제 안 함 — 라벨/요약/href 형식 직접 확인 필요" >&2 ;;
         noref) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인은 있으나 backlog 참조(backlog_ 또는 backlog/)가 없어 미삭제 — href 를 신 경로로 정정 필요" >&2 ;;
         notfound) ;;
         *) index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 인덱스 처리 실패(읽기/인코딩 오류 가능) — 수동 확인 필요" >&2 ;;

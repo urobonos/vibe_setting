@@ -57,7 +57,13 @@ case "$ARG" in
     # `infra` 로 `/taskflow:load infra` 호출 시 이관된 `{date}-ses-email-infra.md` 가 `*-infra.md` 에
     # 걸려 product 필터가 조용히 풀린다. `[0-9]{4}-[0-9]{2}-[0-9]{2}-` 로 날짜를 고정해 ARG 가 slug
     # 전체와 일치할 때만 작업명 모드로 전환되게 한다.
-    if compgen -G "$WORKING_GLOB/*-${ARG}.md" >/dev/null 2>&1 || compgen -G "$HOME/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${ARG}.md" >/dev/null 2>&1; then
+    # `∪ ...-${ARG}--*.md`(2026-08-07 콜드리뷰 H3) — 298건 이관 중 4쌍(8건)이 slug 충돌로
+    # `{date}-{slug}--{product}.md` suffix 를 받았다(예: `us-sns-alarm-no-subscribers--infra.md`).
+    # suffix 없는 glob 만으로는 이 8건을 하나도 못 열어 인덱스 href 는 정상 갱신됐는데 여는 경로만
+    # 사라지는 형제 호출부 누락이 났다.
+    if compgen -G "$WORKING_GLOB/*-${ARG}.md" >/dev/null 2>&1 \
+      || compgen -G "$HOME/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${ARG}.md" >/dev/null 2>&1 \
+      || compgen -G "$HOME/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${ARG}--*.md" >/dev/null 2>&1; then
       TARGET_PRODUCT=""  # 작업명 직접 매칭 → product 필터 해제 (인자 분기 ②에서 처리)
     else
       TARGET_PRODUCT="$ARG"  # product 명으로 간주
@@ -119,47 +125,48 @@ done
 #   name:/description: 앵커도 status: 와 동일하게 `^[[:space:]]*` 로 통일한다(콜드리뷰 M6) — status: 만
 #   들여쓰기 허용이면 frontmatter 가 `metadata:` 하위로 정규화되는 순간 이름/설명 추출만 조용히 깨진다.
 BACKLOG_DIR="$HOME/.claude/docs/working/backlog"
-BACKLOG_CNT=0
-if [ -d "$BACKLOG_DIR" ]; then
-  for bf in "$BACKLOG_DIR"/*.md; do
-    [ -f "$bf" ] || continue
-    bf_base=$(basename "$bf")
-    # 이동 불가 파일명은 done 여부와 무관하게 항상 노출한다(콜드리뷰 R5 M7) — hook(move_backlog_to_tasks)
-    # 이 스킵하는 형식(날짜 미부합·빈 slug)이 status:done 과 겹치면 "done 이라 목록 제외" + "형식오류라
-    # hook 도 이동 안 함" 두 조건이 합쳐져 영구 은닉된다(실측: 구 경로 rename 실패분 이미 5건 존재).
-    case "$bf_base" in
-      [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-?*.md) ;;
-      *)
-        echo "[backlog 잔존·이동불가] $bf_base — 파일명 형식 불일치({yyyy-mm-dd}-{slug}.md 필요), 자동 이동 안 됨 — 수동 rename 필요"
-        BACKLOG_CNT=$((BACKLOG_CNT + 1))
-        continue
-        ;;
-    esac
-    name=$(grep -m1 -E '^[[:space:]]*name:' "$bf" | sed -E 's/^[[:space:]]*name:[[:space:]]*//')
-    # 종료 `---` 를 못 만나면 frontmatter 미완결로 보고 pending 취급한다(콜드리뷰 M3) — 이전엔
-    # `infm` 이 파일 끝까지 안 꺼져 본문 전체(코드블록 예시 `  status: done` 예시 텍스트)를 frontmatter 로
-    # 오인했다. hook 의 has_done_marker()(정규식이 닫는 `---` 매칭을 요구)와 판정이 이 형태로 갈렸었다.
-    if awk '
-          NR==1 && /^---[[:space:]]*$/ { infm=1; next }
-          infm && /^---[[:space:]]*$/ { infm=0; closed=1; exit }
-          infm { l=tolower($0); if (l ~ /^[[:space:]]*status:[[:space:]]*done[[:space:]]*$/) found=1 }
-          END { if (!closed) found=0; exit !found }
-        ' "$bf"; then
-      # 파일명 형식은 정상인데 status:done 이면서 여전히 여기 물리적으로 남아 있다(콜드리뷰 R6 M3) —
-      # 이건 정상 종료가 아니라 **이동 실패 신호**다: mkdir -p/mv 실패, 도구 이벤트를 안 거치는 쓰기
-      # (cp·git checkout·외부 편집), PostToolUse 미발화 중 하나만 있어도 이 상태가 된다. 이전엔
-      # "done 이니까 정상 제외" 로 무경고 스킵해 사용자가 'backlog 완료' 키워드를 칠 때까지 어디에도
-      # 안 보였다. `[backlog 잔존·이동불가]`(파일명 형식 오류) 와 별도 라벨로 항상 노출한다.
-      echo "[backlog 잔존·이동실패] ${name:-$bf_base} | $bf_base — status:done 인데 아직 working/backlog/ 에 있음(원인: mv 실패·비도구 쓰기·PostToolUse 미발화 등), 원인 확인 필요"
-      BACKLOG_CNT=$((BACKLOG_CNT + 1))
-      continue
-    fi
-    desc=$(grep -m1 -E '^[[:space:]]*description:' "$bf" | sed -E 's/^[[:space:]]*description:[[:space:]]*//; s/^"//; s/"$//')
-    echo "[backlog 잔존] ${name:-$bf_base} | ${desc:-(설명 없음)} | $bf_base"
-    BACKLOG_CNT=$((BACKLOG_CNT + 1))
-  done
+# 파일당 6프로세스(basename+grep×2+sed×2+awk) → 전체 1회 awk 로 접음(2026-08-07 콜드리뷰 H2) —
+# 이관으로 이 디렉토리가 0건→298건이 되며 순수 이 스캔 발 `/taskflow:load` 가 실측 124초(2분
+# 타임아웃 재현) 블로킹됐다. find+awk 단일 패스 SSOT(`working-scan.sh`)와 동일 원리 재사용.
+# 출력 상한(§4.4 응답 간결 8행) — `[backlog 잔존]`(대량 정상 항목)만 8건으로 자르고 "+N건" 트레일러를
+# 붙인다. `[이동불가]`/`[이동실패]`는 실제 이상 신호(콜드리뷰 M2 실측 5건급)라 상한 없이 전부 노출한다.
+if [ -d "$BACKLOG_DIR" ] && compgen -G "$BACKLOG_DIR/*.md" >/dev/null 2>&1; then
+  # M4(2026-08-07 콜드리뷰 R2) — `FNR==1` 리셋은 레코드 기반이라 0바이트 파일에서 한 번도 안 돌아
+  # emit() 대상이 안 되고 cnt 에도 안 잡혔다(실측: 구현 CNT:7 vs 신 CNT:6, 빈 파일 1건 완전 소실).
+  # gawk BEGINFILE/ENDFILE(파일 존재 자체가 트리거, 레코드 유무 무관)로 파일 단위 순회를 보장한다.
+  BACKLOG_AWK_OUT=$(awk '
+    function emit() {
+      if (base == "") return
+      if (!valid_name) { printf "[backlog 잔존·이동불가] %s — 파일명 형식 불일치({yyyy-mm-dd}-{slug}.md 필요), 자동 이동 안 됨 — 수동 rename 필요\n", base; cnt++; return }
+      if (is_done && closed) { printf "[backlog 잔존·이동실패] %s | %s — status:done 인데 아직 working/backlog/ 에 있음(원인: mv 실패·비도구 쓰기·PostToolUse 미발화 등), 원인 확인 필요\n", (name!=""?name:base), base; cnt++; return }
+      cnt++; normal_cnt++
+      if (normal_cnt <= 8) printf "[backlog 잔존] %s | %s | %s\n", (name!=""?name:base), (desc!=""?desc:"(설명 없음)"), base
+    }
+    BEGINFILE {
+      n=split(FILENAME, pp, "/"); base=pp[n]
+      valid_name = (base ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-.+\.md$/) ? 1 : 0
+      infm=0; closed=0; is_done=0; name=""; desc=""
+    }
+    $0 ~ /^---[[:space:]]*$/ && FNR==1 { infm=1; next }
+    infm && /^---[[:space:]]*$/ { infm=0; closed=1; next }
+    infm { l=tolower($0); if (l ~ /^[[:space:]]*status:[[:space:]]*done[[:space:]]*$/) is_done=1 }
+    # M5(2026-08-07 콜드리뷰 R2) — name/description 표시 추출은 done 판정(엄격, hook 과 동일 규칙
+    # 유지)과 분리한 완화 규칙을 쓴다. 첫 줄이 `---` 가 아닌 파일(선행 빈 줄 등)은 infm 이 끝까지
+    # 0이라 엄격 규칙만 쓰면 이름·설명이 통째로 비어 파일명으로 대체된다 — 그 문자열이 사용자가
+    # backlog 를 식별하는 유일한 근거라 표시만이라도 파일 앞 20줄에서 관대하게 찾는다(done 판정
+    # 정확성에는 영향 없음 — is_done/closed 는 위 엄격 infm 규칙만 사용).
+    FNR<=20 && name=="" && /^[[:space:]]*name:/ { line=$0; sub(/^[[:space:]]*name:[[:space:]]*/,"",line); name=line; next }
+    FNR<=20 && desc=="" && /^[[:space:]]*description:/ { line=$0; sub(/^[[:space:]]*description:[[:space:]]*/,"",line); gsub(/^"/,"",line); gsub(/"$/,"",line); desc=line; next }
+    ENDFILE { emit() }
+    END {
+      if (normal_cnt > 8) printf "[backlog 잔존] 그 외 %d건 더 (상세는 각 파일 직접 열람)\n", normal_cnt-8
+      printf "CNT:%d\n", cnt
+    }
+  ' "$BACKLOG_DIR"/*.md)
+  echo "$BACKLOG_AWK_OUT" | grep -v '^CNT:'
+  BACKLOG_CNT=$(echo "$BACKLOG_AWK_OUT" | grep '^CNT:' | sed 's/^CNT://')
+  [ -n "$BACKLOG_CNT" ] && [ "$BACKLOG_CNT" -gt 0 ] && echo "[backlog 잔존] 총 ${BACKLOG_CNT}건 (product 무분리 · status: done 제외 + 이동불가/이동실패는 done 무관 항상 포함) — 상세는 각 파일 직접 열람"
 fi
-[ "$BACKLOG_CNT" -gt 0 ] && echo "[backlog 잔존] 총 ${BACKLOG_CNT}건 (product 무분리 · status: done 제외 + 이동불가/이동실패는 done 무관 항상 포함) — 상세는 각 파일 직접 열람"
 
 # 4) DISPATCH 분배 풀 조회 — claim 가능(available) (여기는 목록 조회만 read-only; claim 은 #tag 분기)
 source ~/.claude/hooks/lib/dispatch-utils.sh
@@ -229,7 +236,15 @@ ls ~/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]/*-${작업명
 # 잔존 작업에 없으면 backlog 매칭 시도(콜드리뷰 M8) — backlog slug 는 날짜 폴더 밖(working/backlog/)
 # 이라 위 글롭에 안 걸린다. 잔존·분배 목록은 둘 다 진입 경로를 주는데 backlog 만 막다른 길이었다.
 # slug 전문을 날짜 바로 뒤에 앵커링(콜드리뷰 R5 M1) — `*-${작업명}.md` 는 접미사만 일치해도 매칭된다.
+# suffix 파일(콜드리뷰 H3, `--{product}`)도 함께 시도 — slug 충돌 이관분(4쌍 8건)은 이 형태로만 존재한다.
 ls ~/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${작업명}.md 2>/dev/null
+ls ~/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${작업명}--*.md 2>/dev/null
+```
+
+> **복수 매칭 시(콜드리뷰 M6, 2026-08-07):** suffix 글롭은 충돌 slug 4쌍 전부에서 항상 **2건**을
+> 반환한다(bare 글롭은 이 경우 0건). Claude 가 임의로 하나만 골라 열면 다른 project 의 backlog 를
+> 놓친다 — **두 ls 글롭 결과를 합쳐 2건 이상이면 전건 나열 후 "어느 product 항목을 여시겠습니까?"
+> 로 사용자에게 선택을 요청한다.** 1건이면 바로 본문 출력.
 ```
 
 전체 본문 출력 후 `## 잔여 작업` 섹션 부각 + 재진입 제안.

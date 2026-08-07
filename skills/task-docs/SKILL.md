@@ -351,6 +351,20 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 - 경로: `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` (단일 파일, product 무분리, slug = kebab-case, 날짜 prefix = 생성일)
 - frontmatter: `name` / `description` (1줄) / `type: backlog` / `status: pending|in_progress|done` / `source` / `target_date` (선택) / `product` (기본 claude-harness) / `created` / `completed` (status=done 시 hook 자동 채움)
 - 발생 project 의 `MEMORY.md` `## Backlog` 섹션에 entry 1줄 추가 필수 — `- [slug](../../../docs/working/backlog/{yyyy-mm-dd}-{slug}.md) — 한 줄 요약` (href = MEMORY.md 위치 `.claude/projects/{project}/memory/` 기준 상대경로)
+- **파일명 충돌 규약(2026-08-07, 298건 이관 중 4쌍 실측 — product 무분리 + 날짜 prefix 구조상 서로 다른
+  project 가 같은 날 같은 slug 를 쓰면 충돌한다)**: 저장 직전 `{yyyy-mm-dd}-{slug}.md` 가 이미 존재하면
+  (Write 는 존재 파일을 무경고 덮어쓴다 — 충돌 감지는 저장 주체 책임) **두 파일 다** `--{product}` suffix
+  를 받는다 — 먼저 있던 bare 파일을 그대로 두고 새 파일만 suffix 를 받는 게 **아니다**(2026-08-07
+  콜드리뷰 M8: 이관분 4쌍 8건이 실측상 전부 양쪽 다 suffix 이고 bare 생존자가 0건이라, "두 번째만
+  suffix" 로 명문화하면 `{slug}.md` + `{slug}--B.md}` 체계와 `--A` + `--B` 체계가 공존해 규약과
+  실데이터가 어긋난다). 절차: 신규 저장 시 동일 `{yyyy-mm-dd}-{slug}.md` 가 이미 있으면, **기존
+  파일을 그 파일 자신의 project 기준 `--{product}` 로 먼저 rename** 한 뒤 새 파일을 저장하고, 새
+  파일도 자기 project 기준 `--{product}` 로 저장한다(bare 형태를 아무도 점유하지 않는다). `product`
+  = 이 backlog 를 만든 project 의 `product-resolver.sh` 관례값(cwd basename, 예:
+  `hongcafe_global_backend`) — frontmatter `product:` 필드가 아니다(같은 slug 충돌 쌍이 frontmatter
+  `product:` 값을 공유하는 사례가 실측돼 그 필드로는 충돌이 해소되지 않는다). MEMORY.md href 도 rename
+  된 기존 파일·신규 파일 양쪽 다 갱신한다. `docs/working/backlog/` 는 이 경우에도 단일 평면 디렉토리를
+  유지한다(product 별 하위 디렉토리 분리는 채택 안 함).
 - **별도 경량 backlog 신설 금지** — 본 양식 외 임시 메모·인라인 TODO 로 대체하지 않는다.
 
 ### 비필수 사이드이펙트 격리 판단 (코드 작업 중, CLAUDE.md §4.5)

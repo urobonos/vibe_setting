@@ -793,50 +793,132 @@ if [ ! -f "$J10_SRC" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines
 # J-11. High(2026-08-07) — "href 개수" 가 아니라 "href 의 markdown 링크 뒤에 자기 요약(`—`)이
 #   있는가" 로 판별해야 한다. 그룹라벨 대표줄(href 는 1개, 뒤에 요약 없이 `…`만) 은 manual 보류돼야
 #   하고, 상태배지 라인(href 뒤에 정상 요약 있음) 은 배지 유무와 무관하게 정상 제거돼야 한다(오탐 방지).
-#   픽스처는 손으로 재현하지 않고 실 production MEMORY.md 에서 grep 으로 그대로 뜬다 — 손으로 재현한
-#   픽스처가 5라운드 연속 실 표기를 놓친 전례가 있다.
-mkdir -p "$FH/.claude/projects/projLabel/memory"
-REAL_GROUP_LABEL_LINE=$(grep -m1 -F 'infra-local-copy-stale](backlog_infra-local-copy-stale.md)' "$HOME/.claude/projects/C--Works-hongcafe-global-backend/memory/MEMORY.md" 2>/dev/null)
-[ -z "$REAL_GROUP_LABEL_LINE" ] && REAL_GROUP_LABEL_LINE='- 🟠 인프라·메시징·위생군 — [infra-local-copy-stale](backlog_infra-local-copy-stale.md)…'
-REAL_BADGE_LINE=$(grep -m1 -F 'step-developer-sonnet-measure](backlog_step-developer-sonnet-measure.md)' "$HOME/.claude/projects/C--Users-PV--claude/memory/MEMORY.md" 2>/dev/null)
-[ -z "$REAL_BADGE_LINE" ] && REAL_BADGE_LINE='- `[조건부]` [step-developer-sonnet-measure](backlog_step-developer-sonnet-measure.md) — step-developer sonnet 하향 후 반려 라운드 측정'
-{
-  echo "# Memory"
-  echo "## Backlog"
-  echo "$REAL_GROUP_LABEL_LINE"
-  echo "$REAL_BADGE_LINE"
-} > "$FH/.claude/projects/projLabel/memory/MEMORY.md"
-MEM_J11="$FH/.claude/projects/projLabel/memory/MEMORY.md"
+#   픽스처는 손으로 재현하지 않고 실 production MEMORY.md 에서 **형태를 정규식으로 동적 선택**한다
+#   (2026-08-07 콜드리뷰 R2 M2 — R1 에서 특정 slug(infra-local-copy-stale/step-developer-sonnet-measure)
+#   에 grep 을 하드 결합했더니, 그 slug 들이 인덱스에서 사라지는 것(이 hook 자신이 만드는 정상
+#   수명주기 — done 완료 시 지워진다)만으로 스위트가 영구 red 가 됐다. "실 인덱스에서 grep 으로
+#   뜬다"의 의도는 표기 추격을 끊는 것이지 특정 인스턴스에 결합하는 것이 아니다 — **형태를 잡고
+#   인스턴스는 잡지 않는다.** 11개 실 index 파일을 전수 스캔해 조건에 맞는 첫 라인을 매번 새로 찾는다.
+#   grep 패턴은 href 포맷에 의존하지 않는다(구 `backlog_slug.md` / 신 `.../backlog/date-slug.md` 공통).
+#   네이티브 Windows python3 는 POSIX 형(`/c/Users/...`) 경로를 이해 못 한다(`os.path.isdir` False) —
+#   `to_win_test()` 로 `C:/...` 로 변환해 넘긴다(2026-08-07 R2 자체발견 — extraction 이 항상 빈 값을
+#   반환해 J-11 이 setup-FAIL 조차 없이 조용히 아무 라인도 못 만드는 상태였다).
+J11_HOME_WIN=$(to_win_test "$HOME/.claude")
+J11_SCAN=$(python3 - "$J11_HOME_WIN" <<'PYEOF'
+import re, os, glob, sys
+home = sys.argv[1]
+index_files = sorted(glob.glob(os.path.join(home, "projects", "*", "memory", "MEMORY.md"))) + \
+              sorted(glob.glob(os.path.join(home, "projects", "*", "memory", "BACKLOG.md")))
+any_link_re = re.compile(r'backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s\]\)]+\.md')
+backlog_header_re = re.compile(r'^##\s+Backlog\b')
+section_header_re = re.compile(r'^##\s')
+own_summary_re = re.compile(r'^\s*—')
+# `[^)]*` prefix 필수(2026-08-07 R2 자체발견) — 이관 후 실 href 는 전부
+# `](../../../docs/working/backlog/{date}-{slug}.md)` 처럼 상대경로 prefix 를 달고 있다. prefix
+# 없이 `\(` 바로 뒤에 backlog_/backlog/ 를 요구하면 이 extraction 자체가 항상 0건을 반환해
+# (Critical 패치와 정확히 같은 버그를 이 테스트 스크립트가 스스로 재현하고 있었다) J-11-setup 이
+# 매번 FAIL 하거나(다행히 M1 가드 덕에 조용히 안 넘어가고 실제로 FAIL 했다) 픽스처가 안 만들어졌다.
+link_re = re.compile(r'\[([^\]]*)\]\([^)]*(backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s\]\)]+\.md)\)')
+badge_prefix_re = re.compile(r'^\s*-\s*`\[[^\]]+\]`\s*\[')
+slug_a_re = re.compile(r'backlog_([A-Za-z0-9_-]+)\.md')
+slug_b_re = re.compile(r'backlog/\d{4}-\d{2}-\d{2}-([A-Za-z0-9_-]+)\.md')
 
-# J-11a. 그룹라벨 대표줄 — done 처리해도 라인이 그대로 남아야 한다(manual 보류)
-cat > "$FH/.claude/docs/working/backlog/2026-08-02-infra-local-copy-stale.md" <<'EOF'
----
-name: infra-local-copy-stale
-metadata:
-  status: done
-  product: testprod
----
-x
-EOF
-backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-infra-local-copy-stale.md"
-J11A_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
-if grep -qF 'infra-local-copy-stale](backlog_infra-local-copy-stale.md)' "$MEM_J11"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] 그룹라벨 대표줄이 오삭제됨(High 회귀) — 실 표기: $REAL_GROUP_LABEL_LINE"); fi
-if echo "$J11A_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] manual 보류인데 △ 마커가 안 뜸 — 출력: $J11A_OUT"); fi
+group_ex = None
+badge_ex = None
+for idx_path in index_files:
+    try:
+        with open(idx_path, encoding='utf-8') as f:
+            lines = f.readlines()
+    except Exception:
+        continue
+    has_hdr = any(backlog_header_re.match(l) for l in lines)
+    in_sec = not has_hdr
+    for l in lines:
+        if has_hdr and section_header_re.match(l):
+            in_sec = bool(backlog_header_re.match(l)); continue
+        if has_hdr and not in_sec:
+            continue
+        links = any_link_re.findall(l)
+        if len(set(links)) != 1:
+            continue
+        m = link_re.search(l)
+        if not m:
+            continue
+        href = m.group(2)
+        sm = slug_a_re.search(href) or slug_b_re.search(href)
+        if not sm:
+            continue
+        slug = sm.group(1)
+        has_summary = bool(own_summary_re.match(l[m.end():]))
+        line = l.rstrip('\n')
+        if not has_summary and group_ex is None:
+            group_ex = (slug, href, line)
+        if has_summary and badge_ex is None and badge_prefix_re.match(l):
+            badge_ex = (slug, href, line)
+        if group_ex and badge_ex:
+            break
+    if group_ex and badge_ex:
+        break
 
-# J-11b. 상태배지 라인 — href 뒤 정상 요약이 있으므로 배지(`[조건부]`) 유무와 무관하게 정상 제거돼야 한다
-cat > "$FH/.claude/docs/working/backlog/2026-08-02-step-developer-sonnet-measure.md" <<'EOF'
----
-name: step-developer-sonnet-measure
-metadata:
-  status: done
-  product: testprod
----
-x
-EOF
-backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-step-developer-sonnet-measure.md"
-J11B_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
-if ! grep -qF 'step-developer-sonnet-measure](backlog_step-developer-sonnet-measure.md)' "$MEM_J11"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11b] 상태배지 라인이 정상 제거되지 않음(오탐 차단 회귀) — 실 표기: $REAL_BADGE_LINE"); fi
-if echo "$J11B_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11b] 정상 제거됐는데 ✓ 마커가 안 뜸 — 출력: $J11B_OUT"); fi
+if group_ex:
+    print("GROUP\t%s\t%s\t%s" % group_ex)
+if badge_ex:
+    print("BADGE\t%s\t%s\t%s" % badge_ex)
+PYEOF
+)
+GROUP_SLUG=$(echo "$J11_SCAN" | awk -F'\t' '$1=="GROUP"{print $2}')
+GROUP_HREF=$(echo "$J11_SCAN" | awk -F'\t' '$1=="GROUP"{print $3}')
+REAL_GROUP_LABEL_LINE=$(echo "$J11_SCAN" | awk -F'\t' '$1=="GROUP"{print $4}')
+BADGE_SLUG=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $2}')
+BADGE_HREF=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $3}')
+REAL_BADGE_LINE=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $4}')
+
+# M1(2026-08-07 콜드리뷰 R2) — line 뿐 아니라 **HREF·SLUG 도 개별로 빈값 가드**한다. 이전엔
+# `grep -qF "$GROUP_HREF" "$MEM_J11"` 에서 GROUP_HREF 가 빈 문자열이면 `grep -qF ""` 는 항상 참이라
+# J-11a 가 무조건 PASS 했다 — line 이 비지 않았어도 정규식 추출이 실패해 href 만 빌 수 있어서
+# line 단독 가드로는 안 잡힌다. line·href·slug 3개 전부를 개별로 확인한다.
+J11_SETUP_OK=1
+if [ -z "$REAL_GROUP_LABEL_LINE" ] || [ -z "$GROUP_HREF" ] || [ -z "$GROUP_SLUG" ]; then
+  FAIL=$((FAIL+1)); fail_lines+=("[J-11-setup] 그룹라벨 형태(단일 href, 요약 없음) 라인을 실 인덱스 11파일 전체에서 못 찾음 — line='$REAL_GROUP_LABEL_LINE' href='$GROUP_HREF' slug='$GROUP_SLUG'")
+  J11_SETUP_OK=0
+fi
+if [ -z "$REAL_BADGE_LINE" ] || [ -z "$BADGE_HREF" ] || [ -z "$BADGE_SLUG" ]; then
+  FAIL=$((FAIL+1)); fail_lines+=("[J-11-setup] 배지 형태(백틱대괄호 태그 접두 + 단일 href + 요약 있음) 라인을 실 인덱스 11파일 전체에서 못 찾음 — line='$REAL_BADGE_LINE' href='$BADGE_HREF' slug='$BADGE_SLUG'")
+  J11_SETUP_OK=0
+fi
+
+if [ "$J11_SETUP_OK" -eq 1 ]; then
+  mkdir -p "$FH/.claude/projects/projLabel/memory"
+  {
+    echo "# Memory"
+    echo "## Backlog"
+    echo "$REAL_GROUP_LABEL_LINE"
+    echo "$REAL_BADGE_LINE"
+  } > "$FH/.claude/projects/projLabel/memory/MEMORY.md"
+  MEM_J11="$FH/.claude/projects/projLabel/memory/MEMORY.md"
+
+  # J-11a. 그룹라벨 형태 — done 처리해도 라인이 그대로 남아야 한다(manual 보류)
+  printf -- '---\nname: %s\nmetadata:\n  status: done\n  product: testprod\n---\nx\n' "$GROUP_SLUG" \
+    > "$FH/.claude/docs/working/backlog/2026-08-02-${GROUP_SLUG}.md"
+  backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-${GROUP_SLUG}.md"
+  J11A_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+  if grep -qF "$GROUP_HREF" "$MEM_J11"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] 그룹라벨 대표줄이 오삭제됨(Critical 회귀) — 실 표기: $REAL_GROUP_LABEL_LINE"); fi
+  if echo "$J11A_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] manual 보류인데 △ 마커가 안 뜸 — 출력: $J11A_OUT"); fi
+  # J-11c(2026-08-07 콜드리뷰 R2 M3) — `manual_grouplabel` 신설 상태값·bash case arm 전용 단언.
+  # `△ 이동` 은 manual·noref·removed_partial·lock 실패·any_found=0 이 전부 내는 공용 마커라
+  # 이 신규 분기를 식별 못 한다. python 출력 문자열과 bash case 리터럴이 어긋나면 `*)` catch-all
+  # 로 떨어져 "인덱스 처리 실패(읽기/인코딩 오류 가능)" 라는 엉뚱한 진단이 나오는데 △ 마커만 보면
+  # green 이다 — 전용 메시지 문자열을 직접 grep 해 이 회귀를 막는다.
+  if echo "$J11A_OUT" | grep -qF '그룹라벨 대표항목'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11c] manual_grouplabel 전용 메시지가 안 뜸(case 리터럴 불일치로 catch-all 격하 가능성) — 출력: $J11A_OUT"); fi
+
+  # J-11b. 배지 형태 — href 뒤 정상 요약이 있으므로 배지 유무와 무관하게 정상 제거돼야 한다
+  printf -- '---\nname: %s\nmetadata:\n  status: done\n  product: testprod\n---\nx\n' "$BADGE_SLUG" \
+    > "$FH/.claude/docs/working/backlog/2026-08-02-${BADGE_SLUG}.md"
+  backlog_payload "$FH/.claude/docs/working/backlog/2026-08-02-${BADGE_SLUG}.md"
+  J11B_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+  if ! grep -qF "$BADGE_HREF" "$MEM_J11"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11b] 배지 라인이 정상 제거되지 않음(오탐 차단 회귀) — 실 표기: $REAL_BADGE_LINE"); fi
+  if echo "$J11B_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11b] 정상 제거됐는데 ✓ 마커가 안 뜸 — 출력: $J11B_OUT"); fi
+fi
 
 # ═══════════════════════════════════════════════════════════════════
 printf '\n────────────────────────────────────────\n'

@@ -59,7 +59,12 @@ mkdir -p "$INDEX_DIR" 2>/dev/null || exit 0
 find "$INDEX_DIR" -maxdepth 1 -name "$(basename "$INDEX_FILE").tmp.*" -mmin +1 -delete 2>/dev/null || true
 TMP="$INDEX_FILE.tmp.$$"
 GEN_TS=$(date +'%Y-%m-%d %H:%M')
-DOC_COUNT=$(find "$PRODUCT_DIR" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+# working/backlog/ 제외(2026-08-07 콜드리뷰 M3) — backlog 본문 저장처(product 무분리, 2026-08-06 이관)가
+# PRODUCT="working" 스캔에 그대로 잡혀 이 인덱스가 298건(89%) 으로 부풀었다. 이 파일은 CLAUDE.md §File
+# Paths 가 `/taskflow:analyze`·`plan` 의 "참조 범위 전수 조사" 진입점으로 규정하는 입력이라, 부풀면
+# 매 분석 단계 입력이 그만큼 커진다. backlog 는 태스크 문서가 아니라 별도 워크플로우(backlog-lifecycle.sh)
+# 전용 저장소이므로 이 인덱스의 스캔 대상이 아니다.
+DOC_COUNT=$(find "$PRODUCT_DIR" -type f -name '*.md' -not -path "$PRODUCT_DIR/backlog/*" 2>/dev/null | wc -l | tr -d ' ')
 
 {
   echo "# Document Index — ${PRODUCT}"
@@ -75,7 +80,7 @@ DOC_COUNT=$(find "$PRODUCT_DIR" -type f -name '*.md' 2>/dev/null | wc -l | tr -d
   # 성능: 파일당 grep/date/tr spawn(=O(4n), be 664 시 2분) 제거 →
   #   find -printf 로 mtime 동시 추출 + 단일 gawk 가 getline 으로 각 파일 첫 헤더 읽음.
   #   전체 프로세스 spawn = find + sort + awk = 3개 (파일 수 무관). 15s timeout 내 안착.
-  find "$PRODUCT_DIR" -type f -name '*.md' -printf '%p\t%TY-%Tm-%Td\n' 2>/dev/null \
+  find "$PRODUCT_DIR" -type f -name '*.md' -not -path "$PRODUCT_DIR/backlog/*" -printf '%p\t%TY-%Tm-%Td\n' 2>/dev/null \
     | LC_ALL=C sort \
     | awk -F'\t' -v base="$PRODUCT_DIR/" '
         {
