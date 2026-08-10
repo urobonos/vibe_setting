@@ -92,17 +92,26 @@ product_specs_dir() {
   echo "$(product_docs_root "${1:-$PWD}")/specs"
 }
 
-# 예약된 비-product docs/ 하위 디렉토리 이름(2026-08-07 콜드리뷰 R3 M9) — `backlog-lifecycle.sh` 의
-# product 예약이름 차단(8개)과 `doc-index-maintain.sh` 의 자기제외(2개)가 같은 사실("docs/ 아래 이
-# 이름들은 실제 product 트리가 아니라 공용 SSOT 디렉토리")을 서로 다른 목록으로 인코딩하고 있어
-# 하나가 늘어도 다른 쪽이 안 따라가면 곧 갈라진다. 공용 상수 1곳으로 올리고 양쪽이 참조한다.
-RESERVED_DOCS_NAMES="working indexing references hooks scripts share source_tree 참조문서"
+# 예약된 비-product docs/ 하위 디렉토리 이름(2026-08-07 콜드리뷰 R3 M9) — **backlog frontmatter 의
+# `product:` 값으로 쓸 수 없는 이름**의 단일 목록이다. `backlog-lifecycle.sh` 가 이 술어를 쓴다.
+#
+# **`doc-index-maintain.sh` 의 자기제외는 이 목록이 아니다(2026-08-10 H1).** 두 소비자의 질문이
+# 다르다 — 여기는 "product 값으로 쓸 수 있는가"(8개), 인덱싱은 "인덱싱하지 않는 디렉토리인가"
+# (indexing/references 2개). 두 집합은 그 2개에서만 겹치고, 하나로 묶었을 때 나머지 6개가 인덱싱에서
+# 빠져 라이브 인덱스 5개가 영구 동결됐다. 통합 유혹이 다시 오면 이 문단을 먼저 읽을 것.
+#
+# 배열 + readonly(2026-08-10 M8) — 문자열 + 비인용 `for n in $VAR` 분할은 호출부가 `IFS` 를 바꾼
+# 상태면 판정이 조용히 무너진다(현재 오염 0건이나, 5개 hook 이 source 하는 공용 lib 의 전역이라
+# 노출면이 넓다). 재 source 시 readonly 재할당 에러가 나지 않도록 미정의일 때만 선언한다.
+if [ -z "${RESERVED_DOCS_NAMES+x}" ]; then
+  readonly -a RESERVED_DOCS_NAMES=(working indexing references hooks scripts share source_tree 참조문서)
+fi
 
 # 대소문자 무관 비교(참조문서는 대소문자 개념이 없어 영향 없음) — 호출부가 원본 표기를 그대로 넘기면
 # 된다. 반환: 0=예약 이름(product 로 쓸 수 없음) / 1=아님.
 is_reserved_docs_name() {
   local name="${1,,}" n
-  for n in $RESERVED_DOCS_NAMES; do
+  for n in "${RESERVED_DOCS_NAMES[@]}"; do
     [ "$name" = "$n" ] && return 0
   done
   return 1

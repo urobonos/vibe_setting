@@ -1316,8 +1316,14 @@ if compgen -G "$FH_M5/.claude/docs/claude-harness/tasks/*/backlog/2026-08-04-j16
 #   product 값으로 거부돼야 한다. **이전 라운드는 8개 중 `references` 1개만 검증했다** — 하필 유일한
 #   비-ASCII 값(`참조문서`)이 "화이트리스트가 예약이름 검사보다 먼저 실행돼 도달 불가"(R2 M3) 결함을
 #   갖고 있었는데 그 축을 안 태워 green 으로 통과했다. 8개 전부 루프해 ASCII 7개 + 비-ASCII 1개를
-#   같은 방식으로 검증한다. 각 디렉토리를 FH 에도 실재시켜(값 매칭 자체를 검증 — 실재검사가 우연히
-#   막는 게 아님을 보장) 검사가 실제로 작동함을 보인다.
+#   검증한다. 각 디렉토리를 FH 에도 실재시켜(값 매칭 자체를 검증 — 실재검사가 우연히 막는 게 아님을
+#   보장) 검사가 실제로 작동함을 보인다.
+#
+#   **단 `-b` 축은 8개 중 7개만 유효하다(2026-08-10 M5 주석 정정).** `참조문서`(비-ASCII)는 예약가드를
+#   통째로 제거해도 `-b` 가 실패하지 않는다 — 그땐 화이트리스트(`*[!A-Za-z0-9_-]*`)가 값을
+#   `claude-harness` 로 치환해버려 `docs/참조문서/tasks/` 에는 애초에 아무것도 안 써지기 때문이다
+#   (실측: 예약가드 제거 사본에서 31 FAIL 중 이 건만 PASS). `-a`/`-c` 가 같은 축을 덮으므로 검증
+#   사각은 아니지만, "8개 전부 같은 방식" 이라는 이전 문장은 사실이 아니었다.
 J17_RESERVED_NAMES=(working indexing references hooks scripts share source_tree 참조문서)
 for J17_NAME in "${J17_RESERVED_NAMES[@]}"; do
   mkdir -p "$FH/.claude/docs/$J17_NAME"

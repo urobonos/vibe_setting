@@ -366,7 +366,11 @@ PYEOF
       if [ -n "$exact_match" ]; then
         actual_product_dir="$exact_match"
       else
-        echo "[backlog-lifecycle] $filename — product '$product' 대소문자 무관 매칭이 2건 이상($DOCS_ROOT 하위 공존, 임의 선택 대신 스킵): $(printf '%s ' $ci_matches)" >&2
+        # `"$ci_matches"` 인용 + `tr`(2026-08-10 M7) — 비인용 `printf '%s ' $ci_matches` 는 단어분할
+        # + 경로명 확장을 탄다. `~/.claude/docs/` 에 이미 공백 포함 디렉토리(`NAVER WORKS`)가 있어
+        # 경로가 조각나고, 이름에 glob 문자가 있으면 없는 경로로 치환된다. 하필 이 줄이 이 분기의
+        # 유일한 진단 출력이다.
+        echo "[backlog-lifecycle] $filename — product '$product' 대소문자 무관 매칭이 2건 이상($DOCS_ROOT 하위 공존, 임의 선택 대신 스킵): $(printf '%s' "$ci_matches" | tr '\n' ' ')" >&2
       fi
     elif [ "$match_count" -eq 1 ]; then
       actual_product_dir="$ci_matches"
@@ -725,10 +729,19 @@ PYEOF
         manual) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인에 다른 backlog entry 공존, 자동 삭제 안 함 — 수동 분리 필요" >&2 ;;
         manual_grouplabel) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인이 그룹라벨 대표항목이거나 href 가 markdown 링크 형식이 아님(href 뒤 개별 요약 확인 안 됨), 자동 삭제 안 함 — 라벨/요약/href 형식 직접 확인 필요" >&2 ;;
         noref) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인은 있으나 backlog 참조(backlog_ 또는 backlog/)가 없어 미삭제 — href 를 신 경로로 정정 필요" >&2 ;;
-        # sibling(2026-08-07 콜드리뷰 High) — index_incomplete 를 세우지 않는다: 이 라인은 같은 slug 를
-        # 다른 날짜로 참조하는 **정상 보존된 형제 entry** 다. 인덱스는 정확히 정리된 상태이므로 최종
-        # 마커도 ✓ 여야 한다(noref 와 반대로 "정정 필요" 안내를 하지 않는다 — 정정하면 형제가 방금
-        # 이동된 파일을 가리키게 되어 S1 이 막은 데이터 손실이 재현된다).
+        # sibling(2026-08-07 콜드리뷰 High) — index_incomplete 를 **이 arm 에서는** 세우지 않는다: 이
+        # 라인은 같은 slug 를 다른 날짜로 참조하는 **정상 보존된 형제 entry** 다(noref 와 반대로
+        # "정정 필요" 안내를 하지 않는다 — 정정하면 형제가 방금 이동된 파일을 가리키게 되어 S1 이
+        # 막은 데이터 손실이 재현된다).
+        #
+        # **다만 최종 마커가 ✓ 가 되는 것은 아니다(2026-08-10 M3 주석 정정).** 아래 R2 M2 대로
+        # `any_found` 를 안 세우므로, sibling **단독**(같은 파일에 removed/manual 이 함께 없는 경우)
+        # 이면 `:757` 의 `any_found -eq 0` 분기가 `index_incomplete=1` 을 세워 결국 `△` 가 된다.
+        # 이것이 의도한 동작이다 — 형제가 있다는 것과 "이 backlog 자신의 entry 를 정리했다" 는 서로
+        # 다른 사실이고, 자기 entry 가 어디에도 없으면 미발견 경고가 맞다. 실측(294 slug 재시뮬):
+        # 라이브 sibling 6셀은 100% `△`, `✓` 는 실 데이터에 한 번도 나오지 않는다.
+        # 이전 주석은 "최종 마커도 ✓ 여야 한다" 고 단언해 코드와 정반대였다 — 이 파일 헤더 :19 가
+        # 기록한 "헤더가 구현과 반대로 적혀 다음 라운드를 또 뒤집게 만든" 실패의 재발이었다.
         # **`any_found` 는 세우지 않는다(2026-08-07 콜드리뷰 R2 M2)** — sibling 은 "이 slug 문자열의
         # 어떤 entry" 를 찾은 것이지 "이 backlog(오늘 done 처리한 그 파일) 자신의 entry" 를 찾은 게
         # 아니다. any_found 로 같이 세면, 이 backlog 자신의 entry 가 인덱스 어디에도 없는데 형제만
