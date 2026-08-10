@@ -98,7 +98,7 @@
   - **(a) worktree 항상 강제:** 모든 소스 mutation = worktree 안 (claude-harness 포함 전 영역). 위반 차단·worktree add 안내 = `worktree-enforce.sh` (exit 2 stderr) SSOT.
   - **(b) feature 분기 = 사용자 요청 시:** 신규 = `/git:create` / 기존 수정 = `/git:merge` (자동 강제 폐기). 절차 = command SSOT.
   - **(c) Functional exemption:** 목록·패턴·건수 = `worktree-enforce.sh` SSOT (차단 stderr 가 전량 출력 — 카운트는 hook 헤더가 SSOT, 본문 미기재로 drift 방지).
-  - **(c-2) git 미연동 cwd 면제:** cwd ∉ git work-tree 면 면제 (pwd 기준). **§3 우선:** git repo 내 신규 디렉토리 mutation 은 면제 무관 차단. 판정 = `worktree-enforce.sh` SSOT.
+  - **(c-2) git 미연동 면제 = target 기준 (2026-08-04 정정):** **편집 대상 파일**이 git work-tree 밖이면 면제. **cwd 위치는 판정에 쓰지 않는다** — 구 cwd 기준 면제는 "cwd 가 git 밖인 세션(예: infra)에서 다른 레포를 편집하면 무검사 통과"라는 구멍이었다(2026-08-04 실증·제거). **§3 우선:** git repo 내 신규 디렉토리 mutation 은 면제 무관 차단. 판정 = `worktree-enforce.sh` SSOT.
   - **(d) `git push` 전면 금지 (핵심):** 어떤 분기·시나리오·옵션(`--delete`·`--force-with-lease` 포함)에서도 Claude 자동 push 금지 — 사용자 직접만. 예외 없음 (기한부 예외 2026-07-31 만료). force-push·phpunit 게이트 = `branch-enforce.sh` 헤더 + §(1) SSOT.
   - **(e) master/main 머지·체크아웃·switch 절대 금지 (핵심):** 8 target ref + chained 우회 모두 Claude 자동 호출 금지 — 사용자 직접만. ref 목록·패턴 = `git-guard.py` `MASTER_TARGETS` + `branch-enforce.sh` §(1.5) SSOT.
   - **(f) worktree 정착 = Claude 자동:** ff머지 / cherry-pick fallback / worktree remove / `branch -D wip/*` 자동 수행. **단 master/main 머지·checkout·switch·cherry-pick 은 정착에서도 차단 — source = main/master 면 정착 금지 (PR 절차로 대체, 핵심).** 절차·면제 경계 = `custom-plugin/git/commands/{create,merge}.md` + `branch-enforce.sh` §(1.5)(1.6) SSOT.
@@ -131,7 +131,7 @@
     - **(a) 후속 권고 자동 채택** — 직전 응답 후속 권고·잔여 액션·옵션 분기를 다시 묻지 않고 기본 옵션으로 끝까지 진행. backlog/USER-DECISION 발생 시 bounded `/taskflow:debate` 1회 spawn 정책 = `custom-plugin/taskflow/commands/auto.md` §"Backlog 토론 spawn 정책 (bounded)" SSOT.
     - **(b) self-critique 루프 (Claude 본체 책임)** — 각 단계 완료 직후 직접 검증, FAIL/WARN·hook 차단·양식 누락 0건까지 자동 반복. **재시도 5회 한도.** **§3 매칭 항목 발견 시 직접 수정 금지 — 즉시 사용자 보고 + 명시 승인 대기 후 재진입.**
     - **(c) 종료 sentinel 자동 부착** — 모든 작업 + self-critique 통과 후 응답 **마지막 줄** sentinel 부착: **`[AUTO-ITERATE-DONE]`** (잔여 0건) / **`[AUTO-ITERATE-USER-DECISION]`** (사용자 결정 영역 잔여 — §3 매칭·옵션 분기·외부 시스템 변경). 자연어 표현 ("작업 완료") 만으로는 hook 통과 불가. **`USER-DECISION` 은 (3-2) ladder 통과 후에만 부착.**
-    - **(d) Stop 자동 차단 + 재진입** — gate=2 + 작업 미완료 + sentinel 미부착 시 `auto-iterate-stop-guard.sh` 가 exit 2 차단 → 자동 재진입 (**5회 한도**). §3 매칭 시 개별 guard hook 이 재진입을 먼저 차단 — 루프가 §3 우회 통로로 작동하지 않는다.
+    - **(d) Stop 자동 차단 + 재진입** — gate=2 + 작업 미완료 + sentinel 미부착 시 `auto-iterate-stop-guard.sh` 가 exit 2 차단 → 자동 재진입 (**5회 한도**). §3 매칭 시 차단 경로 = (5) 우선순위 매트릭스.
   - **(3-2) 결정 escalation ladder + 단계 전이 (4축 밖 게이트 — 4축 번호 구조 불변):**
     - **역방향 (필수):** `USER-DECISION` 부착 **전** 분류 — 권한형 (P1 §3 / P2 사업 판단 / P3 외부 상태 변경 / P4 하니스 룰·가드) 또는 **판정 불확실 = 즉시 사용자** (fail-safe, §3 "불확실 시 발동" 상속). 정보 부족형 (I1 조사 / I2 대안 / I3 세부 구현) 만 bounded `/taskflow:analyze`→`/taskflow:plan` 재진입 자체 해소, 미해소 시 조사결과 첨부 USER-DECISION. **판정 기준 = "무엇을 묻는가"가 아니라 "무엇을 하게 되는가"** (조사로 답 나와도 DB 스키마 변경 수반 시 P1). 판별식·bounded·로그표 = `execute.md` §"결정 escalation ladder".
     - **순방향:** `/taskflow:analyze` 완료 + **수정 대상 ≥ 1건** + gate=2 → `/taskflow:plan` 자동 진입 (전이 사유 1줄 보고, 침묵 전이 금지). **진단성 분석 (수정 대상 0건) = 전이 금지** — §4.2 "audit 결과 자동 수정 금지" 우선. gate 미활성 = 정지 + 1줄 확인. SSOT = `custom-plugin/taskflow/commands/analyze.md` §"단계 전이".
@@ -151,4 +151,4 @@
 
 ## 5. Skill & Slash Inventory
 
-> **카탈로그 외부화 (2026-06-23):** user-invocable/internal skill 전체 표·자동화 분류(A/B/C)·카운트·`commands/.md` 매핑·동기화 규칙 = **SSOT `~/.claude/docs/references/skill-inventory.md`**. 스킬 목록·description 은 하니스가 세션 시작 시 `available-skills` 카탈로그로 자동 등재하므로 본문 중복을 제거했다. 신규/삭제/rename/자동화 강도 변경 시 = 그 파일 §5.1 표 갱신, 절차 SSOT = `skills/skill-creator/SKILL.md` §"인벤토리 동기화 규칙".
+> **카탈로그 외부화 (2026-06-23):** user-invocable/internal skill 전체 표·자동화 분류(A/B/C)·카운트·`commands/*.md` 매핑·동기화 규칙 = **SSOT `~/.claude/docs/references/skill-inventory.md`**. 스킬 목록·description 은 하니스가 세션 시작 시 `available-skills` 카탈로그로 자동 등재하므로 본문 중복을 제거했다. 신규/삭제/rename/자동화 강도 변경 시 = 그 파일 §5.1 표 갱신, 절차 SSOT = `skills/skill-creator/SKILL.md` §"인벤토리 동기화 규칙".

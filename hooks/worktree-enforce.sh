@@ -27,7 +27,6 @@
 #   13. */.claude/skills/*           (스킬 정의 — commands(#12) 동질 path 면제, 2026-07-06)
 #   14. */.claude/README.md          (하니스 카탈로그 문서 — CLAUDE.md(#11) 동질, 라이브/문서 성격, 2026-07-06)
 #   15. */.claude/custom-plugin/*    (플러그인 commands/skills — hooks(#9)/commands(#12)/skills(#13) 동질 라이브 발효. git 추적 전환(2026-07-15)으로 #10 gitignore 면제 소멸 → 명시 path 면제 승격, backlog worktree-exempt-plugin-drift 해소)
-#   16. */.claude/PERSONA.md         (persona-reminder 훅 매 턴 주입 페이로드 — CLAUDE.md(#11)/README.md(#14) 동질 루트 하니스 문서, 2026-07-21)
 #
 # SSOT: CLAUDE.md §4.3 "worktree 항상 강제" + 본 hook
 # 짝 hook: worktree-prompt-detect.sh (UserPromptSubmit 안내) + custom-plugin/git/commands/{create,merge}.md
@@ -55,7 +54,6 @@ is_exempt_path() {
     */.claude/commands/*)            return 0 ;;  # #12
     */.claude/skills/*)              return 0 ;;  # #13
     */.claude/README.md)             return 0 ;;  # #14
-    */.claude/PERSONA.md)            return 0 ;;  # #16 (CLAUDE.md#11/README.md#14 동질 루트 하니스 문서 — persona-reminder 훅 매 턴 주입 페이로드, 2026-07-21)
     */.claude/custom-plugin/*)       return 0 ;;  # #15
     C:/Works/infra/*|/c/Works/infra/*) return 0 ;;  # #8
   esac
@@ -216,12 +214,22 @@ if [ -d "$_wt_tdir" ] && ! git -C "$_wt_tdir" rev-parse --is-inside-work-tree >/
   exit 0
 fi
 
-# git 미연동 cwd 면제 (2026-05-26): worktree 는 git 기능 — cwd 가 git work-tree 가
-# 아니면 worktree 생성 자체가 불가능하므로 강제 차단 시 모든 작업이 막힌다. pwd 기준 판정
-# (신규 디렉토리 우회 구멍은 위 target 최근접 조상 판정으로 해소).
-if ! git -C "$(pwd)" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  exit 0
-fi
+# [2026-08-04 제거] 구 "git 미연동 cwd 면제" (2026-05-26 도입) 블록이 여기 있었다:
+#   if ! git -C "$(pwd)" rev-parse --is-inside-work-tree; then exit 0; fi
+#
+# 제거 사유: 위 target 판정(:213)이 이미 "target 이 repo 밖이면 통과"를 정확히 처리하므로,
+#   cwd 기준 면제가 추가로 덮는 경우는 **"target 은 repo 안인데 cwd 가 밖"** 하나뿐이고
+#   그게 정확히 막아야 할 케이스였다. 면제의 선언 근거("cwd 가 git 밖이면 worktree 생성 자체가
+#   불가능")는 target 이 다른 repo 안이면 성립하지 않는다 — 그 repo 에 worktree 를 만들 수 있다.
+#
+# 실증(2026-08-04): cwd=C:\works\infra(git 미연동) 세션에서 BE 레포
+#   app/Modules/Shared/Config/Services.php 를 Edit 했는데 exit 0 으로 통과했다.
+#   merge 충돌 해결이 원본 레포에서 일어나 §4.3(a) 위반이 무검사로 성립했다.
+#   백슬래시 경로 문제가 아니다 — :94 정규화·dirname·git -C 전부 정상 동작 확인(bash -x).
+#
+# 결과: target ∉ git work-tree → :213 이 면제(git 미연동 프로젝트 작업은 그대로 통과).
+#       target ∈ git work-tree → 차단(worktree 강제) — cwd 위치와 무관.
+# SSOT: CLAUDE.md §4.3 (c-2) + memory backlog_worktree-enforce-backslash-bypass
 
 # Bash 모드: FILE_PATH = pwd 이므로 위 면제로 cwd 자동 처리됨
 # (별도 cwd 보조 검사 = Edit 모드 우회 통로 → 제거 2026-05-20 fix)
@@ -235,7 +243,7 @@ echo "                신규 작업 = git worktree add ~/.claude/worktrees/{sid}
 echo "                기존 feature 수정 = git worktree add ~/.claude/worktrees/{sid}-{slug} feature/X" >&2
 echo "              면제 14건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
 echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json /" >&2
-echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md / .claude/commands/* / .claude/skills/* / .claude/README.md / .claude/PERSONA.md" >&2
+echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md / .claude/commands/* / .claude/skills/* / .claude/README.md" >&2
 echo "              SSOT: CLAUDE.md §4.3 \"worktree 항상 강제\"" >&2
 command -v log_event >/dev/null 2>&1 && log_event "worktree-enforce" "block" "reason=worktree-required"
 exit 2
