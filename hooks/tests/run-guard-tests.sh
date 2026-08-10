@@ -1504,6 +1504,101 @@ if [ -f "$FH/.claude/docs/working/backlog/2026-08-05-j23nolib.md" ]; then PASS=$
 if ! find "$FH/.claude/docs/references" -name '*j23nolib*' 2>/dev/null | grep -q .; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-23b] lib 부재 시 예약 SSOT 디렉토리(references)에 파일이 써짐(M1 회귀)"); fi
 if echo "$J23_OUT" | grep -qF 'fail-closed'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-23c] lib 부재 경고(fail-closed)가 안 뜸 — 침묵 fail-open(M1 회귀) — 출력: $J23_OUT"); fi
 
+# J-24. M1-③(2026-08-10) — stale lock 회수 경로가 재시도 카운터를 우회해 무한 스핀.
+#   `rmdir` 이 실패하는 lock(비어있지 않은 디렉토리)이 TTL 을 넘기면, 이전 코드는
+#   [stale 판정 → rmdir 실패 → continue] 를 카운터 증가 없이 반복해 종료 조건이 없었다.
+#   종료가 hook timeout 에만 의존했고 timeout 은 함수가 아니라 hook 전체를 죽인다.
+#   ⚠ `docs/projA` 를 여기서 만든다 — 이게 없으면 product 실재 검증(S2)이 lock 획득 **앞**에서
+#   `return 1` 해버려 이 케이스가 lock 코드를 한 줄도 안 태운 채 통과한다(2026-08-10 실측:
+#   수정 전 판본으로 반증했는데 PASS 가 나와 발견). J-20 이 겪은 "구조적으로 실패할 수 없는
+#   fixture" 와 같은 유형이다.
+mkdir -p "$FH/.claude/docs/projA"
+J24_LOCK="$TMP/j24stale.lock.d"
+mkdir -p "$J24_LOCK"
+: > "$J24_LOCK/blocker"                                   # rmdir 실패 유도 (비어있지 않음)
+touch -t 202001010000 "$J24_LOCK" 2>/dev/null             # mtime 과거 → stale 판정 성립
+cat > "$FH/.claude/docs/working/backlog/2026-08-05-j24stale.md" <<'EOF'
+---
+name: j24stale
+metadata:
+  status: done
+  product: projA
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-05-j24stale.md"
+J24_START=$(date +%s)
+J24_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$J24_LOCK" BACKLOG_INDEX_LOCK_TTL_MIN=1 \
+  BACKLOG_INDEX_LOCK_RETRIES=3 BACKLOG_INDEX_LOCK_SLEEP=0.05 \
+  timeout 30 bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+J24_RC=$?
+J24_ELAPSED=$(( $(date +%s) - J24_START ))
+if [ "$J24_RC" -ne 124 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-24a] stale lock 회수가 무한 스핀(30s timeout 도달) — M1-③ 회귀. 경과 ${J24_ELAPSED}s"); fi
+if [ "$J24_ELAPSED" -lt 10 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-24b] stale lock 회수가 재시도 상한(3회×0.05s)보다 오래 걸림 ${J24_ELAPSED}s — 카운터 우회 의심"); fi
+rm -f "$J24_LOCK/blocker" 2>/dev/null; rmdir "$J24_LOCK" 2>/dev/null
+
+# J-25. M1-①(2026-08-10) — 원자 교체 도입 후 `.tmp` 잔해가 정상 경로에 남지 않아야 한다.
+#   tmp+os.replace 로 바꾸면서 성공 경로에서 rename 이 빠지면 원본은 그대로인데 tmp 만 쌓인다
+#   (인덱스·history·backlog 본문 3곳). 정상 이동 1건 후 트리 전체에 *.tmp 0건을 고정한다.
+mkdir -p "$FH/.claude/docs/projA"   # product 실재 검증(S2) 통과용 — projA 는 memory 경로일 뿐 docs 트리가 아니다
+cat > "$FH/.claude/docs/working/backlog/2026-08-05-j25tmp.md" <<'EOF'
+---
+name: j25tmp
+metadata:
+  status: done
+  product: projA
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-05-j25tmp.md"
+J25_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+J25_TMPCNT=$(find "$FH/.claude" -name '*.tmp' 2>/dev/null | grep -c . || true)
+if [ "${J25_TMPCNT:-0}" -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-25a] 원자 교체 후 .tmp 잔해 ${J25_TMPCNT}건 — rename 누락(M1-① 회귀) — 출력: $J25_OUT"); fi
+if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-05-j25tmp.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-25b] 원자 교체 도입이 정상 이동을 깨뜨림 — 출력: $J25_OUT"); fi
+# J-25c. 위 a/b 만으로는 **원자 교체를 통째로 걷어내도 통과한다** (tmp 를 안 만들면 잔해도 0이고
+#   이동은 그대로 되므로). 이 코드베이스의 규율은 "걷어내면 깨지는 테스트만 검증으로 센다" 이므로
+#   `os.replace` 호출 3곳(backlog 본문 / 인덱스 / history)을 정적으로 고정한다. summary.md 는
+#   append 라 truncate 위험이 없어 대상이 아니다.
+J25_REPL=$(grep -c 'os\.replace(' "$HOOKS_DIR/backlog-lifecycle.sh")
+if [ "${J25_REPL:-0}" -ge 3 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-25c] os.replace 원자 교체가 ${J25_REPL}곳뿐 — 3곳(본문·인덱스·history) 필요. 직접 'w' 쓰기로 되돌아가면 kill 시 truncate(M1-① 회귀)"); fi
+
+# J-26. M1-②(2026-08-10) — index lock 이 history.md·summary.md 갱신까지 덮어야 한다.
+#   release 가 그 둘보다 앞서면 동시 done 처리 시 read-modify-write 가 무보호로 겹쳐 한쪽 entry 가
+#   사라진다. 동시성 재현은 불안정하므로 **호출 순서를 정적으로 고정**한다 (release 를 다시 앞으로
+#   옮기면 이 케이스가 깨진다).
+J26_SRC="$HOOKS_DIR/backlog-lifecycle.sh"
+J26_REL=$(grep -n 'index_locked" -eq 1 \] && backlog_index_lock_release' "$J26_SRC" | tail -1 | cut -d: -f1)
+J26_HIST=$(grep -n 'python3 - "\$history"' "$J26_SRC" | tail -1 | cut -d: -f1)
+J26_SUMM=$(grep -n '# summary.md 갱신' "$J26_SRC" | tail -1 | cut -d: -f1)
+if [ -n "$J26_REL" ] && [ -n "$J26_HIST" ] && [ -n "$J26_SUMM" ] && [ "$J26_REL" -gt "$J26_HIST" ] && [ "$J26_REL" -gt "$J26_SUMM" ]; then
+  PASS=$((PASS+1))
+else
+  FAIL=$((FAIL+1)); fail_lines+=("[J-26] index lock release(:$J26_REL) 가 history(:$J26_HIST)·summary(:$J26_SUMM) 갱신보다 앞섬 — 두 파일이 무보호(M1-② 회귀)")
+fi
+
+# J-27. M1-④(2026-08-10) — `error` arm 이 any_found 를 안 세워 **원인이 다른 경고가 겹쳐 나온다**.
+#   인덱스 읽기가 깨졌는데(인코딩·IO) "전 project index 에서 entry 미발견, 수동 정리 필요" 가 함께
+#   찍히면 조사자는 인덱스 등재 여부를 보러 가지만 실제로 볼 것은 파일 인코딩이다.
+#   유도: 인덱스 파일에 잘못된 UTF-8 바이트를 넣어 python open(encoding='utf-8') 을 UnicodeDecodeError
+#   로 떨어뜨린다(실측 확인). 이 slug 는 어떤 인덱스에도 없어서, 구 코드에서는 error 든 notfound 든
+#   any_found=0 이 되어 미발견 경고가 반드시 따라붙는다.
+mkdir -p "$FH/.claude/projects/projErr/memory"
+printf 'x\xff\xfe\xffy\n' > "$FH/.claude/projects/projErr/memory/MEMORY.md"
+cat > "$FH/.claude/docs/working/backlog/2026-08-05-j27encerr.md" <<'EOF'
+---
+name: j27encerr
+metadata:
+  status: done
+  product: projA
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-05-j27encerr.md"
+J27_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if echo "$J27_OUT" | grep -qF '인덱스 처리 실패'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-27a] 인덱스 읽기 실패 경고가 안 뜸 — fixture 가 error arm 을 못 태움(구조적 무효 케이스) — 출력: $J27_OUT"); fi
+if ! echo "$J27_OUT" | grep -qF 'entry 미발견'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-27b] 읽기 실패인데 '미발견' 경고가 겹쳐 나옴 — 조사자를 엉뚱한 원인으로 보낸다(M1-④ 회귀) — 출력: $J27_OUT"); fi
+rm -f "$FH/.claude/projects/projErr/memory/MEMORY.md" 2>/dev/null   # 이후 케이스 오염 방지
+
 # ═══════════════════════════════════════════════════════════════════
 printf '\n────────────────────────────────────────\n'
 if [ ${#fail_lines[@]} -gt 0 ]; then

@@ -99,8 +99,13 @@ backlog_index_lock_acquire() {
   local i=0
   while ! mkdir "$BACKLOG_INDEX_LOCK" 2>/dev/null; do
     if [ -d "$BACKLOG_INDEX_LOCK" ] && find "$BACKLOG_INDEX_LOCK" -maxdepth 0 -mmin "+$BACKLOG_INDEX_LOCK_TTL_MIN" 2>/dev/null | grep -q .; then
+      # 카운터를 여기서도 올린다(2026-08-10 M1-③) — 이전엔 이 `continue` 가 카운터를 우회해서
+      # `rmdir` 이 계속 실패하면(권한·핸들 점유·비어있지 않은 lock 디렉토리) 같은 판정을 무한 반복했다.
+      # 종료가 hook timeout 에만 의존했고, timeout 은 이 함수가 아니라 hook 전체를 죽인다.
+      i=$((i + 1))
       rmdir "$BACKLOG_INDEX_LOCK" 2>/dev/null
       echo "[backlog-lifecycle] stale index lock 회수 (>${BACKLOG_INDEX_LOCK_TTL_MIN}min orphan): $BACKLOG_INDEX_LOCK" >&2
+      [ "$i" -ge "$BACKLOG_INDEX_LOCK_RETRIES" ] && { echo "[backlog-lifecycle] stale lock 회수 반복 실패 — 포기: $BACKLOG_INDEX_LOCK" >&2; return 1; }
       continue
     fi
     i=$((i + 1))
@@ -415,9 +420,10 @@ PYEOF
   # metadata: 하위 status: 라인과 같은 들여쓰기로 그 바로 뒤에 삽입한다 — 최상위(컬럼 0)에 붙이면
   # frontmatter 계약(`metadata:` 하위에 status/product/created/completed 통일)이 깨진다(콜드리뷰 R2 Medium-5).
   python3 - "$win_backlog" "$today_date" <<'PYEOF' 2>/dev/null
-import sys, re
+import sys, re, os
 file_path = sys.argv[1]
 date_str = sys.argv[2]
+tmp_path = None
 try:
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         content = f.read()
@@ -438,10 +444,20 @@ try:
             else:
                 new_fm = fm.rstrip() + f"\ncompleted: {date_str}"
             content = content.replace(m.group(0), f"---\n{new_fm}\n---\n", 1)
-            with open(file_path, 'w', encoding='utf-8') as f:
+            # 원자 교체(2026-08-10 M1-①) — 직접 'w' 로 열면 truncate 직후 kill(hook timeout 10s)될 때
+            # 이 backlog 본문이 0바이트로 남는다. 이 파일은 곧 mv 될 사용자 데이터라 복구가 수동이다.
+            # tmp 에 완전히 쓴 뒤 os.replace(같은 디렉토리 = 같은 볼륨, 원자적)로 갈아끼운다.
+            tmp_path = file_path + '.tmp'
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 f.write(content)
+            os.replace(tmp_path, file_path)
 except Exception:
-    pass
+    # tmp 잔해 정리 — 실패 시 원본은 손상되지 않았고 tmp 만 남는다
+    try:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    except Exception:
+        pass
 PYEOF
 
   # 이동 — lock 밖(콜드리뷰 R2 M7 잔여 위험 주석) — 아래 sibling 파일존재 검증(index lock 안, python)
@@ -668,8 +684,21 @@ for index_path in index_paths:
                 continue
             changed = True
         if changed:
-            with open(index_path, 'w', encoding='utf-8') as f:
-                f.writelines(out)
+            # 원자 교체(2026-08-10 M1-①) — MEMORY.md/BACKLOG.md 는 사용자가 직접 관리하는 인덱스라
+            # truncate 직후 kill 되면 목록 전체가 날아간다(hook timeout 10s, 이관 후 이 hook 이
+            # 실제로 timeout 을 친 이력이 있다). tmp + os.replace 로 부분 상태를 만들지 않는다.
+            idx_tmp = index_path + '.tmp'
+            try:
+                with open(idx_tmp, 'w', encoding='utf-8') as f:
+                    f.writelines(out)
+                os.replace(idx_tmp, index_path)
+            except Exception:
+                try:
+                    if os.path.exists(idx_tmp):
+                        os.remove(idx_tmp)
+                except Exception:
+                    pass
+                raise
         # manual 사유 분기(2026-08-07 콜드리뷰 M1) — multi(다른 entry 와 같은 줄 공존) 와 grouplabel
         # (href 뒤 개별 요약 없음, 그룹 대표줄)은 사용자가 취해야 할 조치가 다르다. multi 는 실제로
         # 존재하는 형제 entry 를 찾아 분리해야 하고, grouplabel 은 애초에 분리할 형제 entry 가 없다 —
@@ -750,7 +779,14 @@ PYEOF
         # any_found 갱신에서는 분리한다. 메시지 자체는 아래 공통 블록(M8)에서 status 무관하게 낸다.
         sibling) ;;
         notfound) ;;
-        *) index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 인덱스 처리 실패(읽기/인코딩 오류 가능) — 수동 확인 필요" >&2 ;;
+        # `any_found=1` 을 세운다(2026-08-10 M1-④) — 이 arm 은 "entry 를 못 찾은 것" 이 아니라
+        # "찾으러 갔다가 읽기·인코딩 오류로 실패한 것" 이다. 안 세우면 아래 `any_found -eq 0` 이
+        # 추가로 발동해 "전 project index 에서 entry 미발견, 수동 정리 필요" 라는 **원인이 다른**
+        # 경고가 겹쳐 나온다 — 조사자를 인덱스 등재 여부로 보내지만 실제로 볼 것은 파일 인코딩이다.
+        # sibling arm 이 any_found 를 일부러 안 세우는 것(R2 M2)과 다른 사안이다: sibling 은 "다른
+        # backlog 의 entry 를 본 것" 이라 이 slug 에 대해서는 정말 미발견이 맞지만, error 는 이
+        # slug 를 대상으로 실제 조회가 일어났고 그 조회가 깨진 것이다.
+        *) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 인덱스 처리 실패(읽기/인코딩 오류 가능) — 수동 확인 필요" >&2 ;;
       esac
       # sibling 보고는 status 와 무관하게 항상 낸다(2026-08-07 콜드리뷰 R3 M8) — 이전엔 python 쪽
       # status 결정에서 `elif sibling` 이 최하단이라, 같은 파일의 다른 라인이 changed/manual 을
@@ -762,7 +798,10 @@ PYEOF
       fi
     done <<< "$idx_out"
   fi
-  [ "$index_locked" -eq 1 ] && backlog_index_lock_release
+  # lock release 는 함수 끝(history·summary 갱신 뒤)으로 옮겼다(2026-08-10 M1-②) — 여기서 풀면
+  # 이후 history.md·summary.md 갱신이 무보호로 남아 두 세션이 동시에 done 처리할 때 한쪽 entry 가
+  # 사라진다(둘 다 read-modify-write). 점유가 길어지는 대가는 측정했다: 사이에 낀 고아 스캔이
+  # 17 project 에 0.275s, history/summary 는 각 1회 쓰기 — hook timeout 10s 대비 무시할 수준이다.
   if [ "$any_found" -eq 0 ]; then
     index_incomplete=1
     echo "[backlog-lifecycle] slug '$slug' — 전 project index(MEMORY.md/BACKLOG.md 전수)에서 entry 미발견, 수동 정리 필요" >&2
@@ -792,7 +831,7 @@ PYEOF
     "$slug" "$yyyymmdd" "$filename")
 
   python3 - "$history" "$today_dot" "$entry_line" "$filename" <<'PYEOF'
-import sys
+import sys, os
 history_path, today_dot, entry_line, filename = sys.argv[1:5]
 with open(history_path, 'r', encoding='utf-8') as f:
     content = f.read()
@@ -832,8 +871,19 @@ else:
     else:
         new_lines = [header, '', entry_line, ''] + lines
 
-with open(history_path, 'w', encoding='utf-8') as f:
-    f.write('\n'.join(new_lines))
+# 원자 교체(2026-08-10 M1-①) — history.md 는 누적 이력이라 truncate 후 kill 되면 전 이력이 사라진다.
+_tmp = history_path + '.tmp'
+try:
+    with open(_tmp, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(new_lines))
+    os.replace(_tmp, history_path)
+except Exception:
+    try:
+        if os.path.exists(_tmp):
+            os.remove(_tmp)
+    except Exception:
+        pass
+    raise
 PYEOF
 
   # summary.md 갱신
@@ -846,6 +896,10 @@ PYEOF
     printf -- "- [backlog/%s](backlog/%s) — working backlog 완료 → tasks/ 자동 이동\n" \
       "$slug" "$filename" >> "$summary"
   fi
+
+  # index lock 해제 — 인덱스·history·summary 3파일의 read-modify-write 를 모두 덮은 뒤 푼다(M1-②).
+  # 이 함수는 acquire 이후 여기까지 중간 return 이 없다(확인 완료) — 경로가 하나라 trap 없이 안전하다.
+  [ "$index_locked" -eq 1 ] && backlog_index_lock_release
 
   if [ "$index_incomplete" -eq 0 ]; then
     echo "[backlog-lifecycle] ✓ 이동: $filename → ${product}/tasks/$yyyymmdd/backlog/${filename}" >&2
