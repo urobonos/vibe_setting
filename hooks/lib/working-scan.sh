@@ -55,8 +55,10 @@ working_scan() {
       emit()
       seen=FILENAME; path=FILENAME
       n=split(FILENAME, pp, "/"); fname=pp[n]
-      # 날짜 폴더(YYYYMMDD)만 태스크로 본다 — backlog/·dispatch/ 등 비-날짜 폴더는 사용자 관리
-      #   잔여물이지 tick 이 claim 할 대상이 아니다. product 매칭에 기댈 수 없다 — 파일명 규약
+      # 날짜 폴더(YYYYMMDD)만 태스크로 본다 — 비-날짜 폴더는 성격이 서로 다르지만 어느 쪽도
+      #   tick 이 claim 할 대상이 아니다: `backlog/` 는 사용자 관리 잔여 목록,
+      #   `dispatch/` 는 다세션 분배 풀(`dispatch-utils.sh` 가 claim/done 을 따로 관리한다).
+      #   product 매칭에 기댈 수 없다 — 파일명 규약
       #   `{yyyy-mm-dd}-{slug}.md` 에 product 토큰이 없는데 slug 앞머리가 docs/ 디렉토리명과
       #   겹치면 통과한다(실측: `hooks-guard-followups` → product=hooks). `^[0-9]{8}$` 는 이미
       #   working-heartbeat.sh·working-lifecycle.sh·working-register.sh·output-naming-check.sh·
