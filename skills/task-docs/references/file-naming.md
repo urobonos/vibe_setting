@@ -11,6 +11,16 @@
 - `tasks/` 하위: `{yyyy-mm-dd}-{작업명}-{type}.md`
 - `output/` 하위: `{yyyy-mm-dd}-{topic-slug}-{type}.md`
 
+### 예외 — `tasks/{작업명}/steps/` (2026-08-03)
+
+step 평면 파일만 날짜 prefix 를 면제한다: `tasks/YYYYMMDD/{작업명}/steps/{NN}-{slug}.md`
+
+**Why:** 위 "시간성" 근거가 이 경로에는 성립하지 않는다 — step 은 날짜가 아니라 **순번으로 읽히고**, `NN` 이 이미 정렬을 보장한다. 날짜를 덧붙이면 같은 작업의 step 들이 작성일에 따라 순서와 다르게 정렬되어 오히려 해가 된다. 파일을 만드는 주체도 사람이 아니라 `working-lifecycle.sh` 다.
+
+**면제 범위는 날짜 prefix 뿐이다.** 제네릭 단독 이름 금지는 그대로라 `steps/summary.md`·`steps/report.md` 는 차단되고, `steps/` 아래 한 단계만 허용되므로 `steps/sub/x.md` 도 차단된다.
+
+강제 = `hooks/output-naming-check.sh` (`IS_STEP_FILE` 판정) + `hooks/gate-enforce.sh` (경로 패턴). 회귀 가드 = `hooks/tests/run-guard-tests.sh` §H.
+
 `{yyyy-mm-dd}` 는 작업 시작일(파일 최초 생성일) ISO-8601 표기 (예: `2026-04-27`). 파일을 같은 날 다시 수정하더라도 prefix 는 유지한다.
 
 ## `tasks/YYYYMMDD/{작업명}/` 하위 파일명 규칙
@@ -73,7 +83,7 @@ tasks/20260427/pay-refactor/2026-04-27-pay-refactor-result.md
 
 다음 이름은 시간성·주제 식별이 불가능하므로 차단한다:
 
-- 날짜 prefix 누락: `analysis.md`, `report.md`, `pay-refactor-analyze.md` 등 (날짜가 앞에 없는 모든 파일)
+- 날짜 prefix 누락: `analysis.md`, `report.md`, `pay-refactor-analyze.md` 등 (날짜가 앞에 없는 모든 파일 — 단 위 §예외의 `steps/{NN}-{slug}.md` 는 제외)
 - 제네릭 단독 이름: `analysis.md`, `analyze.md`, `result.md`, `report.md`, `recommendation.md`, `comparison.md`, `guide.md`, `proposal.md`, `summary.md`, `doc.md`, `notes.md`, `readme.md`
 
 ## 올바른 예시 (output/)

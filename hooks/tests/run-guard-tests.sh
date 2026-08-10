@@ -30,7 +30,7 @@ cleanup() {
   case "$TMP" in */claude_guardtests_*) ;; *) return 0 ;; esac   # 경로 오인 삭제 방지
   find "$TMP" -type f -delete 2>/dev/null
   find "$TMP" -depth -type d -exec rmdir {} + 2>/dev/null
-  rm "/tmp/claude_gate_guardtests" 2>/dev/null   # §H 가 만드는 gate 파일 (중단 시 잔류 방지)
+  rm "/tmp/claude_gate_guardtests$$" "/tmp/claude_gate_guardtests0$$" 2>/dev/null  # §H gate 파일 (중단 시 잔류 방지)
 }
 trap 'cleanup' EXIT
 
@@ -350,61 +350,128 @@ done
 
 # ═══════════════════════════════════════════════════════════════════
 # H. tasks/{작업명}/steps/ 면제 (2026-08-03) — output-naming-check + gate-enforce
-#    working-lifecycle.sh:155-171 이 working/ → tasks/ 이동 시 step 평면 파일을
-#    `steps/NN-{slug}.md` 로 mv 한다. mv 는 PreToolUse 를 안 타므로 이 파일들은 날짜 prefix 가 없고,
+#    working-lifecycle.sh 의 `step 평면 파일 → steps/ 분배 이동` 루프가 working/ → tasks/ 이동 시
+#    step 평면 파일을 `steps/NN-{slug}.md` 로 mv 한다. mv 는 PreToolUse 를 안 타므로 이 파일들은 날짜 prefix 가 없고,
 #    두 hook 이 그 배치를 모르면 이동이 끝난 step 문서는 **어떤 편집도 영구 차단**된다 (실측 667/667).
 #    반대로 면제가 넓어지면 경로 규칙 자체가 무의미해진다 — 임의 깊이 / generic 이름 /
 #    '..' 세그먼트 / 환경변수 주입 / 도구명 교체(MultiEdit) 가 전부 우회 통로였다.
 #    그래서 "열려야 하는 것" 과 "닫혀 있어야 하는 것" 을 같이 고정한다. 한쪽만 있으면
 #    되돌림(revert)이 초록으로 통과한다.
 # ═══════════════════════════════════════════════════════════════════
-printf '\n=== H. steps/ 면제 + 과확장 가드 (naming · gate · MultiEdit · env) ===\n'
-H_CWD="C:/works/hongcafe_global_backend"   # .claude cwd 면제(gate-enforce:86)를 타면 검증이 무의미해진다
+printf '\n=== H. steps/ 면제 + 과확장 가드 (naming · gate · MultiEdit · cwd · env) ===\n'
+H_CWD="C:/works/hongcafe_global_backend"    # 레포 cwd — .claude cwd 면제 분기를 안 타는 정상 경로
+H_CWD_CLAUDE="C:/Users/PV/.claude"          # .claude cwd 면제 분기를 **타는** 경로 (별도 커버 필요)
 H_TASKS="C:/Users/PV/.claude/docs/api-spec-reviews/tasks"
-H_GATE="/tmp/claude_gate_guardtests"
-echo 2 > "$H_GATE"                          # gate 파일 부재 = gate-enforce 즉시 exit 0 (검증 무효화)
+# 세션 id·gate 파일에 $$ 부착 — 고정 이름이면 스위트 2개가 동시에 돌 때 서로의 gate 파일을 지우고,
+# gate 파일이 사라지면 gate-enforce 가 즉시 exit 0 이라 "차단 기대" 케이스가 통째로 거짓 FAIL 이 된다.
+H_SID="guardtests$$"        # gate=2 (EXECUTE)
+H_SID0="guardtests0$$"      # gate=0 (LOCKED) — .claude cwd 화이트리스트 미매칭 fall-through 검증용
+H_GATE="/tmp/claude_gate_${H_SID}"
+H_GATE0="/tmp/claude_gate_${H_SID0}"
+echo 2 > "$H_GATE"
+echo 0 > "$H_GATE0"
 
 # 판정 원재료 부재를 조용히 '차단' 으로 세지 않는다 — 없으면 그 사실 자체를 FAIL 로 올린다.
 for h in output-naming-check.sh gate-enforce.sh; do
   [ -f "$HOOKS_DIR/$h" ] || { FAIL=$((FAIL+1)); fail_lines+=("[H] $h 부재 — 판정 불가(차단으로 집계 금지)"); }
 done
 
-path_payload() {  # $1=tool_name $2=file_path $3=cwd  (hook_event_name 필수 — 누락 시 일부 hook 이 조용히 미실행)
-  printf '{"session_id":"guardtests","hook_event_name":"PreToolUse","cwd":"%s","tool_name":"%s","tool_input":{"file_path":"%s","old_string":"a","new_string":"b","edits":[{"old_string":"a","new_string":"b"}]}}' \
-    "$(json_escape "$3")" "$1" "$(json_escape "$2")" > "$TMP/p.json"
+path_payload() {  # $1=tool_name $2=file_path $3=cwd $4=session_id(선택)
+  # hook_event_name 필수 — 누락 시 일부 hook 이 조용히 미실행돼 "통과" 로 오집계된다.
+  printf '{"session_id":"%s","hook_event_name":"PreToolUse","cwd":"%s","tool_name":"%s","tool_input":{"file_path":"%s","old_string":"a","new_string":"b","edits":[{"old_string":"a","new_string":"b"}]}}' \
+    "${4:-$H_SID}" "$(json_escape "$3")" "$1" "$(json_escape "$2")" > "$TMP/p.json"
+}
+check_reason() {  # $1=라벨 $2=기대exit $3=실제exit $4=기대 사유 substring(빈 값이면 생략)
+  # exit code 만 보면 **차단 사유가 뒤바뀌어도 초록**이다 (예: '..' 가드가 죽어도 else 분기가 2 를 낸다).
+  check "$1" "$2" "$3"
+  # exit 이 이미 어긋났으면 사유 검사를 더 하지 않는다 — 계속하면 같은 케이스가
+  # FAIL+1 과 PASS+1 을 동시에 올려 헤드라인 PASS 가 실제 성공 건수를 부풀린다.
+  [ "$2" = "$3" ] || return 1
+  [ -z "${4:-}" ] && return 0
+  case "${LAST_OUT:-}" in
+    *"$4"*) PASS=$((PASS+1)) ;;
+    *) FAIL=$((FAIL+1)); fail_lines+=("$1 — 차단 사유 불일치: stderr 에 '$4' 없음") ;;
+  esac
 }
 
-# 형식: "exit|hook|tool|경로|라벨"
+# 형식: "exit|hook|tool|경로|사유substring|라벨"
 H_CASES=(
   # ── 열려야 하는 것: step 평면 파일 (날짜 prefix 없음) ──
-  "0|output-naming-check.sh|Edit|$H_TASKS/20260727/t/steps/02-repository.md|steps/ 무날짜 파일 naming"
-  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/02-repository.md|steps/ 무날짜 파일 경로규칙"
-  "0|gate-enforce.sh|MultiEdit|$H_TASKS/20260727/t/steps/02-repository.md|steps/ 정상 + MultiEdit"
-  "0|output-naming-check.sh|Edit|$H_TASKS/20260727/t/steps/2026-08-03-x.md|steps/ 날짜 있는 파일"
-  # ── 닫혀 있어야 하는 것: 과확장 방지 ──
-  "2|output-naming-check.sh|Edit|$H_TASKS/20260727/t/steps/summary.md|steps/ generic 이름은 계속 차단"
-  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/sub/x.md|steps/ 하위 4단계 차단"
-  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/sub/2026-08-03-x.md|steps/sub 는 날짜 있어도 차단"
-  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/../summary.md|'..' 세그먼트 차단"
-  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/t/../steps/x.md|'..' + steps 조합 차단"
-  "2|output-naming-check.sh|Edit|$H_TASKS/20260727/t/x.md|steps/ 아닌 무날짜 파일은 종전대로 차단"
+  "0|output-naming-check.sh|Edit|$H_TASKS/20260727/t/steps/02-repository.md||steps/ 무날짜 파일 naming"
+  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/02-repository.md||steps/ 무날짜 파일 경로규칙"
+  "0|gate-enforce.sh|MultiEdit|$H_TASKS/20260727/t/steps/02-repository.md||steps/ 정상 + MultiEdit"
+  "0|output-naming-check.sh|Edit|$H_TASKS/20260727/t/steps/2026-08-03-x.md||steps/ 날짜 있는 파일"
+  # ── 닫혀 있어야 하는 것: 과확장 방지 (사유까지 고정) ──
+  "2|output-naming-check.sh|Edit|$H_TASKS/20260727/t/steps/summary.md|[TASK-NAMING] 제네릭|steps/ generic 이름은 계속 차단"
+  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/sub/x.md|tasks/ 경로 규칙 위반 — 허용 패턴|steps/ 하위 4단계 차단"
+  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/sub/2026-08-03-x.md|tasks/ 경로 규칙 위반 — 허용 패턴|steps/sub 는 날짜 있어도 차단"
+  "2|output-naming-check.sh|Edit|$H_TASKS/20260727/t/x.md|[TASK-NAMING] 날짜 prefix|steps/ 아닌 무날짜 파일은 종전대로 차단"
+  # 면제 대상은 'steps/' **리터럴 1단계** 다. 아래 2건이 없으면 다음 변경이 자유롭다:
+  #   (a) gate-enforce 정규식을 '(steps/|other/)?' 로 넓히기 — 깊이만 고정돼 있어 리터럴이 안 잠긴다
+  #   (b) naming 정규식을 '^[^/]+/steps/' prefix-only 로 바꾸기 — 깊이 제한이 사라진다
+  #       (b) 는 gate-enforce 가 backstop 이라 런타임 영향은 없지만 defense-in-depth 한 겹이 조용히 사라진다
+  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/t/other/x.md|tasks/ 경로 규칙 위반 — 허용 패턴|'other/' 는 면제 아님(리터럴 동일성)"
+  "2|output-naming-check.sh|Edit|$H_TASKS/20260727/t/steps/sub/x.md|[TASK-NAMING] 날짜 prefix|naming: steps/ 하위 4단계는 면제 아님"
+  # ── '..' 가드: tasks/ 안 · tasks/ 앞 · naming hook 쪽 모두 ──
+  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/../summary.md|'..' 세그먼트를 쓸 수 없습니다|'..' 세그먼트 차단"
+  "2|gate-enforce.sh|Edit|$H_TASKS/20260727/t/../steps/x.md|'..' 세그먼트를 쓸 수 없습니다|'..' + steps 조합 차단"
+  "2|gate-enforce.sh|Edit|C:/Users/PV/.claude/docs/api-spec-reviews/specs/../tasks/20260727/t/steps/sub/deep/x.md|'..' 세그먼트를 쓸 수 없습니다|'..' 이 tasks/ **앞**에 온 우회"
+  "2|gate-enforce.sh|Edit|C:/Users/PV/.claude/docs/api-spec-reviews/output/../tasks/badpath.md|'..' 세그먼트를 쓸 수 없습니다|면제경로 경유 '..' 우회"
+  "2|output-naming-check.sh|Edit|$H_TASKS/20260727/../steps/x.md|[TASK-NAMING] 날짜 prefix|naming: '..'+steps 는 면제 대상 아님"
+  # ── '..' 판정: hook 단독 기대값 ≠ 체인 최종 기대값 (둘 다 고정한다) ──
+  #    gate-enforce(이번 신설) = **세그먼트** 판정 `(^|/)\.\.(/|$)` → 'foo..bar' · '..foo' 는 통과.
+  #    worktree-enforce:43(기존) = **부분문자열** 판정 `*..*` → 같은 이름을 exit 2 로 막는다.
+  #    그래서 이 2건은 "차단 대상 아님" 이 아니라 "gate-enforce 단독으로만 통과" 가 맞다.
+  #    ('..' 판정을 lib/ 단일 SSOT 로 모으는 것은 별 트랙 — 여기서는 현 동작을 사실대로 고정만 한다)
+  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/foo..bar.md||'foo..bar.md' gate-enforce 단독 통과(세그먼트 아님)"
+  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/t/steps/..foo.md||'..foo.md' gate-enforce 단독 통과(세그먼트 아님)"
+  "2|worktree-enforce.sh|Edit|$H_TASKS/20260727/t/steps/foo..bar.md|WORKTREE-ENFORCE|'foo..bar.md' 체인 최종 = 차단"
+  "2|worktree-enforce.sh|Edit|$H_TASKS/20260727/t/steps/..foo.md|WORKTREE-ENFORCE|'..foo.md' 체인 최종 = 차단"
+  "0|worktree-enforce.sh|Edit|$H_TASKS/20260727/t/steps/02-repository.md||정상 step 파일은 체인에서도 통과"
   # ── 도구명 교체 우회 (matcher 는 MultiEdit 포함인데 hook 조건에서 빠져 있었다) ──
-  "2|gate-enforce.sh|MultiEdit|$H_TASKS/badpath.md|MultiEdit + 규칙위반 경로 차단"
-  "2|gate-enforce.sh|MultiEdit|$H_TASKS/20260727/t/../2026-08-03-x.md|MultiEdit + '..' 차단"
-  "2|gate-enforce.sh|Edit|$H_TASKS/badpath.md|Edit + 규칙위반 경로 차단(회귀)"
+  "2|gate-enforce.sh|MultiEdit|$H_TASKS/badpath.md|tasks/ 경로 규칙 위반 — 허용 패턴|MultiEdit + 규칙위반 경로 차단"
+  "2|gate-enforce.sh|MultiEdit|$H_TASKS/20260727/t/../2026-08-03-x.md|'..' 세그먼트를 쓸 수 없습니다|MultiEdit + '..' 차단"
+  "2|gate-enforce.sh|Edit|$H_TASKS/badpath.md|tasks/ 경로 규칙 위반 — 허용 패턴|Edit + 규칙위반 경로 차단(회귀)"
   # ── 기존 허용 경로 회귀 ──
-  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/summary.md|YYYYMMDD/summary.md 유지"
-  "0|gate-enforce.sh|Edit|$H_TASKS/history.md|history.md 유지"
-  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/t/2026-08-03-t-plan.md|평면 2단계 유지"
+  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/summary.md||YYYYMMDD/summary.md 유지"
+  "0|gate-enforce.sh|Edit|$H_TASKS/history.md||history.md 유지"
+  "0|gate-enforce.sh|Edit|$H_TASKS/20260727/t/2026-08-03-t-plan.md||평면 2단계 유지"
 )
 for row in "${H_CASES[@]}"; do
   want="${row%%|*}"; rest="${row#*|}"
   hook="${rest%%|*}"; rest="${rest#*|}"
   tool="${rest%%|*}"; rest="${rest#*|}"
-  fp="${rest%%|*}";   label="${rest#*|}"
+  fp="${rest%%|*}";   rest="${rest#*|}"
+  reason="${rest%%|*}"; label="${rest#*|}"
   path_payload "$tool" "$fp" "$H_CWD"
-  run_hook "$hook" normal "$TMP"
-  check "[H][$tool] $label" "$want" "$?"
+  # worktree-enforce 는 **pwd 가 git work-tree 안일 때만** 판정한다 (git 미연동 cwd = 면제).
+  # $TMP 는 git 저장소가 아니라 여기서 돌리면 전건 통과 → 체인 기대값 검증이 무의미해진다.
+  case "$hook" in
+    worktree-enforce.sh) h_cwd="$TMP/repo_feature" ;;
+    *)                   h_cwd="$TMP" ;;
+  esac
+  run_hook "$hook" normal "$h_cwd"
+  check_reason "[H][$tool] $label" "$want" "$?" "$reason"
+done
+
+# ── cwd=~/.claude 분기 (하니스 자기수정 부트스트랩 면제) ──
+#    위 케이스는 전부 레포 cwd 라 이 분기를 한 번도 실행하지 않는다. 그래서 면제 조건에서
+#    MultiEdit 을 빼는 변경이 매트릭스에 잡히지 않았다. 화이트리스트 안/밖을 같이 고정한다.
+#    gate=0 세션을 쓰는 이유: 화이트리스트 미매칭 시 fall-through 해서 **실제로 차단되는지**를
+#    봐야 하는데, gate=2 면 비코드 파일이 그냥 통과해 분기 도달 여부를 구분할 수 없다.
+for row in \
+  "2|Edit|$H_CWD_CLAUDE/custom-plugin/taskflow/commands/x.md|비코드 파일 수정 차단|화이트리스트 밖(custom-plugin) Edit" \
+  "2|MultiEdit|$H_CWD_CLAUDE/custom-plugin/taskflow/commands/x.md|비코드 파일 수정 차단|화이트리스트 밖(custom-plugin) MultiEdit" \
+  "0|Edit|$H_CWD_CLAUDE/hooks/x.sh||화이트리스트 안(hooks/) Edit 면제 유지" \
+  "0|MultiEdit|$H_CWD_CLAUDE/hooks/x.sh||화이트리스트 안(hooks/) MultiEdit 면제 유지" \
+  ; do
+  want="${row%%|*}"; rest="${row#*|}"
+  tool="${rest%%|*}"; rest="${rest#*|}"
+  fp="${rest%%|*}";   rest="${rest#*|}"
+  reason="${rest%%|*}"; label="${rest#*|}"
+  path_payload "$tool" "$fp" "$H_CWD_CLAUDE" "$H_SID0"
+  run_hook gate-enforce.sh normal "$TMP"
+  check_reason "[H][cwd=.claude][$tool] $label" "$want" "$?" "$reason"
 done
 
 # ── 환경변수 주입: IS_STEP_FILE 은 hook 내부 판정 결과여야 하고 외부에서 켤 수 없어야 한다.
@@ -417,9 +484,9 @@ for row in \
   fp="${row%%|*}"; label="${row#*|}"
   path_payload Edit "$fp" "$H_CWD"
   LAST_OUT=$(cd "$TMP" && IS_STEP_FILE=true bash "$HOOKS_DIR/output-naming-check.sh" < "$TMP/p.json" 2>&1)
-  check "[H][env주입] IS_STEP_FILE=true + $label" 2 "$?"
+  check_reason "[H][env주입] IS_STEP_FILE=true + $label" 2 "$?" "날짜 prefix 누락 차단"
 done
-rm "$H_GATE" 2>/dev/null
+rm "$H_GATE" "$H_GATE0" 2>/dev/null
 
 # ═══════════════════════════════════════════════════════════════════
 # I. working_scan — 날짜 폴더(YYYYMMDD) 판정 회귀 (2026-08-06, backlog/ 경로 이관 부수 검증)

@@ -18,6 +18,8 @@
 #   - tasks/YYYYMMDD/summary.md (일일 요약)
 #   - tasks/history.md (전체 이력 인덱스)
 #   - specs/ 경로 (IEEE 공식 산출물 — 별도 규칙)
+#   - tasks/YYYYMMDD/{작업명}/steps/{단계}.md (날짜 prefix 면제, generic 금지는 유지)
+#     working-lifecycle.sh 의 `step 평면 파일 → steps/ 분배 이동` 이 mv 로 배치 — 회귀 테스트 = tests/run-guard-tests.sh §H
 
 # early-exit 최적화 (2026-07-03): docs/ 경로 여부를 lib source 전 bash 내장으로 판정.
 #   본 hook 은 output//tasks//working/ (전부 /docs/ 하위) 전용 → docs 무관 편집은 즉시 exit.
@@ -54,6 +56,12 @@ fi
 
 FILE_NAME=$(basename "$FILE_PATH")
 
+# steps/ 면제 플래그 — KIND 분기보다 먼저 초기화한다.
+# tasks 분기 안에서만 초기화하면 output//working/ 경로는 대입을 안 거쳐 아래 "날짜 prefix 강제" 의
+# ${IS_STEP_FILE:-false} 가 환경변수를 그대로 읽는다 (= 날짜 prefix 강제 우회).
+# 3개 KIND(output/tasks/working) 공통으로 여기서 잠근다.
+IS_STEP_FILE=false
+
 # .md 외 파일은 검증 제외 (이미지, 첨부 등 허용)
 if ! echo "$FILE_NAME" | grep -qE '\.md$'; then
   exit 0
@@ -72,6 +80,17 @@ if [ "$KIND" = "tasks" ]; then
     echo "[TASK-NAMING] tasks/YYYYMMDD/{작업명}/ 하위에 파일을 배치하세요. 현재: tasks/.../$REL_FROM_DATE" >&2
     command -v log_event >/dev/null 2>&1 && log_event "output-naming-check" "block" "reason=tasks-depth"
     exit 2
+  fi
+  # {작업명}/steps/{단계}.md — working-lifecycle.sh 의 `step 평면 파일 → steps/ 분배 이동` 루프가
+  # working/ → tasks/ 이동 시 mv 로 배치한다 (`steps/NN-{slug}.md`, 날짜 prefix 없음).
+  # mv 는 PreToolUse 를 안 타므로 이 파일들은 생성 시점에 걸러진 적이 없고,
+  # 이후 Edit 만 아래 "날짜 prefix 강제" 에 영구 차단됐다.
+  # output/ sub-document(KIND=output 의 DEPTH>3 분기) 와 동일 취급 — 날짜 prefix 강제만 면제한다.
+  # 과확장 방지: steps/ 리터럴 1단계만, '..' 세그먼트 포함 경로는 면제하지 않는다.
+  # (generic 이름 금지는 그대로 적용 — steps/summary.md 류는 계속 차단)
+  if echo "$REL_FROM_DATE" | grep -qE '^[^/]+/steps/[^/]+\.md$' \
+     && ! echo "$REL_FROM_DATE" | grep -qE '(^|/)\.\.(/|$)'; then
+    IS_STEP_FILE=true
   fi
   WORK_NAME=$(echo "$REL_FROM_DATE" | awk -F/ '{print $1}')
   CONTEXT_SLUG="$WORK_NAME"
@@ -238,8 +257,8 @@ for g in "${GENERIC_NAMES[@]}"; do
   fi
 done
 
-# 날짜 prefix 강제: ^YYYY-MM-DD-
-if ! echo "$FILE_NAME" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
+# 날짜 prefix 강제: ^YYYY-MM-DD- (tasks/{작업명}/steps/ 평면 파일은 면제 — 위 IS_STEP_FILE 참조)
+if [ "${IS_STEP_FILE:-false}" != true ] && ! echo "$FILE_NAME" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-'; then
   if [ "$KIND" = "tasks" ]; then
     SUGGEST="${TODAY_ISO}-${CONTEXT_SLUG}-${FILE_NAME}"
     echo "[TASK-NAMING] 날짜 prefix 누락 차단: '$FILE_NAME' — 파일명은 '{yyyy-mm-dd}-{작업명}-{type}.md' 형식 필수." >&2
@@ -258,7 +277,9 @@ fi
 
 # 컨텍스트 slug 첫 단어 정합성 (경고)
 CONTEXT_FIRST_WORD=$(echo "$CONTEXT_SLUG" | cut -d'-' -f1)
-if [ -n "$CONTEXT_FIRST_WORD" ] && ! echo "$FILE_NAME" | grep -qi "$CONTEXT_FIRST_WORD"; then
+# step 평면 파일(steps/NN-{slug}.md)은 작업명과 무관한 단계명이 정상이라 경고 대상에서 제외 (전건 오경고 방지)
+if [ "${IS_STEP_FILE:-false}" != true ] \
+   && [ -n "$CONTEXT_FIRST_WORD" ] && ! echo "$FILE_NAME" | grep -qi "$CONTEXT_FIRST_WORD"; then
   if [ "$KIND" = "tasks" ]; then
     echo "[TASK-NAMING WARN] 파일명 '$FILE_NAME' 이 작업명 '$CONTEXT_SLUG' 와 연관 없음. '{yyyy-mm-dd}-{작업명}-{type}.md' 권장." >&2
   else

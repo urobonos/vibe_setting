@@ -2,7 +2,7 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "gate-enforce" "enter" "pid=$$"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null  # is_hard_code_file (plan-before 게이트, 2026-07-08)
-# PreToolUse Hook: Gate 미통과 시 Edit/Write 차단 + Agent 검증
+# PreToolUse Hook: Gate 미통과 시 Edit/Write/MultiEdit 차단 + Agent 검증
 # Phase 3 Harness — v2 (비코드 경로 완화)
 #
 # Gate 레벨:
@@ -32,7 +32,8 @@ command -v python3 >/dev/null 2>&1 && _GATE_PY=python3
 _GF=()
 if [ -n "$_GATE_PY" ]; then
   # 배칭: 필요한 8개 값을 python 1회로 일괄 추출.
-  #   기존엔 cwd(L73)·file_path(L89,L119)·prompt(L227) 를 지점마다 python 재기동(최대 4회) → 콜드 스타트 시 수 초 손실.
+  #   기존엔 cwd(.claude CWD 면제 분기)·file_path(면제 분기 / Edit·Write·MultiEdit Gate)·prompt(Team 3 worktree 검사)를
+  #   지점마다 python 재기동(최대 4회) → 콜드 스타트 시 수 초 손실.
   #   file_path 는 여기서 역슬래시→슬래시 정규화 (기존 각 지점 replace(chr(92),'/') 와 동일 동작 보존).
   mapfile -t _GF < <(printf '%s' "$STDIN_DATA" | "$_GATE_PY" -c "
 import json, sys
@@ -84,8 +85,16 @@ CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
 # Edit/Write 외 도구(Read, Bash 등)는 종전과 동일하게 즉시 면제.
 # (CWD 는 상단 배치 추출에서 이미 확보 — python 재기동 제거)
 if echo "$CWD" | grep -qE '[\\/]\.claude$'; then
-  # Edit/Write 가 아니면 종전대로 면제
-  if [[ "$TOOL_NAME" != "Edit" && "$TOOL_NAME" != "Write" ]]; then
+  # 파일 변경 도구(Edit/Write/MultiEdit)만 아래 화이트리스트 검사를 받는다.
+  #
+  # ⚠ 미해소 (정합 아님): settings.json matcher 는 `Edit|Write|MultiEdit|Task|SubagentSpawn` 5종인데
+  #   이 조건이 닫은 것은 파일 도구 3종뿐이다. Task/SubagentSpawn 은 여기서 exit 0 으로 조기 탈출하므로
+  #   cwd 가 ~/.claude 일 때 **파일 하단 Subagent Spawn Validation(model 파라미터 강제 +
+  #   isolation:worktree 강제)에 도달하지 못한다** = 그 검증이 사문화된다.
+  #   실측: 같은 spawn 이 cwd=레포면 exit 2, cwd=~/.claude 면 exit 0.
+  #   여기를 "비-mutating 도구만 면제" 로 뒤집으면 하니스 자기수정 흐름 전반에 영향이 가므로
+  #   구조 변경은 별도 §3 결정으로 다룬다. 이 줄을 "닫혔다" 로 읽지 말 것.
+  if [[ "$TOOL_NAME" != "Edit" && "$TOOL_NAME" != "Write" && "$TOOL_NAME" != "MultiEdit" ]]; then
     exit 0
   fi
 
@@ -109,9 +118,37 @@ if echo "$CWD" | grep -qE '[\\/]\.claude$'; then
   # 화이트리스트 미매칭 → 정규 gate 검증으로 fall-through
 fi
 
-# --- Edit/Write Gate ---
-if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
+# --- Edit/Write/MultiEdit Gate ---
+# MultiEdit 은 settings.json matcher(`Edit|Write|MultiEdit|Task|SubagentSpawn`) 에 등록돼 있는데
+# 이 조건에서 빠져 있어 gate 레벨·plan-before·tasks/ 경로 규칙을 전부 통과했다 (도구명만 바꾸면 우회).
+if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "MultiEdit" ]]; then
   # file_path 는 상단 배치에서 추출·정규화 완료 (python 재기동 제거)
+
+  # --- '..' 세그먼트 거부 (이 블록 안의 모든 경로 판정보다 먼저) ---
+  # FILE_PATH 는 역슬래시 정규화만 됐고 realpath 해석은 안 된 문자열이다. '..' 이 남아 있으면
+  # 이후의 면제 매칭(specs//output//working/)과 tasks/ 규칙이 전부 "쓰여 있는 대로" 판정돼 무력화된다.
+  # 이 검사를 tasks/ 블록 **안**에 두면 '..' 이 tasks/ 앞에 올 때
+  #   (예: docs/{product}/specs/../tasks/20260727/t/steps/sub/deep/x.md)
+  # tasks/ 매칭 자체가 성립해도 규칙을 우회하거나, 면제 경로로 먼저 빠져나간다.
+  # 세그먼트 단위로만 판정한다 — '...' · '..foo' · 'foo..bar' 는 정상 파일명이라 차단 대상이 아니다.
+  #   (단 실 PreToolUse 체인에서는 worktree-enforce 가 '..' 을 **부분문자열**로 보고 막는다.
+  #    체인 기준 최종 판정이 다르다는 뜻 — 회귀 케이스는 tests/run-guard-tests.sh §H 참조)
+  #
+  # ⚠ 미해소 ("전 경로 공통" 아님): 위쪽 `.claude 레포 CWD 면제` 화이트리스트가 exit 0 으로 **먼저**
+  #   탈출하므로 cwd=~/.claude + 화이트리스트 경로(docs/ 등)로 들어온 '..' 은 이 가드에 도달하지 않는다.
+  #   실측: gate=0 에서 `~/.claude/docs/../../../works/{repo}/app/**.php` 가 체인 전체 통과(php 쓰기가
+  #   gate·plan-before·worktree-enforce 동시 우회). 이 구멍은 HEAD 도 exit 0 = 기존 결함이며,
+  #   면제 분기 구조를 바꾸는 것은 하니스 자기수정 흐름에 영향이 가므로 별도 §3 결정으로 다룬다.
+  #
+  # 신규 차단면: '..' 세그먼트를 실제로 포함한 경로만 새로 막힌다. 실측 표본 6종 확인
+  #   (tasks/ 앞뒤 · specs/../specs · output/../output · working/../working · auto-memory memory/../memory ·
+  #    인접 레포 repo/../infra/docs) — 전수 상한은 측정하지 않았다.
+  #   하니스 정상 호출부가 '..' 포함 경로로 쓰는 흐름은 0건으로 확인했다.
+  if echo "$FILE_PATH" | grep -qE '(^|/)\.\.(/|$)'; then
+    echo "[GATE BLOCKED] 경로에 '..' 세그먼트를 쓸 수 없습니다 — 정규화된 절대 경로로 지정하세요. (현재: $FILE_PATH)" >&2
+    command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=path-traversal"
+    exit 2
+  fi
 
   # docs/specs/ — IEEE 산출물 경로 (게이트 면제)
   # 글로벌 `~/.claude/docs/{product}/specs/` 포함, 과거 프로젝트 로컬 `docs/specs/` 도 호환.
@@ -216,17 +253,20 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" ]]; then
   # 글로벌: `~/.claude/docs/{product}/tasks/...`, 과거 프로젝트 로컬: `docs/tasks/...`
   if echo "$FILE_PATH" | grep -qE 'docs/([^/]+/)?tasks/'; then
     REL_PATH=$(echo "$FILE_PATH" | sed -E 's|.*docs/([^/]+/)?tasks/||')
+    # ('..' 거부는 이 블록 진입 전 전 경로 공통 가드가 담당한다 — 여기 두면 tasks/ 앞의 '..' 을 못 잡는다)
     # history.md (전체 이력 인덱스) 허용
     if echo "$REL_PATH" | grep -qE '^history\.md$'; then
       : # 통과
     # YYYYMMDD/summary.md (일일 작업 요약) 허용
     elif echo "$REL_PATH" | grep -qE '^[0-9]{8}/summary\.md$'; then
       : # 통과
-    # YYYYMMDD/{작업명}/{단계}.md (워크플로우 산출물) 허용
-    elif echo "$REL_PATH" | grep -qE '^[0-9]{8}/[^/]+/[^/]+\.md$'; then
+    # YYYYMMDD/{작업명}/{단계}.md + YYYYMMDD/{작업명}/steps/{단계}.md (워크플로우 산출물) 허용
+    # steps/ 1단계는 working-lifecycle.sh 가 working/ → tasks/ 이동 시 실제로 만드는 배치라 허용한다.
+    # (임의 깊이로 열지 않는다 — steps/ 외 하위 디렉토리는 종전대로 차단)
+    elif echo "$REL_PATH" | grep -qE '^[0-9]{8}/[^/]+/(steps/)?[^/]+\.md$'; then
       : # 통과
     else
-      echo "[GATE BLOCKED] tasks/ 경로 규칙 위반 — 허용 패턴: history.md | YYYYMMDD/summary.md | YYYYMMDD/{작업명}/{단계}.md (현재: tasks/$REL_PATH)" >&2
+      echo "[GATE BLOCKED] tasks/ 경로 규칙 위반 — 허용 패턴: history.md | YYYYMMDD/summary.md | YYYYMMDD/{작업명}/{단계}.md | YYYYMMDD/{작업명}/steps/{단계}.md (현재: tasks/$REL_PATH)" >&2
       command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=tasks-path"
       exit 2
     fi

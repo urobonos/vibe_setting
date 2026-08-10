@@ -96,6 +96,10 @@ min_claude_md_version: "4.0"
 
 모든 문서 파일은 **`{yyyy-mm-dd}-` 날짜 prefix 를 필수로** 가지며, 제네릭 단독 이름(analysis.md, report.md 등)은 금지한다. `~/.claude/hooks/output-naming-check.sh` 가 PreToolUse:Write|Edit 에서 강제 차단한다.
 
+**예외 — tasks/ 착지 step 파일 (2026-08-03 명문화).** `working-lifecycle.sh` 가 working/ → tasks/ 이동 시 step 평면 파일을 `tasks/YYYYMMDD/{작업명}/steps/{NN}-{slug}.md` 로 배치한다. 이 경로는 **날짜 prefix 를 면제**한다 — 순번(`NN`)이 이미 순서를 표현하므로 날짜가 중복 정보이고, 같은 작업의 step 들은 날짜가 아니라 순번으로 읽힌다. **제네릭 이름 금지는 그대로 적용**되므로 `steps/summary.md` 는 여전히 차단된다.
+
+> 이 면제는 `working-lifecycle.sh` 가 `mv` 로 옮기며 PreToolUse 를 우회하던 설계 의도를 hook 이 뒤늦게 따라잡은 것이다. 그 전까지 이동 완료된 step 문서는 **어떤 편집도 차단**돼 있었다(2026-08-03 실측 667건). 회귀 가드 = `hooks/tests/run-guard-tests.sh` §H.
+
 > 상세 형식·금지 패턴·예시는 `references/file-naming.md` 참조.
 
 ## 공통 규칙
@@ -192,6 +196,8 @@ min_claude_md_version: "4.0"
     │       ├── summary.md            ← 일일 작업 요약
     │       └── {작업명}/
     │           ├── {yyyy-mm-dd}-{작업명}-unified.md           ← **신규 2026-05-12~** (working/ 자동 이동, 단일 통합 보존)
+    │           ├── steps/                                     ← step 평면 파일 (working-lifecycle.sh 이동)
+    │           │   └── {NN}-{slug}.md                         ← **날짜 prefix 면제** (순번이 순서 표현), 제네릭 금지는 유지
     │           ├── {yyyy-mm-dd}-{작업명}-analyze.md           ← (역소급 < 2026-05-12) Team 1 분석 결과
     │           ├── {yyyy-mm-dd}-{작업명}-plan.md              ← (역소급 < 2026-05-12) Team 2 계획 + Blueprint
     │           └── {yyyy-mm-dd}-{작업명}-result.md            ← (역소급 < 2026-05-12) Team 3 완료 결과
