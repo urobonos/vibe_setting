@@ -48,11 +48,35 @@ LOWER_BASENAME="${BASENAME,,}"
 LOWER_FILE="${FILE,,}"; LOWER_FILE="${LOWER_FILE//\\//}"
 while [[ "$LOWER_FILE" == *//* ]]; do LOWER_FILE="${LOWER_FILE//\/\///}"; done
 
-# 프로젝트별 예외 경로는 프로젝트 로컬 .claude/hooks/ 에서 처리한다.
+# 프로젝트별 예외 경로는 하드코딩하지 않고 면제 목록 파일에 위임한다.
 # 글로벌 훅은 공통 정책만 유지 (프로젝트 특정 bypass 하드코딩 금지).
+#
+# 면제 목록: ~/.claude/hooks/sensitive-exempt.txt (1줄 1패턴, `#` 주석·빈 줄 무시)
+#   - 대상은 아래 "1. 프론트엔드 파일" 카테고리 한정.
+#     .env·잠금·인증서/키·인증정보·서버설정(2~6번)은 면제 불가 — fail-safe.
+#   - 매칭은 정규화된 소문자 절대경로에 bash glob. `*` 는 `/` 도 매칭한다.
+#   - 목록을 프로젝트 로컬 .claude/ 에 두지 않는 이유: 로컬 .claude/ 는 worktree checkout 에서
+#     빠지므로(skip-worktree) 같은 파일이 메인에서는 통과하고 worktree 에서는 차단된다.
+FE_EXEMPT=0
+EXEMPT_LIST="$(dirname "${BASH_SOURCE[0]}")/sensitive-exempt.txt"
+if [ -f "$EXEMPT_LIST" ]; then
+  while IFS= read -r EXEMPT_PAT || [ -n "$EXEMPT_PAT" ]; do
+    EXEMPT_PAT="${EXEMPT_PAT%%#*}"
+    EXEMPT_PAT="${EXEMPT_PAT#"${EXEMPT_PAT%%[![:space:]]*}"}"
+    EXEMPT_PAT="${EXEMPT_PAT%"${EXEMPT_PAT##*[![:space:]]}"}"
+    [ -z "$EXEMPT_PAT" ] && continue
+    EXEMPT_PAT="${EXEMPT_PAT,,}"; EXEMPT_PAT="${EXEMPT_PAT//\\//}"
+    if [[ "$LOWER_FILE" == $EXEMPT_PAT ]]; then
+      FE_EXEMPT=1
+      command -v log_event >/dev/null 2>&1 && log_event "sensitive-file-guard" "fe-exempt" "pattern=$EXEMPT_PAT"
+      break
+    fi
+  done < "$EXEMPT_LIST"
+fi
 
 # 1. 프론트엔드 파일 차단 — Read만 허용, Edit/Write 차단
-#    이 정책이 부적절한 프로젝트는 프로젝트 로컬 hook에서 선처리하여 면제한다.
+#    이 정책이 부적절한 경로는 위 면제 목록으로 통과시킨다.
+if [ "$FE_EXEMPT" = "0" ]; then
 case "$LOWER_BASENAME" in
   *.tsx|*.jsx)
     block_exit "fe-tsx" "[BLOCKED] 프론트엔드 파일 수정 차단: $BASENAME — 글로벌 정책상 프론트엔드 파일은 Read 전용입니다." ;;
@@ -67,6 +91,7 @@ case "$LOWER_BASENAME" in
   package.json|yarn.lock|pnpm-lock.yaml)
     block_exit "fe-pkg" "[BLOCKED] 프론트엔드 패키지 파일 수정 차단: $BASENAME — npm/yarn/pnpm 명령으로 관리하세요." ;;
 esac
+fi   # FE_EXEMPT — 면제는 1번 카테고리에서 끝난다. 아래 2~6번은 면제 무관 항상 검사.
 
 # 2. 환경변수 파일 차단 (.env 와 환경별 변형만 차단, .env.example/.env.sample 은 허용)
 # CLAUDE.md §4 e2e 검증 — "새 env 변수 참조 시 .env.example 추가" 룰을 hook 이 막지 않도록.

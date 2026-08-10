@@ -1,0 +1,15 @@
+# sensitive-file-guard.sh 프론트엔드 차단(1번 카테고리) 면제 패턴
+#
+# 형식: 1줄 1패턴, `#` 이후는 주석, 빈 줄 무시.
+# 매칭: 정규화된 소문자 절대경로에 bash glob `[[ == ]]`. `*` 는 `/` 도 매칭한다.
+#       (예: `*/tools/shared/js/*.js` 는 worktree 사본에도 그대로 걸린다)
+#
+# ⚠️ 면제 범위는 1번(프론트엔드: .tsx/.ts/.jsx/.js/.css/.scss/config/package.json) 한정.
+#    .env · 잠금파일 · 인증서/키 · 인증정보 · 서버설정(2~6번)은 이 목록으로 뚫리지 않는다.
+#
+# 등재 기준: "FE 레포 소스가 아닌데 확장자만 겹치는 것". 실제 FE 소스는 등재하지 않는다.
+
+# hongcafe_global_backend — BE 레포의 API 테스터 공용 wrapper.
+# FE 소스가 아니라 BE 회귀 가드 도구이며, 프로젝트 CLAUDE.md §"tools 디렉토리 동기화" 가
+# "API 변경 시 tools/shared/ 갱신"을 BE 의무로 명시한다. 레포 전체에서 이 경로의 .js 는 1개.
+*/tools/shared/js/*.js
