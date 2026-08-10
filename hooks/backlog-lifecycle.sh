@@ -64,6 +64,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || true
 source "$(dirname "${BASH_SOURCE[0]}")/lib/product-resolver.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
+
+# fail-closed (2026-08-10 M1) — R3 M9 가 실패할 수 없던 인라인 `case` 를 실패 가능한 lib 의존으로
+# 바꿨다. `source … || true` 상태에서 lib 이 없거나 못 읽히면 `is_reserved_docs_name` 호출이 127 로
+# 죽고 false 로 평가돼 예약이름 가드가 통째로 사라진다(실측: lib 만 rename 하면 `product: references`
+# 인 done backlog 가 경고 한 줄 없이 `docs/references/tasks/20260808/backlog/…` 에 써지고 `△ 이동` 으로
+# 성공 보고된다). 아래 화이트리스트는 ASCII 예약 7개를 전부 통과시키므로 2차 방어가 없다.
+# 가드를 못 세우면 아무것도 하지 않는다 — 잘못된 경로에 쓰는 것보다 이동이 안 되는 쪽이 낫다.
+# stdin 소비 이후에 검사한다(writer SIGPIPE 회피).
+if ! declare -F is_reserved_docs_name >/dev/null 2>&1; then
+  echo "[backlog-lifecycle] lib/product-resolver.sh 로드 실패 — 예약이름 가드 부재로 이동 중단 (fail-closed)" >&2
+  exit 0
+fi
+
 DOCS_ROOT="$HOME/.claude/docs"
 # normalize_path 필수(콜드리뷰 R3 Medium-2) — $HOME 이 백슬래시(C:\Users\PV) 나 trailing slash
 # (/c/Users/PV/) 로 오면 앵커 문자열이 정규화된 file_path_win 과 영원히 불일치해 전체 이동이
@@ -280,7 +293,9 @@ PYEOF
   # 디렉토리(`docs/working/`)로 정규화해 공용 SSOT 안에 tasks/history.md 를 써넣는다 — M4 가 대소문자
   # 무관 매칭을 들여오면서 M7 이 막던 구멍이 다시 열렸다. `is_reserved_docs_name()`(product-resolver.sh,
   # 콜드리뷰 R3 M9 공용 상수) 이 이미 `${1,,}` 로 소문자화해 비교한다.
-  if is_reserved_docs_name "$product" 2>/dev/null; then
+  # `2>/dev/null` 없음(2026-08-10 M1) — 억제하면 lib 부재 시 127 이 침묵으로 false 가 된다.
+  # 함수 존재는 위 fail-closed 가드가 이미 보장하므로 여기서 감출 에러가 없다.
+  if is_reserved_docs_name "$product"; then
     echo "[backlog-lifecycle] $filename — product '$product' 은 공용 SSOT 예약 디렉토리(product 아님), frontmatter product: 값 정정 필요 — 이동 스킵" >&2
     return 1
   fi

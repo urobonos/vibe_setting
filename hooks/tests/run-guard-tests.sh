@@ -1443,6 +1443,30 @@ EOF
   if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-05-j22symlinktest.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-22] 심링크 product 디렉토리가 영구 스킵됨(M11 회귀 — find -type d 가 -L 없이 심링크를 거짓 판정) — 출력: $J22_OUT"); fi
 fi
 
+# J-23. M1(2026-08-08 콜드리뷰 R4, [보안]) — R3 M9 가 실패할 수 없던 인라인 `case` 를 실패 가능한 lib
+# 의존으로 바꿨다. `source … || true` + `is_reserved_docs_name … 2>/dev/null` 조합이라 lib 이 없거나
+# 못 읽히면 127 이 억제된 채 false 로 평가돼 예약이름 가드가 통째로 사라진다. 실측(lib 만 rename):
+# `product: references` 인 done backlog 가 경고 한 줄 없이 `docs/references/tasks/{date}/backlog/` 에
+# 써지고 `△ 이동` 으로 성공 보고됐다(본문 + summary.md + history.md 3건 유출). 화이트리스트는 ASCII
+# 예약 7개를 전부 통과시키므로 2차 방어가 없다 — 가드를 못 세우면 아무것도 하지 않아야 한다.
+J23_HOOKS="$TMP/hooks-nolib"
+cp -r "$HOOKS_DIR" "$J23_HOOKS"
+mv "$J23_HOOKS/lib/product-resolver.sh" "$J23_HOOKS/lib/product-resolver.sh.disabled"
+cat > "$FH/.claude/docs/working/backlog/2026-08-05-j23nolib.md" <<'EOF'
+---
+name: j23nolib
+metadata:
+  status: done
+  product: references
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-05-j23nolib.md"
+J23_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$J23_HOOKS/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if [ -f "$FH/.claude/docs/working/backlog/2026-08-05-j23nolib.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-23a] lib 부재인데 이동됨(M1 회귀 — 예약가드 fail-open) — 출력: $J23_OUT"); fi
+if ! find "$FH/.claude/docs/references" -name '*j23nolib*' 2>/dev/null | grep -q .; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-23b] lib 부재 시 예약 SSOT 디렉토리(references)에 파일이 써짐(M1 회귀)"); fi
+if echo "$J23_OUT" | grep -qF 'fail-closed'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-23c] lib 부재 경고(fail-closed)가 안 뜸 — 침묵 fail-open(M1 회귀) — 출력: $J23_OUT"); fi
+
 # ═══════════════════════════════════════════════════════════════════
 printf '\n────────────────────────────────────────\n'
 if [ ${#fail_lines[@]} -gt 0 ]; then
