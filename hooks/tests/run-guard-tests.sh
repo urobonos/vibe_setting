@@ -29,6 +29,12 @@ cleanup() {
   [ -n "${TMP:-}" ] || return 0
   case "$TMP" in */claude_guardtests_*) ;; *) return 0 ;; esac   # 경로 오인 삭제 방지
   find "$TMP" -type f -delete 2>/dev/null
+  # 심링크/junction 회수(2026-08-10) — J-22 가 만드는 dir junction 은 MSYS 가 `-type l` 로 분류해
+  # `-type f` 에도 `-type d` 에도 안 걸린다. 대상이 먼저 지워져 댕글링이 되면 부모가 "not empty" 로
+  # rmdir 을 거부해 `$TMPDIR/claude_guardtests_*` 트리 전체가 남는다(실측: 전체 실행마다 누적).
+  # `-type d` 회수보다 **먼저** 지워야 부모 rmdir 이 성공한다. junction 은 링크만 끊길 뿐 대상
+  # 디렉토리 내용을 따라가지 않는다(`-delete` 는 unlink).
+  find "$TMP" -type l -delete 2>/dev/null
   find "$TMP" -depth -type d -exec rmdir {} + 2>/dev/null
   rm "/tmp/claude_gate_guardtests$$" "/tmp/claude_gate_guardtests0$$" 2>/dev/null  # §H gate 파일 (중단 시 잔류 방지)
 }
