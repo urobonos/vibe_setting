@@ -87,7 +87,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 |------|------|
 | `~/.claude/CLAUDE.md` §4.1 "Validation (No Test, No Merge)" | 정책 SSOT |
 | `simplify` skill (Anthropic plugin, 글로벌 카탈로그 등재 — `~/.claude/skills/` 본체 없음) | 코드 품질 리뷰 진입점 (Skill 도구로 호출) |
-| `custom-plugin/taskflow/agents/cold-reviewer.md` | **cold 판정 계약** — 판정축 5 · 등급 기준 · 반환 양식 · Edit/Write 부재 · `model: opus` |
+| `custom-plugin/taskflow/agents/cold-reviewer.md` | **cold 판정 계약** — 판정축 5 · 등급 기준 · 반환 양식 · Edit/Write 부재 · `model: sonnet` |
 | `~/.claude/skills/task-docs/references/unified-template.md` § 실행 §Self-Critique + § 리뷰 | 양식 SSOT |
 
 ## §3 Checkpoint 우선 적용
