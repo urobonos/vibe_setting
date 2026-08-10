@@ -1599,6 +1599,23 @@ if echo "$J27_OUT" | grep -qF '인덱스 처리 실패'; then PASS=$((PASS+1)); 
 if ! echo "$J27_OUT" | grep -qF 'entry 미발견'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-27b] 읽기 실패인데 '미발견' 경고가 겹쳐 나옴 — 조사자를 엉뚱한 원인으로 보낸다(M1-④ 회귀) — 출력: $J27_OUT"); fi
 rm -f "$FH/.claude/projects/projErr/memory/MEMORY.md" 2>/dev/null   # 이후 케이스 오염 방지
 
+# J-28. 콜드리뷰 Medium(2026-08-10) — history.md 갱신 실패가 최종 마커에 반영돼야 한다.
+#   원자 교체 도입으로 이 단계의 실패 확률이 올라갔는데(Windows `os.replace` 는 대상이 읽기로
+#   열려만 있어도 PermissionError), 실패해도 `index_incomplete` 가 안 서서 인덱스 정리만 성공하면
+#   `✓ 이동` 으로 보고됐다 — 안 써졌는데 성공 신호가 나간다.
+#
+#   **정적 앵커를 쓴다(J-26 과 같은 이유가 아니다 — 여기는 동적 시도가 실패했다).** 동적 케이스를
+#   두 번 시도했고 두 번 다 **자기무효화**였다: (1) slug 가 인덱스에 없으면 `any_found=0` 이 되어
+#   history 와 무관하게 `index_incomplete` 가 서고 (2) entry 를 심어도 그 제거 판정이 `manual` 등으로
+#   갈리면 같은 결과가 된다. 즉 "△ 가 나왔다" 는 관측이 history 실패를 특정하지 못한다 —
+#   `index_incomplete` 를 세우는 경로가 여럿이라 원인을 격리하려면 그 전부를 0으로 눌러야 하는데,
+#   그 fixture 자체가 본 검증보다 깨지기 쉽다. 배선 존재를 직접 고정하는 편이 정직하다.
+#   (반증 확인: 아래 두 줄 중 하나라도 지우면 이 케이스가 FAIL 한다.)
+J28_SRC="$HOOKS_DIR/backlog-lifecycle.sh"
+if grep -qE '^\s*HIST_RC=\$\?' "$J28_SRC"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-28a] history python 블록의 종료코드를 받지 않음 — 갱신 실패가 감지되지 않는다(콜드리뷰 Medium 회귀)"); fi
+if grep -qE '^\s*\[ "\$HIST_RC" -ne 0 \] && index_incomplete=1' "$J28_SRC"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-28b] history 갱신 실패가 index_incomplete 에 반영되지 않음 — 실패가 ✓ 로 보고된다(콜드리뷰 Medium 회귀)"); fi
+if grep -qF 'history.md 갱신 실패' "$J28_SRC"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-28c] history 실패 시 규약 메시지가 없음 — python traceback 이 그대로 노출된다"); fi
+
 # ═══════════════════════════════════════════════════════════════════
 printf '\n────────────────────────────────────────\n'
 if [ ${#fail_lines[@]} -gt 0 ]; then

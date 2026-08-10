@@ -447,6 +447,9 @@ try:
             # 원자 교체(2026-08-10 M1-①) — 직접 'w' 로 열면 truncate 직후 kill(hook timeout 10s)될 때
             # 이 backlog 본문이 0바이트로 남는다. 이 파일은 곧 mv 될 사용자 데이터라 복구가 수동이다.
             # tmp 에 완전히 쓴 뒤 os.replace(같은 디렉토리 = 같은 볼륨, 원자적)로 갈아끼운다.
+            # 이 사이트는 best-effort 계약(아래 except: pass)을 유지한다 — 실패해도 결과는
+            # "completed: 필드 누락" 뿐이고 이동 자체는 진행된다. 단 Windows os.replace 는 대상이
+            # 읽기로 열려만 있어도 실패하므로(콜드리뷰 실측) 그 누락 확률은 구 코드보다 높아졌다.
             tmp_path = file_path + '.tmp'
             with open(tmp_path, 'w', encoding='utf-8') as f:
                 f.write(content)
@@ -786,7 +789,7 @@ PYEOF
         # sibling arm 이 any_found 를 일부러 안 세우는 것(R2 M2)과 다른 사안이다: sibling 은 "다른
         # backlog 의 entry 를 본 것" 이라 이 slug 에 대해서는 정말 미발견이 맞지만, error 는 이
         # slug 를 대상으로 실제 조회가 일어났고 그 조회가 깨진 것이다.
-        *) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 인덱스 처리 실패(읽기/인코딩 오류 가능) — 수동 확인 필요" >&2 ;;
+        *) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 인덱스 처리 실패(읽기·인코딩 오류 또는 쓰기 권한/점유 실패 가능) — 수동 확인 필요" >&2 ;;
       esac
       # sibling 보고는 status 와 무관하게 항상 낸다(2026-08-07 콜드리뷰 R3 M8) — 이전엔 python 쪽
       # status 결정에서 `elif sibling` 이 최하단이라, 같은 파일의 다른 라인이 changed/manual 을
@@ -872,19 +875,31 @@ else:
         new_lines = [header, '', entry_line, ''] + lines
 
 # 원자 교체(2026-08-10 M1-①) — history.md 는 누적 이력이라 truncate 후 kill 되면 전 이력이 사라진다.
+# **트레이드오프(2026-08-10 콜드리뷰 Medium)**: Windows 의 `os.replace` 는 대상이 다른 프로세스에
+# **읽기 전용으로 열려만 있어도** PermissionError 로 실패한다(실측). 구 `open('w')` 는 같은 상황에서
+# 성공했으므로 실패 확률 자체는 올라갔다. 대신 실패해도 원본은 무손상이고 tmp 만 남는다 — "부분
+# 상태를 만들지 않는다" 는 이득이 "가끔 갱신을 못 한다" 보다 크다고 판단했다.
+# 다만 그 실패가 조용하면 안 된다: 아래 bash 가 종료코드로 받아 index_incomplete 를 세운다.
 _tmp = history_path + '.tmp'
 try:
     with open(_tmp, 'w', encoding='utf-8') as f:
         f.write('\n'.join(new_lines))
     os.replace(_tmp, history_path)
-except Exception:
+except Exception as e:
     try:
         if os.path.exists(_tmp):
             os.remove(_tmp)
     except Exception:
         pass
-    raise
+    # traceback 대신 규약 메시지 1줄 — 다른 두 write 사이트·hook 전체와 출력 형식을 맞춘다.
+    sys.stderr.write("[backlog-lifecycle] %s — history.md 갱신 실패(%s: 다른 프로세스 점유 가능) — 수동 확인 필요\n" % (history_path, type(e).__name__))
+    sys.exit(3)
 PYEOF
+  HIST_RC=$?
+  # 갱신 실패를 마커에 반영(2026-08-10 콜드리뷰 Medium) — 이전엔 실패해도 index_incomplete 가 안 서서
+  # 인덱스 정리만 성공하면 최종 보고가 `✓ 이동` 이었다. history 가 안 써졌는데 성공 신호가 나가면
+  # "돈다" 는 신호가 실제 상태와 어긋난다.
+  [ "$HIST_RC" -ne 0 ] && index_incomplete=1
 
   # summary.md 갱신
   local summary_dir="$DOCS_ROOT/$product/tasks/$yyyymmdd"
