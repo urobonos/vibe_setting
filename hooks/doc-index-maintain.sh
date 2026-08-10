@@ -17,8 +17,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || exit 0
-# shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/product-resolver.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 
@@ -44,11 +42,14 @@ esac
 # product = docs 직속 디렉토리명
 PRODUCT=$(echo "$FILE_PATH_NORM" | sed -E 's#.*/\.claude/docs/([^/]+)/.*#\1#')
 [ -z "$PRODUCT" ] && exit 0
-# 공용 예약이름 목록 사용(2026-08-07 콜드리뷰 R3 M9) — 이전엔 `indexing|references` 2개만 하드코딩해
-# `backlog-lifecycle.sh` 의 8개 예약이름 목록과 따로 놀았다(같은 사실이 다른 곳에서 갈라지면 한쪽만
-# 갱신되고 다른 쪽은 stale 해진다). `product-resolver.sh::is_reserved_docs_name()` 공용 상수로 통일 —
-# 위 :38-40 의 indexing/references 경로 우선 차단은 그대로 둔다(빠른 조기 종료, 이 검사의 부분집합).
-is_reserved_docs_name "$PRODUCT" 2>/dev/null && exit 0
+# 자기제외는 `indexing|references` 2개다 — `is_reserved_docs_name()` 로 묶지 않는다(2026-08-10 되돌림).
+# R3 M9 가 "같은 목록이 두 곳에 갈렸다"며 공용 술어로 통일했으나 두 소비자의 질문이 서로 다르다:
+#   backlog-lifecycle.sh = "이 이름을 backlog frontmatter 의 product 값으로 쓸 수 있는가" (예약 8개)
+#   본 hook             = "이 디렉토리를 인덱싱하지 않는가"            (indexing/references 2개)
+# 두 집합은 그 2개에서만 겹친다. 통일한 순간 나머지 6개(working·참조문서·share·source_tree·scripts·
+# hooks)가 인덱싱에서 빠져 라이브 인덱스 5개가 영구 동결됐다(실측: base 5개 생성 vs 신 코드 0개).
+# 헤더 :9 "범위 = working/참조문서 등 전 영역" · :13 "자기 제외 = indexing + references" 와도 모순이었다.
+case "$PRODUCT" in indexing|references) exit 0 ;; esac
 
 DOCS_ROOT=$(echo "$FILE_PATH_NORM" | sed -E 's#(.*/\.claude/docs)/.*#\1#')
 PRODUCT_DIR="$DOCS_ROOT/$PRODUCT"
