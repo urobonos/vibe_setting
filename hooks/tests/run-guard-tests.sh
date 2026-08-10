@@ -36,6 +36,10 @@ trap 'cleanup' EXIT
 
 PASS=0; FAIL=0; SKIP=0
 fail_lines=()
+# skip_lines (2026-08-10 M4) — SKIP 은 라벨도 메시지도 없이 카운터 한 칸만 올려서, 환경 한계 SKIP 과
+# 데이터 부재 SKIP 이 같은 숫자에 섞였다. 실 landmark 데이터가 사라지는 순간의 신호가 `SKIP=2 → 3`
+# 뿐이라 "무엇이 검증되지 않았는가" 를 아무도 못 읽는다. fail_lines 와 같은 방식으로 수집·출력한다.
+skip_lines=()
 
 # ── python 실행 실패 shim (Windows Store 별칭 재현: command -v 통과 / 실행 exit 9) ──
 printf '#!/bin/sh\nexit 9\n' > "$TMP/shim/python3"
@@ -1092,7 +1096,7 @@ PYEOF
 # 형태만 바뀌어 재발한 것이다(이전엔 FAIL 로 세면서 주석에 "이건 좋은 신호" 라고 자인했다 — 좋은
 # 신호인데 스위트를 red 로 만드는 건 모순). PASS/SKIP 두 값만 쓴다(핵심 회귀 테스트 J-12a~f 는 이와
 # 무관하게 항상 유효하므로 SKIP 이 스위트 신뢰도를 낮추지 않는다).
-if [ "$J12_LANDMARK" = "FOUND" ]; then PASS=$((PASS+1)); else SKIP=$((SKIP+1)); fi
+if [ "$J12_LANDMARK" = "FOUND" ]; then PASS=$((PASS+1)); else SKIP=$((SKIP+1)); skip_lines+=("[J-12 landmark] 실 dup slug 쌍이 라이브 데이터에 없어 미검증(데이터 부재 — 코드 회귀 아님)"); fi
 
 # J-12g. M1(2026-08-07 콜드리뷰 R3) — `sibling_re.search()` 는 첫 매치만 본다. 한 라인에 같은 slug 의
 #   다른 날짜 href 가 2개 있고 첫 번째 파일이 없고 두 번째가 있으면 noref 로 잘못 떨어진다(R1 High 가
@@ -1224,7 +1228,7 @@ PYEOF
 # `docs/working/backlog/` 본문 파일명 스캔으로 이미 바꿔놨었다 — 조사자를 없는 데이터(인덱스)로
 # 보내는 stale 메시지였다. SKIP 은 메시지 없이도 원인이 코드가 아니라 데이터 부재임이 명확하므로
 # 별도 fail_lines 자체가 불필요해졌다(SKIP 은 실패 상세에 나열되지 않는다).
-if [ "$J13_LANDMARK" = "FOUND" ]; then PASS=$((PASS+1)); else SKIP=$((SKIP+1)); fi
+if [ "$J13_LANDMARK" = "FOUND" ]; then PASS=$((PASS+1)); else SKIP=$((SKIP+1)); skip_lines+=("[J-13 landmark] docs/working/backlog/ 에 해당 파일명 패턴이 없어 미검증(데이터 부재 — 코드 회귀 아님)"); fi
 
 # J-14. S1 결함면 — 인덱스 href 의 날짜가 실제 파일명 날짜와 어긋나면(수동 편집·이관 오차) 매칭이
 #   실패해 entry 가 잔존해야 하고, 그게 조용한 성공(✓)이 아니라 경고(△ + noref stderr)로 나와야 한다.
@@ -1375,15 +1379,22 @@ if ! find "$FH/.claude/docs/references" -name '*j19mixedcase*' 2>/dev/null | gre
 if echo "$J19_OUT" | grep -qF '공용 SSOT 예약'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-19c] 대소문자 변형 예약이름 차단 경고가 안 뜸(H2 회귀) — 출력: $J19_OUT"); fi
 
 # J-20. M10(2026-08-07 콜드리뷰 R3) — 대소문자 무관 매칭이 2건 이상이면(대소문자 구분 파일시스템에서
-#   `docs/TestProd`·`docs/testprod` 공존) 임의 선택 대신 경고 후 스킵해야 한다. **Windows/NTFS 는
-#   대소문자 구분 안 하는 파일시스템이라 두 디렉토리를 실제로 별개로 만들 수 없다(실측: 아래에서
-#   직접 확인)** — 이 fixture 자체가 이 플랫폼에서 재현 불가하면 코드 결함이 아니라 환경 한계이므로
-#   SKIP 한다(거짓 PASS/FAIL 방지). 별도로, 대소문자 무관 매칭이 여러 개라도 그중 하나가 `$product`
-#   와 완전히 같은 문자열이면(정확 일치) 모호하지 않아야 한다는 것도 확인한다(exact-match 우선).
-mkdir -p "$FH/.claude/docs/j20lower" "$FH/.claude/docs/J20Upper"
+#   `docs/TestProd`·`docs/testprod` 공존) 임의 선택 대신 경고 후 스킵해야 한다. 별도로, 대소문자 무관
+#   매칭이 여러 개라도 그중 하나가 `$product` 와 완전히 같은 문자열이면(정확 일치) 모호하지 않아야
+#   한다는 것도 확인한다(exact-match 우선).
+#
+#   **fixture 정정(2026-08-10 H2).** 이전 fixture 는 `j20lower` + `J20Upper` 를 만들었는데 이 둘은
+#   서로 대소문자 변형이 아니다(소문자화하면 `j20lower` vs `j20upper`). `find -iname 'j20lower'` 는
+#   **대소문자 구분 파일시스템에서도 항상 1건**이라 아래 가드가 모든 플랫폼에서 무조건 참이었다 —
+#   NTFS 한계가 아니라 fixture 버그였고, 그 결과 `match_count -gt 1` 분기 전체(모호 경고 + exact-match
+#   우선)가 **검증 0** 인 채 "환경 한계 SKIP" 으로 위장됐다. `J20Lower` 로 고쳐 진짜 변형을 만든다.
+#   이제 대소문자 구분 FS 에서는 2건이 되어 분기가 실제로 돌고, NTFS 에서만 1건으로 합쳐져 SKIP 된다
+#   (NTFS 에서는 이 코드 경로 자체가 도달 불가이므로 인위적 주입으로 태우지 않는다).
+mkdir -p "$FH/.claude/docs/j20lower" "$FH/.claude/docs/J20Lower"
 J20_DISTINCT=$(find -L "$FH/.claude/docs" -mindepth 1 -maxdepth 1 -iname 'j20lower' -type d 2>/dev/null | grep -c .)
 if [ "$J20_DISTINCT" -lt 2 ]; then
   SKIP=$((SKIP+1))
+  skip_lines+=("[J-20] 대소문자 무관 매칭 2건 공존을 이 파일시스템에서 만들 수 없어 미검증(대소문자 무구분 FS = 이 코드 경로 도달 불가). 대소문자 구분 FS 에서 실행 시 검증됨 — 실측 매칭 ${J20_DISTINCT}건")
 else
   cat > "$FH/.claude/docs/working/backlog/2026-08-05-j20tiebreak.md" <<'EOF'
 ---
@@ -1423,11 +1434,25 @@ fi
 #   **이 환경(Git Bash/Windows)에서 `ln -s` 로 만든 디렉토리 심링크가 실제로 `find -type d`(비-`-L`)
 #   에서 거짓을 내는지 먼저 실측한다** — 재현 안 되면(이 플랫폼의 심링크 구현이 POSIX lstat 의미론과
 #   다르면) 코드 결함이 아니라 환경 한계이므로 SKIP(거짓 PASS 방지).
+#
+#   **junction fallback(2026-08-10 M2).** 이전엔 `ln -s` 하나만 시도하고 실패하면 "환경 한계" 로
+#   SKIP 했는데, 그 정당화가 사실과 달랐다. MSYS 기본 설정의 `ln -s` 는 디렉토리를 **복사**해서
+#   `find -type d` 가 1건을 내지만(재현 실패), `cmd //c mklink //J`(junction, 관리자 권한 불요)는
+#   이 환경에서 그대로 재현된다 — 실측: junction 에 대해 `find -type d` = **0건** / `find -L -type d`
+#   = **1건**, 정확히 M11 시나리오다. 재현 가능한 fixture 를 만들 수 있는데 만들지 않아 M11 회귀가
+#   무방비였다. `ln -s` 가 심링크를 못 만들면 junction 으로 승격해 분기를 실제로 태운다.
 mkdir -p "$FH/.claude/docs/j22realtarget"
 ln -s "$FH/.claude/docs/j22realtarget" "$FH/.claude/docs/j22symlinked" 2>/dev/null
 J22_NOFOLLOW=$(find "$FH/.claude/docs" -mindepth 1 -maxdepth 1 -iname 'j22symlinked' -type d 2>/dev/null | grep -c .)
+if [ "$J22_NOFOLLOW" -ge 1 ] && command -v cygpath >/dev/null 2>&1; then
+  # ln -s 가 복사본을 만든 상태 — 걷어내고 junction 으로 재시도
+  rm -rf "$FH/.claude/docs/j22symlinked" 2>/dev/null
+  cmd //c mklink //J "$(cygpath -w "$FH/.claude/docs/j22symlinked")" "$(cygpath -w "$FH/.claude/docs/j22realtarget")" >/dev/null 2>&1
+  J22_NOFOLLOW=$(find "$FH/.claude/docs" -mindepth 1 -maxdepth 1 -iname 'j22symlinked' -type d 2>/dev/null | grep -c .)
+fi
 if [ "$J22_NOFOLLOW" -ge 1 ]; then
   SKIP=$((SKIP+1))
+  skip_lines+=("[J-22] dir 심링크/junction 을 이 환경에서 만들 수 없어 미검증(ln -s 는 복사본, junction 도 실패) — M11(find -type d 가 -L 없이 심링크 거짓 판정) 회귀가 무방비")
 else
   cat > "$FH/.claude/docs/working/backlog/2026-08-05-j22symlinktest.md" <<'EOF'
 ---
@@ -1472,6 +1497,12 @@ printf '\n───────────────────────�
 if [ ${#fail_lines[@]} -gt 0 ]; then
   printf 'FAIL 상세:\n'
   for l in "${fail_lines[@]}"; do printf '  - %s\n' "$l"; done
+fi
+# SKIP 상세(2026-08-10 M4) — 무엇이 검증되지 않았는지 읽을 수 있어야 한다. SKIP 은 스위트를 red 로
+# 만들지 않지만, 라벨 없이 숫자만 늘면 환경 한계와 데이터 부재가 구분되지 않는다.
+if [ ${#skip_lines[@]} -gt 0 ]; then
+  printf 'SKIP 상세(미검증 항목):\n'
+  for l in "${skip_lines[@]}"; do printf '  - %s\n' "$l"; done
 fi
 printf 'PASS=%d  FAIL=%d  SKIP=%d\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ] || exit 1
