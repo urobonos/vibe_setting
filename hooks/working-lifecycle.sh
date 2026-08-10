@@ -402,7 +402,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
         done
       done
       if [ "$pending_count" -gt 0 ]; then
-        echo "[working-lifecycle 확인 요청] 자연어 'done' 키워드 감지 — working/ → tasks/ 이동 대상 ${pending_count}건: ${pending_names}. 사용자에게 \"working/ 문서를 tasks/ 로 이동할까요? (대상 ${pending_count}건)\" 을 1회 확인한 뒤 승인 시 /taskflow:done 을 실행하라. 미승인 시 이동하지 말 것."
+        echo "[working-lifecycle 확인 요청] 자연어 'done' 키워드 감지 — working/ → tasks/ 이동 대상 ${pending_count}건: ${pending_names}. 사용자에게 \"working/ 문서를 tasks/ 로 이동할까요? (대상 ${pending_count}건)\" 을 1회 확인한 뒤 승인 시 /taskflow:save now 를 실행하라. 미승인 시 이동하지 말 것."
       else
         echo "[working-lifecycle] 자연어 'done' 키워드 감지 but 완료 마커(Status:Done + ## Self-Critique) 충족 파일 0건 — 이동 대상 없음" >&2
       fi
