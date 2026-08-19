@@ -87,7 +87,7 @@ fi
 # 4. SELECT * 사용
 SELECT_STAR=$(grep -niE "select\s+\*\s+(from|,)" "$FILE" 2>/dev/null)
 if [ -n "$SELECT_STAR" ]; then
-  WARNINGS="${WARNINGS}\n[SELECT * 금지] 필요 컬럼만 명시하세요 (hongcafe:mysql8 스킬 규칙):\n${SELECT_STAR}\n"
+  WARNINGS="${WARNINGS}\n[SELECT * 금지] 필요 컬럼만 명시하세요 (backend:mysql8 스킬 규칙):\n${SELECT_STAR}\n"
   ((COUNT++))
 fi
 

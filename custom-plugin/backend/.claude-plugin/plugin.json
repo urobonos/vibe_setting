@@ -1,0 +1,8 @@
+{
+  "name": "backend",
+  "description": "백엔드 공통 기술 — 언어·DB(php8/mysql8/query-tuning) + API 계약(api-spec-audit/sns-oauth) + 디버깅(debug-skill). 특정 제품에 묶이지 않는다",
+  "version": "1.0.0",
+  "author": {
+    "name": "박재영"
+  }
+}

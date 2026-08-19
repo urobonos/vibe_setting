@@ -29,7 +29,7 @@ triggers:
   - "/aws"
 version: 1.0.1
 user-invocable: true
-depends_on: [hongcafe:mysql8, security-audit]
+depends_on: [backend:mysql8, security-audit]
 conflicts_with: []
 min_claude_md_version: "4.0"
 ---
@@ -106,7 +106,7 @@ deploy/
 
 ### 2.3. 주석 규칙
 
-Lambda Python 코드에도 `hongcafe:php8` 코딩 표준 (`~/.claude/custom-plugin/hongcafe/skills/php8/references/coding-standards.md`) 과 동일한 규칙을 적용한다:
+Lambda Python 코드에도 `backend:php8` 코딩 표준 (`~/.claude/custom-plugin/hongcafe/skills/php8/references/coding-standards.md`) 과 동일한 규칙을 적용한다:
 - 모든 함수에 docstring 필수 (`@param`, `@return` 포함)
 - 복잡한 로직에 단계별 설명 주석
 - 추상화 시 사유 주석

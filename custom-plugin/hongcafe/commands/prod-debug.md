@@ -75,7 +75,7 @@ argument-hint: "[connect|verify|sync] [env] [args]"
 | `~/.claude/CLAUDE.md` §4.3 "서버 우선 디버그 → 로컬 반영 흐름" | 정책 SSOT (5 단계 + 환경별 매트릭스) |
 | `hongcafe:prod-debug` 스킬 | 본 슬래시의 본체 스킬 (3 모드 상세) |
 | `~/.claude/skills/aws/SKILL.md` §"실행 주체" | SSM 조회/변경 분리 패턴 |
-| `hongcafe:php8` 스킬 §"e2e 검증" | verify 모드 5점 매핑 |
+| `backend:php8` 스킬 §"e2e 검증" | verify 모드 5점 매핑 |
 
 ## §3 Checkpoint 우선 적용
 

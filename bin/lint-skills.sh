@@ -147,7 +147,7 @@ echo "$CLAUDE_MD_VERSION" | grep -qE '^[0-9]+\.[0-9]+$' && CLAUDE_MD_VERSION="${
 
 # --- 스킬 참조 해석 (L6/L7 공용) ---
 # 글로벌 스킬 폴더 + `{plugin}:{skill}` 네임스페이스 (custom-plugin/{plugin}/skills/{skill}/SKILL.md).
-# Why: 플러그인 이동(2026-07-15) 후에도 해석기가 글로벌 폴더만 조회해 `hongcafe:mysql8` 이 상시
+# Why: 플러그인 이동(2026-07-15) 후에도 해석기가 글로벌 폴더만 조회해 `backend:mysql8` 이 상시
 #      L6-FAIL -> lint 가 항상 exit 1 = 신호 자체가 죽었다. frontmatter 가 아니라 해석기가 틀렸다.
 skill_ref_exists() {
   local ref="$1"

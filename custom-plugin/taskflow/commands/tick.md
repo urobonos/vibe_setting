@@ -193,7 +193,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 bash ~/.claude/bin/dev-stack.sh up     # idempotent — 이미 떠 있으면 즉시 반환
 ```
 
-e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`hongcafe:php8` §e2e 검증), 살아 있는 환경 없이는 verify 가 애초에 완결되지 않는다. 코드를 다 고친 뒤 검증 단계에서 스택이 없다는 걸 발견하면 그 iteration 이 통째로 낭비되므로 **착수 전**에 세운다.
+e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`backend:php8` §e2e 검증), 살아 있는 환경 없이는 verify 가 애초에 완결되지 않는다. 코드를 다 고친 뒤 검증 단계에서 스택이 없다는 걸 발견하면 그 iteration 이 통째로 낭비되므로 **착수 전**에 세운다.
 
 - **`up` 은 병렬에서도 안전하다.** `docker compose up -d` 가 idempotent 라 슬롯 N 개가 동시에 불러도 이미 떠 있으면 아무 일도 일어나지 않는다. 최초 기동만 mkdir 락으로 직렬화된다.
 - **기동 실패 시 그 step 은 `NeedsDecision`** 으로 마감한다 (검증 불가 = 완료 판정 불가). 코드를 고쳐놓고 verify 를 건너뛰는 것보다 낫다.

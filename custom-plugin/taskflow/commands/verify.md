@@ -1,5 +1,5 @@
 ---
-description: e2e 5점 검증 진입 — env / 함수·클래스 정의 / DB 스키마 / 프로덕션 curl / mock 검증. `hongcafe:php8` §"e2e 검증" SSOT 기반.
+description: e2e 5점 검증 진입 — env / 함수·클래스 정의 / DB 스키마 / 프로덕션 curl / mock 검증. `backend:php8` §"e2e 검증" SSOT 기반.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent
 argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 ---
@@ -62,7 +62,7 @@ e2e 5점 검증 진입 — 코드 수정 완료 판단을 위한 환경/스키�
 | SSOT | 역할 |
 |------|------|
 | `~/.claude/CLAUDE.md` §4.3 "e2e 검증 (필수)" | 정책 SSOT |
-| `hongcafe:php8` 스킬 §"e2e 검증" | 5점 체크 SSOT |
+| `backend:php8` 스킬 §"e2e 검증" | 5점 체크 SSOT |
 | `~/.claude/skills/task-docs/references/unified-template.md` § 검증 | 양식 SSOT (5행 표 골격) |
 | `~/.claude/hooks/doc-unified-check.sh V5` | 5점 PASS 강제 (신규) |
 

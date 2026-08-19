@@ -260,7 +260,7 @@
 | 5 | mock 검증 분리 | - | - |
 
 > `doc-unified-check.sh V5` — 5건 모두 PASS 시 통과, 일부 FAIL 시 exit 2.
-> SSOT: hongcafe:php8 §"e2e 검증" + CLAUDE.md §4.3 "e2e 검증 (필수)".
+> SSOT: backend:php8 §"e2e 검증" + CLAUDE.md §4.3 "e2e 검증 (필수)".
 
 ---
 

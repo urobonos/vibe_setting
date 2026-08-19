@@ -225,7 +225,7 @@ frontmatter `triggers` 매칭 시 즉시 호출. 모호한 경우 한 줄 확인
 |------|------|
 | `~/.claude/CLAUDE.md` §4.3 "서버 우선 디버그 → 로컬 반영 흐름" | 정책 SSOT (5 단계 흐름 본문) |
 | `~/.claude/skills/aws/SKILL.md` §"실행 주체" | SSM 조회/변경 분리 패턴 |
-| `hongcafe:php8` 스킬 §"e2e 검증" | verify 모드 5점 매핑 SSOT |
+| `backend:php8` 스킬 §"e2e 검증" | verify 모드 5점 매핑 SSOT |
 | `~/.claude/skills/security-audit/SKILL.md` | CIS AWS / IAM 최소 권한 |
 | `/hongcafe:prod-debug` 커맨드 | 슬래시 진입점 thin wrapper |
 

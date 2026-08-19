@@ -441,7 +441,7 @@ v_verify_e2e() {
   fi
   local bmsg="[BLOCKED] verify-e2e-check: e2e 5점 중 $FAIL_COUNT 점 누락"$'\n'"  파일: $FP"
   local p; for p in "${fail_points[@]}"; do bmsg+=$'\n'"  · $p"; done
-  bmsg+=$'\n\n'"SSOT: hongcafe:php8 §\"e2e 검증\" + CLAUDE.md §4.3 \"e2e 검증 (필수)\""$'\n'"진입점: /taskflow:verify  (~/.claude/custom-plugin/taskflow/commands/verify.md)"
+  bmsg+=$'\n\n'"SSOT: backend:php8 §\"e2e 검증\" + CLAUDE.md §4.3 \"e2e 검증 (필수)\""$'\n'"진입점: /taskflow:verify  (~/.claude/custom-plugin/taskflow/commands/verify.md)"
   add_block "$bmsg"
 }
 

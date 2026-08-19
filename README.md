@@ -105,14 +105,14 @@
 
 - **`hongcafe:api-team`** `A` — API 추가/오류 시 FE+BE+인프라 3-멤버 병렬 spawn 영향분석. `add` = 3-레포 반영 체크리스트, `debug` = 가설 우선순위
 - **`hongcafe:dev-team`** `A` — 다레포 개발 팀(BE / 인프라 / 문서 / FE read-only). Lead 라우팅 1~4 spawn, api-team(영향분석) → dev-team(구현) handoff
-- **`hongcafe:api-spec-audit`** `A` — API 명세 ↔ IEEE 산출물(SRS/SDD/IDD) 9축 정합성 audit
+- **`backend:api-spec-audit`** `A` — API 명세 ↔ IEEE 산출물(SRS/SDD/IDD) 9축 정합성 audit
 - **`hongcafe:api-test`** `A·B` — BE API 러너 호출 — smoke(공개 EP 4종) / e2e(자동가입→코인) / scenario(ep.json 다단계)
-- **`hongcafe:php8`** `B` — PHP 8.4+ / CI 4.7+ Modular Monolith. 레이어 규칙·DI 강제·9산출물 동반. **e2e 5점 검증 SSOT**
-- **`hongcafe:mysql8`** `B` — MySQL 8.x 쿼리·최적화·스키마 설계. ANSI 우선, EXPLAIN 필수, 인덱스 변경 승인
-- **`hongcafe:query-tuning`** `B` — 이미 느린 쿼리의 실서버 진단·재작성·폐기 판단. 측정 우선, 인덱스 미적용 원인, ESR 복합 인덱스 설계, 안티패턴 카탈로그
-- **`hongcafe:sns-oauth`** `A·B` — SNS OAuth(kakao/naver/google/apple) 4-provider 매트릭스 SSOT. add / verify / debug
+- **`backend:php8`** `B` — PHP 8.4+ / CI 4.7+ Modular Monolith. 레이어 규칙·DI 강제·9산출물 동반. **e2e 5점 검증 SSOT**
+- **`backend:mysql8`** `B` — MySQL 8.x 쿼리·최적화·스키마 설계. ANSI 우선, EXPLAIN 필수, 인덱스 변경 승인
+- **`backend:query-tuning`** `B` — 이미 느린 쿼리의 실서버 진단·재작성·폐기 판단. 측정 우선, 인덱스 미적용 원인, ESR 복합 인덱스 설계, 안티패턴 카탈로그
+- **`backend:sns-oauth`** `A·B` — SNS OAuth(kakao/naver/google/apple) 4-provider 매트릭스 SSOT. add / verify / debug
 - **`hongcafe:prod-debug`** `C` — 서버 우선 디버그 → 로컬 반영. connect / verify / sync, prd 는 최후 수단
-- **`hongcafe:debug-skill`** `B` — 단일 레포 디버깅 표준 7단계 + 영역별 P0~P2 의심 매트릭스
+- **`backend:debug-skill`** `B` — 단일 레포 디버깅 표준 7단계 + 영역별 P0~P2 의심 매트릭스
 - **`hongcafe:hongcafe-db-migration`** `C` — 소스 DB(NCP) → prd Aurora(US/JP) 이관 (접속판별 → dry-run → 적재 → PII위생 → 롤백)
 - **`hongcafe:mirror-be-claude`** `A·C` — be CLAUDE.md ↔ 글로벌 미러 + api-docs 3-way 정합. verify / sync-from-be / sync-from-global
 - **`hongcafe:global-context`** (internal) — 다국가 서비스 컨텍스트(국가코드·Country Resolver·Feature Flag·i18n·타임존)
