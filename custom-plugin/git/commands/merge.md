@@ -10,6 +10,8 @@ description: worktree(wip) 작업 → 기존 feature 분기 ff-only 머지·정�
 
 1. worktree (`wip/{sid}-{slug}`) commit 완료 확인 — base = `feature/{이름}`
 2. 대상 feature 분기 확인
+
+> **`/taskflow:code` 가 만든 worktree(`wip/{sid8}-{slug}`)는 아래 3 대신 §"squash 정착" 으로 간다.** 판정 기준은 브랜치 이름이 아니라 **출처**다 — 리뷰 루프가 라운드마다 커밋을 쌓아 중간 상태가 남기 때문이다. `/taskflow:tick`·`/taskflow:watch`·`/taskflow:save` 경로는 3 그대로(ff-only).
 3. **Claude 자동 실행** (2026-06-04~, 사용자 명시 승인 — 각 명령을 **개별 Bash 호출**로 실행, `&&`/`;` 결합 금지):
 
 ```bash
@@ -43,6 +45,28 @@ git branch -D wip/{sid}-{slug}
 
 4. **정착 후 reachable 해시 기록 (추적성, 2026-06-02~):** ff-only 머지·cherry-pick 후 working/summary 에 기록하는 커밋 해시는 **정착 후 reachable 최종 해시**여야 한다 (`git rev-parse ${FEATURE}` / `git log -1 --format=%h`). 머지 전 wip 해시·rebase 이전 해시를 인용하면 HEAD 에서 도달 불가한 orphan 이 된다 (audit 2026-06-02 — BE summary 6개 해시 전부 orphan 인용, patch-id 로만 작업 확인됨). `/taskflow:retro` 단계에서 `git merge-base --is-ancestor` 로 재확인.
 
+## squash 정착 — `/taskflow:code` 산 worktree
+
+**`wip/{sid8}-{slug}` 패턴(= `/taskflow:code` 분리 루프 산출물)은 squash 머지가 기본이다.** 라운드별 중간 상태를 이력에 남기지 않는다 (근거 = `custom-plugin/taskflow/commands/code.md` §"정착은 1커밋으로").
+
+각 명령을 **개별 Bash 호출**로 실행한다 (`&&`/`;` 결합 금지 — 위 3의 결합 금지 이유 그대로).
+
+```bash
+# FEATURE = feature/{이름} — master/main 이면 정착 절대 금지 (branch-enforce §1.5 차단, PR 절차로 대체)
+git checkout feature/{이름}
+git merge --squash wip/{sid8}-{slug}
+git commit -m "type(scope): 제목"
+git worktree remove ~/.claude/worktrees/{sid8}-{slug}
+git branch -D wip/{sid8}-{slug}
+```
+
+- **`--squash` 는 스테이징만 한다** — 커밋이 자동 생성되지 않으므로 `git commit` 이 별도 명령으로 붙는다. 3(ff-only)이 4명령인데 여기가 5명령인 이유다.
+- **cherry-pick fallback 이 없다.** `--squash` 는 feature 가 분기 후 전진(divergence)해도 성공하므로 3의 ff-only 실패 경로가 발생하지 않는다. 충돌이 나면 자동 해결하지 않고 `git merge --abort` 후 충돌 파일 목록을 보고하고 정지한다 (wip 분기는 보존된다).
+- **`git branch -D` 는 그대로다.** squash 후 wip 은 "not fully merged" 상태지만 `-D` 가 강제 삭제하고, `dangerous-ops-guard.sh` 의 단일 라인 면제도 그대로 매칭된다.
+- **커밋 메시지 = `/taskflow:code` 1단계에서 확정한 type·scope + 제목 한 줄.** 포맷 SSOT 는 `custom-plugin/git/skills/push/SKILL.md` §"커밋 메시지 컨벤션" 이다 — type 목록·scope 규칙·72자·명령형을 **여기서 재정의하지 않는다.** 본문을 쓰는 경우는 BREAKING CHANGE(`type(scope)!:` + footer) 뿐이다.
+- **push 하지 않는다.** push 스킬 §"규칙"(자동 원격 push 전면 금지)과 `branch-enforce.sh` 가 그대로 적용된다. 머지 후 사용자에게 `! git push origin {branch}` 형태를 안내하는 것까지가 범위다.
+- 정착 후 해시 기록은 위 4 그대로 (squash 커밋 = 새 해시이므로 wip 해시를 인용하면 orphan 이 된다).
+
 ## Why
 
 - **기존 feature 수정 = worktree → feature 환원 패턴.** 별 feature 신설 안 함.
@@ -52,3 +76,8 @@ git branch -D wip/{sid}-{slug}
 ## SSOT
 - CLAUDE.md §4.3 "worktree 항상 강제 + feature 요청 시 생성"
 - 짝 진입점: `/git:create` (신규 feature 생성 시)
+- 커밋 포맷: `custom-plugin/git/skills/push/SKILL.md` §"커밋 메시지 컨벤션" (본 파일에 재정의 0)
+
+## Changelog
+
+- 2026-08-19: **`/taskflow:code` 산 worktree 전용 squash 정착 분기 추가** — 리뷰 루프가 라운드마다 쌓은 중간 커밋은 리뷰를 통과한 적이 없고, 린터 `--fix` 커밋이 `git blame` 을 오염시킨다. **기존 ff-only 경로(`/taskflow:tick`·`/taskflow:watch`·`/taskflow:save`)는 건드리지 않았다** — CLAUDE.md §4.3(f)·`watch.md` 머지 사다리 L1~L3 가 ff-only 를 전제한다. 커밋 포맷은 push 스킬 포인터(재정의 0), push 는 여전히 사용자 직접
