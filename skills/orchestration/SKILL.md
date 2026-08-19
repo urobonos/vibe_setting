@@ -9,7 +9,7 @@ triggers:
   - "3-Team"
   - "Analyze→Plan→Execute"
   - "/orchestration"
-version: 2.2.0
+version: 2.2.1
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -33,7 +33,7 @@ min_claude_md_version: "4.0"
 
 | 작업 유형 | 진입 모드 | Model |
 |-----------|-----------|-------|
-| 코드베이스 탐색 (3쿼리+) | `Explore` agent | 시스템 기본 |
+| 코드베이스 탐색 (3쿼리+) | `Explore` agent | `sonnet` (§1.1) |
 | 다파일 영향 분석 | Team 1 (Analyze) | opus |
 | 다단계 구현 (M/L 등급) | 3-Team 전체 (Analyze→Plan→Execute) | opus 통일 (Part 1.1) |
 | 설계 결정 (아키텍처·스키마·API) | `Plan` agent + Architect 페르소나 | opus |
@@ -64,10 +64,10 @@ min_claude_md_version: "4.0"
 | 추론·검증·구현·분석 (대부분) | `opus` | 기본값. 생략 시 부모(opus) 상속과 동일 |
 | 단발 조회·기계적 패턴 매칭 (경량) | `sonnet` (선택) | Lead 재량 — 추론 깊이가 결과에 영향 없을 때만 |
 
-- **팀 내 모델 통일 (핵심):** 한 팀 멤버 간 모델을 섞지 않는다. 멤버별 추론 깊이가 다르면 가설·우선순위 비교가 무의미해지기 때문이다 (`hongcafe:api-team` SKILL §[실행 주체] 근거 정합). **적용 대상 = 같은 문제를 각자 풀어 결과를 대조하는 병렬 멤버** (`api-team`·`debate`·3-Team). 생산자↔검수자처럼 **직렬로 물리는 역할은 애초에 비교 대상이 아니라 통일 대상도 아니다** — `tick` 루프의 개발자 `sonnet` / 리뷰어 `opus` 비대칭이 그 사례다 (SSOT = `custom-plugin/taskflow/commands/tick.md` §"step 개발").
+- **팀 내 모델 통일 (핵심):** 한 팀 멤버 간 모델을 섞지 않는다. 멤버별 추론 깊이가 다르면 가설·우선순위 비교가 무의미해지기 때문이다 (`hongcafe:api-team` SKILL §[실행 주체] 근거 정합). **적용 대상 = 같은 문제를 각자 풀어 결과를 대조하는 병렬 멤버** (`api-team`·`debate`·3-Team). 생산자↔검수자처럼 **직렬로 물리는 역할은 애초에 비교 대상이 아니라 통일 대상도 아니다** — `tick` 루프의 개발자·리뷰어가 그 사례다. 2026-08-10 기준 둘 다 `sonnet` 이지만 **같은 값인 것은 통일 룰의 결과가 아니라 역할별 독립 판단이 우연히 같은 지점에 도달한 것**이고, 한쪽만 움직여도 규칙 위반이 아니다 (SSOT = `custom-plugin/taskflow/commands/tick.md` §"step 개발").
 - **effort 파라미터 없음:** Agent 도구는 `model` 만 지정한다 — reasoning effort 파라미터가 없다. effort 차등이 필요하면 Workflow `agent()` 경로에서만 가능하다.
 - **sonnet 예외는 강제 아님:** 경량 멤버에 sonnet 을 쓸지는 Lead 판단. 정확성 우선이면 opus 유지가 안전한 기본값이다.
-- Explore 에이전트는 `subagent_type: "Explore"` 사용, 시스템 기본값.
+- **Explore 는 `sonnet` 을 명시한다** (`subagent_type: "Explore"` + `model: "sonnet"`). 임무가 판단이 아니라 위치 특정이고(발췌만 읽어 경로를 돌려줄 뿐 리뷰·감사는 하지 않는다), fan-out 이 가장 큰 자리라 같은 하향이라도 절감 폭이 제일 크다. **실패 모드 = false negative** — 못 찾고 "없다"고 돌아오면 Lead 가 그대로 믿는다. 품질 레버는 모델이 아니라 프롬프트에 있으므로 `breadth` 를 명시하고, 빈손이거나 결과가 얇을 때만 `opus` 로 재시도한다.
 - **모델은 계열명(`opus`/`sonnet`/`haiku`)으로만 지정한다.** 버전·context·cutoff 를 본문에 박지 않는다 — 모델군 교체마다 갱신해야 하는 부채가 되고, 하니스가 실제로 쓰는 것은 계열명뿐이다.
 
 ## 1.2. Task Sizing
