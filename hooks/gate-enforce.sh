@@ -280,7 +280,7 @@ if [[ "$TOOL_NAME" == "Task" || "$TOOL_NAME" == "SubagentSpawn" ]]; then
   # Explore, Plan, claude-code-guide, statusline-setup, general-purpose → model 검증 제외
   if [[ "$SUBAGENT_TYPE" != "Explore" && "$SUBAGENT_TYPE" != "Plan" && "$SUBAGENT_TYPE" != "claude-code-guide" && "$SUBAGENT_TYPE" != "statusline-setup" && "$SUBAGENT_TYPE" != "general-purpose" ]]; then
     if [ -z "$MODEL" ]; then
-      echo "[GATE BLOCKED] Subagent spawn 차단 — model 파라미터(opus/sonnet/haiku)를 반드시 지정하세요. (orchestration 스킬 §1.1 Effort 할당)" >&2
+      echo "[GATE BLOCKED] Subagent spawn 차단 — model 파라미터(opus/sonnet/haiku)를 반드시 지정하세요. (orchestration 스킬 §1.1 Model 할당 정책)" >&2
       command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=subagent-model"
       exit 2
     fi
