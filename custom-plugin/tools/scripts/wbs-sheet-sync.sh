@@ -19,7 +19,7 @@
 #
 # 사용법
 #   bash wbs-sheet-sync.sh [repo-root]
-#   repo-root 생략 시 cwd 의 git toplevel → 없으면 기본 경로.
+#   repo-root 생략 시 cwd 의 git toplevel → 생성기가 없으면 기본 경로.
 #
 # SSOT: custom-plugin/tools/commands/wbs-sync.md + 레포 docs/wbs/tools/*.py
 # ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ MENU='2026-08-12-wbs-menu-summary.xlsx'
 REPO="${1:-}"
 if [ -z "$REPO" ]; then
   REPO="$(git rev-parse --show-toplevel 2>/dev/null)"
-  [ -d "$REPO/docs/wbs" ] || REPO="$FALLBACK_REPO"
+  [ -f "$REPO/docs/wbs/tools/sheet-sync.py" ] || REPO="$FALLBACK_REPO"
 fi
 WBS="$REPO/docs/wbs"
 if [ ! -d "$WBS" ]; then
