@@ -1,5 +1,5 @@
 ---
-description: 리뷰 단계 진입 — Self-Critique 체크리스트(unified 골격 10항목) 채움 + cold 판정 1회 + simplify 스킬 보조 호출. 코드 재사용성·가독성·효율성 검토.
+description: 리뷰 단계 진입 — Self-Critique 체크리스트(unified 골격 10항목) 채움 + cold 리뷰 루프(2인 병렬·클린까지) + simplify 스킬 보조 호출. 코드 재사용성·가독성·효율성 검토.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent
 argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 ---
@@ -21,24 +21,30 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | 단계 | 동작 | 결과 |
 |------|------|------|
 | ① Self-Critique 채움 | working/ §실행 §Self-Critique 체크리스트 채움 (보안 / 로직 / 코드 품질 / 테스트 커버리지 / 이전 단계 검증). **개수 SSOT = `unified-template.md` §체크리스트** — unified 골격 10항목, 게이트는 문서 **총합 ≥ 30**(V4 `unified) MIN=30`)이라 섹션별 하한이 따로 없다 | 미체크 항목 처리 또는 잔여 이슈 기록 |
-| **①.5 cold 판정 (코드 변경 시)** | `taskflow:cold-reviewer` 1회 spawn — 변경분 ↔ §계획·DoD 대조 (아래 §"cold 판정"). 코드 변경 0 이면 skip | `VERDICT: CLEAN\|FINDINGS` + `file:line` 지적 |
+| **①.5 cold 리뷰 루프 (코드 변경 시)** | `reviewer-correctness` · `reviewer-design` 을 **병렬 spawn** → 지적을 본체가 수정 → 재리뷰. `Critical`·`High`·`Medium` 이 모두 0이 될 때까지 (아래 §"cold 리뷰 루프"). 코드 변경 0 이면 skip | 라운드 로그 + 최종 `VERDICT` |
 | ② simplify 스킬 호출 | 변경 파일에 대해 simplify 스킬 실행 (재사용성·가독성·효율성 리뷰) | 리뷰 결과 요약 |
 | ③ working/ § 리뷰 섹션 기록 | simplify 결과 + Self-Critique 보강 항목 § 리뷰 (Review) 섹션에 기록 | 표 + 본문 |
 
 > **비필수 사이드이펙트 백로그 격리:** Self-Critique·simplify 가 짚은 항목이 (① 필수요소 아님 + ② 문제·버그 아님 + ③ 사이드이펙트급) 3조건을 모두 충족하면 즉시 픽스하지 말고 backlog 메모리에만 기록. **보안·로직 결함 등 실제 문제는 경미해도 backlog 가 아니라 정상 처리** (②가 안전장치). SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
 
-## cold 판정 (단계 ①.5 — 코드 변경이 있을 때만, 2026-07-31~)
+## cold 리뷰 루프 (단계 ①.5 — 코드 변경이 있을 때만, 2026-07-31~ / 2026-08-27 루프 승격)
 
-`taskflow:cold-reviewer` Agent 1개를 spawn 해 변경분을 판정한다. 입력 = 변경분 diff + 그 작업의 §계획·DoD. 판정축·등급·반환 양식·"코드 수정 금지"는 **전부 agent 정의에 있다** (`custom-plugin/taskflow/agents/cold-reviewer.md`) — 여기서 다시 적지 않는다.
+**spawn 규약은 `watch.md` §"코드 축 — 변경분 리뷰" 가 SSOT 다** — 리뷰어 구성(`reviewer-correctness`·`reviewer-design` 2인 병렬)·입력 조립·판정축 7개 분담·반환 양식. 여기서 다시 적지 않는다. 입력 = 변경분 diff + 그 작업의 §계획·DoD.
+
+**루프 제어는 `code.md` 가 SSOT 다** — 종료 조건(C·H·M 0)·캡(5회)·`Low` 처리·반박 판정·종료 전 최종 검증(무이력 1회)·라운드 이력 형식·두 리뷰어 합본. 이것도 여기서 다시 적지 않는다.
 
 **왜 self-critique 만으로 끝내지 않는가.** ① 은 자기가 쓴 코드를 자기가 보는 것이고, 그때 안 보이는 것이 있다. "사람이 결과를 즉시 보니 cold 가 불필요하다" 는 판단이 앞서 있었으나, 실제로 사용자는 **결과 요약을 보지 diff 전체를 읽지 않는다** — 그래서 사람 경로에도 독립 판정이 필요하다 (근거 실측 = `tick.md` §2-bis 2, 테스트 green 인 채 통과한 [Critical]).
 
-**`simplify` 보다 먼저 돈다.** `simplify` 는 **고치는** 스킬이라(`then apply the fixes`) 뒤에 두지 않으면 리뷰 대상이 리뷰 중에 움직인다. 순서는 cold 판정 → 본체가 지적 수정 → `simplify` 로 품질 정리다.
+**왜 1회에서 루프로 올렸는가 (2026-08-27).** 1회 판정의 근거는 "사람이 결과를 보고 다음을 정한다" 였는데, 그건 **바로 위 문단이 실측으로 부정한 그 전제다.** cold 를 도입한 근거와 루프를 막던 근거가 같은 전제였고, 전제가 죽었으면 종료 조건도 같이 움직여야 했다. 그대로 두는 동안 사람 경로만 리뷰어 1인·1회로 남아 **코드를 제대로 검증하려면 `/taskflow:tick`·`/taskflow:code` 로 새는** 구조가 됐다. 코드 작업의 리뷰 강도가 호출 경로마다 다를 이유가 없다.
+
+**`code.md` 와 다른 것은 수정 주체 하나다.** 거기는 `step-developer` 가 고치고 **여기는 본체가 고친다** — 사람 경로엔 개발 Agent 가 없고 이미 본체가 그 코드를 썼다. 리뷰의 값은 **본 쪽이 cold** 라는 데 있지 짠 쪽이 서브에이전트라는 데 있지 않다. 따라서 `code.md` 의 `SendMessage` 전달·`REBUTTED` 반환은 여기 해당하지 않고, 반박이 필요하면 본체가 근거 3종을 직접 확인해 판정한다.
+
+**`simplify` 는 루프가 끝난 뒤 돈다.** `simplify` 는 **고치는** 스킬이라(`then apply the fixes`) 루프 안에 두면 리뷰 대상이 리뷰 중에 움직인다. 순서는 루프 클린 → `simplify` 로 품질 정리다.
 
 - 지적은 **본체가** 고친다. 리뷰어는 Edit·Write 가 없어 고칠 수 없다.
 - 수정 범위 = 지적 항목 + 그 심볼의 호출부 전건 (부분 적용이 가장 위험하다).
-- **루프를 돌리지 않는다.** 여기는 1회 판정이다 — 사람이 결과를 보고 다음을 정한다. 클린까지 자동 반복은 무인 경로(`/taskflow:tick`) 소관이다.
-- 지적이 §3 매칭이거나 계획 자체를 바꾸면 고치지 말고 사용자에게 보고한다.
+- 지적이 §3 매칭이거나 계획 자체를 바꾸면 고치지 말고 사용자에게 보고한다 — 루프를 계속 돌리지 않는다.
+- 캡을 소진하고 C·H·M 이 남으면 **클린으로 만들지 않는다.** 잔여를 §리뷰 섹션에 남기고 보고한다.
 
 > **무인 경로와 겹치지 않는다.** `/taskflow:tick` 은 `/taskflow:review` 를 타지 않는다 (`tick.md` §"step 코드리뷰 루프"). 겹쳐 돌리면 같은 코드를 cold 로 두 번 본다.
 
@@ -50,8 +56,8 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 | 태스크 | 직렬·병렬 | 방법 |
 |--------|----------|-----|
-| ① Self-Critique 채움 + **①.5 cold 판정** | **병렬 가능** | 체크리스트 작성과 리뷰어 spawn 은 독립 → 동시 진행 |
-| ①.5 → ② simplify | **직렬 필수** | `simplify` 는 코드를 고치므로 cold 판정보다 뒤여야 한다 (리뷰 대상이 움직이면 판정이 무의미) |
+| ① Self-Critique 채움 + **①.5 cold 리뷰 루프** | **병렬 가능** | 체크리스트 작성과 리뷰어 spawn 은 독립 → 동시 진행 |
+| ①.5 → ② simplify | **직렬 필수** | `simplify` 는 코드를 고치므로 리뷰 루프보다 뒤여야 한다 (리뷰 대상이 움직이면 판정이 무의미) |
 | ③ § 리뷰 기록 | **직렬** | ①·①.5·② 결과 종합 후 기록 |
 
 ## 자연어 trigger
@@ -87,7 +93,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 |------|------|
 | `~/.claude/CLAUDE.md` §4.1 "Validation (No Test, No Merge)" | 정책 SSOT |
 | `simplify` skill (Anthropic plugin, 글로벌 카탈로그 등재 — `~/.claude/skills/` 본체 없음) | 코드 품질 리뷰 진입점 (Skill 도구로 호출) |
-| `custom-plugin/taskflow/agents/cold-reviewer.md` | **cold 판정 계약** — 판정축 5 · 등급 기준 · 반환 양식 · Edit/Write 부재 · `model: sonnet` |
+| `custom-plugin/taskflow/agents/reviewer-correctness.md` · `reviewer-design.md` | **cold 리뷰 계약** — 판정축 7(기능 3 / 설계 4) · 등급 기준 · 반환 양식 · Edit/Write 부재 · `model: sonnet` |
 | `~/.claude/skills/task-docs/references/unified-template.md` § 실행 §Self-Critique + § 리뷰 | 양식 SSOT |
 
 ## §3 Checkpoint 우선 적용
@@ -101,14 +107,15 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | 등급 | 진행 여부 |
 |------|----------|
 | S (단순 1~3줄 패치 / typo / 명명 변경) | 면제 — Self-Critique 인라인 1~2줄로 충분 |
-| M / L | **권장** — Self-Critique 체크리스트 전건 + cold 판정 + simplify 호출 |
+| M / L | **권장** — Self-Critique 체크리스트 전건 + cold 리뷰 루프 + simplify 호출 |
 
 ## 짝 슬래시
 
-앞 = `/taskflow:verify`(외부 환경) / 뒤 = `/taskflow:deploy`. 본 슬래시 = **내부 품질**(Self-Critique + cold 판정 + simplify). 무인 경로에서는 `/taskflow:tick` 의 리뷰 루프가 이 자리를 대체한다. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
+앞 = `/taskflow:verify`(외부 환경) / 뒤 = `/taskflow:deploy`. 본 슬래시 = **내부 품질**(Self-Critique + cold 리뷰 루프 + simplify). 무인 경로에서는 `/taskflow:tick` 의 리뷰 루프가 이 자리를 대체한다. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-08-27: **①.5 를 1회 판정 → 루프로 승격 + 리뷰어 2인 병렬.** 1회 판정의 근거("사람이 결과를 보고 정한다")는 바로 위 문단이 실측으로 부정한 그 전제였다. 그대로 두는 동안 사람 경로만 리뷰어 1인·1회로 남아, 코드를 제대로 검증하려면 `/taskflow:tick`·`/taskflow:code` 로 새는 구조였다. spawn 규약 = `watch.md` §"코드 축" / 루프 제어 = `code.md` — 여기 고유는 수정 주체(본체)뿐
 - 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + Self-Critique "≥ 20" 4곳 제거 (게이트 = 문서 총합 ≥ 30)
 - 2026-07-31: **①.5 cold 판정 추가** (코드 변경 시) — self-critique 만으로는 자기가 쓴 코드의 결함이 안 보인다. `simplify` 앞에 두는 것이 필수(뒤에 두면 리뷰 대상이 리뷰 중에 움직인다). 1회 판정만 — 클린까지 반복은 무인 경로 소관
 - 2026-05-15: 신설

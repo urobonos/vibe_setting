@@ -1,5 +1,5 @@
 ---
-description: 분리 루프 1회 — 지금 이 요청을 `step-developer` 가 worktree 안에서 구현하고 `reviewer-correctness`(기능 정합) · `reviewer-design`(설계 정합) 두 콜드 리뷰어가 병렬로 판정한다. 짠 쪽과 본 쪽을 갈라놓는 것이 값이다. 문서·상태 전이 없음, 머지 안 함(§3). 짝 = `/taskflow:tick`(문서 기반 무인) · `/taskflow:execute`(대화형 self review)
+description: 분리 루프 1회 — 지금 이 요청을 `step-developer` 가 worktree 안에서 구현하고 `reviewer-correctness`(기능 정합) · `reviewer-design`(설계 정합) 두 콜드 리뷰어가 병렬로 판정한다. 짠 쪽과 본 쪽을 갈라놓는 것이 값이다. 문서·상태 전이 없음, 머지 안 함(§3). 짝 = `/taskflow:tick`(문서 기반 무인) · `/taskflow:execute`(계획 기반 대화형)
 allowed-tools: Bash, Read, Glob, Grep, Agent, Skill, PowerShell
 argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 을 쓰려면 /taskflow:tick 을 쓴다"
 ---
@@ -22,7 +22,8 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
 2. worktree  : git -C {repo} worktree add ~/.claude/worktrees/{sid8}-{slug} -b wip/{sid8}-{slug}
 3. 개발      : subagent_type: taskflow:step-developer
               (요청 + 성공 기준 + 테스트 범위 + 비목표 + worktree 경로)
-4. 리뷰 루프 : reviewer-correctness · reviewer-design 을 병렬 스폰 (라운드마다 새로 + 이전 라운드 이력)
+4. 리뷰 루프 : subagent_type: taskflow:reviewer-correctness · taskflow:reviewer-design 병렬 스폰
+              (라운드마다 새로 + 이전 라운드 이력 · spawn 규약 = watch.md §"코드 축")
               → 지적을 합쳐 개발 Agent 에 SendMessage → 재리뷰
               → C·H·M 이 모두 0이 될 때까지, 5회
               → REBUTTED 가 오면 본체가 수용·기각을 판정하고 다음 리뷰어에게 이력으로 넘긴다
@@ -38,7 +39,8 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
 | 개발 Agent 계약 (코드 기준·반박 근거 3종·`git add -N`·반환 양식·`model: sonnet`) | `custom-plugin/taskflow/agents/step-developer.md` |
 | 기능 정합 리뷰어 (§1 경계값·예외·회귀·동시성 · §5 호출부 전수 · §6 실행 검증) | `custom-plugin/taskflow/agents/reviewer-correctness.md` |
 | 설계 정합 리뷰어 (§2 보안 · §3 단순성 · §4 재사용 · §7 범위) | `custom-plugin/taskflow/agents/reviewer-design.md` |
-| 루프 운영 (warm 유지·`isolation` 금지·변경 실재 확인) | `custom-plugin/taskflow/commands/tick.md` §"step 개발" + §"step 코드리뷰 루프" |
+| **리뷰어 spawn 규약** (구성 2인·입력 조립·판정축 분담·반환 합본) | `custom-plugin/taskflow/commands/watch.md` §"코드 축 — 변경분 리뷰" |
+| 개발 Agent 운영 (warm 유지·`isolation` 금지·변경 실재 확인) | `custom-plugin/taskflow/commands/tick.md` §"step 개발" |
 | worktree 생성·정착 절차 | `custom-plugin/git/commands/{create,merge}.md` |
 
 ## 대조 기준 — 1단계를 건너뛰지 않는다
@@ -141,9 +143,7 @@ C·H·M 이 0이 되면 **종료 전에 `reviewer-correctness` 를 한 번 더 �
 
 라운드마다 `reviewer-correctness` · `reviewer-design` 을 **병렬 스폰**하고 지적을 합쳐 개발 Agent 에 넘긴다. 두 리뷰어는 **같은 이전 라운드 이력**을 받는다.
 
-같은 `file:line` 에 양쪽 지적이 겹치면 **높은 등급을 채택한다.**
-
-상대 축으로 넘어온 지적(`[design]` · `[correctness]` 태그)은 **다음 라운드에 해당 리뷰어가 등급을 판정한다.** 본체가 임의로 등급을 매기지 않는다.
+**합본 규칙(등급 겹침·상대 축 태그·한쪽 CLEAN)은 `watch.md` §"코드 축" 이 SSOT 다** — 2인을 띄우는 경로가 여기만이 아니라서 규약 쪽에 둔다. 여기 소관은 **루프 특유의 것 하나뿐이다: 상대 축 태그가 붙은 지적은 다음 라운드에 해당 리뷰어가 등급을 판정한다** (1회 경로엔 다음 라운드가 없어 태그째 잔여로 남는다).
 
 ## 라운드 이력을 넘긴다
 
@@ -261,6 +261,7 @@ fix(Payment): 코인 차감 실패 시 잔액 원복 누락 수정
 
 ## Changelog
 
+- 2026-08-27: 흐름 4단계에 `subagent_type` 명시 + SSOT 표 단방향화 — spawn 규약은 `watch.md` §"코드 축" 참조로 통일하고, 구 "루프 운영 = `tick.md`" 행은 역참조라 **개발 Agent 운영**으로 좁혔다. 합본 규칙은 규약 쪽으로 이관(순환 제거), 여기 소관은 루프 제어만
 - 2026-07-31: 신설 — tick 의 루프 코어를 문서·claim 없이 단발로 쓰는 진입점. 로직 재구현 0(계약 전부 포인터)
 - 2026-08-05: 잔여 핸드오프 추가 — `Critical`·`High` 잔여는 `/taskflow:draft` 로 §분석·§계획까지 넘긴다. tick 의 `NeedsDecision` 이 없어 잔여가 응답과 함께 증발하던 구멍. 분석·계획 로직은 여전히 재구현 0
 - 2026-08-19: 품질 우선 개정 — **리뷰어 2축 분리**(7축을 한 패스에 보면 실측이 필요한 무거운 축이 얕아지던 구멍. 두 리뷰어 모두 `sonnet` — 08-10 하향 정합) · **종료 조건 C·H·M 0**("머지 후 처리 가능" 을 종료 사유로 쓰던 통로 차단) · **캡 5회**(2축 분리로 늘어난 지적량을 3회로는 못 소화한다) · **종료 전 무이력 최종 검증**(이력을 받은 리뷰어의 "이미 처리됨" 프레임이 만드는 거짓 클린) · **테스트 범위 명시**(리뷰어가 커버리지 축을 라운드마다 새로 파서 `Medium` 이 수렴하지 않던 축) · **비목표 필수화**(안 적힌 것을 상상해 채운 지적 → 방어 코드 → 다음 라운드 과설계 지적의 진동) · **크기 게이트**(캡 소진 후에야 크기 문제였음을 알게 되던 낭비) · **반박 판정**(가짜 양성이 전부 코드 변경으로 귀결되던 통로) · **라운드 이력**(닫힌 판정의 재개봉) · **라운드 로그**(튜닝할 데이터가 안 남던 구멍) · **4-ter 린터**(`Low` ①②③ 을 라운드로 태우던 낭비)

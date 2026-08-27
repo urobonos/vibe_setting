@@ -78,7 +78,7 @@ FINDINGS:
 
 전달: (a) 외부 문서 경로 + 정독 지시, (b) 변경분(신규 파일 포함), (c) "문서 요구 충족 여부만 판정, **코드 수정 금지**", (d) 위 양식, (e) **"지적을 압축하지 마라 — 전건 열거"**.
 
-> (e) 는 `cold-reviewer` 정의(`custom-plugin/taskflow/agents/cold-reviewer.md`)와 같은 이유다. 요약되거나 "그 외 유사 건" 으로 묶인 findings 는 아래 FAIL 라우팅('구현 누락' ↔ '계획이 문서와 어긋남')을 판별할 수 없다. **QA 축은 `cold-reviewer` 를 쓰지 않는다** — 그 정의는 코드 품질 리뷰용이고, 여기는 "외부 문서 요구 충족" 대조라 판정 대상이 다르다. 억지로 합치면 두 축이 함께 흐려진다.
+> (e) 는 cold 리뷰어 정의(`custom-plugin/taskflow/agents/reviewer-correctness.md` · `reviewer-design.md`)와 같은 이유다. 요약되거나 "그 외 유사 건" 으로 묶인 findings 는 아래 FAIL 라우팅('구현 누락' ↔ '계획이 문서와 어긋남')을 판별할 수 없다. **QA 축은 cold 리뷰어를 쓰지 않는다** — 그 정의들은 코드 품질 리뷰용이고, 여기는 "외부 문서 요구 충족" 대조라 판정 대상이 다르다. 억지로 합치면 두 축이 함께 흐려진다.
 
 ### 판정 (fail-closed)
 
@@ -95,7 +95,7 @@ FINDINGS:
 
 **코드 파일(php/js/ts/py/sql) 변경 작업은** ③.5 QA(외부문서 시) 이후 `Status: Done` 부착 **전에** 다음을 **필수 실행**한다 (선택 슬래시 → 필수 체인 승격 — "코드 생성 시 QA 전부 타게"):
 1. **`/taskflow:verify`** — e2e 5점(env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock). §검증 표 기록.
-2. **`/taskflow:review`** — Self-Critique 보강 + simplify.
+2. **`/taskflow:review`** — cold 리뷰 루프(2인 병렬·C·H·M 0까지) + Self-Critique 보강 + simplify.
 
 - ③.5 comprehension-QA(변경분↔외부문서)는 **self-scoped 유지** — 외부문서 없으면 self-critique 와 중복이라 무조건화 대상 아님. 무조건화되는 것은 **verify + review**다.
 - 코드 변경 없는 작업(문서·sh 훅·commands·설정)은 §Skip 조건대로 `review` 만으로 충분(verify 면제 — `verify.md` §"Skip 조건" 정합).
@@ -276,7 +276,7 @@ Status: Done   (시작 라인)
 | 근거 | `/taskflow:feasibility` (§분석 도중 병행) | §타당성 검토 |
 | 계획 | `/taskflow:plan` | §계획 + step-01~nn 분해 (+ 병렬그룹 DISPATCH 등록) |
 | 실행 | **`/taskflow:execute`** | step 인덱스 순차 소비 + §실행 + Self-Critique + **QA 게이트(③.5)** + Status |
-| 검증 | `/taskflow:verify`(환경·런타임 e2e 5점) → `/taskflow:review`(코드 내부 품질 + cold 판정 1회) | §검증 / §리뷰 |
+| 검증 | `/taskflow:verify`(환경·런타임 e2e 5점) → `/taskflow:review`(코드 내부 품질 + cold 리뷰 루프) | §검증 / §리뷰 |
 | 마감 | `/taskflow:deploy`(push 안내 — 사용자 직접) → `/taskflow:retro`(history·summary) → `/taskflow:save`(worktree 정착 + Done/잔여 판정) | §회고 |
 | 재개 | `/taskflow:load` (다음 세션 — **잔여 미체크 `- [ ]` ≥1 문서 전건**, Status 무관 + `#tag` 배타 claim) | — |
 
@@ -300,7 +300,7 @@ Status: Done   (시작 라인)
 | `/taskflow:debate`(16 Agent) · `/taskflow:suggest`(단일 권고) | 의견 갈림 / 결정 권고 |
 | `/taskflow:research` · `/taskflow:ps` | 웹 조사 병렬 / 세션·REGISTRY orphan 조회·정리 |
 
-> **QA 게이트(③.5) vs /taskflow:verify·/taskflow:review:** QA 게이트 = "구현 ↔ **외부 문서**(기획·제안) 대조(comprehension drift)" — 외부 문서 있을 때만. `/taskflow:verify` = 환경·런타임(e2e 5점), `/taskflow:review` = 코드 내부 품질(Self-Critique·simplify). 상보적 — QA 게이트는 /taskflow:execute **내부 조건부**(Status 전, 단일 subagent), /taskflow:verify·/taskflow:review는 **별도 슬래시**.
+> **QA 게이트(③.5) vs /taskflow:verify·/taskflow:review:** QA 게이트 = "구현 ↔ **외부 문서**(기획·제안) 대조(comprehension drift)" — 외부 문서 있을 때만. `/taskflow:verify` = 환경·런타임(e2e 5점), `/taskflow:review` = 코드 내부 품질(cold 리뷰 루프·Self-Critique·simplify). 상보적 — QA 게이트는 /taskflow:execute **내부 조건부**(Status 전, 단일 subagent), /taskflow:verify·/taskflow:review는 **별도 슬래시**.
 
 ## Changelog
 

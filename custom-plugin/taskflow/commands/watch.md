@@ -164,15 +164,24 @@ done
 
 **본 절이 무인 코드리뷰 계약의 SSOT 다 — `/taskflow:tick` 의 리뷰 루프도 같은 계약을 쓴다** (`tick.md` §"step 코드리뷰 루프" 는 여기 포인터). 계약이 두 곳에 복붙되면 갈라지고, 갈라지는 순간 tick 이 통과시킨 것을 watch 가 **다른 기준으로** 반려해 왕복이 되살아난다.
 
-**`cold-reviewer` Agent 1개**를 spawn 해 **변경분만** 리뷰한다 (`subagent_type: taskflow:cold-reviewer` — 플러그인 agent 는 `plugin:name` 형식이다. 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`). 전체 코드베이스 감사가 아니다.
+**`reviewer-correctness` · `reviewer-design` Agent 2개를 병렬 spawn** 해 **변경분만** 리뷰한다 (`subagent_type: taskflow:reviewer-correctness` · `taskflow:reviewer-design` — 플러그인 agent 는 `plugin:name` 형식이다. 정의 = `custom-plugin/taskflow/agents/reviewer-correctness.md` · `reviewer-design.md`). 전체 코드베이스 감사가 아니다.
 
-- **본체가 조립하는 것은 입력뿐이다** — worktree diff(또는 커밋 범위) + 그 step 문서의 §계획·DoD.
-- 리뷰 관점(**기능 오류 → 보안 → 품질** 7축, 순서가 곧 우선순위)·판정 등급·"코드 수정 금지"·반환 양식은 **전부 agent 정의에 박혀 있다**. 여기서 다시 적지 않는다.
-- 반환 = `VERDICT: CLEAN | FINDINGS` + Critical~Low 지적의 `file:line` (양식 SSOT = agent 정의).
+- **본체가 조립하는 것은 입력뿐이다** — worktree diff(또는 커밋 범위) + 그 step 문서의 §계획·DoD. 두 리뷰어는 **같은 입력**을 받는다.
+- 리뷰 관점 7축은 **둘로 갈라져 있다** — 기능 정합(§1 경계값·예외·회귀·동시성 / §5 호출부 전수 / §6 실행 검증) = `reviewer-correctness`, 설계 정합(§2 보안 / §3 단순성 / §4 재사용 / §7 범위) = `reviewer-design`. 판정 등급·"코드 수정 금지"·반환 양식과 함께 **전부 agent 정의에 박혀 있다**. 여기서 다시 적지 않는다.
+- **한 패스로 7축을 보지 않는다 (2026-08-19 축 분리).** 실측이 필요한 무거운 축(§6 돌려봐야 검증)이 얕아진다 — 구 `cold-reviewer` 정의 스스로가 그렇게 적어뒀다.
+- 반환 = 리뷰어별 `VERDICT: CLEAN | FINDINGS` + Critical~Low 지적의 `file:line` (양식 SSOT = agent 정의).
+
+**두 반환을 합치는 규칙 (본 절이 SSOT — 2인을 띄우는 모든 경로가 이걸 쓴다).**
+
+| 상황 | 처리 |
+|------|------|
+| 같은 `file:line` 에 양쪽 지적 | **높은 등급을 채택**한다 |
+| 상대 축 태그(`[design]`·`[correctness]`)가 붙은 지적 | **본체가 등급을 매기지 않는다.** 루프 경로면 다음 라운드에 해당 리뷰어가 판정하고, 1회 경로면 태그를 단 채로 잔여에 남긴다 |
+| 한쪽 `CLEAN` · 한쪽 `FINDINGS` | 합본은 `FINDINGS` 다. 한 축이 깨끗한 것은 종료 근거가 아니다 |
 
 **왜 프롬프트가 아니라 agent 정의인가.** 계약을 매번 프롬프트로 조립하면 라운드마다 문구가 달라지고 그 편차가 곧 리뷰 편차다(아래 §"watch 의 리뷰는 재확인이다" 가 인정하는 그 편차). 정의에 박아두면 spawn 마다 변하는 것이 diff 하나뿐이 된다.
 
-**리뷰어는 코드를 고치지 않는다.** `cold-reviewer` 에 Edit·Write 도구가 없는 것이 그 강제다 (`dev-team` FE 멤버를 `Explore` 로 두는 것과 같은 기계적 차단 — 지시문은 어길 수 있어도 없는 도구는 못 쓴다). `simplify` 처럼 수정까지 하는 경로를 타지 않는다 — 무인 루프가 리뷰하면서 코드를 바꾸면 리뷰 대상 자체가 움직인다.
+**리뷰어는 코드를 고치지 않는다.** 두 정의 모두 Edit·Write 도구가 없는 것이 그 강제다 (`dev-team` FE 멤버를 `Explore` 로 두는 것과 같은 기계적 차단 — 지시문은 어길 수 있어도 없는 도구는 못 쓴다). `simplify` 처럼 수정까지 하는 경로를 타지 않는다 — 무인 루프가 리뷰하면서 코드를 바꾸면 리뷰 대상 자체가 움직인다.
 
 > **카탈로그 미등재 fallback** = `tick.md` §"카탈로그 미등재 fallback" SSOT.
 
@@ -584,6 +593,7 @@ control 은 **지금 쌓여 있는 것**(대기 큐 전체)을 보여준다. wat
 
 ## Changelog
 
+- 2026-08-27: **리뷰어 1인(구 `cold-reviewer`) → 2인 병렬(`reviewer-correctness`·`reviewer-design`).** 2026-08-19 축 분리가 agent 정의에만 반영되고 호출부 4곳이 따라오지 않아 전 경로가 1인 7축 한 패스로 돌고 있었다(§6 얕아짐 = 분리 사유 그대로 재발). 반환 **합본 규칙을 본 절에 신설** — 2인을 띄우는 모든 경로가 공유하므로 루프 제어(`code.md`)가 아니라 규약 쪽에 둔다
 - 2026-08-03: **681 → 601줄 감축 + SSOT 2건 이관.** `## cwd 에 국한되지 않는다` = 무인 계열 공통 cwd 규약 SSOT 로 **선언**(tick 은 포인터), `## 카탈로그 미등재 fallback` 은 반대로 **내보냄**(slash·agent 공통 — 2026-08-04 tick-team 폐기로 `tick.md` 로 재이관). 중복 제거 = worktree 판별 awk 2벌→1벌 / "보유율 0/20" 3회→1회 / 반려 블록 예시 2곳→1곳(양식 SSOT = 본 파일) / 출력 예 53줄→대표 3블록. 판정 표·계약은 전건 보존, 삭감분은 Why 산문뿐. `### D2 순서` 를 헤딩으로 승격(포인터 해결용)
 - 2026-07-31: 리뷰어를 **`cold-reviewer` 전용 agent 정의로 수렴** — 리뷰 관점·판정축·반환 양식·수정 불가(Edit/Write 부재)가 정의에 박히고, 본체가 조립하는 것은 diff+DoD 뿐. 매 spawn 프롬프트 재조립이 곧 리뷰 편차라는 §"재확인" 문단의 원인을 제거
 - 2026-07-30: §"코드 축 — 변경분 리뷰" 를 **무인 코드리뷰 계약 SSOT** 로 명시 (tick 리뷰 루프가 같은 계약을 포인터 참조). B 트랙 동작 무변경 — tick 이 클린을 만든 뒤의 **재확인** 성격만 명문화

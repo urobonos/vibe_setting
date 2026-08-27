@@ -232,7 +232,7 @@ step 개발은 **`step-developer` Agent 1개**에 위임하고(`subagent_type: t
 git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰로 넘기지 않는다)
 ```
 
-빈 결과를 그대로 리뷰에 넘기면 `cold-reviewer` 가 빈 diff 를 `[High]` 판정 불가로 되돌려 라운드만 소진된다.
+빈 결과를 그대로 리뷰에 넘기면 리뷰어가 빈 diff 를 `[High]` 판정 불가로 되돌려 라운드만 소진된다.
 
 **hook 은 자동 상속된다** (아래 §"하니스 자동 상속"). 개발 Agent 의 Write·Bash 에도 worktree-enforce·dangerous-ops-guard·§3 가드가 걸리므로 룰 재주입이 불요하다. 미등재 세션 대응은 §"카탈로그 미등재 fallback".
 
@@ -249,7 +249,7 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 | 대상 | 미등재 시 |
 |------|----------|
 | **slash** (`taskflow:tick` 등 Skill 호출) | 그 커맨드 문서의 해당 단계를 `bash` 로 직접 수행 (예: tick 1단계 = `working_scan` + `registry_claim`) |
-| **agent** (`taskflow:cold-reviewer` · `taskflow:step-developer`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model` 을 호출 파라미터로 명시** — 리뷰어 = `sonnet`, 개발자 = `sonnet` |
+| **agent** (`taskflow:reviewer-correctness` · `taskflow:reviewer-design` · `taskflow:step-developer`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model` 을 호출 파라미터로 명시** — 리뷰어 = `sonnet`, 개발자 = `sonnet`. **리뷰어 2개는 fallback 에서도 각각 띄운다** (한 프롬프트에 두 정의를 합치면 축 분리 이유였던 §6 얕아짐이 그대로 돌아온다) |
 
 **agent fallback 에서 `model` 을 생략하면 안 된다.** 정의를 안 타면 모델도 세션 기본값을 상속한다(`tick-loop.sh` = sonnet). 지금은 두 값이 우연히 목표값과 같지만 **세션 기본값이 바뀌면 양쪽 다 조용히 흔들린다.** 상속에 기대지 말고 두 값을 각각 적는다. 계약 없이 도는 것보다 정의 전문을 붙여 도는 편이 낫다.
 
@@ -265,11 +265,11 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 | 지적 ≥ 1건 (severity 무관) | **개발 Agent 가 수정**(본체가 `SendMessage` 로 전달) → 새 리뷰어로 재리뷰 |
 | 5회 소진 + 잔존 | 반려 블록 append + `상태: Pending` 유지 — **`ReadyToMerge` 부착 금지** |
 
-- **라운드마다 `cold-reviewer` Agent 를 새로 spawn 한다** (`subagent_type: taskflow:cold-reviewer` — 정의 = `custom-plugin/taskflow/agents/cold-reviewer.md`, 미등재 세션 fallback 은 아래 §"카탈로그 미등재 fallback"). 입력 = worktree diff **현재 상태** + 그 step 의 §계획·§파급면·§결함면·DoD (파급면·결함면은 리뷰어 §"1. 기능 오류"·§"5. 호출부 전수" 의 대조 기준 — 원문을 넘겨야 축별 판정이 선다). 같은 리뷰어를 이어 쓰면 자기가 낸 지적과 그 수정을 함께 보게 되어 "고쳤다" 는 확인 편향이 들어간다 — cold 라는 게 이 계약의 값 전부다.
-- **리뷰어는 코드를 고치지 않는다** (watch 계약 그대로 — `cold-reviewer` 에 Edit·Write 가 없다). 고치는 주체는 **개발 Agent** 다 (§"step 개발" — 본체가 `SendMessage` 로 지적을 전달). 리뷰어가 고치면 리뷰 대상이 리뷰 중에 움직인다.
+- **라운드마다 리뷰어를 새로 spawn 한다** (spawn 규약·리뷰어 구성·입력 조립 = `watch.md` §"코드 축" SSOT, 미등재 세션 fallback 은 위 §"카탈로그 미등재 fallback"). 입력에 그 step 의 **§파급면·§결함면 원문**을 반드시 포함한다 — 리뷰어 §"1. 기능 오류"·§"5. 호출부 전수" 의 대조 기준이라 원문을 넘겨야 축별 판정이 선다. 같은 리뷰어를 이어 쓰면 자기가 낸 지적과 그 수정을 함께 보게 되어 "고쳤다" 는 확인 편향이 들어간다 — cold 라는 게 이 계약의 값 전부다.
+- **리뷰어는 코드를 고치지 않는다** (watch 계약 그대로 — 두 정의 모두 Edit·Write 가 없다). 고치는 주체는 **개발 Agent** 다 (§"step 개발" — 본체가 `SendMessage` 로 지적을 전달). 리뷰어가 고치면 리뷰 대상이 리뷰 중에 움직인다.
 - **수정 범위 = 지적 항목 + 그 심볼의 호출부 전건.** §2-bis 2 반려 소비 모드와 같은 규칙이고 근거도 같다 — 부분 적용이 가장 위험하다.
 - **한도 = 5회.** 신규 상한을 만들지 않고 self-critique 루프 한도(CLAUDE.md §4.4 (3)(b))를 그대로 쓴다.
-- **`auto`/`execute` 의 `/taskflow:review` 는 무인 경로에서 타지 않는다.** `execute.md` §"코드 변경 = verify + review 필수 체인" 의 **review 자리를 본 루프가 대체**한다 (verify 는 그대로 필수). `/taskflow:review` 도 2026-07-31 부터 cold 판정을 타므로(`review.md` ①.5), 무인이 review 를 함께 돌리면 **같은 코드를 cold 로 두 번** 보게 된다 — 이 배제는 그래서 더 강해졌다. 사람 경로에서는 review 가 그 cold 자리를 맡는다.
+- **`auto`/`execute` 의 `/taskflow:review` 는 무인 경로에서 타지 않는다.** `execute.md` §"코드 변경 = verify + review 필수 체인" 의 **review 자리를 본 루프가 대체**한다 (verify 는 그대로 필수). `/taskflow:review` 도 2026-08-27 부터 같은 2인 리뷰 루프를 타므로(`review.md` ①.5), 무인이 review 를 함께 돌리면 **같은 코드를 cold 로 두 번** 보게 된다 — 이 배제는 그래서 더 강해졌다. 사람 경로에서는 review 가 그 cold 자리를 맡는다.
 - 지적이 §3 매칭이거나 계획 자체를 바꾸면 고치지 말고 `NeedsDecision` 마감 (escalation ladder — §3단계).
 
 **verify 는 리뷰 루프가 끝난 뒤 1회 돈다.** 루프 안에서 코드가 계속 바뀌므로 앞에 두면 마지막 수정분이 미검증으로 남고, 매 라운드 돌리면 e2e 5점(curl·DB)이 라운드마다 반복돼 비싸다. 코드가 더 안 바뀌는 시점에 검증해야 **검증 대상과 최종 산출물이 일치한다** (§2-bis 2 실측이 그 불일치였다).
@@ -373,7 +373,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | **문서 없는 단발 실행** | 같은 개발·리뷰 루프를 claim·상태 전이 없이 1회 (대조 기준 = 호출자 확정 성공 기준) | `custom-plugin/taskflow/commands/code.md` |
 | **무인 코드리뷰 계약** | 입력(diff+DoD) 조립 · 리뷰어 spawn 규약 | **`custom-plugin/taskflow/commands/watch.md`** (§"코드 축 — 변경분 리뷰") |
 | **개발자 정의** | 코드 기준(단순성·재사용·검증·호출부 전수·범위 고수) · 문서·커밋 금지 · 반환 양식(`FILES`/`TESTS`/`NOTES`) · `model: sonnet` | **`custom-plugin/taskflow/agents/step-developer.md`** |
-| **리뷰어 정의** | 리뷰 관점 · 판정축(Critical~Low + `file:line`) · 반환 양식 · **Edit/Write 부재 = 수정 불가** · `model: sonnet` | **`custom-plugin/taskflow/agents/cold-reviewer.md`** |
+| **리뷰어 정의** (2인) | 판정축 7 분담(기능 3 / 설계 4) · 등급(Critical~Low + `file:line`) · 반환 양식 · **Edit/Write 부재 = 수정 불가** · `model: sonnet` | **`agents/reviewer-correctness.md`** · **`agents/reviewer-design.md`** |
 | **반려 생산** | 리뷰 지적 → `Pending` 복귀 + 반려 블록 append | **`custom-plugin/taskflow/commands/watch.md`** (§"반려 — Pending 복귀") |
 | 반려 블록 형식 | `^#+ 반려 [0-9]+회` 블록 안 `- [ ]` 카운트 (tick·watch 공용) | `hooks/lib/working-scan.sh::working_rejections` |
 
@@ -402,6 +402,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 
 ## Changelog
 
+- 2026-08-27: 리뷰 루프 spawn 을 `watch.md` §"코드 축" 포인터로 축약 — 계약 SSOT 를 watch 로 선언해놓고 바로 아래에서 `subagent_type` 을 다시 적고 있었고, 그게 리뷰어 2인화가 tick 에 전파되지 않은 원인이었다. fallback 표·SSOT 표도 리뷰어 2인으로 갱신
 - 2026-08-10: **리뷰어도 `sonnet` 으로 하향** (사용자 지시). 08-06 개발자 하향 이후 남아 있던 비대칭이 사라져 tick 두 Agent 모두 sonnet 이다. **관측 지표에 머지 후 결함을 추가한다** — 반려 라운드 수만 보면 리뷰가 느슨해져 라운드가 줄어든 것을 개선으로 오독한다 (하향의 실패 모드는 "라운드 증가" 가 아니라 "조용한 통과"). 되돌림 = `cold-reviewer.md:5` 1줄
 - 2026-08-06: **개발자만 `sonnet` 으로 하향** (리뷰어는 `opus` 유지 — 08-10 에 리뷰어도 하향되어 종료). 07-31 의 opus 고정은 계획↔개발↔리뷰 판정축이 정렬되기 전 판단이었고, `78f0a8d`(08-03)로 `step-developer` 가 `cold-reviewer` 판정축을 작성 기준으로 선반영하면서 전제가 바뀌었다. 정렬 이후 반려 실측은 아직 0건 — **하향 근거도 유지 근거도 없는 상태에서 측정을 택했다.** 판정 지표 = 반려 라운드 수(`working_rejections`), 관측 대상 = 08-06 athena cdn-purge step-01~09(성격 분산). 라운드가 유의미하게 늘면 되돌린다
 - 2026-07-31: 반려 재작업 시 `reset --soft` 로 커밋을 되돌리는 안 **검토 후 채택 안 함** (2-bis 2에 사유 명시). 근거 = (a) `머지 전 리뷰 포인트` 기록 실측 보유율 0/20 이라 base 해시도 안 남을 공산이 크고 (b) 커밋 지저분함은 가역이라 PR squash 로 사후 해결되며 (c) 무인 루프는 커밋 이력이 유일한 추적 수단
