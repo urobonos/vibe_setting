@@ -1,5 +1,5 @@
 ---
-description: 무인 loop 1-iteration 러너 — **cwd 무관 전체 스캔**으로 진행 가능 step 1건 claim → Status 분기 → 개발 → **cold Agent 코드리뷰 루프(클린까지)** → verify → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
+description: 무인 loop 1-iteration 러너 — **cwd 무관 전체 스캔**으로 진행 가능 step 1건 claim → Status 분기 → 개발 → **cold Agent 코드리뷰 루프(클린까지)** → **적대적 검증 게이트(클린 반증)** → verify → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent, PowerShell
 argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명] | deny [작업명]"
 ---
@@ -25,7 +25,7 @@ argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명]
 2. 분기    : unified Status 판정 (아래 표)
 2-bis 하강 : working-scan 으로 다음 진행 가능한 step(Pending + 선행 Done) 선택
 2-ter 환경 : dev-stack.sh up (검증 환경 보장 — §"dev 스택 보장". 실패 시 NeedsDecision)
-3. step 실행: 개발(Agent 위임) → 코드리뷰 루프(cold Agent — 지적 0건까지) → verify(e2e 5점)
+3. step 실행: 개발(Agent 위임) → 코드리뷰 루프(cold Agent — 지적 0건까지) → 적대적 검증 게이트(`UPHELD` 까지) → verify(e2e 5점)
               → 그 step 파일에 Status: ReadyToMerge 부착
               (머지 안 함. §계획 인덱스 표 상태도 ReadyToMerge 로 갱신)
               └ 리뷰 5회 소진해도 지적 잔존 → 반려 블록 + Pending 유지 (ReadyToMerge 부착 X)
@@ -215,6 +215,7 @@ step 개발은 **`step-developer` Agent 1개**에 위임하고(`subagent_type: t
 | tick 본체 | claim · worktree 생성 · 개발 Agent 지휘 · 리뷰어 spawn · 문서 기록 · 상태 전이 |
 | **개발 Agent** (warm, 1개) | 코드 작성 + 리뷰 지적 수정 |
 | 리뷰 Agent (cold, 라운드마다 신규) | 판정만 · 코드 수정 금지 (§"step 코드리뷰 루프") |
+| **적대적 red-team** (cold, 게이트 1~2회) | 클린 반증만 · 코드 수정 금지 (§"적대적 검증 게이트") |
 
 **개발 Agent 는 라운드마다 새로 뜨지 않는다.** 최초 1회 spawn 하고 리뷰 지적은 `SendMessage` 로 **같은 Agent** 에 이어 보낸다. 새로 띄우면 §계획·DoD·이미 쓴 코드를 매 라운드 다시 읽어야 하고, 리뷰 한도가 5회라 최악에 5회 재구축이다. 갈아끼우는 쪽은 리뷰어뿐이다.
 
@@ -249,7 +250,7 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 | 대상 | 미등재 시 |
 |------|----------|
 | **slash** (`taskflow:tick` 등 Skill 호출) | 그 커맨드 문서의 해당 단계를 `bash` 로 직접 수행 (예: tick 1단계 = `working_scan` + `registry_claim`) |
-| **agent** (`taskflow:reviewer-correctness` · `taskflow:reviewer-design` · `taskflow:step-developer`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model` 을 호출 파라미터로 명시** — 리뷰어 = `sonnet`, 개발자 = `sonnet`. **리뷰어 2개는 fallback 에서도 각각 띄운다** (한 프롬프트에 두 정의를 합치면 축 분리 이유였던 §6 얕아짐이 그대로 돌아온다) |
+| **agent** (`taskflow:reviewer-correctness` · `taskflow:reviewer-design` · `taskflow:step-developer` · `taskflow:adversary`) | `general-purpose` 로 spawn 하되 **정의 파일 전문을 프롬프트 앞에 붙이고 `model` 을 호출 파라미터로 명시** — 리뷰어 = `sonnet`, 개발자 = `sonnet`, `taskflow:adversary` = `opus`. **리뷰어 2개는 fallback 에서도 각각 띄운다** (한 프롬프트에 두 정의를 합치면 축 분리 이유였던 §6 얕아짐이 그대로 돌아온다) |
 
 **agent fallback 에서 `model` 을 생략하면 안 된다.** 정의를 안 타면 모델도 세션 기본값을 상속한다(`tick-loop.sh` = sonnet). 지금은 두 값이 우연히 목표값과 같지만 **세션 기본값이 바뀌면 양쪽 다 조용히 흔들린다.** 상속에 기대지 말고 두 값을 각각 적는다. 계약 없이 도는 것보다 정의 전문을 붙여 도는 편이 낫다.
 
@@ -261,7 +262,7 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 
 | 라운드 결과 | 동작 |
 |------------|------|
-| 지적 0건 | 루프 종료 → verify 로 |
+| 지적 0건 | **적대적 검증 게이트** (아래) → `UPHELD` 면 verify 로 |
 | 지적 ≥ 1건 (severity 무관) | **개발 Agent 가 수정**(본체가 `SendMessage` 로 전달) → 새 리뷰어로 재리뷰 |
 | 5회 소진 + 잔존 | 반려 블록 append + `상태: Pending` 유지 — **`ReadyToMerge` 부착 금지** |
 
@@ -271,6 +272,19 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 - **한도 = 5회.** 신규 상한을 만들지 않고 self-critique 루프 한도(CLAUDE.md §4.4 (3)(b))를 그대로 쓴다.
 - **`auto`/`execute` 의 `/taskflow:review` 는 무인 경로에서 타지 않는다.** `execute.md` §"코드 변경 = verify + review 필수 체인" 의 **review 자리를 본 루프가 대체**한다 (verify 는 그대로 필수). `/taskflow:review` 도 2026-08-27 부터 같은 2인 리뷰 루프를 타므로(`review.md` ①.5), 무인이 review 를 함께 돌리면 **같은 코드를 cold 로 두 번** 보게 된다 — 이 배제는 그래서 더 강해졌다. 사람 경로에서는 review 가 그 cold 자리를 맡는다.
 - 지적이 §3 매칭이거나 계획 자체를 바꾸면 고치지 말고 `NeedsDecision` 마감 (escalation ladder — §3단계).
+
+### 적대적 검증 게이트 (지적 0건 직후 · 필수)
+
+**지적 0건은 종료 후보이지 종료가 아니다.** `subagent_type: taskflow:adversary` 를 스폰해 **그 클린을 깨보게 한다** — 계약·배선 SSOT = `code.md` §"적대적 검증 게이트" + `agents/adversary.md`. 여기서 다시 정의하지 않는다.
+
+**무인 경로라서 더 필요하다.** 사람 경로는 결과를 보는 눈이 하나 더 있지만 여기는 없다. §2-bis 2 의 실측(테스트 green 인 채 통과한 [Critical])이 정확히 이 자리에서 새던 것이고, 리뷰 루프를 붙여 한 겹 막았어도 **리뷰어는 그 step 의 대조 기준 안에서만 본다.**
+
+- 입력에 **라운드 로그 전문**을 넣는다 (§실행에 이미 남기고 있는 그 기록 재사용 — 신규 양식 0). 클린 근거가 없으면 계약이 `BROKEN: 판정 불가` 로 되돌린다.
+- `UPHELD` → verify 로. `시도` 나열을 §실행 리뷰 라운드 기록 아래에 그대로 남긴다 (무인이라 이게 유일한 근거다).
+- `BROKEN` → 재현 명령·출력을 개발 Agent 에 `SendMessage` → 수정 → 리뷰어 2인 1라운드 → 게이트 재진입. **캡 2회.**
+- 캡 2회를 소진하고도 `BROKEN` 이면 `ReadyToMerge` 를 붙이지 않는다. 반려 블록에 **재현물을 그대로 붙여** `Pending` 유지 — 다음 tick 이 §2-bis 2 반려 소비 모드로 이어받는다.
+- 리뷰 루프 5회를 소진해 이미 지적이 남은 경우에는 **돌리지 않는다** (깰 것이 이미 있다).
+
 
 **verify 는 리뷰 루프가 끝난 뒤 1회 돈다.** 루프 안에서 코드가 계속 바뀌므로 앞에 두면 마지막 수정분이 미검증으로 남고, 매 라운드 돌리면 e2e 5점(curl·DB)이 라운드마다 반복돼 비싸다. 코드가 더 안 바뀌는 시점에 검증해야 **검증 대상과 최종 산출물이 일치한다** (§2-bis 2 실측이 그 불일치였다).
 
@@ -306,7 +320,7 @@ registry_update "{작업명}" "{sid8}" active     # 3. needs-decision → active
 
 ## 4단계 — step ReadyToMerge (머지 준비, 정지)
 
-step 이 개발 → 코드리뷰 루프(지적 0건) → verify 를 통과하면:
+step 이 개발 → 코드리뷰 루프(지적 0건) → 적대적 검증 게이트(`UPHELD`) → verify 를 통과하면:
 
 1. **머지 안 함** — 정착(`/git:merge`) 하지 않는다. wip/* worktree 그대로. 커밋만 누적.
 2. 그 step 파일 frontmatter 상태를 **`상태: ReadyToMerge`** 로 갱신 (plan.md step 규약 = 한글 `상태:` 라벨. unified 는 `Status:`. working-scan 은 `Status`/`상태` 둘 다 인식하므로 어느 쪽이든 잡힌다). 인덱스 표 상태 컬럼도 갱신.
@@ -374,6 +388,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | **무인 코드리뷰 계약** | 입력(diff+DoD) 조립 · 리뷰어 spawn 규약 | **`custom-plugin/taskflow/commands/watch.md`** (§"코드 축 — 변경분 리뷰") |
 | **개발자 정의** | 코드 기준(단순성·재사용·검증·호출부 전수·범위 고수) · 문서·커밋 금지 · 반환 양식(`FILES`/`TESTS`/`NOTES`) · `model: sonnet` | **`custom-plugin/taskflow/agents/step-developer.md`** |
 | **리뷰어 정의** (2인) | 판정축 7 분담(기능 3 / 설계 4) · 등급(Critical~Low + `file:line`) · 반환 양식 · **Edit/Write 부재 = 수정 불가** · `model: sonnet` | **`agents/reviewer-correctness.md`** · **`agents/reviewer-design.md`** |
+| **적대적 검증 red-team** | 클린 판정 반증 전담 — 반환 `BROKEN`/`UPHELD` · 공격면 5축(대조 기준의 틈) · **재현 없으면 지적 아님** · Edit/Write 부재 · `model: opus` | **`agents/adversary.md`** |
 | **반려 생산** | 리뷰 지적 → `Pending` 복귀 + 반려 블록 append | **`custom-plugin/taskflow/commands/watch.md`** (§"반려 — Pending 복귀") |
 | 반려 블록 형식 | `^#+ 반려 [0-9]+회` 블록 안 `- [ ]` 카운트 (tick·watch 공용) | `hooks/lib/working-scan.sh::working_rejections` |
 
@@ -402,6 +417,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 
 ## Changelog
 
+- 2026-08-31: **리뷰 루프 지적 0건 뒤에 적대적 검증 게이트 추가** (`taskflow:adversary` · 캡 2회 · 배선 SSOT = `code.md`). 리뷰어는 그 step 의 대조 기준 안에서만 보므로 기준의 틈은 기준을 지키는 역할이 볼 수 없다 — 무인 경로엔 결과를 보는 사람 눈도 없어 이 자리가 §2-bis 2 가 샜던 지점이다. `BROKEN` 재현물은 반려 블록에 그대로 붙여 다음 tick 이 이어받는다
 - 2026-08-27: 리뷰 루프 spawn 을 `watch.md` §"코드 축" 포인터로 축약 — 계약 SSOT 를 watch 로 선언해놓고 바로 아래에서 `subagent_type` 을 다시 적고 있었고, 그게 리뷰어 2인화가 tick 에 전파되지 않은 원인이었다. fallback 표·SSOT 표도 리뷰어 2인으로 갱신
 - 2026-08-10: **리뷰어도 `sonnet` 으로 하향** (사용자 지시). 08-06 개발자 하향 이후 남아 있던 비대칭이 사라져 tick 두 Agent 모두 sonnet 이다. **관측 지표에 머지 후 결함을 추가한다** — 반려 라운드 수만 보면 리뷰가 느슨해져 라운드가 줄어든 것을 개선으로 오독한다 (하향의 실패 모드는 "라운드 증가" 가 아니라 "조용한 통과"). 되돌림 = `cold-reviewer.md:5` 1줄
 - 2026-08-06: **개발자만 `sonnet` 으로 하향** (리뷰어는 `opus` 유지 — 08-10 에 리뷰어도 하향되어 종료). 07-31 의 opus 고정은 계획↔개발↔리뷰 판정축이 정렬되기 전 판단이었고, `78f0a8d`(08-03)로 `step-developer` 가 `cold-reviewer` 판정축을 작성 기준으로 선반영하면서 전제가 바뀌었다. 정렬 이후 반려 실측은 아직 0건 — **하향 근거도 유지 근거도 없는 상태에서 측정을 택했다.** 판정 지표 = 반려 라운드 수(`working_rejections`), 관측 대상 = 08-06 athena cdn-purge step-01~09(성격 분산). 라운드가 유의미하게 늘면 되돌린다
