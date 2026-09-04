@@ -299,6 +299,7 @@ Status: Done   (시작 라인)
 | `/taskflow:parallel` | 뒤에 오는 슬래시의 Agent spawn 강제 병렬화 |
 | `/taskflow:debate`(16 Agent) · `/taskflow:suggest`(단일 권고) | 의견 갈림 / 결정 권고 |
 | `/taskflow:research` · `/taskflow:ps` | 웹 조사 병렬 / 세션·REGISTRY orphan 조회·정리 |
+| `/taskflow:sweep` | 사이트 순회로 결함을 **발견**해 발행 대상 레포 규약대로 티켓 등재 후 정지. 순회·판정은 그 레포의 `tools/regression/` 이 하고 이 커맨드는 부르기만 한다. 소진은 안 한다(②가 가져간다) |
 
 > **QA 게이트(③.5) vs /taskflow:verify·/taskflow:review:** QA 게이트 = "구현 ↔ **외부 문서**(기획·제안) 대조(comprehension drift)" — 외부 문서 있을 때만. `/taskflow:verify` = 환경·런타임(e2e 5점), `/taskflow:review` = 코드 내부 품질(cold 리뷰 루프·Self-Critique·simplify). 상보적 — QA 게이트는 /taskflow:execute **내부 조건부**(Status 전, 단일 subagent), /taskflow:verify·/taskflow:review는 **별도 슬래시**.
 
