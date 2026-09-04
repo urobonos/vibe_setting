@@ -281,7 +281,7 @@ git -C "$WORKTREE" status --porcelain      # 빈 결과 = 개발 실패 (리뷰�
 
 - 입력에 **라운드 로그 전문**을 넣는다 (§실행에 이미 남기고 있는 그 기록 재사용 — 신규 양식 0). 클린 근거가 없으면 계약이 `BROKEN: 판정 불가` 로 되돌린다.
 - `UPHELD` → verify 로. `시도` 나열을 §실행 리뷰 라운드 기록 아래에 그대로 남긴다 (무인이라 이게 유일한 근거다).
-- `BROKEN` → 재현 명령·출력을 개발 Agent 에 `SendMessage` → 수정 → 리뷰어 2인 1라운드 → 게이트 재진입. **캡 2회.**
+- `BROKEN` → 재현 명령·출력을 개발 Agent 에 `SendMessage` → 수정 → 리뷰어 2인 1라운드 → 게이트 재진입. **캡 2회.** 이 재리뷰 1라운드는 **정규 리뷰 캡(5회)에 계상한다** — 남은 정규 캡이 없으면 재진입하지 않고 아래 처리로 간다.
 - 캡 2회를 소진하고도 `BROKEN` 이면 `ReadyToMerge` 를 붙이지 않는다. 반려 블록에 **재현물을 그대로 붙여** `Pending` 유지 — 다음 tick 이 §2-bis 2 반려 소비 모드로 이어받는다.
 - 리뷰 루프 5회를 소진해 이미 지적이 남은 경우에는 **돌리지 않는다** (깰 것이 이미 있다).
 
@@ -391,6 +391,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | **적대적 검증 red-team** | 클린 판정 반증 전담 — 반환 `BROKEN`/`UPHELD` · 공격면 5축(대조 기준의 틈) · **재현 없으면 지적 아님** · Edit/Write 부재 · `model: opus` | **`agents/adversary.md`** |
 | **반려 생산** | 리뷰 지적 → `Pending` 복귀 + 반려 블록 append | **`custom-plugin/taskflow/commands/watch.md`** (§"반려 — Pending 복귀") |
 | 반려 블록 형식 | `^#+ 반려 [0-9]+회` 블록 안 `- [ ]` 카운트 (tick·watch 공용) | `hooks/lib/working-scan.sh::working_rejections` |
+| **결함 공급원** | 사이트 순회로 티켓을 **발행**만 하고 정지 — tick 은 그 티켓을 소비하는 쪽이다 (역방향 의존 없음) | `custom-plugin/taskflow/commands/sweep.md` |
 
 ## 호출 예
 
