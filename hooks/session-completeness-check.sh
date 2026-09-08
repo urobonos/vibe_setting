@@ -139,6 +139,13 @@ fi
 # 자체 보장하므로 EDIT_FLAG 는 정리하지 않아도 무해 (SESSION_ID 별 파일 분리).
 # rm -f "$EDIT_FLAG" 2>/dev/null   # ← 제거: selfcheck 미발화 결함 방지
 rm -f "$NONCODE_FLAG" 2>/dev/null
-rm -f "/tmp/claude_test_run_${SESSION_ID}" 2>/dev/null
+#
+# TEST_RUN 플래그도 위 EDIT_FLAG·GATE_FILE 과 같은 이유로 정리하지 않는다 (2026-09-07).
+# Stop 은 "매 assistant 응답 종료" 마다 도는데 여기서 지우면, 테스트를 돌린 턴과
+# git-quality-gate.sh 가 그 플래그를 읽는 턴 사이에 삭제가 끼어들어 "테스트 이력 없음" 으로
+# 오판된다. SESSION_ID 별 파일이라 세션 간 오염 재사용도 없다.
+# 근거 = backlog `2026-07-10-git-quality-gate-testflag-race.md` (사용자 결정 2026-09-07 — 국면1만 적용,
+# 국면2 cwd 판정 수정은 Phase 2·3 회귀 케이스 신설 후 별도 판단).
+# rm -f "/tmp/claude_test_run_${SESSION_ID}" 2>/dev/null   # ← 제거: flag race 방지
 
 exit 0

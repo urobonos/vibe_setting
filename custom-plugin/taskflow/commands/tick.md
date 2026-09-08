@@ -102,6 +102,17 @@ working_scan all | awk -F'\t' -v t="$TASK" '$4==t && $6==0 {print $1}'   # unifi
 1. `working_scan all 5`(cwd 무관 — cwd product 0건이어도 타 product 진행. **`min_age_min=5`** — 최종 수정 5분 이내 문서는 후보에서 제외, 방금 다른 세션이 저장한 문서를 바로 채가는 경합 방지) → **0단계 통과분에 한해** 진행 가능 후보 산출:
    - **평면(step 분해) task** = 다음 진행 가능 step(2-bis 의존 판정) → claim 단위 = **step slug** `{작업명}-step-NN`.
    - **통(경량·step 없음) task** = unified 전체 → claim 단위 = **task slug** `{작업명}`.
+
+   > **`{작업명}` 은 기계 도출이다 — 지어내지 않는다 (2026-09-07 확정).** unified 파일명에서만 뽑는다:
+   > ```
+   > {작업명}   = basename(unified) 에서 `{yyyy-mm-dd}-{product}-` prefix 와 `.md` 를 제거한 나머지
+   > {step slug} = {작업명} + "-step-" + {2자리 step 번호}      # 예: jpa09-migration-11-step-03
+   > ```
+   > 문서 제목·`## 계획` 표기·사람이 부르는 이름을 쓰지 않는다. **claim 배타 판정이 slug 문자열 일치이기 때문**에, 같은 대상을 세션마다 다르게 적으면 `registry_claim` 이 서로를 못 보고 **두 세션이 같은 step 을 동시에 잡는다**(실측 충돌 7건, backlog `2026-07-27`·`2026-07-29-tick-claim-slug-collision`).
+   >
+   > **step 번호는 인덱스 표의 `step` 열을 그대로** 쓴다(0 패딩 2자리). 파일명이 `…-step-03-guard-skeleton.md` 처럼 뒤에 설명을 달고 있어도 slug 에는 **번호까지만** 넣는다 — 설명 부분은 세션마다 달라진다.
+   >
+   > 이 규약은 **claim 키 표기만** 고정한다. `paused` 를 배타로 볼지, 배타 키를 slug 대신 대상 경로(`working_file`)로 바꿀지는 별개 미결이다 — 후자는 `registry-utils.sh` 11개 지점을 한꺼번에 바꿔야 하고, 전자는 `paused` 전용 staleness 판정을 함께 신설하지 않으면 REGISTRY 의 paused 35건이 영구 잠금돼 **tick 루프가 멈춘다**(2026-09-07 실측).
 2. 배타 claim — `registry_claim`(lock 안에서 확인+add 원자 수행, TOCTOU race 차단 — 병렬 워커 필수):
    ```bash
    source ~/.claude/hooks/lib/registry-utils.sh
