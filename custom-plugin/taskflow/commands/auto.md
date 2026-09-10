@@ -29,7 +29,7 @@ argument-hint: "[작업 내용 — 선택]"
 |--------|----------|-----|
 | 다모듈·다파일 독립 작업 | **조건부 병렬** | `/taskflow:parallel /taskflow:auto` 결합 시 Agent 동시 spawn (race 가드 적용) |
 | Backlog 토론 위임 | **본질적 병렬** | `/taskflow:debate` 16 Agent 풀-병렬 (§"Backlog 토론 spawn 정책" 참조, 1회 cap) |
-| worktree 생성 → 코드 변경 → self-critique → QA 게이트(외부문서 시) → **verify+review(코드 변경 시 필수)** → 정착 | **직렬 필수** | 순서 강제 (§worktree-first 정책 / §"QA 게이트" / §정착 절차). QA=단일 subagent. verify+review 필수화 = `execute.md` §"코드 변경 = verify + review 필수 체인" SSOT (코드 시 `[AUTO-ITERATE-DONE]` 전 필수) |
+| worktree 생성 → **기준선(코드 변경 전 필수)** → 코드 변경 → self-critique → QA 게이트(외부문서 시) → **verify+review(코드 변경 시 필수)** → 정착 | **직렬 필수** | 순서 강제 (§worktree-first 정책 / §"QA 게이트" / §정착 절차). QA=단일 subagent. 기준선 = `execute.md` §"step 순차 소비" 3-bis SSOT (재현 실패 시 **고치지 않고 보고**). verify+review 필수화 = `execute.md` §"코드 변경 = verify + review 필수 체인" SSOT (코드 시 `[AUTO-ITERATE-DONE]` 전 필수) |
 | 결정 요구 발생 → 분류 → (정보 부족형) analyze → plan bounded 재진입 → 실행 복귀 | **직렬 필수** | 흐름 중단 지점에서 삽입. 권한형·판정 불확실 = 즉시 `[AUTO-ITERATE-USER-DECISION]` (ladder 미진입). 절차 = `execute.md` §"결정 escalation ladder" SSOT |
 
 ## worktree-first 정책 (필수, 2026-05-20 재정의)
@@ -250,5 +250,6 @@ git ls-files --others --exclude-standard                  # untracked 신규 →
 
 ## Changelog
 
+- 2026-09-10: 직렬 필수 순서에 **기준선(코드 변경 전)** 삽입 — 절차 SSOT = `execute.md` §"step 순차 소비" 3-bis
 - 2026-05-13: worktree-first 확장
 - 2026-06-05: QA 게이트 연동

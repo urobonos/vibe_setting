@@ -37,6 +37,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 1. **선택:** 인덱스에서 상태 `Pending` 이고 선행 의존이 모두 `Done` 인 가장 낮은 번호 step 선택
 2. **§3 게이트:** 해당 step 이 `Pending(승인 대기)` (§3 매칭) 이면 사용자 명시 승인 전까지 소비 금지 → 다음 진행 가능 step 으로 (없으면 중단)
 3. **진입 마킹:** step 평면 파일 frontmatter `상태: Pending → In Progress`, unified 인덱스 표 상태 `In Progress`
+3-bis. **기준선 (코드 변경 **전**, 필수):** 고치기 전에 먼저 돌려 현상을 박제한다 — 버그 수정이면 **red 재현**, 신규·리팩터면 현행 **green 캡처**(테스트·assertion 수). **재현이 안 되면 고치지 않고 보고한다** (요청이 틀렸거나 이미 해소됐을 수 있고, 재현 없는 수정은 원인 귀속이 안 된다). 6번 완료 마킹 전에 **같은 명령**으로 재실행해 전·후를 §실행에 남긴다 — 명령이 달라지면 대조가 아니다. 계약·근거 SSOT = `custom-plugin/taskflow/agents/step-developer.md` §"돌려봐야 검증" (전량 스위트 금지 · `exit 0` 은 green 이 아님 포함). **이 경로는 본체가 직접 코드를 써서 그 계약이 안 걸려 있던 자리다** — `/taskflow:code`·`/taskflow:tick` 은 `step-developer` 가 계약으로 지고 있었다. §"코드 변경 = verify + review 필수 체인" 의 **앞쪽 짝**이다.
 4. **수행:** step 파일 `## 작업 내용` 체크리스트를 실제 변경(Edit/Write/MultiEdit/Bash)으로 처리, 완료 항목 `- [x]` 마킹. **풀사이클 step**(`## 분석(국소)`·`## 계획(접근)`·`## QA(자체 점검)`·`## 검증(국소 동작)` 보유 — plan.md §"풀사이클 step")이면: 진입 시 §분석·§계획 정독 → 개발 → §QA self-check `- [x]` → §검증 국소 동작 확인 `- [x]`. **step 국소 검증은 경량**(문법/컴파일/국소 실행, subagent·e2e 없음)
 5. **DoD 검증:** `## 완료 기준 (DoD)` 충족 확인, 충족 시 `- [x]`
 6. **완료 마킹:** step 파일 frontmatter `상태: In Progress → Done`, unified 인덱스 표 상태 `Done`
@@ -305,6 +306,7 @@ Status: Done   (시작 라인)
 
 ## Changelog
 
+- 2026-09-10: **§"step 순차 소비" 에 3-bis 기준선(코드 변경 전) 추가.** 같은 개발 루프인데 **진입점에 따라 계약이 갈려 있었다** — `/taskflow:code`·`/taskflow:tick` 은 `step-developer` 가 착수 전 실행을 계약으로 지는데, 이 경로는 본체가 직접 코드를 써서 아무 계약이 없었다(grep 실증: 이 파일에 `step-developer` 0건). 버그=red 재현 / 신규=green 캡처 · **재현 실패 시 고치지 않고 보고** · 전·후 같은 명령. §"코드 변경 = verify + review 필수 체인" 의 앞쪽 짝이고, `/taskflow:auto` 는 이 절을 SSOT 로 상속한다
 - 2026-08-03: **`## 워크플로우 맵` 신설 = 슬래시 배치 SSOT 로 승격.** 11개 커맨드가 각자 갖고 있던 구 `## 차별점` 표(90줄, 내용이 서로 갈려 `save.md` 의 폐기 필터 drift 를 낳았다)를 여기 1벌로 모으고 나머지는 `## 짝 슬래시` 1~2줄 포인터로 축약. 무인 계열(tick·watch·control·code)이 11벌 어디에도 없던 누락도 함께 메움. 그룹 판정 기준 = **마커·claim 유무** (read-only·claim 없는 control·code 는 ② 아님)
 - 2026-05-15: 신설
 - 2026-05-29: step 순차 소비 연동
