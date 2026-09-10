@@ -21,7 +21,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | 단계 | 동작 | 결과 |
 |------|------|------|
 | ① Self-Critique 채움 | working/ §실행 §Self-Critique 체크리스트 채움 (보안 / 로직 / 코드 품질 / 테스트 커버리지 / 이전 단계 검증). **개수 SSOT = `unified-template.md` §체크리스트** — unified 골격 10항목, 게이트는 문서 **총합 ≥ 30**(V4 `unified) MIN=30`)이라 섹션별 하한이 따로 없다 | 미체크 항목 처리 또는 잔여 이슈 기록 |
-| **①.5 cold 리뷰 루프 (코드 변경 시)** | `reviewer-correctness` · `reviewer-design` 을 **병렬 spawn** → 지적을 본체가 수정 → 재리뷰. `Critical`·`High`·`Medium` 이 모두 0이 될 때까지, 그 뒤 **적대적 검증 게이트** 1회 (아래 §"cold 리뷰 루프"). 코드 변경 0 이면 skip | 라운드 로그 + 최종 `VERDICT` |
+| **①.5 cold 리뷰 루프 (코드 변경 시)** | `reviewer-correctness` · `reviewer-design` 을 **병렬 spawn** → 지적을 본체가 수정 → 재리뷰. `Critical`·`High`·`Medium` 이 모두 0이 될 때까지, 그 뒤 **적대적 검증 게이트** (아래 §"cold 리뷰 루프"). 코드 변경 0 이면 skip | 라운드 로그 + 최종 `VERDICT` |
 | ② simplify 스킬 호출 | 변경 파일에 대해 simplify 스킬 실행 (재사용성·가독성·효율성 리뷰) | 리뷰 결과 요약 |
 | ③ working/ § 리뷰 섹션 기록 | simplify 결과 + Self-Critique 보강 항목 § 리뷰 (Review) 섹션에 기록 | 표 + 본문 |
 
