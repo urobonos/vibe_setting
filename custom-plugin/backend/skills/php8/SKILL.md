@@ -1,11 +1,13 @@
 ---
 name: php8
 description: >
-  PHP 8.4+ / CI 4.7+ Mono-repo Modular Monolith API 스킬.
+  CodeIgniter 4 (CI4 / CodeIgniter4) + PHP 8.4+ Mono-repo Modular Monolith API 스킬.
+  본 레포의 CI4 작업 단일 진입점 — 컨트롤러·모델·Entity·Filter·Routes·spark·PHPUnit 테스트 전부 포함.
   아키텍처: Modular Monolith. 레거시 코드(app/Libraries/ 등)는 마이그레이션 완료까지 유지.
   레이어: Controller → Service → Repository → Model + Entity/VO.
   모듈 간 직접 클래스 참조 금지(Interface 통신만), service() DI 강제,
   CI 4.7 Service Discovery 활용. QB 우선, raw query는 Repository에서만 named binding.
+  테스트는 tests/{unit,database,feature} 3축 배치 강제 (references/testing.md).
   신규 모듈은 부분 구현 절대 금지 — 9가지 산출물이 항상 함께 생성되어야 한다.
   **Why:** 부분 구현 모듈은 Interface·DI·Routes·테스트 중 하나라도 누락 시 다른 모듈에서 참조 불가능해 통합 시점에 폭발적 재작업 비용이 발생한다.
 triggers:
@@ -15,13 +17,19 @@ triggers:
   - "CI4 컨트롤러 만들어줘"
   - "PHP 모델 만들어줘"
   - "서비스 만들어줘"
+  - "ci4"
+  - "CodeIgniter"
+  - "CodeIgniter4"
+  - "spark"
+  - "CIUnitTestCase"
+  - "phpunit 테스트 작성"
   - "app/Modules"
   - "app/Libraries"
   - "app/Controllers/Api"
   - "app/Models"
   - "Modular Monolith"
   - "/php8"
-version: 3.1.0
+version: 3.2.0
 user-invocable: true
 depends_on: [mysql8, security-audit]
 conflicts_with: []
@@ -142,7 +150,7 @@ Mono-repo + **Modular Monolith** 아키텍처. 레거시 코드는 마이그레�
 4. **Model** (`Modules/{BC}/Models/`)
 5. **Entity/VO** (`Modules/{BC}/Entities/`, `Modules/{BC}/ValueObjects/`) — 도메인 규칙이 필요한 경우
 6. **모듈 DI 등록** (`Modules/{BC}/Config/Services.php`)
-7. **PHPUnit 테스트** (Unit + Feature)
+7. **PHPUnit 테스트** — `tests/unit/Modules/{BC}/` + `tests/feature/Modules/{BC}/` (DB 검증 있으면 `tests/database/Modules/{BC}/` 추가)
 8. **모듈 Routes** (`Modules/{BC}/Config/Routes.php`)
 9. **API 명세서** (`api-docs/{module}/{apiname}.md`)
 
@@ -197,9 +205,21 @@ Controller에서 1차 검증, Model 검증은 2차 안전망:
 
 ## 테스트 코드
 
-> **상세:** 디렉토리 구조 + Unit Test (Repository Mock 주입) + Feature Test (HTTP 엔드포인트) 풀 코드는 `references/testing.md` 참조.
+> **상세:** 3축 배치 규칙 + 축별 작성 가이드(트레이트·프로퍼티·assertion) + 금지 사항은 `references/testing.md` 참조. **테스트를 쓰기 전에 반드시 읽는다** — 배치를 틀리면 파일을 옮기는 비용이 다시 쓰는 비용과 같다.
 
-핵심: Unit/Feature 1차 분류 → 모듈별 2차 분류. Service 검증은 Repository Interface mock 으로, API 엔드포인트는 `FeatureTestTrait` 으로 200/201/400/404 검증.
+**배치 = 3축 강제** (CI4 공식 기본 구조). 판정은 *무엇을 테스트하려 했는가*가 아니라 **무엇에 실제로 붙는가**로 한다.
+
+| 축 | 판정 | 트레이트 | 대상 |
+|----|------|---------|------|
+| `tests/unit/Modules/{BC}/` | DB 연결 **없음** | — | Service·Entity·VO (Repository Interface mock) |
+| `tests/database/Modules/{BC}/` | DB 연결 **있음** | `DatabaseTestTrait` | Repository·Model 쿼리 |
+| `tests/feature/Modules/{BC}/` | **HTTP** 진입 | `FeatureTestTrait` | API EP (200/201·400·401/403·404 전건) |
+
+공통 강제: `CIUnitTestCase` 상속 · `setUp()` 재정의 시 `parent::setUp()` 호출 · 픽스처는 `tests/_support/`.
+
+**red 를 약화로 덮지 않는다.** assertion 완화·`markTestSkipped()`·케이스 삭제·기대값을 실제 출력에 맞춰 고쳐 쓰기는 전부 금지 — 테스트가 red 면 프로덕션 코드가 틀린 것이 기본 가정이다.
+
+**Why:** 2026-09-11 실측에서 `hongcafe_global_backend` 테스트 594개가 3개 컨벤션으로 갈라져 있었다. 배치 규칙이 문서에만 있고 강제되지 않으면 작업자마다 그때그때 정하고, 결국 도메인별 테스트 위치를 매번 전수 grep 으로 찾게 된다. 2026-09-11 이전 작성분은 역소급 면제.
 
 ---
 
