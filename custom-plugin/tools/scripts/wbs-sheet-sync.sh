@@ -7,6 +7,8 @@
 #     3. build-xlsx.py         tsv           → 간트 xlsx
 #     4. build-menu-summary.py 간트 xlsx     → 메뉴별 요약 xlsx (보고용)
 #     5. gsheet-push-summary.py 요약 xlsx    → 구글 시트 `요약` 탭 (변경 회차에만)
+#     6. issue-sheet-sync.py   이슈 md      ↔ 구글 시트 `ISS` 원장 탭 (양방향, 매 회차)
+#     7. gsheet-push-issue-summary.py 이슈 md → 구글 시트 `요약` 탭 하단 (5단계 아래에 이어 붙인다)
 #
 #   로직은 전부 레포 쪽 스크립트에 있다. 본 파일은 순서·실패 분기·요약만 담당한다
 #   (로직을 여기 복제하면 SSOT 가 둘로 갈라진다).
@@ -139,6 +141,37 @@ if [ "$CHANGED" -eq 1 ] && [ -f "$PUSH" ] && [ -f "$TOKEN" ]; then
   fi
 elif [ "$CHANGED" -eq 0 ]; then
   echo '구글 푸시 생략 — 데이터 무변경'
+fi
+
+# --- 6. 이슈 파일 <-> 구글 시트 `개발ISS` 탭 (양방향) ---
+# 간트와 축이 다르다 — WBS 데이터 무변경 회차에도 이슈는 바뀔 수 있으므로 CHANGED 를 보지 않는다.
+# pull 이 먼저 돌아 시트에서 내린 상태를 파일에 반영(git mv)하고, 그 결과를 push 가 올린다.
+# 스크립트가 없는 레포·자격증명 없는 환경에서는 조용히 건너뛴다 (간트 파이프라인과 독립).
+ISSYNC="$HOME/.claude/custom-plugin/tools/scripts/issue-sheet-sync.py"
+if [ -f "$ISSYNC" ] && [ -f "$TOKEN" ]; then
+  if ! IOUT="$("$PY" "$ISSYNC" both "$REPO" 2>&1)"; then
+    printf '%s
+' "$IOUT" >&2
+    echo "[경고] ISS 원장 탭 동기화 실패 — 간트 산출물은 정상이다" >&2
+  else
+    printf '%s
+' "$IOUT" | tail -3
+  fi
+fi
+
+# --- 7. 이슈 → 구글 시트 `요약` 탭 하단 ---
+# 6단계가 원장(`개발ISS`)을 맞춘 뒤에 온다 — 순서가 뒤집히면 낡은 상태로 집계한다.
+# 집계 대상은 시트가 아니라 이슈 파일이라 6단계 실패와 무관하게 옳은 값이 나온다.
+ISUM="$HOME/.claude/custom-plugin/tools/scripts/gsheet-push-issue-summary.py"
+if [ -f "$ISUM" ] && [ -f "$TOKEN" ]; then
+  if ! SOUT="$("$PY" "$ISUM" "$REPO" 2>&1)"; then
+    printf '%s
+' "$SOUT" >&2
+    echo "[경고] 요약 탭 이슈 블록 푸시 실패 — 원장 탭은 정상이다" >&2
+  else
+    printf '%s
+' "$SOUT" | tail -1
+  fi
 fi
 
 # --- 요약 ---
