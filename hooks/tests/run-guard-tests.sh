@@ -68,6 +68,22 @@ init_repo() {
 init_repo "$TMP/repo_master" master
 init_repo "$TMP/repo_feature" feature/x
 
+# ── worktree 커밋 시나리오용 저장소 3개 (2026-09-15) ──
+#   repo_cwd = 세션 cwd 역할(메인 레포). staged 없음.
+#   repo_wt  = 커밋 대상 worktree 역할. 문서만 staged.
+#   repo_wt_code = 같은 역할이나 코드가 staged.
+#   셋 다 phpunit.xml.dist 를 둔다 — 테스트 프레임워크가 없으면 게이트가 그 앞에서 통과해버려
+#   케이스가 공집합 위의 green 이 된다.
+mkdir -p "$TMP/repo_cwd" "$TMP/repo_wt/docs" "$TMP/repo_wt_code/app"
+init_repo "$TMP/repo_cwd" master
+init_repo "$TMP/repo_wt" master
+init_repo "$TMP/repo_wt_code" master
+for _d in repo_cwd repo_wt repo_wt_code; do : > "$TMP/$_d/phpunit.xml.dist"; done
+printf '# guardtest doc\n' > "$TMP/repo_wt/docs/guardtest.md"
+git -C "$TMP/repo_wt" add docs/guardtest.md 2>/dev/null
+printf '<?php\nclass GuardTestFixture {}\n' > "$TMP/repo_wt_code/app/GuardTestFixture.php"
+git -C "$TMP/repo_wt_code" add app/GuardTestFixture.php 2>/dev/null
+
 # ── payload 생성 (python 없이도 동작하도록 bash 로 JSON escape) ──
 json_escape() {
   local s="$1"
@@ -267,6 +283,24 @@ EOF" "$TMP/repo_master"
 
   bash_payload "git status" "$TMP/repo_master"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 비커밋 명령" 0 $?
+
+  # ── worktree 대상 커밋 (2026-09-15) ──
+  #   hook 프로세스의 cwd 는 세션 cwd(메인 레포)다. `cd <wt> && git commit` / `git -C <wt> commit` 이면
+  #   staged 목록을 **그 디렉토리에서** 읽어야 docs/config-only 면제가 성립한다. 구 코드는 cwd 인덱스를
+  #   읽어 staged 가 비었고, 면제를 건너뛰어 [NO TEST, NO MERGE] 로 오차단했다 (실측 2026-09-15: 한 세션 2회).
+  #   그리고 `git -C … commit` 은 검출 정규식(`git\s+commit`)에 안 걸려 **게이트 3단 전체를 건너뛰었다**.
+  bash_payload "git -C $TMP/repo_feature ${GC#git } -m \"zzz no prefix\"" "$TMP/repo_cwd"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_cwd"; check "[$mode] git -C 커밋도 형식 검사 대상" 2 $?
+
+  bash_payload "cd $TMP/repo_wt && $GC -m \"docs(hooks): worktree 문서 커밋\"" "$TMP/repo_cwd"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_cwd"; check "[$mode] cd worktree — 문서만 staged 면제" 0 $?
+
+  bash_payload "git -C $TMP/repo_wt ${GC#git } -m \"docs(hooks): worktree 문서 커밋\"" "$TMP/repo_cwd"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_cwd"; check "[$mode] git -C worktree — 문서만 staged 면제" 0 $?
+
+  # 음성 대조 — 코드가 staged 면 면제되지 않는다 (면제가 전량 허용으로 뒤집히지 않았는지)
+  bash_payload "cd $TMP/repo_wt_code && $GC -m \"fix(hooks): worktree 코드 커밋\"" "$TMP/repo_cwd"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_cwd"; check "[$mode] worktree 코드 staged 는 차단 유지" 2 $?
 done
 
 # ═══════════════════════════════════════════════════════════════════

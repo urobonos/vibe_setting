@@ -35,7 +35,10 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # git commit 명령만 검사
-if ! echo "$COMMAND" | grep -qE 'git\s+commit'; then
+#   `git -C <경로> commit` 도 포함한다 (2026-09-15). 구 정규식은 `git` 바로 뒤 `commit` 만 봐서
+#   그 형태가 **게이트 3단(메시지 형식·커밋 범위·테스트 이력)을 통짜로 건너뛰었다** — worktree 에서
+#   커밋할 때 흔히 쓰는 형태라 우회 통로가 열려 있었다 (실측 2026-09-15: exit 0, 검사 0건).
+if ! echo "$COMMAND" | grep -qE 'git\s+(-C\s+[^[:space:]]+\s+)?commit'; then
   exit 0
 fi
 
@@ -129,7 +132,22 @@ fi
 
 # ===== Phase 2: 커밋 범위 검증 (1 커밋 = 1 변경) =====
 
-STAGED_FILES=$(git diff --cached --name-only 2>/dev/null)
+# 커밋 대상 디렉토리 — 명령이 지정한 곳을 먼저 본다 (2026-09-15)
+#   hook 프로세스의 cwd 는 세션 cwd(=메인 레포)다. worktree 에서 `cd <wt> && git commit` 이나
+#   `git -C <wt> commit` 으로 커밋하면 여기서 읽던 인덱스가 그 worktree 가 아니라 메인 레포였고,
+#   staged 가 비어 아래 :185 의 docs/config-only 면제를 건너뛰어 [NO TEST, NO MERGE] 로 **오차단**됐다
+#   (실측 2026-09-15: 한 세션에서 2회. 사용자가 직접 커밋해 우회했다).
+#   경로에 공백이 있으면 첫 토큰만 잡는다 — worktree 경로 관례상 공백이 없고, 빗나가도 아래
+#   `[ -d ]` 검사가 $CWD 로 되돌려 구동작과 같아진다 (fail-safe).
+REPO_DIR="$CWD"
+if [[ "$COMMAND" =~ git[[:space:]]+-C[[:space:]]+[\"\']?([^\"\'[:space:]]+) ]]; then
+  REPO_DIR="${BASH_REMATCH[1]}"
+elif [[ "$COMMAND" =~ (^|[[:space:];\&|])cd[[:space:]]+[\"\']?([^\"\'[:space:]]+) ]]; then
+  REPO_DIR="${BASH_REMATCH[2]}"
+fi
+[ -d "$REPO_DIR" ] || REPO_DIR="$CWD"
+
+STAGED_FILES=$(git -C "$REPO_DIR" diff --cached --name-only 2>/dev/null)
 
 if [ -n "$STAGED_FILES" ]; then
   MODULE_COUNT=$(echo "$STAGED_FILES" | grep -oE 'app/Modules/[A-Za-z]+' | sort -u | wc -l)
@@ -170,7 +188,7 @@ fi
 # 테스트 프레임워크 없는 프로젝트 → 통과
 HAS_TEST_FRAMEWORK=false
 for marker in "phpunit.xml" "phpunit.xml.dist" "jest.config.js" "jest.config.ts" "pytest.ini" "pyproject.toml" "vitest.config.ts" "vitest.config.js"; do
-  if [ -f "$CWD/$marker" ]; then
+  if [ -f "$REPO_DIR/$marker" ]; then
     HAS_TEST_FRAMEWORK=true
     break
   fi
