@@ -7,7 +7,7 @@
 #     3. build-xlsx.py         tsv           → 간트 xlsx
 #     4. build-menu-summary.py 간트 xlsx     → 메뉴별 요약 xlsx (보고용)
 #     5. gsheet-push-summary.py 요약 xlsx    → 구글 시트 `요약` 탭 (변경 회차에만)
-#     6. issue-sheet-sync.py   이슈 md      ↔ 구글 시트 `ISS` 원장 탭 (양방향, 매 회차)
+#     6. issue-sheet-sync.py   이슈 md      → 구글 시트 `ISS` 원장 탭 (문서가 정본, 매 회차)
 #     7. gsheet-push-issue-summary.py 이슈 md → 구글 시트 `요약` 탭 하단 (5단계 아래에 이어 붙인다)
 #
 #   로직은 전부 레포 쪽 스크립트에 있다. 본 파일은 순서·실패 분기·요약만 담당한다
@@ -143,9 +143,9 @@ elif [ "$CHANGED" -eq 0 ]; then
   echo '구글 푸시 생략 — 데이터 무변경'
 fi
 
-# --- 6. 이슈 파일 <-> 구글 시트 `개발ISS` 탭 (양방향) ---
+# --- 6. 이슈 파일 -> 구글 시트 `ISS` 원장 탭 (문서가 정본) ---
 # 간트와 축이 다르다 — WBS 데이터 무변경 회차에도 이슈는 바뀔 수 있으므로 CHANGED 를 보지 않는다.
-# pull 이 먼저 돌아 시트에서 내린 상태를 파일에 반영(git mv)하고, 그 결과를 push 가 올린다.
+# 상태 정본은 이슈 문서(폴더)다. push 가 문서 상태를 시트에 쓰고, pull 은 시트와 어긋난 건만 보고한다(파일은 안 건드린다).
 # 스크립트가 없는 레포·자격증명 없는 환경에서는 조용히 건너뛴다 (간트 파이프라인과 독립).
 ISSYNC="$HOME/.claude/custom-plugin/tools/scripts/issue-sheet-sync.py"
 if [ -f "$ISSYNC" ] && [ -f "$TOKEN" ]; then
