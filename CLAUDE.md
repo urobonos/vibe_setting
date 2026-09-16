@@ -33,6 +33,28 @@
 
 프로젝트 루트·브랜치·커밋·스킬 카탈로그(`available-skills`)는 하니스가 세션 시작 시 자동 주입한다 — Claude 별도 확인 절차 불요. 이전 작업 이력은 `~/.claude/docs/{product}/tasks/history.md` 참조 (대용량이라 자동 로드 안 함, 필요시 수동).
 
+### Context Compaction 요약 양식 (필수)
+
+autocompact (컨텍스트 자동 압축) 발생 시 **서사식 요약 금지.** 아래 구조로 정확히 정리한다:
+
+1. **완료된 작업** — 무엇을 끝냈는지
+2. **현재 상태** — 수정한 파일 전체 목록(정확한 경로), 실행 명령어, 테스트 명령어
+3. **진행 중** — 지금 손대고 있던 것과 어디까지 했는지
+4. **결정 사항** — 채택한 접근법과 그 이유, 기각한 대안과 기각 이유
+5. **막다른 길** — 시도했다가 실패한 방법 (한 줄씩, 다시 시도하지 않도록)
+6. **제약/선호** — 사용자가 지시한 규칙, 코딩 스타일, 하지 말라고 한 것
+7. **미해결/다음 단계** — 열린 이슈, TODO, 사용자의 마지막 질문 **원문 그대로**
+
+**파일 경로·에러 메시지·변수명·ID 는 절대 의역하지 말고 원문 그대로 유지.** 탐색 과정의 잡담은 버린다.
+
+**2번에 반드시 포함** — 작업 중인 **worktree 경로·브랜치명** + **미커밋 변경 유무**(있으면 파일 목록). 이 둘을 잃으면 압축 후 `develop` 직접 편집(§4.3 worktree 강제 위반) 또는 변이 유실로 이어진다.
+
+**요약은 근거가 아니다** — 압축본의 사실 주장(건수·완료 여부·파일 상태)은 **재확인 대상**이지 판정 근거가 아니다. 요약을 인용해 재판정하지 말고 원 출처를 다시 읽는다.
+
+**2번·7번은 기계가 채운다** — 압축 직전 PreCompact 가 `~/.claude/docs/compact/{sid}/NN-*.md` 에 **수정 파일 전수·실행 명령어·사용자 발화 원문**을 박제하고, 압축 직후 SessionStart 가 그 경로를 통지한다. 맥락이 비면 추측하지 말고 그 파일을 읽는다. 배선 SSOT = `hooks/{compact-snapshot,compact-context-restore}.sh`.
+
+**§4.4 "응답 간결" 면제 영역** — 본 양식은 압축 산출물이지 사용자 대상 답변이 아니다. 7항목·표 행 상한을 적용하지 않는다 (누락이 곧 컨텍스트 소실).
+
 ---
 
 ## 2. Hierarchy & Authority (Global Constitution)
@@ -87,6 +109,7 @@
 - **Hook 우회 임의 파일 생성 금지 (필수):** hook 차단 회피 목적 파일 생성·커밋 금지. 정당한 누락분 보완과 다름. 무관한 파일/hook 경로 위장 더미 파일 생성 = 위반. 차단 정당하지 않다고 판단 시 사용자 보고.
 - **audit 결과 자동 수정 금지 (필수):** audit (예: `/backend:api-spec-audit`·`/security-audit`) N 판정에 자동 "개선 제안"·"수정 계획" 덧붙이지 않는다. audit = 현황 진단 도구, 무조건 고쳐야 하는 task 아님. 사용자 명시 수정 요청 시에만 개선안 제시.
 - **사용자 직접 실행 명령 스크립트화 (필수):** 사용자에게 직접 실행을 요청하는 **비-§3 명령은 무조건 실행 스크립트 파일**로 작성한다. 경로 양식·직접 호출 순서·정착 계열 제외·GC = `hooks/script-request-enforce.sh` stderr(exit 2 전량 출력) + `hooks/scripts-cleanup.sh` SSOT. **§3 절대 차단 영역(`git push` / master·main 머지·체크아웃 / `rm -rf` / DB 마이그·롤백 / aws 변경계)은 스크립트화 불가** — 의도된 다층 안전 설계이므로 **어떤 도구로도 우회를 시도하지 말 것.** 이 영역만 텍스트 `! <command>` 로 사용자 직접 안내 (Claude 자동 호출 시도조차 금지). 조회·로컬 명령(`ls`/`git status` 류)은 애초에 Claude 가 직접 실행 (§4.2 실행 책임).
+- **파일 탐색 도구 (필수):** 파일 검색 = `Glob`·`Grep` 도구 사용, Bash 의 `find`·`grep` 으로 대체 금지. 셸에서 파일 목록이 필요하면 `git ls-files` 또는 `rg --files` (`find` 금지).
 
 ### §4.3 게이트·워크플로우
 
@@ -144,7 +167,7 @@
 ### §4.5 산출물 생명주기
 
 - **working/ 자동 이동 3 진입점 (필수):** (1) 정상 마감 = `/taskflow:save` (정착 안내 + Done/Partial 잔여 판정) / (2) 긴급 단순 이동 = `/taskflow:save now` (판정 생략, 이동만) / (3) 자동 = `working-lifecycle.sh` (`Status: Done` + `## Self-Critique` 동시 존재 시). 선택 기준·절차 = `custom-plugin/taskflow/commands/save.md` §"즉시 이동 모드" + `hooks/working-lifecycle.sh` SSOT.
-- **backlog 메모리 정책 (필수):** 본 세션 잔여 후속·시간 트리거·사용자 결정 보류 = `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` 단일 파일 (2026-08-06 배선 / 2026-08-07 실 데이터 이관, product 무분리) + 발생 project 의 `MEMORY.md` `## Backlog` entry(인덱스는 project 별 그대로, href 만 신 경로 상대참조). 트리거 키워드 = `backlog 완료`/`backlog 정리`/`backlog 이동`/`/backlog-done`. frontmatter 양식·자동 이동 절차 = `hooks/backlog-lifecycle.sh` + `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" SSOT. §3 Checkpoint 우선 적용.
+- **backlog 메모리 정책 (필수):** 본 세션 잔여 후속·시간 트리거·사용자 결정 보류 = `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` 단일 파일 (2026-08-06 배선 / 2026-08-07 실 데이터 이관, product 무분리) + 발생 project 의 **`memory/backlog-index.md`** entry(인덱스는 project 별 그대로, href 만 신 경로 상대참조). **`MEMORY.md` 에는 그 파일을 가리키는 포인터 1줄만 둔다 (2026-09-07 분리)** — MEMORY.md 는 200줄 로드 한도가 있는데 backlog 는 줄어드는 경로가 없어 계속 쌓이고, 한도를 넘으면 **끝부분이 조용히 절단돼 새로 쓴 것이 먼저 안 보인다**(실측: 210줄·10줄 절단. 병렬 세션이 동시에 추가하므로 한 번 줄여도 재발한다). 트리거 키워드 = `backlog 완료`/`backlog 정리`/`backlog 이동`/`/backlog-done`. frontmatter 양식·자동 이동 절차 = `hooks/backlog-lifecycle.sh` + `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" SSOT. §3 Checkpoint 우선 적용.
 - **비필수 사이드이펙트 백로그 격리 (필수):** 코드 작업 중 발견 항목이 **① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급(부수적·경미)** 3조건을 **모두** 충족할 때만 working/ 본문·코드 TODO 로 끌어올리지 않고 **backlog 메모리에만 기록** 후 현재 작업 계속 (별도 경량 backlog 신설 금지). 하나라도 불충족 = Critical~Low 정상 분류. **실제 버그·문제는 경미해 보여도 절대 backlog 로 미루지 않는다 (②가 안전장치).** §3 매칭 항목은 크기 무관 사용자 보고. 세부·Why = `skills/task-docs/SKILL.md` §"backlog 메모리 워크플로우" SSOT.
 
 ---
