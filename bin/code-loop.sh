@@ -329,10 +329,18 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
             local fix_body="$common
 적대적 검증이 깼다: $dir/adv-$mm.md 의 재현 명령·출력을 읽고 고친다.
 범위는 $dir/00-spec.md 그대로다. $dir/dev-$nn2.md 를 쓴다 (FILES/TESTS/NOTES/BASELINE/WHY)."
-            if ! run_step "dev-$nn2(adv)" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn2.md" \
-                 "$(step_prompt "$AGENT_DIR/step-developer.md" "$fix_body")"; then
-              echo "!!! adv 수정 실패 — 중단"
-              return 1
+            # dev-loop 의 dev 스텝과 같은 재개 가드. 없으면 --resume 이 끝난 수정을
+            # 다시 태우고, 그때 덮이는 것은 코드가 아니라 **판정**이다 — adv 수정분이
+            # "FILES: 없음"(고칠 코드가 없다)으로 끝나는 경우가 실재하고(2026-09-16
+            # ISS-570 dev-02), 그 판정이 사라지면 왜 안 고쳤는지가 함께 사라진다
+            if [ ! -s "$dir/dev-$nn2.md" ]; then
+              if ! run_step "dev-$nn2(adv)" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn2.md" \
+                   "$(step_prompt "$AGENT_DIR/step-developer.md" "$fix_body")"; then
+                echo "!!! adv 수정 실패 — 중단"
+                return 1
+              fi
+            else
+              echo "--- [dev-$nn2(adv)] 기존 산출물 재사용 ($(wc -c < "$dir/dev-$nn2.md") bytes)"
             fi
             # adversary 수정분도 반드시 리뷰를 거친다 — 안 그러면 아무도 안 본 변경이
             # 클린을 달고 남는다 (adversary 는 깨는 역할이지 판정 역할이 아니다)

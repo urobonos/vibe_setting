@@ -206,6 +206,17 @@ check "dev 프롬프트 첫 줄이 --- 아님" 0 "$(grep '^dev-01.md|' "$T_TOOLS
 check "rev 프롬프트 첫 줄이 --- 아님" 0 "$(grep '^rev-01-design.md|' "$T_TOOLSLOG" | cut -d'|' -f3 | grep -c '^---')"
 unset T_TOOLSLOG
 
+echo "== N. --resume 이 adv 수정분 판정을 덮지 않는다 =="
+# adv BROKEN 뒤 dev 수정은 "FILES: 없음"(고칠 코드가 없다)으로 끝나는 경우가 실재한다.
+# 그 판정이 재실행으로 덮이면 왜 안 고쳤는지가 함께 사라진다 (ISS-570 dev-02 실측)
+reset; runit T_REV=CLEAN T_ADV='BROKEN,UPHELD' > /dev/null
+RUN=$(basename "$(d)")
+printf '판정: FILES 없음 — 고칠 코드가 없다\n' > "$ST/$RUN/dev-02.md"
+before=$(md5sum "$ST/$RUN/dev-02.md" | cut -d' ' -f1)
+env T_REV=CLEAN T_ADV='BROKEN,UPHELD' bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+check "adv 수정분 판정 보존" "$before" "$(md5sum "$ST/$RUN/dev-02.md" | cut -d' ' -f1)"
+check "재사용 로그" 1 "$(grep -c '기존 산출물 재사용' "$TMP/out.txt")"
+
 echo
 echo "===== PASS $pass / FAIL $fail ====="
 [ "$fail" -eq 0 ]
