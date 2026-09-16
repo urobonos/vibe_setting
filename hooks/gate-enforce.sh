@@ -194,6 +194,27 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Mult
             _plan_ok=1; break
           fi
         done < <(awk -F'|' -v s="$_plan_sid8" '{gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$9); if ($4==s) print $9}' "$_plan_registry" 2>/dev/null)
+
+        # code-loop 경로 (2026-09-16) — 스텝마다 새 프로세스라 SID8 이 매번 바뀌어
+        # REGISTRY 에 원천적으로 닿지 못한다. REGISTRY 등록은 UserPromptSubmit 경유로만
+        # 가능한데 서브프로세스에는 그 경로가 없다 (실측: ISS-570 이전 run 이 5라운드 전부
+        # 이 게이트에 막혀 코드 0줄로 끝났고, 재시도로는 풀리지 않음을 개발자가 소스로 확정).
+        #
+        # 그 대신 1단계가 만든 00-spec.md 를 §계획으로 인정한다 — 요청·성공 기준(검증 가능)
+        # ·테스트 범위·비목표가 들어 있어 이 게이트가 요구하는 것을 다른 이름으로 이미
+        # 만족한다. 우회가 아니라 인정이다.
+        #
+        # **환경변수는 "어디를 보라" 는 포인터일 뿐 통과 사유가 아니다.** 판정은 그 경로의
+        # 파일이 실재하고 1단계 크기 게이트를 통과(GATE: OK)했는지로 한다 — 변수만 세우면
+        # 열리는 구조면 그 자체가 우회 통로가 된다. TOO-LARGE 는 인정하지 않는다
+        # (그건 "이 커맨드로 받지 않는다" 는 판정이라 계획이 선 상태가 아니다).
+        if [ "$_plan_ok" -ne 1 ] && [ -n "${CODE_LOOP_SPEC:-}" ] \
+           && [ -f "$CODE_LOOP_SPEC" ] \
+           && grep -qE '^GATE:[[:space:]]*OK[[:space:]]*$' "$CODE_LOOP_SPEC" 2>/dev/null; then
+          _plan_ok=1
+          command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "pass" "reason=code-loop-spec"
+        fi
+
         if [ "$_plan_ok" -ne 1 ]; then
           echo "[GATE BLOCKED] 코드 변경 전 계획 필요 — /taskflow:plan 으로 §계획을 세우고 'Status: Plan Complete' 부착 후 수정하세요. trivial 핫픽스면 '핫픽스' 키워드로 override 하세요. [$FILE_PATH]" >&2
           command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "block" "reason=plan-before"

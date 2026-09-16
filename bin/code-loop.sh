@@ -231,6 +231,13 @@ $request"
     return 2
   fi
 
+  # 이 아래 스텝들이 코드를 쓸 수 있게 한다. gate-enforce.sh 의 plan-before 게이트는
+  # 세션 SID8 로 REGISTRY 를 찾는데, 스텝마다 새 프로세스라 매번 새 SID8 이 나와
+  # 원천적으로 닿지 못한다. 그 대신 이 경로의 00-spec.md 를 §계획으로 인정한다.
+  # 변수는 포인터일 뿐이고 통과 판정은 hook 이 파일 실재와 GATE: OK 로 한다
+  # (SSOT = hooks/gate-enforce.sh plan-before 절)
+  export CODE_LOOP_SPEC="$dir/00-spec.md"
+
   # ── dev-loop ──────────────────────────────────────────────────────────
   local n nn verdict=""
   for n in $(seq 1 "$DEV_CAP"); do
