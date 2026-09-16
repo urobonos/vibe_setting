@@ -133,10 +133,23 @@ check "dev 라운드수(캡)" 5 "$(cnt 'dev-*.md')"
 check "adv 미실행" 0 "$(cnt 'adv-*.md')"
 check "캡 메시지" 1 "$(grep -c '캡 5 소진' "$TMP/out.txt")"
 
-echo "== D. adv BROKEN → dev 재진입(정규 캡 계상) =="
+echo "== D. adv BROKEN → dev 재진입 + 리뷰 1라운드(정규 캡 계상) =="
+# 2026-09-16 ISS-570 실전 회귀: BROKEN 뒤 dev 수정분이 리뷰 없이 다음 게이트로 갔다.
+# adversary 는 깨는 역할이지 판정 역할이 아니라 그 수정은 아무도 안 본 변경이 된다
 reset; rc=$(runit T_REV=CLEAN T_ADV='BROKEN,UPHELD')
 check "dev 라운드수(1+재진입)" 2 "$(cnt 'dev-*.md')"
 check "재진입 메시지" 1 "$(grep -c 'dev-loop 재진입' "$TMP/out.txt")"
+check "adv 수정분 리뷰 실행" 1 "$([ -s "$(d)/rev-02.md" ] && echo 1 || echo 0)"
+check "합본 라운드수" 2 "$(merged)"
+check "adv 2회차 진입" 2 "$(cnt 'adv-*.md')"
+
+echo "== M. adv 수정분에 지적이 남으면 게이트를 닫는다 =="
+# 정규 루프로 되돌리지 않는다 — 게이트 캡이 정규 캡을 늘리는 통로가 되면
+# 클린 직전에 라운드가 무한히 열린다
+reset; rc=$(runit T_REV='CLEAN,FINDINGS C=0 H=1 M=0' T_ADV='BROKEN,UPHELD')
+check "adv 2회차 미실행" 1 "$(cnt 'adv-*.md')"
+check "게이트 닫힘 메시지" 1 "$(grep -c '지적 잔존' "$TMP/out.txt")"
+check "RESULT 는 생성" 1 "$([ -s "$(d)/RESULT.md" ] && echo 1 || echo 0)"
 
 echo "== E. 크기 게이트 TOO-LARGE → 정지 =="
 reset; rc=$(runit T_GATE=TOO-LARGE)

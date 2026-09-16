@@ -136,6 +136,65 @@ agent_body() {
   awk '/^---$/{n++; next} n>=2' "$1"
 }
 
+# 리뷰 1라운드 = 콜드 리뷰어 2인 병렬 + 합본. rev-NN.md 와 그 안의 VERDICT 줄을 남긴다.
+#
+# **dev-loop 와 adv-loop(BROKEN 재진입) 양쪽이 이 함수를 쓴다.** adversary 는 깨는
+# 역할이지 판정 역할이 아니라서, 그것이 BROKEN 을 내고 개발자가 고친 변경도 반드시
+# 이 라운드를 거쳐야 한다. 2026-09-16 ISS-570 실전 run 에서 그 수정분이 아무도 안 본 채
+# 다음 게이트로 넘어갔다 — 결과적으로 UPHELD 라 무사했지만 무검증 변경이 클린을
+# 달 수 있는 통로였다 (code-loop.md 는 "뺄 수 없다" 고 쓰고 구현이 안 지키고 있었다).
+#
+# $1 결과문서 디렉토리 / $2 라운드 번호(2자리) / $3 라운드 번호(정수) / $4 공통 프롬프트
+review_round() {
+  local dir="$1" nn="$2" n="$3" common="$4"
+  [ -s "$dir/rev-$nn.md" ] && return 0
+
+  local hist=""
+  [ "$n" -gt 1 ] && hist="라운드 이력: $dir/rev-*.md — 이미 닫힌 판정을 다시 열지 않는다."
+  local rev_body="$common
+
+너는 이 라운드의 콜드 리뷰어다. $dir/00-spec.md (대조 기준) 와 $dir/dev-$nn.md
+(이번 변경 + BASELINE) 를 읽고, worktree 의 diff 를 실제로 돌려 판정한다.
+$hist"
+
+  run_step "rev-$nn-correctness" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-correctness.md")" \
+    "$dir/rev-$nn-correctness.md" \
+    "$(step_prompt "$AGENT_DIR/reviewer-correctness.md" \
+       "$rev_body
+판정 결과를 $dir/rev-$nn-correctness.md 에 쓴다.")" &
+  local p1=$!
+  run_step "rev-$nn-design" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-design.md")" \
+    "$dir/rev-$nn-design.md" \
+    "$(step_prompt "$AGENT_DIR/reviewer-design.md" \
+       "$rev_body
+판정 결과를 $dir/rev-$nn-design.md 에 쓴다.")" &
+  local p2=$!
+  wait $p1; local r1=$?
+  wait $p2; local r2=$?
+  if [ $r1 -ne 0 ] || [ $r2 -ne 0 ]; then
+    echo "!!! 리뷰어 실패 (correctness=$r1 design=$r2) — 중단"
+    return 1
+  fi
+
+  # 합본 + 반박 판정 — code.md 가 "본체" 에 맡긴 일이고, 그 본체도 여기선 단발이다
+  local merge_body="$common
+
+두 리뷰어 판정을 합쳐 $dir/rev-$nn.md 를 쓴다.
+  입력: $dir/rev-$nn-correctness.md · $dir/rev-$nn-design.md · $dir/dev-$nn.md · $dir/00-spec.md
+  합본 규칙 SSOT = $CMD_DIR/watch.md 의 코드 축 절
+  REBUTTED 가 있으면 code.md 의 반박 판정 절에 있는 근거 3종을 직접 확인해
+  수용·기각을 판정하고, 수용분은 REBUTTED-ACCEPTED 로 표시한다 (다음 라운드 재개봉 차단).
+  BASELINE 전·후 명령이 다르거나 없으면 그 사실을 적는다 (관측 실패 — 라운드로 세지 않는다).
+마지막 줄에 기계 판독용으로 정확히 한 줄:
+  VERDICT: CLEAN                      (Critical·High·Medium 모두 0)
+  VERDICT: FINDINGS C=n H=n M=n       (하나라도 잔존)"
+  if ! run_step "merge-$nn" "$M_SPEC" "" "$dir/rev-$nn.md" "$merge_body"; then
+    echo "!!! 합본 실패 — 중단"
+    return 1
+  fi
+  return 0
+}
+
 run_loop() {
   local request="$1" run="$2" resume="${3:-}" dir="$STATE_DIR/$2"
   mkdir -p "$dir"
@@ -204,50 +263,8 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
       fi
     fi
 
-    # 리뷰어 2인 병렬 — 판정축이 갈라져 있어 서로를 안 봐도 된다
-    if [ ! -s "$dir/rev-$nn.md" ]; then
-      local hist=""
-      [ "$n" -gt 1 ] && hist="라운드 이력: $dir/rev-*.md — 이미 닫힌 판정을 다시 열지 않는다."
-      local rev_body="$common
-
-너는 이 라운드의 콜드 리뷰어다. $dir/00-spec.md (대조 기준) 와 $dir/dev-$nn.md
-(이번 변경 + BASELINE) 를 읽고, worktree 의 diff 를 실제로 돌려 판정한다.
-$hist"
-
-      run_step "rev-$nn-correctness" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-correctness.md")" "$dir/rev-$nn-correctness.md" \
-        "$(step_prompt "$AGENT_DIR/reviewer-correctness.md" \
-           "$rev_body
-판정 결과를 $dir/rev-$nn-correctness.md 에 쓴다.")" &
-      local p1=$!
-      run_step "rev-$nn-design" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-design.md")" "$dir/rev-$nn-design.md" \
-        "$(step_prompt "$AGENT_DIR/reviewer-design.md" \
-           "$rev_body
-판정 결과를 $dir/rev-$nn-design.md 에 쓴다.")" &
-      local p2=$!
-      wait $p1; local r1=$?
-      wait $p2; local r2=$?
-      if [ $r1 -ne 0 ] || [ $r2 -ne 0 ]; then
-        echo "!!! 리뷰어 실패 (correctness=$r1 design=$r2) — 중단"
-        return 1
-      fi
-
-      # 합본 + 반박 판정 — code.md 가 "본체" 에 맡긴 일이고, 그 본체도 여기선 단발이다
-      local merge_body="$common
-
-두 리뷰어 판정을 합쳐 $dir/rev-$nn.md 를 쓴다.
-  입력: $dir/rev-$nn-correctness.md · $dir/rev-$nn-design.md · $dir/dev-$nn.md · $dir/00-spec.md
-  합본 규칙 SSOT = $CMD_DIR/watch.md 의 코드 축 절
-  REBUTTED 가 있으면 code.md 의 반박 판정 절에 있는 근거 3종을 직접 확인해
-  수용·기각을 판정하고, 수용분은 REBUTTED-ACCEPTED 로 표시한다 (다음 라운드 재개봉 차단).
-  BASELINE 전·후 명령이 다르거나 없으면 그 사실을 적는다 (관측 실패 — 라운드로 세지 않는다).
-마지막 줄에 기계 판독용으로 정확히 한 줄:
-  VERDICT: CLEAN                      (Critical·High·Medium 모두 0)
-  VERDICT: FINDINGS C=n H=n M=n       (하나라도 잔존)"
-      if ! run_step "merge-$nn" "$M_SPEC" "" "$dir/rev-$nn.md" "$merge_body"; then
-        echo "!!! 합본 실패 — 중단"
-        return 1
-      fi
-    fi
+    # 리뷰어 2인 병렬 + 합본 — adv-loop 의 BROKEN 재진입도 같은 함수를 쓴다
+    review_round "$dir" "$nn" "$n" "$common" || return 1
 
     verdict=$(verdict_of "$dir/rev-$nn.md")
     echo "=== 라운드 $n 판정: ${verdict:-(VERDICT 줄 없음)}"
@@ -317,7 +334,19 @@ $hist"
               echo "!!! adv 수정 실패 — 중단"
               return 1
             fi
-            echo "=== adv 수정분 리뷰는 재개 실행이 이어받는다 — --resume $run"
+            # adversary 수정분도 반드시 리뷰를 거친다 — 안 그러면 아무도 안 본 변경이
+            # 클린을 달고 남는다 (adversary 는 깨는 역할이지 판정 역할이 아니다)
+            review_round "$dir" "$nn2" "$n" "$common" || return 1
+            verdict=$(verdict_of "$dir/rev-$nn2.md")
+            echo "=== adv 수정분 리뷰 판정: ${verdict:-(VERDICT 줄 없음)}"
+            case "$verdict" in
+              CLEAN*) ;;   # 통과 — 다음 adv 회차로
+              *)
+                # 정규 루프로 되돌리지 않는다. 게이트 캡이 정규 캡을 늘리는 통로가 되면
+                # 클린 직전에 라운드가 무한히 열린다 (code.md 와 같은 이유)
+                echo "=== adv 수정분에 지적 잔존 — 잔여로 넘기고 게이트를 닫는다"
+                break ;;
+            esac
             ;;
           *)
             echo "!!! adv VERDICT 줄이 없다 — 계약 위반. 중단"
