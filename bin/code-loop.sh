@@ -64,7 +64,13 @@ cmd_status() {
     if [ -f "$d/RESULT.md" ]; then state="완료"; else state="미완"; fi
     printf '%-46s %s  리뷰라운드 %s\n' "$run" "$state" "$rounds"
   done
-  [ "$found" = 1 ] || echo "run 없음"
+  if [ "$found" = 1 ]; then
+    # 진행 중인 run 을 눈으로 따라갈 방법을 여기서 알려준다 — 백그라운드로 띄우면
+    # stdout 이 호출한 쪽으로 가버려서 터미널에는 아무것도 안 뜬다
+    printf '\n진행 상황: tail -f %s/{run}/run.log\n' "$STATE_DIR"
+  else
+    echo "run 없음"
+  fi
 }
 
 # 스텝 1개 = claude -p 1회. 출력 파일이 생겼는지로 성공을 판정한다 — exit 0 은
@@ -313,6 +319,30 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
   return 1
 }
 
+# 루프 출력을 run.log 에 남기고 stdout 으로 미러링한다.
+#
+# 왜 tee 가 아니라 파일 우선인가:
+#   `code-loop.sh … | head` 처럼 호출자가 stdout 을 일찍 닫으면 tee 가 SIGPIPE 로
+#   죽고 그 다음 루프까지 죽는다 (2026-09-16 실측 — run.log 205 bytes 에서 중단,
+#   RESULT.md 미생성). 수십 분짜리 루프가 조용히 중단되는 것이 최악이므로
+#   루프는 파일에만 쓰고, stdout 은 tail 이 미러링한다. tail 이 죽어도 루프는 산다.
+#
+# 백그라운드로 띄우면 stdout 은 호출한 쪽으로 가버려 터미널에 아무것도 안 뜬다 —
+# 그때 진행을 볼 창구가 이 파일이다 (tail -f).
+tee_run() {
+  local run="$1"; shift
+  local log="$STATE_DIR/$run/run.log"
+  mkdir -p "$STATE_DIR/$run"
+  echo "로그: $log"
+  : >> "$log"
+  run_loop "$@" >> "$log" 2>&1 &
+  local pid=$!
+  # --pid 는 GNU coreutils 기능이다. 없으면 미러링을 포기하고 루프만 돌린다 —
+  # 진행은 tail -f 로 따로 볼 수 있으므로 미러링 실패가 루프를 막아선 안 된다
+  tail -n +1 -f --pid="$pid" "$log" 2>/dev/null || true
+  wait "$pid"
+}
+
 case "${1:-}" in
   ""|-h|--help)
     usage ;;
@@ -325,7 +355,8 @@ case "${1:-}" in
     if [ ! -s "$STATE_DIR/$2/00-spec.md" ]; then
       echo "재개 불가 (00-spec.md 없음): $2"; exit 1
     fi
-    run_loop "" "$2" resume ;;
+    tee_run "$2" "" "$2" resume ;;
   *)
-    run_loop "$1" "$(date '+%Y%m%d-%H%M%S')-$(make_slug "$1")" ;;
+    RUN="$(date '+%Y%m%d-%H%M%S')-$(make_slug "$1")"
+    tee_run "$RUN" "$1" "$RUN" ;;
 esac

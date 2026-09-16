@@ -14,6 +14,18 @@ bash ~/.claude/bin/code-loop.sh "$@"
 
 인자가 없으면 러너가 usage 를 낸다. 진행 중인 run 조회는 `bash ~/.claude/bin/code-loop.sh status`, 미완주분 재개는 `--resume {run}`.
 
+### 진행 상황을 눈으로 보려면
+
+러너는 시작하자마자 **로그 경로를 첫 줄에 낸다.** 백그라운드로 띄우면 stdout 이 호출한 쪽으로 가버려 터미널에는 아무것도 안 뜨므로, 그때 창구는 이 파일 하나다.
+
+```bash
+tail -f ~/.claude/state/code-loop/{run}/run.log
+```
+
+`{run}` 은 `code-loop.sh status` 가 알려준다. 로그에는 라운드 전이(`=== dev-loop 라운드 2/5`), 스텝 시작(`--- [rev-02-design] model=sonnet try=1`), 판정(`=== 라운드 2 판정: CLEAN`)이 시간과 함께 남는다.
+
+**루프는 로그 파일에만 쓰고 stdout 은 미러링이다.** 그래서 터미널을 닫거나 출력을 `head` 로 잘라도 루프는 끝까지 간다 — 수십 분짜리 작업이 파이프가 끊겼다고 조용히 죽으면 안 된다.
+
 ---
 
 **이 커맨드는 `/taskflow:code` 를 재정의하지 않는다.** 1단계 범위 확인 · 크기 게이트 · 루프 종료 조건 · 반박 판정 · BASELINE 교차 확인 · 적대적 검증 게이트 · 캡(정규 5 · 게이트 2) 전부 `custom-plugin/taskflow/commands/code.md` 가 SSOT 다. **여기 소관은 그 루프를 어디서 도느냐 하나뿐이다.**

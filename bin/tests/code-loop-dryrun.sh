@@ -125,6 +125,19 @@ RUN=$(basename "$(d)"); before=$(md5sum "$(d)/dev-01.md" | cut -d' ' -f1)
 env T_REV='FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
 check "기존 산출물 보존" "$before" "$(md5sum "$ST/$RUN/dev-01.md" | cut -d' ' -f1)"
 
+echo "== I. stdout 이 끊겨도 루프는 완주한다 (SIGPIPE 내성) =="
+# 2026-09-16 회귀: tee 로 미러링하던 때는 호출자가 head 로 파이프를 닫으면 tee 가
+# SIGPIPE 로 죽고 루프까지 죽었다 (run.log 205 bytes 에서 중단, RESULT.md 미생성)
+reset
+env T_REV=CLEAN T_ADV=UPHELD bash "$SUT" "드라이런 요청" 2>&1 | head -3 > /dev/null
+check "완주" 1 "$(grep -c 'code-loop 종료' "$(d)/run.log" 2>/dev/null || echo 0)"
+check "RESULT 생성" 1 "$([ -s "$(d)/RESULT.md" ] && echo 1 || echo 0)"
+
+echo "== J. run.log 에 진행이 남는다 =="
+reset; runit T_REV='FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD > /dev/null
+check "라운드 로그" 2 "$(grep -c 'dev-loop 라운드' "$(d)/run.log")"
+check "스텝 로그" 1 "$([ "$(grep -c '^--- .*\[' "$(d)/run.log")" -ge 8 ] && echo 1 || echo 0)"
+
 echo
 echo "===== PASS $pass / FAIL $fail ====="
 [ "$fail" -eq 0 ]
