@@ -28,7 +28,10 @@ hook_parse_session_id
 resolve_python 2>/dev/null
 [ -z "$HOOK_PY" ] && exit 0   # python 없으면 조용히 포기 (압축을 막지 않는다)
 
-OUT_DIR="$HOME/.claude/docs/compact/${SESSION_ID}"
+# sid 는 8자리 — REGISTRY·dispatch lock·history.md 가 전부 SID8 을 쓰므로 교차 조회가 된다.
+# 풀 sid 의 이점(트랜스크립트 1:1 매칭)은 본문에 transcript_path 전문이 박혀 있어 불필요하다.
+SID8="${SESSION_ID:0:8}"
+OUT_DIR="$HOME/.claude/docs/snapshot/${SID8}"
 mkdir -p "$OUT_DIR" 2>/dev/null || exit 0
 
 # 같은 세션에서 압축은 여러 번 일어난다 — 순번으로 누적한다 (덮어쓰면 이전 구간이 사라진다)
@@ -46,7 +49,7 @@ $(git status --porcelain 2>/dev/null | grep -v '^??' | head -30 | sed 's/^/    /
 fi
 
 # 이벤트 JSON 은 **환경변수로** 넘긴다 — heredoc 이 stdin 을 점유해 파이프가 무시되기 때문 (2026-09-16 실측)
-export SNAP_OUT="$OUT_FILE" SNAP_SEQ="$SEQ_PAD" SNAP_GIT="$GIT_BLOCK" SNAP_SID="$SESSION_ID" SNAP_EVENT="$STDIN_DATA"
+export SNAP_OUT="$OUT_FILE" SNAP_SEQ="$SEQ_PAD" SNAP_GIT="$GIT_BLOCK" SNAP_SID="$SID8" SNAP_EVENT="$STDIN_DATA"
 "$HOOK_PY" - <<'PYEOF'
 import json, os, sys, datetime
 
@@ -157,7 +160,7 @@ with open(out, "w", encoding="utf-8") as f:
 PYEOF
 
 # GC — 14일 지난 스냅샷 정리 (무한 증식 차단)
-find "$HOME/.claude/docs/compact" -mindepth 2 -name '*.md' -mtime +14 -delete 2>/dev/null
-find "$HOME/.claude/docs/compact" -mindepth 1 -maxdepth 1 -type d -empty -delete 2>/dev/null
+find "$HOME/.claude/docs/snapshot" -mindepth 2 -name '*.md' -mtime +14 -delete 2>/dev/null
+find "$HOME/.claude/docs/snapshot" -mindepth 1 -maxdepth 1 -type d -empty -delete 2>/dev/null
 
 exit 0

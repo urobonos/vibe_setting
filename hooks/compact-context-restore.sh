@@ -60,7 +60,7 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 # ── 2. PreCompact 스냅샷 (compact-snapshot.sh 가 압축 직전에 박제한 원문) ──
-SNAP_DIR="$HOME/.claude/docs/compact/${SESSION_ID}"
+SNAP_DIR="$HOME/.claude/docs/snapshot/${SESSION_ID:0:8}"   # sid 8자리 = REGISTRY·dispatch 관습과 동일 (교차 조회)
 if [ -n "$SESSION_ID" ] && [ -d "$SNAP_DIR" ]; then
   LATEST=$(ls -1t "$SNAP_DIR"/*.md 2>/dev/null | head -1)
   SNAP_N=$(ls -1 "$SNAP_DIR"/*.md 2>/dev/null | wc -l)

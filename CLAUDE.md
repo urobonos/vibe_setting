@@ -51,7 +51,7 @@ autocompact (컨텍스트 자동 압축) 발생 시 **서사식 요약 금지.**
 
 **요약은 근거가 아니다** — 압축본의 사실 주장(건수·완료 여부·파일 상태)은 **재확인 대상**이지 판정 근거가 아니다. 요약을 인용해 재판정하지 말고 원 출처를 다시 읽는다.
 
-**2번·7번은 기계가 채운다** — 압축 직전 PreCompact 가 `~/.claude/docs/compact/{sid}/NN-*.md` 에 **수정 파일 전수·실행 명령어·사용자 발화 원문**을 박제하고, 압축 직후 SessionStart 가 그 경로를 통지한다. 맥락이 비면 추측하지 말고 그 파일을 읽는다. 배선 SSOT = `hooks/{compact-snapshot,compact-context-restore}.sh`.
+**2번·7번은 기계가 채운다** — 압축 직전 PreCompact 가 `~/.claude/docs/snapshot/{sid8}/NN-*.md` 에 **수정 파일 전수·실행 명령어·사용자 발화 원문**을 박제하고, 압축 직후 SessionStart 가 그 경로를 통지한다. 맥락이 비면 추측하지 말고 그 파일을 읽는다. 배선 SSOT = `hooks/{compact-snapshot,compact-context-restore}.sh`.
 
 **§4.4 "응답 간결" 면제 영역** — 본 양식은 압축 산출물이지 사용자 대상 답변이 아니다. 7항목·표 행 상한을 적용하지 않는다 (누락이 곧 컨텍스트 소실).
 
