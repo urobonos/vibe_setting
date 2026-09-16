@@ -36,6 +36,17 @@ set -uo pipefail
 PAYLOAD=$(cat)
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "worktree-enforce" "enter" "pid=$$"
 
+# target 경로의 git 판정 기준 디렉토리 = **존재하는 최근접 조상**.
+# 신규 파일·신규 디렉토리는 dirname 이 아직 없을 수 있고, 그때 "repo 밖" 으로 오판하면
+# 우회 구멍이 된다. #10 면제 판정과 아래 target repo 검증이 같은 기준을 쓰게 하는 SSOT.
+_wt_nearest_dir() {
+  local d; d=$(dirname "$1")
+  while [ ! -d "$d" ] && [ "$d" != "/" ] && [ "$d" != "." ] && [ -n "$d" ]; do
+    d=$(dirname "$d")
+  done
+  printf '%s' "$d"
+}
+
 # --- 면제 판정 단일 함수 (14 path-pattern + #10 check-ignore) ---
 # Edit/Write 모드와 Bash 모드 target 검사가 공유하는 단일 SSOT (v6, 2026-06-10 — 사용자 승인 오탐 픽스).
 is_exempt_path() {
@@ -58,8 +69,17 @@ is_exempt_path() {
     C:/Works/infra/*|/c/Works/infra/*) return 0 ;;  # #8
   esac
   # #10 (2026-05-29): untracked+ignored 로컬 전용 파일 — worktree 에 존재하지 않아 격리 불가능.
-  if git -C "$(pwd)" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
-     && git -C "$(pwd)" check-ignore -q -- "$P" 2>/dev/null; then
+  #
+  # 판정 기준은 **target 의 레포**다 (2026-09-17 정정). cwd 기준으로 돌리면 cwd 와 target 이
+  # 서로 다른 레포일 때 `check-ignore` 가 "outside repository" 로 조회 자체를 실패하고,
+  # 실제로는 ignored 인 파일이 비면제로 떨어져 차단된다. 실증 = code-loop 결과문서
+  # (`state/`, .gitignore:103 등재)를 worktree cwd 에서 쓰려다 4회 차단 (ISS-5 세션 dev-02/04/05
+  # + result 스텝). CLAUDE.md §4.3(c-2) 가 "cwd 위치는 판정에 쓰지 않는다" 로 이미 정한 것을
+  # 이 분기만 안 지키고 있었다 — 문서가 약속한 기준을 구현이 따라가지 못한 자리다.
+  local _ig_dir; _ig_dir=$(_wt_nearest_dir "$P")
+  if [ -d "$_ig_dir" ] \
+     && git -C "$_ig_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+     && git -C "$_ig_dir" check-ignore -q -- "$P" 2>/dev/null; then
     return 0
   fi
   return 1
@@ -206,10 +226,7 @@ if is_exempt_path "$FILE_PATH"; then exit 0; fi
 #   cwd 가 repo 여도 target 이 repo 밖이면 통과 — cwd-only 과잉차단 해소 (worktree 안 파일·
 #   repo 밖 임시경로 오차단 3회 실증). 신규 디렉토리는 **존재하는 최근접 조상**으로 판정하여
 #   dirname 미존재 → repo 밖 오판 통과(우회 구멍)를 회피한다.
-_wt_tdir=$(dirname "$FILE_PATH")
-while [ ! -d "$_wt_tdir" ] && [ "$_wt_tdir" != "/" ] && [ "$_wt_tdir" != "." ] && [ -n "$_wt_tdir" ]; do
-  _wt_tdir=$(dirname "$_wt_tdir")
-done
+_wt_tdir=$(_wt_nearest_dir "$FILE_PATH")
 if [ -d "$_wt_tdir" ] && ! git -C "$_wt_tdir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 0
 fi
