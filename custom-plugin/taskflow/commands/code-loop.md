@@ -4,6 +4,18 @@ allowed-tools: Bash, Read, Glob, Grep, Skill
 argument-hint: "{구현 요청} — 필수. 오래 걸리므로 run_in_background 로 띄운다"
 ---
 
+`~/.claude/bin/code-loop.sh` 의 thin wrapper. **로직 재구현 0 — 인자를 그대로 넘긴다.**
+
+```bash
+bash ~/.claude/bin/code-loop.sh "$@"
+```
+
+**`run_in_background: true` 로 띄운다.** 루프 1회가 스텝 7개 이상(1라운드 클린 기준)이라 Bash 도구 타임아웃(10분)을 넘긴다. 완료되면 하니스가 알려주고, 그때 `RESULT.md` 만 읽는다 — 중간에 폴링하지 않는다. 폴링하면 메인 컨텍스트를 아끼려고 만든 커맨드가 메인 컨텍스트를 쓴다.
+
+인자가 없으면 러너가 usage 를 낸다. 진행 중인 run 조회는 `bash ~/.claude/bin/code-loop.sh status`, 미완주분 재개는 `--resume {run}`.
+
+---
+
 **이 커맨드는 `/taskflow:code` 를 재정의하지 않는다.** 1단계 범위 확인 · 크기 게이트 · 루프 종료 조건 · 반박 판정 · BASELINE 교차 확인 · 적대적 검증 게이트 · 캡(정규 5 · 게이트 2) 전부 `custom-plugin/taskflow/commands/code.md` 가 SSOT 다. **여기 소관은 그 루프를 어디서 도느냐 하나뿐이다.**
 
 ## 어떻게 도는가
