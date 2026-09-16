@@ -75,16 +75,26 @@ cmd_status() {
 
 # 스텝 1개 = claude -p 1회. 출력 파일이 생겼는지로 성공을 판정한다 — exit 0 은
 # 모델이 "못 하겠다"고 말하고 끝난 경우에도 나오므로 성공 신호가 못 된다
-# $1 라벨 / $2 모델 / $3 산출 파일 / $4 프롬프트
+# $1 라벨 / $2 모델 / $3 허용 도구(비면 제한 없음) / $4 산출 파일 / $5 프롬프트
 run_step() {
-  local label="$1" model="$2" out="$3" prompt="$4" rc try=0
+  local label="$1" model="$2" tools="$3" out="$4" prompt="$5" rc try=0
   while [ "$try" -lt 2 ]; do
     try=$((try + 1))
-    echo "--- $(date '+%T') [$label] model=$model try=$try"
+    echo "--- $(date '+%T') [$label] model=$model tools=${tools:-*} try=$try"
     cd "$CLAUDE_HOME" || return 1
-    claude -p --model "$model" --permission-mode "$PERM" "$prompt" < /dev/null 2>&1 \
-      | sed 's/^/    /'
-    rc=${PIPESTATUS[0]}
+    # 프롬프트는 stdin 으로 준다. 인자로 주면 두 군데서 깨진다 (2026-09-16 실측):
+    #   (a) 에이전트 정의가 --- 로 시작해서 CLI 가 옵션으로 파싱한다
+    #       → error: unknown option '---
+    #   (b) --allowed-tools 가 variadic 이라 뒤따르는 프롬프트까지 도구로 먹는다
+    #       → Error: Input must be provided ...
+    if [ -n "$tools" ]; then
+      printf '%s' "$prompt" | claude -p --model "$model" \
+        --allowed-tools "$tools" --permission-mode "$PERM" 2>&1 | sed 's/^/    /'
+    else
+      printf '%s' "$prompt" | claude -p --model "$model" \
+        --permission-mode "$PERM" 2>&1 | sed 's/^/    /'
+    fi
+    rc=${PIPESTATUS[1]}
     if [ -s "$out" ]; then
       echo "--- [$label] ok ($(wc -c < "$out") bytes)"
       return 0
@@ -99,10 +109,31 @@ verdict_of() {
   grep -h '^VERDICT:' "$1" 2>/dev/null | tail -1 | sed 's/^VERDICT:[[:space:]]*//'
 }
 
-# 에이전트 정의 전문을 프롬프트 앞에 붙인다. 이 프로세스가 곧 그 에이전트다
+# 에이전트 정의 본문을 프롬프트 앞에 붙인다. 이 프로세스가 곧 그 에이전트다
 # (Agent 도구로 spawn 하는 게 아니라 프로세스 자체가 역할을 수행한다)
+#
+# frontmatter 는 뺀다 — 메타데이터라 역할 수행에 필요 없고, 프롬프트가 --- 로
+# 시작하면 CLI 가 옵션으로 파싱한다. 대신 그 안의 tools 는 agent_tools 가 뽑아
+# --allowed-tools 로 넘긴다.
 step_prompt() {
-  printf '%s\n\n---\n\n%s\n' "$(cat "$1")" "$2"
+  printf '%s\n\n===\n\n%s\n' "$(agent_body "$1")" "$2"
+}
+
+# 정의 frontmatter 의 tools 줄 → --allowed-tools 인자 (콤마 구분, 공백 제거)
+#
+# **이게 없으면 "리뷰어는 코드를 고치지 않는다" 가 강제되지 않는다.** 정의의
+# 도구 목록은 Agent 도구로 spawn 할 때만 자동 적용되고, claude -p 로 띄우면
+# 아무 제한이 없다 — 리뷰어와 adversary 가 Edit/Write 를 쓸 수 있게 된다.
+# 짠 쪽과 본 쪽을 가르는 것이 이 루프의 값 전부이므로 여기가 비면 루프가 무의미해진다.
+# (2026-09-16 실측 — --allowed-tools 로 Write 를 빼면 실제로 파일을 못 쓴다)
+agent_tools() {
+  awk '/^---$/{n++; next} n==1 && /^tools:/{
+         sub(/^tools:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }' "$1"
+}
+
+# frontmatter 를 뺀 본문
+agent_body() {
+  awk '/^---$/{n++; next} n>=2' "$1"
 }
 
 run_loop() {
@@ -129,7 +160,7 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
 
 구현 요청:
 $request"
-    if ! run_step spec "$M_SPEC" "$dir/00-spec.md" "$spec_body"; then
+    if ! run_step spec "$M_SPEC" "" "$dir/00-spec.md" "$spec_body"; then
       echo "!!! 1단계 실패 — 중단"
       return 1
     fi
@@ -166,7 +197,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
 3종(도달 불가 / 상위 처리 / 비목표 매칭) 중 무엇인지를 적는다. 다음 라운드의 나는
 이 WHY 만 보므로 여기 없으면 없는 것이다.
 코드만 쓴다 — 커밋하지 않는다."
-      if ! run_step "dev-$nn" "$M_DEV" "$dir/dev-$nn.md" \
+      if ! run_step "dev-$nn" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn.md" \
            "$(step_prompt "$AGENT_DIR/step-developer.md" "$dev_body")"; then
         echo "!!! dev-$nn 실패 — 중단"
         return 1
@@ -183,12 +214,12 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
 (이번 변경 + BASELINE) 를 읽고, worktree 의 diff 를 실제로 돌려 판정한다.
 $hist"
 
-      run_step "rev-$nn-correctness" "$M_REV" "$dir/rev-$nn-correctness.md" \
+      run_step "rev-$nn-correctness" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-correctness.md")" "$dir/rev-$nn-correctness.md" \
         "$(step_prompt "$AGENT_DIR/reviewer-correctness.md" \
            "$rev_body
 판정 결과를 $dir/rev-$nn-correctness.md 에 쓴다.")" &
       local p1=$!
-      run_step "rev-$nn-design" "$M_REV" "$dir/rev-$nn-design.md" \
+      run_step "rev-$nn-design" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-design.md")" "$dir/rev-$nn-design.md" \
         "$(step_prompt "$AGENT_DIR/reviewer-design.md" \
            "$rev_body
 판정 결과를 $dir/rev-$nn-design.md 에 쓴다.")" &
@@ -212,7 +243,7 @@ $hist"
 마지막 줄에 기계 판독용으로 정확히 한 줄:
   VERDICT: CLEAN                      (Critical·High·Medium 모두 0)
   VERDICT: FINDINGS C=n H=n M=n       (하나라도 잔존)"
-      if ! run_step "merge-$nn" "$M_SPEC" "$dir/rev-$nn.md" "$merge_body"; then
+      if ! run_step "merge-$nn" "$M_SPEC" "" "$dir/rev-$nn.md" "$merge_body"; then
         echo "!!! 합본 실패 — 중단"
         return 1
       fi
@@ -252,7 +283,7 @@ $hist"
   VERDICT: UPHELD           (못 깼다 — 시도 나열 필수)
   VERDICT: BROKEN           (깼다 — 재현 명령·출력 필수)
   VERDICT: BROKEN-UNDECIDED (입력이 부족해 판정 못 함)"
-          if ! run_step "adv-$mm" "$M_ADV" "$dir/adv-$mm.md" \
+          if ! run_step "adv-$mm" "$M_ADV" "$(agent_tools "$AGENT_DIR/adversary.md")" "$dir/adv-$mm.md" \
                "$(step_prompt "$AGENT_DIR/adversary.md" "$adv_body")"; then
             echo "!!! adv-$mm 실패 — 중단"
             return 1
@@ -281,7 +312,7 @@ $hist"
             local fix_body="$common
 적대적 검증이 깼다: $dir/adv-$mm.md 의 재현 명령·출력을 읽고 고친다.
 범위는 $dir/00-spec.md 그대로다. $dir/dev-$nn2.md 를 쓴다 (FILES/TESTS/NOTES/BASELINE/WHY)."
-            if ! run_step "dev-$nn2(adv)" "$M_DEV" "$dir/dev-$nn2.md" \
+            if ! run_step "dev-$nn2(adv)" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn2.md" \
                  "$(step_prompt "$AGENT_DIR/step-developer.md" "$fix_body")"; then
               echo "!!! adv 수정 실패 — 중단"
               return 1
@@ -302,7 +333,7 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
 담을 것: 변경 요약(파일·무엇을) · 라운드 로그(dev 라운드 수 · adv 회차 · 각 VERDICT) ·
 잔여 핸드오프(범위밖·Low·재현물) · worktree 경로와 커밋 여부.
 이것만 메인이 읽는다 — 여기 없는 것은 메인에 존재하지 않는다. 간결하게 쓴다."
-  if ! run_step result "$M_SPEC" "$dir/RESULT.md" "$result_body"; then
+  if ! run_step result "$M_SPEC" "" "$dir/RESULT.md" "$result_body"; then
     echo "!!! RESULT.md 생성 실패"
   fi
 

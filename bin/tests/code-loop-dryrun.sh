@@ -20,9 +20,29 @@ ST="$HOME/.claude/state/code-loop"
 mkdir -p "$TMP/bin" "$ST" \
          "$HOME/.claude/custom-plugin/taskflow/agents" \
          "$HOME/.claude/custom-plugin/taskflow/commands"
-for a in step-developer reviewer-correctness reviewer-design adversary; do
-  echo "# $a (dryrun dummy)" > "$HOME/.claude/custom-plugin/taskflow/agents/$a.md"
+# dummy 정의도 frontmatter 를 갖춰야 한다 — agent_tools 가 거기서 도구 목록을 뽑고,
+# agent_body 가 거기까지를 잘라낸다. 실제 정의와 같은 도구 배치를 쓴다
+# (개발자만 Edit/Write 보유, 리뷰어·adversary 는 읽기 전용)
+for a in reviewer-correctness reviewer-design adversary; do
+  cat > "$HOME/.claude/custom-plugin/taskflow/agents/$a.md" <<AGENT
+---
+name: $a
+tools: Read, Glob, Grep, Bash
+model: sonnet
+---
+
+$a 본문 (dryrun dummy)
+AGENT
 done
+cat > "$HOME/.claude/custom-plugin/taskflow/agents/step-developer.md" <<'AGENT'
+---
+name: step-developer
+tools: Read, Glob, Grep, Edit, Write, Bash
+model: sonnet
+---
+
+step-developer 본문 (dryrun dummy)
+AGENT
 for c in code code-loop watch; do
   echo "# $c (dryrun dummy)" > "$HOME/.claude/custom-plugin/taskflow/commands/$c.md"
 done
@@ -33,7 +53,17 @@ done
 #       그래서 줄 필터는 한글로, 경로 추출은 ASCII 패턴으로 2단 분리한다.
 cat > "$TMP/bin/claude" <<'STUB'
 #!/usr/bin/env bash
-prompt=""; for a in "$@"; do prompt="$prompt $a"; done
+# 실제 CLI 와 같은 계약으로 받는다 — 프롬프트는 stdin, 도구 제한은 --allowed-tools.
+# (인자로 받던 예전 stub 은 프롬프트가 --- 로 시작할 때 CLI 가 옵션으로 파싱하는
+#  실제 결함을 못 잡았다. 2026-09-16 실사용에서 처음 드러났다)
+tools=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --allowed-tools) tools="${2:-}"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+prompt=$(cat)
 out=$(printf '%s' "$prompt" | grep -E '쓴다|쓰고' | grep -oE '/[^ ]*\.md' | tail -1)
 [ -n "$out" ] || { echo "stub: 산출 경로 못 찾음" >&2; exit 0; }
 base=$(basename "$out")
@@ -63,6 +93,11 @@ case "$base" in
   *)
     printf 'stub\n' > "$out" ;;
 esac
+# 스텝마다 실제로 넘어온 도구 제한과 프롬프트 첫 줄을 남긴다 — 리뷰어에게 Edit/Write 가
+# 새는지, frontmatter 가 프롬프트에 섞이는지를 테스트가 검사할 수 있게
+if [ -n "${T_TOOLSLOG:-}" ]; then
+  printf '%s|%s|%s\n' "$base" "$tools" "$(printf '%s' "$prompt" | head -1)" >> "$T_TOOLSLOG"
+fi
 echo "stub: wrote $base"
 STUB
 chmod +x "$TMP/bin/claude"
@@ -137,6 +172,26 @@ echo "== J. run.log 에 진행이 남는다 =="
 reset; runit T_REV='FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD > /dev/null
 check "라운드 로그" 2 "$(grep -c 'dev-loop 라운드' "$(d)/run.log")"
 check "스텝 로그" 1 "$([ "$(grep -c '^--- .*\[' "$(d)/run.log")" -ge 8 ] && echo 1 || echo 0)"
+
+echo "== K. 도구 제한이 스텝별로 전달된다 =="
+# 2026-09-16 실사용 회귀: 정의의 tools 는 Agent 도구로 spawn 할 때만 적용된다.
+# claude -p 로 띄우면 제한이 없어 리뷰어·adversary 가 Edit/Write 를 쓸 수 있었다 —
+# 짠 쪽과 본 쪽을 가르는 것이 이 루프의 값 전부라 여기가 비면 루프가 무의미해진다
+reset; export T_TOOLSLOG="$TMP/tools.log"; : > "$T_TOOLSLOG"
+runit T_REV=CLEAN T_ADV=UPHELD > /dev/null
+rev_tools=$(grep '^rev-01-correctness.md|' "$T_TOOLSLOG" | cut -d'|' -f2)
+adv_tools=$(grep '^adv-01.md|' "$T_TOOLSLOG" | cut -d'|' -f2)
+dev_tools=$(grep '^dev-01.md|' "$T_TOOLSLOG" | cut -d'|' -f2)
+check "리뷰어에 Edit 안 감" 0 "$(printf '%s' "$rev_tools" | grep -c Edit)"
+check "리뷰어에 Write 안 감" 0 "$(printf '%s' "$rev_tools" | grep -c Write)"
+check "adversary 에 Edit 안 감" 0 "$(printf '%s' "$adv_tools" | grep -c Edit)"
+check "개발자에 Write 감" 1 "$(printf '%s' "$dev_tools" | grep -c Write)"
+
+echo "== L. frontmatter 가 프롬프트에 안 섞인다 =="
+# 프롬프트가 --- 로 시작하면 CLI 가 옵션으로 파싱한다 (error: unknown option '---)
+check "dev 프롬프트 첫 줄이 --- 아님" 0 "$(grep '^dev-01.md|' "$T_TOOLSLOG" | cut -d'|' -f3 | grep -c '^---')"
+check "rev 프롬프트 첫 줄이 --- 아님" 0 "$(grep '^rev-01-design.md|' "$T_TOOLSLOG" | cut -d'|' -f3 | grep -c '^---')"
+unset T_TOOLSLOG
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="
