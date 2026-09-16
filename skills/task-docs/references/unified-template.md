@@ -6,10 +6,11 @@
 - working/ 단계 (진행 중) — `~/.claude/docs/working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` 단일 파일 (하위 폴더 금지).
 - 작성 시 본 템플릿 골격을 그대로 prepend 후 의미만 채운다 (자체 번호 헤더 자유 작성 금지 — `doc-unified-check.sh V1` exit 2 차단).
 - 필요한 섹션만 채울 수 있으나 헤더 자체는 SSOT 골격 그대로 유지 (분석 단독 = `## 계획` / `## 실행` 는 "해당 없음" 1행 허용).
-- 체크리스트 — **실제 게이트는 문서 전체 총합 ≥ 30** (`doc-unified-check.sh` V4 `unified) MIN=30`, tasks/ 이동 후 검사). 아래 골격은 **총 36개**(분석 15 + 계획 11 + Self-Critique 10)로 게이트 위에 슬랙 6을 남긴다 — 골격 합을 30 에 딱 맞추면 한 섹션만 비어도 exit 2 하드 차단이라 무인 루프가 선다. 작업 성격상 필요 없는 항목은 지우지 말고 `- [x]` + `해당 없음` 으로 소진한다.
+- 체크리스트 — **게이트는 문서 전체 총합 ≥ 5** (`doc-unified-check.sh` V4 `MIN=5`, tasks/ 이동 후 검사). 하한이지 목표가 아니고 **상한은 없다** — 작업이 요구하는 만큼 쓰되 숫자를 채우려 항목을 늘리지 않는다. 아래 골격은 **총 36개**(분석 15 + 계획 11 + Self-Critique 10)이고, 작은 작업이면 해당 없는 섹션을 비워도 게이트가 서지 않는다 (구 게이트 30 시절에는 슬랙 6을 남기려 전수 소진이 필요했다 — 2026-09-04 완화로 불필요). 남겨두고 싶은 항목은 `- [x]` + `해당 없음` 으로 소진한다.
 - 완료 마커 = `Status: Done` (시작 라인) + `## Self-Critique` 섹션 동시 존재 → `working-lifecycle.sh` 자동 이동.
   - **⚠️ Status 는 반드시 단독 라인** — hook 정규식이 `^Status:[[:space:]]*Done[[:space:]]*$` **완전일치**라 `Status: Done — {요약}` 처럼 뒤에 설명·구분자(`—`/`-`)를 붙이면 **매칭 실패 → 자동 이동 안 됨**(조용히 실패, 경고 없음). 요약이 필요하면 **직전 줄에 인용문**(`> 완료 요약: …`)으로 분리하고 `Status: Done` 은 단독으로 둔다. (`상태: 완료` 도 동일 규칙.)
 - 이동 후 `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` 로 영구 보존.
+- **`ISS:` = 다세션 선착순 claim 축 (2026-09-16~):** 이 세션이 **고치는** 번호만 적는다 — 참조·대조용으로 언급하는 번호는 적지 않는다. ISS 작업이 아니면 `없음` (빈 칸 금지 — "안 정했다" 와 "해당 없다" 가 구분되지 않는다). 같은 번호를 두 세션이 적으면 REGISTRY `started` 가 이른 쪽이 우선권을 갖고 후착에는 경고가 주입된다(비차단 — 건너뛸지는 본체가 정한다). **필드가 없으면 claim 0건으로 fail-open** 이라 기존 문서는 손대지 않아도 그대로 돈다. 판정·경고 = `hooks/lib/iss-claim.sh` + `hooks/iss-claim-guard.sh` SSOT.
 - **Status 단일 축 (단계별 필드 신설 금지):** `초안` → `Analysis Complete`(analyze) → `Plan Complete`(plan) → `In Progress`(execute) → `NeedsDecision`(판단 대기) → `Done`. 단계마다 별도 필드를 두지 않고 **한 라인을 덮어쓴다** — 두 벌이면 한쪽만 갱신될 때 tick 이 멈추거나 중복 claim 한다. 부착 주체·소비처 = `custom-plugin/taskflow/commands/{analyze,plan,tick}.md`, 파싱 = `hooks/lib/working-scan.sh`. step 평면 파일은 **별도 축**(`상태:` Pending→In Progress→ReadyToMerge→Done, SSOT = `plan.md` §"step 파일 양식").
 
 ## 템플릿
@@ -22,6 +23,7 @@
 최종 수정일: {YYYY-MM-DD}
 작성자: jypark
 대상 시스템: {모듈/BC명, 해당 시}
+ISS: {이 세션이 고치는 번호 — 예: ISS-137 ISS-162} | 없음
 관련 문서: {참조 문서 목록, 해당 시}
 ---
 
@@ -327,7 +329,7 @@
 
 ---
 
-# § 체크리스트 (총 36개 — 게이트 ≥ 30 + 슬랙 6)
+# § 체크리스트 (골격 36개 — 게이트 하한 5, 상한 없음)
 
 ## 분석 체크리스트 (15)
 
@@ -438,6 +440,6 @@ Status: {초안 | Analysis Complete | Plan Complete | In Progress | NeedsDecisio
 | Hook | 검증 항목 | 차단 강도 |
 |------|---------|----------|
 | `doc-unified-check.sh V1` | `*-unified.md` 패턴 분기 — analyze + plan + result 합집합 ≈ 20 헤더 | exit 2 |
-| `doc-unified-check.sh V4` | 체크리스트 ≥ 30 | exit 2 |
+| `doc-unified-check.sh V4` | 체크리스트 ≥ 5 (하한. 상한 없음) | exit 2 |
 | `doc-unified-check.sh V3` | `## 변경 영향` + 3열 표 | exit 0 (경고) |
 | `doc-unified-check.sh V6` | `## 타당성 검토` + `[Source:...]` ≥ 1 | exit 0 (경고) |

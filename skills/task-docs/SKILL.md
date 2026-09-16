@@ -41,7 +41,7 @@ triggers:
   - "/taskflow:review"
   - "/taskflow:deploy"
   - "/taskflow:retro"
-version: 6.0.0
+version: 6.0.2
 user-invocable: true
 depends_on: []
 conflicts_with: []
@@ -116,7 +116,7 @@ min_claude_md_version: "4.0"
 5b. **사용자 보고용 경로는 OS 정합 형식으로 변환한다.** Windows = 백슬래시 + 절대 경로 (`C:\Users\PV\.claude\docs\...`), POSIX = forward slash + 홈 표기 (`~/.claude/docs/...`). 산출물 경로 보고 / `tasks/`·`output/`·`specs/` 위치 안내 / 단계 문서 경로 출력 등 사용자에게 노출되는 모든 경로에 적용. Bash 도구 `command` 파라미터·Glob/Grep 패턴은 POSIX 그대로 (도구 내부용). 글로벌 CLAUDE.md §4.4 "경로 안내 형식 (OS 정합)" SSOT.
 6. **팀 간 산출물 체이닝:** 다단계 작업에서 Team 2는 그 unified 의 **§분석** 을 Read한 뒤 **§계획** 을 작성하고, Team 3는 **§계획**(+ step 평면 파일)을 Read한 뒤 **§실행** 을 채운다 — 파일이 아니라 **한 문서 안의 섹션**을 체이닝한다. 분석 단독/소규모 작업은 필요한 섹션만 채우고 나머지는 "해당 없음" 1행으로 둔다 (헤더 골격은 유지 — `doc-unified-check.sh V1`).
    > **Why:** Team 2/3가 선행 산출물 Read 없이 자체 컨텍스트로 진행하면 분석 단계의 트레이드오프·리스크 식별이 계획·실행에 반영되지 않아 동일 결론을 매 팀마다 재도출하는 비용이 발생하고, 의사결정 근거가 팀별로 분기된다.
-7. **골격 소진 필수 + 추가는 자유 (2026-08-03 개정):** `unified-template.md` §체크리스트 **36개 골격은 지우지 않고 전부 소진**한다 (해당 없으면 `- [x] 해당 없음 (사유)`). 그 위에 작업 고유 항목을 **더 붙이는 것은 자유**다 — 서술형 나열보다 체크박스를 우선한다. **"최대한 생성" 이 골격 대체가 아니다:** 골격을 지우고 자유 항목으로 채우면 §"단계별 산출물"(총 ≥ 30)의 슬랙 6이 사라져 tasks/ 이동 시 V4 exit 2 로 막힌다.
+7. **골격은 출발점이고 추가는 자유 (2026-09-04 개정):** `unified-template.md` §체크리스트 36개 골격을 출발점으로 삼되, **작업이 실제로 요구하는 항목만 남긴다** — 해당 없는 항목은 `- [x] 해당 없음 (사유)` 로 소진하거나 작은 작업이면 섹션째 비워도 된다. 그 위에 작업 고유 항목을 더 붙이는 것은 자유이고, 서술형 나열보다 체크박스를 우선한다. **숫자를 채우려 항목을 늘리지 않는다** — V4 게이트는 하한 5(존재 강제)뿐이고 상한이 없다. (구 개정 2026-08-03 은 게이트 30 을 넘기려 "36개 골격 전수 소진 + 슬랙 6" 을 요구했는데, 그 요구 자체가 형식 채우기를 유발해 2026-09-04 에 철회됐다.)
    > **Why:** 서술형 나열은 후속 단계가 "어떤 항목이 끝났는지" 판정할 수 없지만, 체크박스는 `- [x]`/`- [ ]` 토글만으로 진행·잔여를 자동 추적한다. 다만 **개수를 늘리는 것 자체가 목적이 되면** 문서마다 과잉 항목이 복사돼 소진율이 떨어진다 — 그래서 하한(골격)만 강제하고 상한은 두지 않는다.
 8. **이전 문서 체크리스트 소거 의무:** 이전 팀 산출물을 참조하여 실행하는 팀은, 해당 문서의 체크리스트를 검증 후 체크 표시(`- [x]`)하고 판단 근거를 기록한다. 구체적으로:
    - **Team 2 (Plan):** §분석 체크리스트를 읽고, 계획 수립 시 반영 여부를 **그 자리에** 직접 체크한다. (`- [x] 항목 — 계획에 반영` 또는 `- [x] 항목 — 해당 없음 (사유)`)
@@ -147,6 +147,7 @@ min_claude_md_version: "4.0"
     검토자: {검토자, 해당 시}
     승인자: {승인자, 해당 시}
     대상 시스템: {모듈/BC명, 해당 시}
+    ISS: {이 세션이 고치는 번호} | 없음
     관련 문서: {참조 문서 목록, 해당 시}
     ---
     ```
@@ -163,8 +164,11 @@ min_claude_md_version: "4.0"
     | 검토자 | ○ | — | ○ |
     | 승인자 | ○ | — | ○ |
     | 대상 시스템 | ● | ● | ○ |
+    | ISS | — | ● (working/ unified) | — |
     | 관련 문서 | ● | ○ | ○ |
     > ● 필수, ○ 선택(해당 시), — 불필요
+    - **`ISS:` = 다세션 선착순 claim 축 (2026-09-16~):** working/ 통합 문서에서 **이 세션이 고치는** 이슈 번호만 적는다. 참조·대조용으로 본문에 언급하는 번호는 **적지 않는다** — 그게 claim 이 되면 남의 작업을 잠근다. ISS 작업이 아니면 `없음`(빈 칸 금지). 같은 번호를 두 세션이 적으면 REGISTRY `started` 가 이른 쪽이 우선권을 갖고 후착에만 경고가 주입된다(**비차단** — 건너뛸지는 본체가 그 step 맥락을 보고 정한다).
+      > **Why 선언인가:** 같은 5세션을 본문 `ISS-\d{3}` grep 으로 세면 겹침 7건, step 파일명으로 세면 0건이 나왔다(2026-09-16 실측). 본문은 참조를 소유로 읽고 파일명은 명명 관습에 의존해 과소집계한다 — 추정 축이 둘 다 틀리므로 선언만 본다. **필드가 없으면 claim 0건으로 fail-open** 이라 도입 이전 문서는 손대지 않아도 그대로 돈다. 판정·경고 = `hooks/lib/iss-claim.sh` + `hooks/iss-claim-guard.sh` SSOT.
     - **작성자 기본값:** 프로젝트 소유자는 `jypark`(박재영)이다. 별도 지정 없으면 작성자는 `jypark`으로 기입한다.
     - **기존 문서 수정 시:** `최종 수정일`을 갱신하고, specs 문서는 `버전`도 함께 올린다.
     - **상태 전이:** 초안 → 검토중 → 승인됨. 상태 변경 시 변경 로그(규칙 9)에도 기록한다.
@@ -177,7 +181,7 @@ min_claude_md_version: "4.0"
     > - `infra/tasks/20260511/fe-cleanup-bugfix/...-{analyze,plan,result}.md` — 모든 강제 헤더 + 체크리스트 0건
     > **강제 hook (PostToolUse):**
     > - `doc-unified-check.sh V1` — unified 는 analyze+plan+result 합집합 헤더, 역소급 3종은 각 12/11/6 헤더 + Status 그룹 grep. 미충족 시 `[BLOCKED]` + exit 2
-    > - `doc-unified-check.sh V4` — **unified ≥ 30 (문서 전체 합산, 등급 스케일 없음)** / 역소급 analyze≥30·plan≥20·result≥20. 미달 시 `[BLOCKED]` + exit 2 (역소급 면제: 생성일 < 2026-05-07 은 hint 강등)
+    > - `doc-unified-check.sh V4` — **전 단계 하한 5개** (문서 전체 합산, 등급 스케일 없음). 미달 시 `[BLOCKED]` + exit 2 (역소급 면제: 생성일 < 2026-05-07 은 hint 강등). **하한은 '검증 항목이 아예 없는 문서' 만 막고 상한은 없다** — 숫자를 채우려 항목을 늘리지 않는다 (2026-09-04 완화, 구 analyze/unified≥30·plan/result≥20)
     > - `doc-unified-check.sh V3` / `doc-unified-check.sh V6` — 변경 영향 / 타당성 검토 섹션 추가 강제
 
 ## 파일 경로
@@ -224,9 +228,9 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 | 정책 | 파일명 | 용도 | references |
 |---|---|---|---|
-| **Unified (신규 = 전건)** | (진행) `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` → (완료) `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` | 분석 + 계획 + 실행 단일 통합. 체크리스트 **총 ≥ 30** (`doc-unified-check.sh` V4 `unified` MIN=30 이 실제 게이트) | `references/unified-template.md` |
+| **Unified (신규 = 전건)** | (진행) `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md` → (완료) `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` | 분석 + 계획 + 실행 단일 통합. 체크리스트 **총 ≥ 5** (`doc-unified-check.sh` V4 `MIN=5` 하한. 상한 없음) | `references/unified-template.md` |
 
-> **역소급 3종은 열람 전용이다 (신규 생성 금지).** `-analyze.md`(≥ 30) / `-plan.md`(≥ 20) / `-result.md`(Self-Critique ≥ 20) 는 **생성일 < 2026-05-12** 산출물에만 존재하며 최신 생성분이 `20260514` 에서 끊겼다. 기존 문서를 읽거나 이어 쓸 때만 `references/{analyze,plan,result}-template.md` 를 참조하고, 새 작업은 어떤 등급이든 unified 1개다.
+> **역소급 3종은 열람 전용이다 (신규 생성 금지).** `-analyze.md` / `-plan.md` / `-result.md`(Self-Critique) — 셋 다 V4 하한 5 적용 (2026-09-04 이전에는 각 30/20/20) — 은 **생성일 < 2026-05-12** 산출물에만 존재하며 최신 생성분이 `20260514` 에서 끊겼다. 기존 문서를 읽거나 이어 쓸 때만 `references/{analyze,plan,result}-template.md` 를 참조하고, 새 작업은 어떤 등급이든 unified 1개다.
 
 ---
 
@@ -273,7 +277,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 이동 후 `tasks/.../{yyyy-mm-dd}-{작업명}-unified.md` 에 대해:
 - `doc-unified-check.sh V1` — `*-unified.md` 패턴 검증, 합집합 ≈ 20개 필수 헤더 (analyze 11 + plan 5 + result 4 — 통합 변경 영향 / 타당성 검토는 합쳐서 1회) 누락 시 `[BLOCKED]` exit 2
-- `doc-unified-check.sh V4` — 체크리스트 `- [ ]` + `- [x]` **문서 전체 합산 ≥ 30** (섹션별 하한 없음. 골격은 **36개**라 슬랙 **6** — `unified-template.md` §체크리스트 SSOT)
+- `doc-unified-check.sh V4` — 체크리스트 `- [ ]` + `- [x]` **문서 전체 합산 ≥ 5** (섹션별 하한 없음, 상한 없음. 골격 36개는 출발점이지 채워야 할 정원이 아니다 — `unified-template.md` §체크리스트 SSOT)
 - `doc-unified-check.sh V3` — `## 변경 영향` 섹션 + 3열 표(변경/개선/이유) 존재
 - `doc-unified-check.sh V6` — `## 타당성 검토` 헤더 + `[Source: <name> §<id>]` 인용 ≥ 1건
 - 모두 통과 시 `tasks/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 가 영구 보존 산출물로 확정
