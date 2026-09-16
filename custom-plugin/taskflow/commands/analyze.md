@@ -22,7 +22,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 |------|------|------|
 | ① working/ 문서 식별 | 인자 있음 = 파일명 매칭 / 없음 = 가장 최근 working/ 파일 | 대상 파일 경로 |
 | ② 양식 골격 prepend | `~/.claude/skills/task-docs/references/unified-template.md` SSOT 골격 prepend (파일 미존재 시) | `## 분석` 헤더 + 하위 표 |
-| ③ §분석 섹션 채움 | 분석 관점별 요약 / Critical~Low 4분류 / 트레이드오프 / 우선순위 권고 + § 공통 (타당성 검토 / 변경 영향 기록 / 장기 영향 / 재발 방지 / SSOT 일관성) | 분석 체크리스트 = `unified-template.md` §체크리스트 골격 소진 (게이트는 **문서 총합 ≥ 30**, 섹션별·등급별 하한 없음) |
+| ③ §분석 섹션 채움 | 분석 관점별 요약 / Critical~Low 4분류 / 트레이드오프 / 우선순위 권고 + § 공통 (타당성 검토 / 변경 영향 기록 / 장기 영향 / 재발 방지 / SSOT 일관성) | 분석 체크리스트 = `unified-template.md` §체크리스트 골격 소진 (게이트는 **존재 강제** — 하한 숫자는 hook SSOT, 섹션별·등급별 하한 없음) |
 | ③-2 **변경 표면 인벤토리** | 수정 대상 ≥ 1건이면 호출부·read 경로 / 회귀 기준선 / 재사용 자산 / 테스트 커버 4종을 `git grep` 실측 (아래 §"변경 표면 인벤토리") | plan 이 step §파급면·§결함면·DoD 검증을 채울 원재료 |
 | ④ Status 마커 부착 | 단독 라인 `Status: Analysis Complete` (아래 §"종료 마커") | tick 이 분석 재실행하지 않고 `/taskflow:plan` 부터 진입 |
 
@@ -89,10 +89,14 @@ Status: Analysis Complete
 
 | Hook | 검증 | 차단 강도 |
 |------|------|----------|
-| `doc-unified-check.sh V1` | unified §분석 헤더 (분석 관점별 / Critical~Low / 우선순위 권고 / 장기 영향 / 재발 방지 / SSOT 일관성) | exit 2 (working/ 경로는 면제, tasks/ 이동 후 검증) |
-| `doc-unified-check.sh V4` | unified 체크리스트 **문서 전체 합산 ≥ 30** — 평면값이라 등급 스케일이 없다 (CLAUDE.md §4.3 "단계 고정, 등급 무관") | exit 2 |
+| `doc-unified-check.sh V5` | **e2e 5점** (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock) — working+unified 둘 다. 해당 없는 축도 **"해당 없음 + 근거"** 로 적어야 통과한다 | **exit 2** |
+| `doc-unified-check.sh V2` | `## 참조 출처` + `[참조: ...]` ≥ 1건 | **exit 2** |
+| `doc-unified-check.sh V4` | unified 체크리스트 **존재 강제** — 하한 숫자는 적지 않는다 (hook 이 SSOT). 평면값이라 등급 스케일이 없다 (CLAUDE.md §4.3 "단계 고정, 등급 무관") | exit 2 |
+| `doc-unified-check.sh V1` | unified §분석 헤더 (분석 관점별 / Critical~Low / 우선순위 권고 / 장기 영향 / 재발 방지 / SSOT 일관성) | **경고** — tasks/ 하위 + `Status: Done\|Partial` 은 차단이 아니라 **강등** 조건이다 |
 | `doc-unified-check.sh V6` | §타당성 검토 헤더 존재 시 `[Source:...]` ≥ 1건 | 경고 |
 | `doc-unified-check.sh V3` | §변경 영향 + 3열 표 | 경고 |
+
+> **차단하는 것을 위에 둔다.** 구 표는 경고인 V1 을 맨 위에 "exit 2" 로 적고 실제로 막는 V5·V2 를 아예 빼놨다 — 따라가면 안 막힐 것에 대비하고 막히는 것에 놀란다. **임계값 숫자는 여기 복사하지 않는다**: 구 `≥ 30` 을 복사해 뒀다가 2026-09-04 인하를 이 계열 4개 커맨드가 통째로 놓쳤다 (CLAUDE.md §4.4 "신규 룰 작성 관습" — 값은 hook 에 위임).
 
 ## 호출 예
 
@@ -110,7 +114,7 @@ Status: Analysis Complete
 | `~/.claude/skills/task-docs/SKILL.md` | 본 슬래시의 본체 스킬 |
 | `~/.claude/skills/task-docs/references/unified-template.md` | 양식 SSOT (§ 분석 섹션 골격) |
 | `~/.claude/hooks/doc-unified-check.sh` V1 `v_template_guard` → `*unified*.md` 분기 | unified §분석 헤더 강제 |
-| `~/.claude/hooks/doc-unified-check.sh` V4 `v_checklist_count` (:355~) | unified 체크리스트 임계 (`unified) MIN=30` 평면값) |
+| `~/.claude/hooks/doc-unified-check.sh` V4 `v_checklist_count` | unified 체크리스트 임계 — **값은 그 함수의 `MIN` 이 정한다** (여기 복사하지 않는다. 하드 줄번호도 안 쓴다 — 둘 다 hook 이 바뀌면 조용히 낡는다) |
 | `~/.claude/hooks/doc-unified-check.sh V6` | 타당성 검토 인용 강제 |
 | **본 파일 §"단계 전이 (→ plan)"** | **순방향 전이 조건 (T1 gate=2 / T2 수정 대상 ≥1) SSOT** — CLAUDE.md·reminder hook 이 참조 |
 | **본 파일 §"변경 표면 인벤토리"** | **plan 원재료 4종 SSOT** — 소비처 = `plan.md` §"파급면·결함면 — 골격 무관 공통" + DoD 검증 행 |
@@ -136,6 +140,7 @@ Status: Analysis Complete
 
 ## Changelog
 
+- 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 세 갈래였다 — ① 체크리스트 임계를 `≥ 30` 으로 복사해 뒀는데 hook 은 2026-09-04 에 5 로 내렸다(`unified-template.md`·`task-docs/SKILL.md` 는 그때 같이 고쳐졌고 이 계열 4개만 남았다) ② V1 차단 강도가 정반대였다 — "tasks/ 이동 후 exit 2" 로 적었으나 그 조건이 바로 **강등** 조건이고 `v_template_guard` 는 `add_block` 0건이다 ③ 실제로 차단하는 V5(e2e 5점)·V2(참조 출처)가 표에 아예 없었다. **값과 하드 줄번호를 지우고 hook 포인터만 남긴다** — 복사해 둔 값이 이 drift 를 만들었다 (CLAUDE.md §4.4)
 - 2026-08-05: `## 변경 표면 인벤토리` 신설 (호출부·read 경로 / 회귀 기준선 / 재사용 자산 / 테스트 커버 4종, 수정 대상 ≥1 조건부) + 동작 표 ③-2 행. 근거 = plan 의 §파급면·§결함면·DoD 검증이 심볼 단위 실측을 전제하는데 analyze 가 판정만 넘겨 plan 이 추측하거나 `해당 없음` 으로 비우던 경로 (`plan.md` 2026-08-05 정정과 짝)
-- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + V4 임계를 등급 스케일로 적던 오기 정정 (실제는 문서 총합 ≥ 30 평면값) + 하드 줄번호 → 함수명
+- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + V4 임계를 등급 스케일로 적던 오기 정정 (당시 값 = 문서 총합 ≥ 30 평면값 — **그 값은 2026-09-04 에 인하됐다**. 현행 하한은 hook 이 SSOT) + 하드 줄번호 → 함수명
 - 2026-05-15: 신설

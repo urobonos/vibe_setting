@@ -21,7 +21,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | 단계 | 동작 | 결과 |
 |------|------|------|
 | ① working/ 문서 식별 | 인자 매칭 또는 가장 최근 working/ 파일 | 대상 파일 경로 |
-| ② §계획 섹션 채움 | 작업 목표 / 수정 대상 표 / Blueprint / 작업 분해 (WBS) / 실행 계획 | 계획 체크리스트 = `unified-template.md` §체크리스트 골격 소진 (게이트는 **문서 총합 ≥ 30**, 섹션별·등급별 하한 없음) |
+| ② §계획 섹션 채움 | 작업 목표 / 수정 대상 표 / Blueprint / 작업 분해 (WBS) / 실행 계획 | 계획 체크리스트 = `unified-template.md` §체크리스트 골격 소진 (게이트는 **존재 강제** — 하한 숫자는 hook SSOT, 섹션별·등급별 하한 없음) |
 | ③ **step 분해 + 평면 파일 생성** | WBS 를 step-01~nn 순차 단위로 분해. 각 step 을 `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` **평면 파일**로 Write. unified §계획에 **Step 분해 인덱스 표** 추가 | step 파일 N개 + 인덱스 표 |
 | ④ **계획 재검토 1회 (Plan Self-Review)** | 생성한 step 분해의 정합성을 1회 자체 검토 (누락 / 순서 / 의존 / 원자성 / 중복) | 재검토 통과 또는 보강 |
 | ⑤ **전체 계획 점검 (Plan Audit)** | 생성된 전체 step 집합을 통합 점검 (의존 그래프 무순환 / DoD 명확성 / 인덱스↔파일 정합 / 커버리지) | 점검 표 기록 |
@@ -280,10 +280,14 @@ step 분해 직후 **1회** 자체 재검토. task-docs SKILL.md Part 6 "3-Round
 
 | Hook | 검증 | 차단 강도 |
 |------|------|----------|
-| `doc-unified-check.sh V1` | unified §계획 헤더 (작업 등급 S/M/L / Blueprint / 수정 대상 / 실행 계획 / WBS) — `v_template_guard` `*unified*.md` 분기 | exit 2 (tasks/ 이동 후) |
-| `doc-unified-check.sh V4` | unified 체크리스트 **문서 전체 합산 ≥ 30** — 평면값이라 등급 스케일이 없다 (§4.3 "단계 고정, 등급 무관") | exit 2 |
+| `doc-unified-check.sh V5` | **e2e 5점** (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock) — working+unified 둘 다. 해당 없는 축도 **"해당 없음 + 근거"** 로 적어야 통과한다 | **exit 2** |
+| `doc-unified-check.sh V2` | `## 참조 출처` + `[참조: ...]` ≥ 1건 | **exit 2** |
+| `doc-unified-check.sh V4` | unified 체크리스트 **존재 강제** — 하한 숫자는 적지 않는다 (hook 이 SSOT). 평면값이라 등급 스케일이 없다 (§4.3 "단계 고정, 등급 무관") | exit 2 |
 | `output-naming-check.sh` | working/ step 평면 파일 = DEPTH=1 + `{yyyy-mm-dd}-` prefix | exit 2 (위반 시) |
+| `doc-unified-check.sh V1` | unified §계획 헤더 (작업 등급 S/M/L / Blueprint / 수정 대상 / 실행 계획 / WBS) — `v_template_guard` `*unified*.md` 분기 | **경고** — tasks/ 하위 + `Status: Done\|Partial` 은 차단이 아니라 **강등** 조건이다 |
 | `working-lifecycle.sh` | 완료 시 step 평면 파일 → `tasks/.../steps/NN-{slug}.md` 분배 mv | (lifecycle 트리거) |
+
+> **차단하는 것을 위에 둔다.** 구 표는 경고인 V1 을 맨 위에 "exit 2" 로 적고 실제로 막는 V5·V2 를 아예 빼놨다. **임계값 숫자는 여기 복사하지 않는다** — 구 `≥ 30` 을 복사해 뒀다가 2026-09-04 인하를 이 계열 4개 커맨드가 통째로 놓쳤다 (CLAUDE.md §4.4 — 값은 hook 에 위임).
 
 ## 종료 마커
 
@@ -341,6 +345,7 @@ Status: Plan Complete
 
 ## Changelog
 
+- 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 체크리스트 임계 `≥ 30` → 존재 강제(hook SSOT, 2026-09-04 에 5 로 인하된 것을 이 계열 4개가 놓쳤다) · V1 차단 강도 정정(경고다 — "tasks/ 이동 후" 는 차단이 아니라 강등 조건) · 실제로 차단하는 V5(e2e 5점)·V2(참조 출처) 행 추가. 값을 복사해 둔 것이 원인이라 숫자를 지우고 포인터만 남긴다
 - 2026-08-05: §파급면·§결함면 발동 축을 **골격 → 변경 성격**으로 이동 (경량 골격에도 필수화, §"파급면·결함면 — 골격 무관 공통" 신설). 근거 = 도입 후 실측 step 23개 중 파급면 보유 8개, 누락 쪽에 룰 근거였던 `image-upload` step-05·06 이 포함(경량 골격이라 섹션 부재) → 재검토 ④·Audit ⑤ 검사식이 공회전. 동반: 결함면에 **회귀·동시성** 2축 추가 (`cold-reviewer` §1 과 1:1) + DoD **검증 명령 행** 필수화 (`step-developer` `TESTS:` ↔ 리뷰어 6축 대조 기준) + Audit ⑤ 2행 추가
 - 2026-08-03: step `## 결함면` 추가 (경계값·예외/트랜잭션·타입계약, 해당 시) + 재검토 ④ 결함 체크. 근거 = 반려 지적 208건 중 이 3축이 75건이고 셋 다 `step-developer` 정의에 대응 항목이 없던 유일한 축. 전건 박제 안 함 (반려 2위 = 문서·기록 불일치 58건)
 - 2026-07-29: step `## 파급면` 필수화 (read 경로 / 형제 / `해당 없음` 명시) + 재검토 ④ 파급 체크 + Plan Audit ⑤ 커버리지 행
