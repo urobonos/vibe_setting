@@ -56,6 +56,17 @@ make_slug() {
 usage() { sed -n '2,30p' "$0" | sed 's/^# \?//'; }
 
 cmd_status() {
+  # 토큰·비용은 스텝이 남긴 세션 jsonl 에서 읽는다 — 러너는 `claude -p` 를 띄우고
+  # 끝나므로 자기가 쓴 양을 모른다. 집계는 헬퍼에 맡기고, 헬퍼가 없거나 python 이
+  # 없으면 목록만 내고 계속한다 (조회가 집계에 종속되면 안 된다).
+  local helper py
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/code-loop-usage.py"
+  py=$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)
+  if [ -n "$py" ] && [ -f "$helper" ]; then
+    if CLAUDE_HOME="$CLAUDE_HOME" "$py" "$helper"; then return 0; fi
+    echo "--- 사용량 집계 실패 — 목록만 낸다" >&2
+  fi
+
   local found=0 d run rounds state
   for d in "$STATE_DIR"/*/; do
     [ -d "$d" ] || continue
