@@ -45,9 +45,12 @@ ADV_CAP=2   # 적대적 게이트 캡 (code.md §"적대적 검증 게이트")
 
 mkdir -p "$STATE_DIR"
 
+# 개행을 먼저 지운다 — `sed` 는 줄 단위라 개행이 `[^a-z0-9]` 에 걸리지 않고,
+# `cut -c1-40` 도 줄마다 따로 40자를 남긴다. 여러 줄 요청을 그대로 넘기면
+# 각 줄이 디렉토리명 조각이 되어 `File name too long` 으로 죽는다 (2026-09-17 실측).
 make_slug() {
   local s
-  s=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' \
+  s=$(printf '%s' "$1" | tr '[:space:]' ' ' | tr '[:upper:]' '[:lower:]' \
       | sed 's/[^a-z0-9]\+/-/g; s/^-\+//; s/-\+$//' | cut -c1-40)
   [ -n "$s" ] || s="run"
   printf '%s' "$s"
