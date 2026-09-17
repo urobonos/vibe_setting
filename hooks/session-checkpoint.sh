@@ -15,18 +15,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 STDIN_DATA=$(cat)
 
 # 기본 필드 추출
+# 값은 반드시 shlex.quote 로 감싼다 — 큰따옴표로 감싸 eval 하면 값 안의 백틱·$( ) 가
+# 이 훅 프로세스에서 실행된다. 형제 phpunit-prd-guard.sh 가 같은 형태로 샌드박스 DB 124행을
+# 지운 사고(2026-09-17)의 재발 방지 — 여기는 명령 텍스트가 아니라 경로 값만 들어오지만 형태가 같다.
 eval "$(echo "$STDIN_DATA" | python -c "
-import json, sys
+import json, shlex, sys
 try:
     data = json.load(sys.stdin)
     sid = data.get('session_id', '')
     cwd = data.get('cwd', '')
     tp = data.get('transcript_path', '')
-    safe_cwd = cwd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    safe_tp = tp.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    print(f'SESSION_ID=\"{sid}\"')
-    print(f'CWD=\"{safe_cwd}\"')
-    print(f'TRANSCRIPT=\"{safe_tp}\"')
+    print('SESSION_ID=' + shlex.quote(sid))
+    print('CWD=' + shlex.quote(cwd))
+    print('TRANSCRIPT=' + shlex.quote(tp))
 except:
     print('SESSION_ID=\"\"')
     print('CWD=\"\"')
