@@ -101,11 +101,16 @@ run_step() {
     #       → error: unknown option '---
     #   (b) --allowed-tools 가 variadic 이라 뒤따르는 프롬프트까지 도구로 먹는다
     #       → Error: Input must be provided ...
+    # MCP 서버는 띄우지 않는다 (--strict-mcp-config, --mcp-config 없이 = 서버 0개).
+    # 설정된 Playwright MCP 가 매 스텝 `npx @playwright/mcp@latest` 로 떴는데, 스텝은
+    # --allowed-tools 로 MCP 도구를 못 쓰고 실제 호출도 0건이었다. 그런데 기동이
+    # 세션 시작을 막았다 — 225 스텝 실측에서 프로세스 기동부터 세션 첫 기록까지
+    # 중앙 11초 · 평균 30초 · 최대 312초(5건, 타임아웃으로 보임) (2026-09-17).
     if [ -n "$tools" ]; then
-      printf '%s' "$prompt" | claude -p --model "$model" \
+      printf '%s' "$prompt" | claude -p --model "$model" --strict-mcp-config \
         --allowed-tools "$tools" --permission-mode "$PERM" 2>&1 | sed 's/^/    /'
     else
-      printf '%s' "$prompt" | claude -p --model "$model" \
+      printf '%s' "$prompt" | claude -p --model "$model" --strict-mcp-config \
         --permission-mode "$PERM" 2>&1 | sed 's/^/    /'
     fi
     rc=${PIPESTATUS[1]}

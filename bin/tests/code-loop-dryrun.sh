@@ -56,10 +56,11 @@ cat > "$TMP/bin/claude" <<'STUB'
 # 실제 CLI 와 같은 계약으로 받는다 — 프롬프트는 stdin, 도구 제한은 --allowed-tools.
 # (인자로 받던 예전 stub 은 프롬프트가 --- 로 시작할 때 CLI 가 옵션으로 파싱하는
 #  실제 결함을 못 잡았다. 2026-09-16 실사용에서 처음 드러났다)
-tools=""
+tools=""; strict=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --allowed-tools) tools="${2:-}"; shift 2 ;;
+    --strict-mcp-config) strict=1; shift ;;
     *) shift ;;
   esac
 done
@@ -96,7 +97,7 @@ esac
 # 스텝마다 실제로 넘어온 도구 제한과 프롬프트 첫 줄을 남긴다 — 리뷰어에게 Edit/Write 가
 # 새는지, frontmatter 가 프롬프트에 섞이는지를 테스트가 검사할 수 있게
 if [ -n "${T_TOOLSLOG:-}" ]; then
-  printf '%s|%s|%s\n' "$base" "$tools" "$(printf '%s' "$prompt" | head -1)" >> "$T_TOOLSLOG"
+  printf '%s|%s|%s|%s\n' "$base" "$tools" "$(printf '%s' "$prompt" | head -1)" "$strict" >> "$T_TOOLSLOG"
 fi
 echo "stub: wrote $base"
 STUB
@@ -204,6 +205,13 @@ echo "== L. frontmatter 가 프롬프트에 안 섞인다 =="
 # 프롬프트가 --- 로 시작하면 CLI 가 옵션으로 파싱한다 (error: unknown option '---)
 check "dev 프롬프트 첫 줄이 --- 아님" 0 "$(grep '^dev-01.md|' "$T_TOOLSLOG" | cut -d'|' -f3 | grep -c '^---')"
 check "rev 프롬프트 첫 줄이 --- 아님" 0 "$(grep '^rev-01-design.md|' "$T_TOOLSLOG" | cut -d'|' -f3 | grep -c '^---')"
+echo "== U. 모든 스텝이 MCP 서버를 띄우지 않는다 (--strict-mcp-config) =="
+# 도구 제한이 있는 스텝(dev·리뷰어·adv)과 없는 스텝(spec·merge·result) 두 분기를
+# 다 탄다 — 한쪽에만 붙으면 제한 없는 스텝이 여전히 npx 로 MCP 를 띄운다
+check "기록된 스텝 6개 이상"      1 "$([ "$(wc -l < "$T_TOOLSLOG")" -ge 6 ] && echo 1 || echo 0)"
+check "strict 누락 스텝 0"        0 "$(cut -d'|' -f4 "$T_TOOLSLOG" | grep -vc '^1$')"
+check "제한 없는 spec 도 strict"  1 "$(grep '^00-spec.md|' "$T_TOOLSLOG" | cut -d'|' -f4)"
+check "제한 있는 dev 도 strict"   1 "$(grep '^dev-01.md|' "$T_TOOLSLOG" | cut -d'|' -f4)"
 unset T_TOOLSLOG
 
 echo "== N. --resume 이 adv 수정분 판정을 덮지 않는다 =="
