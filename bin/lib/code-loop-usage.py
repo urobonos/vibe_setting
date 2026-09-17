@@ -77,7 +77,7 @@ def scan_runs():
             state = "중단"
         else:
             state = ("%s 진행" % last_label) if last_label else "시작"
-        runs[d.name] = {"state": state, "steps": steps, "sess": 0,
+        runs[d.name] = {"state": state, "steps": steps, "sess": 0, "ctx": [],
                         "in": 0, "cr": 0, "cw": 0, "out": 0, "usd": 0.0}
     return runs
 
@@ -95,7 +95,7 @@ def scan_sessions(runs):
     # …-hello-world2) 짧은 쪽이 먼저 걸려 남의 비용을 가져간다.
     names = sorted(runs, key=len, reverse=True)
     for f in PROJ.glob("*/*.jsonl"):
-        run, agg = None, {}
+        run, agg, ctx = None, {}, []
         try:
             with open(f, encoding="utf-8", errors="replace") as fh:
                 for i, line in enumerate(fh):
@@ -117,6 +117,9 @@ def scan_sessions(runs):
                     u = msg.get("usage") or {}
                     if not u:
                         continue
+                    ctx.append((u.get("input_tokens", 0) or 0)
+                               + (u.get("cache_read_input_tokens", 0) or 0)
+                               + (u.get("cache_creation_input_tokens", 0) or 0))
                     a = agg.setdefault(msg.get("model", "?"),
                                        {"in": 0, "cr": 0, "cw": 0, "out": 0})
                     a["in"]  += u.get("input_tokens", 0) or 0
@@ -129,6 +132,7 @@ def scan_sessions(runs):
             continue
         r = runs[run]
         r["sess"] += 1
+        r["ctx"] += ctx
         for model, a in agg.items():
             for k in ("in", "cr", "cw", "out"):
                 r[k] += a[k]
@@ -144,25 +148,29 @@ def main():
 
     w = 44
     head = (pad("항목", w) + " " + pad("상태", 18) + " "
-            + pad("스텝", 8, True) + " " + pad("토큰", 9, True) + " "
-            + pad("비용", 9, True))
+            + pad("스텝", 8, True) + " " + pad("평균ctx", 9, True) + " "
+            + pad("최대ctx", 9, True) + " " + pad("비용", 9, True))
     print(head)
     print("-" * dwidth(head))
-    tt = tc = 0
+    allc, tc = [], 0.0
     for name, r in runs.items():
-        tok = r["in"] + r["cr"] + r["cw"] + r["out"]
-        tt += tok
+        c = r["ctx"]
+        allc.extend(c)
         tc += r["usd"]
         label = name if len(name) <= w else name[:w - 1] + "~"
         print(pad(label, w) + " " + pad(r["state"], 18) + " "
               + pad("%s/%s" % (r["sess"], r["steps"]), 8, True) + " "
-              + pad(human(tok), 9, True) + " "
+              + pad(human(sum(c) / len(c)) if c else "-", 9, True) + " "
+              + pad(human(max(c)) if c else "-", 9, True) + " "
               + pad("$%.2f" % r["usd"], 9, True))
     print("-" * dwidth(head))
-    print(pad("합계 (%d run)" % len(runs), w) + " " + pad("", 18) + " "
-          + pad("", 8) + " " + pad(human(tt), 9, True) + " "
+    print(pad("전체 %d run" % len(runs), w) + " " + pad("", 18) + " "
+          + pad("", 8) + " "
+          + pad(human(sum(allc) / len(allc)) if allc else "-", 9, True) + " "
+          + pad(human(max(allc)) if allc else "-", 9, True) + " "
           + pad("$%.2f" % tc, 9, True))
     print()
+    print("ctx = 모델 호출 1회가 읽은 입력(캐시 포함). 누적이 아니라 그 순간의 무게다.")
     print("스텝 = jsonl 로 귀속된 수 / run.log 가 띄운 수. 어긋나면 그만큼 덜 센 것이다.")
     print("진행 상황: tail -f %s/{run}/run.log" % STATE.as_posix())
     return 0

@@ -93,6 +93,27 @@ out=$(run)
 check "긴 쪽에 붙는다"  'p-base2 +.*1/1 +.*\$2\.00' "$out"
 check "짧은 쪽은 0"     '^p-base +[^ ]+ +[^ ]+ +0/1' "$out"
 
+echo "== K. 컨텍스트 열 — 평균과 최대는 누적이 아니라 호출 1회의 무게다 =="
+mkrun r-ctx '--- 10:00:00 [dev-01] model=sonnet try=1'
+# 두 번의 모델 호출: ctx = in+read+write = 100,000 과 300,000 -> 평균 200K · 최대 300K
+{
+  printf '{"type":"user","content":"%s/state/code-loop/r-ctx/dev-01.md"}
+' "$CLAUDE_HOME"
+  printf '{"type":"assistant","message":{"model":"claude-sonnet-5","usage":{"input_tokens":0,"cache_read_input_tokens":90000,"cache_creation_input_tokens":10000,"output_tokens":500}}}
+'
+  printf '{"type":"assistant","message":{"model":"claude-sonnet-5","usage":{"input_tokens":0,"cache_read_input_tokens":300000,"cache_creation_input_tokens":0,"output_tokens":500}}}
+'
+} > "$PROJ/s-ctx.jsonl"
+out=$(run)
+check "평균 200K" '^r-ctx .*200\.0K' "$out"
+check "최대 300K" '^r-ctx .*200\.0K +300\.0K' "$out"
+# output_tokens 는 컨텍스트가 아니다 — 1,000 이 섞여 들어가면 위 수치가 어긋난다
+check "출력토큰 미포함" '^r-ctx .*200\.0K +300\.0K' "$out"
+
+echo "== L. 호출이 하나도 안 잡힌 run 은 '-' 로 낸다 (0 으로 위장하지 않는다) =="
+mkrun r-empty '--- 10:00:00 [spec] model=sonnet try=1'
+check "빈 run" '^r-empty .*[0-9]/[0-9] +- +-' "$(run)"
+
 echo "== I. run.log 없는 디렉토리는 run 이 아니다 =="
 mkdir -p "$STATE/not-a-run"
 [ "$(run | grep -c 'not-a-run')" = "0" ] \
