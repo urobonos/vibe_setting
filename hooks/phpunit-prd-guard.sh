@@ -17,19 +17,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 
 STDIN_DATA=$(cat)
 
+# 값은 반드시 shlex.quote 로 감싼다 — 큰따옴표로 감싸 eval 하면 명령 문자열 안의
+# 백틱·$( ) 가 이 훅 프로세스에서 실행된다. 작은따옴표 안에 있어도, 분류기를 거치지 않고.
+# 2026-09-17 실측: 문서 sed 치환의 코드 표기 백틱이 seed-sandbox --restore 를 실행해
+# 샌드박스 DB 124행이 지워졌다 (binlog 로 확정 · printf 프로브로 재현).
 eval "$(echo "$STDIN_DATA" | python3 -c "
-import json, sys
+import json, shlex, sys
 try:
     data = json.load(sys.stdin)
     tn = data.get('tool_name', '')
     ti = data.get('tool_input', {})
     cmd = ti.get('command', '')
     cwd = data.get('cwd', '')
-    safe_cmd = cmd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"').replace('\n', ' ')
-    safe_cwd = cwd.replace('\\\\', '\\\\\\\\').replace('\"', '\\\\\"')
-    print(f'TOOL_NAME=\"{tn}\"')
-    print(f'COMMAND=\"{safe_cmd}\"')
-    print(f'CWD=\"{safe_cwd}\"')
+    print('TOOL_NAME=' + shlex.quote(tn))
+    print('COMMAND=' + shlex.quote(cmd.replace('\n', ' ')))
+    print('CWD=' + shlex.quote(cwd))
 except:
     print('TOOL_NAME=\"\"')
     print('COMMAND=\"\"')
