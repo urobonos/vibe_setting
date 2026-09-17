@@ -29,6 +29,10 @@ set -uo pipefail
 CLAUDE_HOME="$HOME/.claude"
 STATE_DIR="$CLAUDE_HOME/state/code-loop"
 CMD_DIR="$CLAUDE_HOME/custom-plugin/taskflow/commands"
+# 크기 게이트 판정 줄 읽기 — hook(gate-enforce.sh)과 같은 함수를 쓴다. 러너 위치 기준으로
+# 찾으므로 worktree 의 러너는 같은 worktree 의 lib 를 읽는다 (SSOT = hooks/lib/code-loop-gate.sh)
+GATE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/code-loop-gate.sh"
+. "$GATE_LIB" 2>/dev/null
 AGENT_DIR="$CLAUDE_HOME/custom-plugin/taskflow/agents"
 PERM="${CODE_LOOP_PERM:-auto}"
 
@@ -219,6 +223,11 @@ run_loop() {
   mkdir -p "$dir"
   echo "=== $(date '+%F %T') code-loop 시작 (run=$run perm=$PERM)"
   echo "=== 결과문서: $dir"
+  # 판정 lib 가 없으면 크기 게이트를 읽을 수 없다 — spec 스텝을 태우기 전에 멈춘다
+  if ! declare -F code_loop_gate >/dev/null; then
+    echo "!!! GATE 판정 lib 를 못 읽었다: $GATE_LIB — 중단"
+    return 1
+  fi
 
   local common="결과문서 디렉토리: $dir
 루프 계약 SSOT = $CMD_DIR/code.md · 결과문서 규약 SSOT = $CMD_DIR/code-loop.md
@@ -244,11 +253,18 @@ $request"
     fi
   fi
 
-  if grep -q '^GATE:[[:space:]]*TOO-LARGE' "$dir/00-spec.md"; then
-    echo "=== 크기 게이트: 성공 기준 4개 이상 — 이 커맨드로 받지 않는다."
-    echo "=== /taskflow:plan 경로를 쓴다. spec: $dir/00-spec.md"
-    return 2
-  fi
+  # 세 갈래다. 판정 줄이 없으면 진행하지 않는다 (fail-closed, code-loop.md §VERDICT 계약) —
+  # 예전엔 TOO-LARGE 줄만 찾아서 헤더형 TOO-LARGE 와 판정 줄 없음을 전부 "진행" 으로 읽었다
+  case "$(code_loop_gate "$dir/00-spec.md")" in
+    OK) ;;
+    TOO-LARGE)
+      echo "=== 크기 게이트: 성공 기준 4개 이상 — 이 커맨드로 받지 않는다."
+      echo "=== /taskflow:plan 경로를 쓴다. spec: $dir/00-spec.md"
+      return 2 ;;
+    *)
+      echo "!!! 00-spec.md 에 GATE 판정 줄이 없다 — 크기 게이트를 못 받았다. 중단 (spec: $dir/00-spec.md)"
+      return 1 ;;
+  esac
 
   # 이 아래 스텝들이 코드를 쓸 수 있게 한다. gate-enforce.sh 의 plan-before 게이트는
   # 세션 SID8 로 REGISTRY 를 찾는데, 스텝마다 새 프로세스라 매번 새 SID8 이 나와

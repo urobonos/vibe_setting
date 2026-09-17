@@ -2,6 +2,7 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "gate-enforce" "enter" "pid=$$"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null  # is_hard_code_file (plan-before 게이트, 2026-07-08)
+source "$(dirname "${BASH_SOURCE[0]}")/lib/code-loop-gate.sh" 2>/dev/null  # code_loop_gate (code-loop spec 판정, 2026-09-17)
 # PreToolUse Hook: Gate 미통과 시 Edit/Write/MultiEdit 차단 + Agent 검증
 # Phase 3 Harness — v2 (비코드 경로 완화)
 #
@@ -208,9 +209,13 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Mult
         # 파일이 실재하고 1단계 크기 게이트를 통과(GATE: OK)했는지로 한다 — 변수만 세우면
         # 열리는 구조면 그 자체가 우회 통로가 된다. TOO-LARGE 는 인정하지 않는다
         # (그건 "이 커맨드로 받지 않는다" 는 판정이라 계획이 선 상태가 아니다).
+        #
+        # 판정 줄 읽기는 러너와 같은 함수다 (SSOT = lib/code-loop-gate.sh). 여기서 따로
+        # `^GATE:` 를 grep 하다가 spec 의 `## GATE: OK` 를 못 읽어 개발자가 5라운드 내내
+        # 코드를 못 쓴 run 이 나왔다. lib 가 안 읽히면 함수가 없어 빈 값 → 통과시키지 않는다.
         if [ "$_plan_ok" -ne 1 ] && [ -n "${CODE_LOOP_SPEC:-}" ] \
            && [ -f "$CODE_LOOP_SPEC" ] \
-           && grep -qE '^GATE:[[:space:]]*OK[[:space:]]*$' "$CODE_LOOP_SPEC" 2>/dev/null; then
+           && [ "$(code_loop_gate "$CODE_LOOP_SPEC" 2>/dev/null)" = "OK" ]; then
           _plan_ok=1
           command -v log_event >/dev/null 2>&1 && log_event "gate-enforce" "pass" "reason=code-loop-spec"
         fi

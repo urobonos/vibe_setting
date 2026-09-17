@@ -75,7 +75,9 @@ pick() { printf '%s' "$1" | cut -d, -f"$2"; }
 last() { printf '%s' "$1" | rev | cut -d, -f1 | rev; }
 case "$base" in
   00-spec.md)
-    printf 'spec\n\nGATE: %s\n' "${T_GATE:-OK}" > "$out" ;;
+    # T_GATE_LINE 이 설정돼 있으면(빈 값 포함) 판정 줄을 원문 그대로 쓴다 — 표기 변형·줄 없음 검사용
+    if [ -n "${T_GATE_LINE+x}" ]; then printf 'spec\n\n%s\n' "$T_GATE_LINE" > "$out"
+    else printf 'spec\n\nGATE: %s\n' "${T_GATE:-OK}" > "$out"; fi ;;
   rev-*-correctness.md|rev-*-design.md)
     printf 'reviewer (stub)\n' > "$out" ;;
   rev-*.md)
@@ -224,6 +226,23 @@ before=$(md5sum "$ST/$RUN/dev-02.md" | cut -d' ' -f1)
 env T_REV=CLEAN T_ADV='BROKEN,UPHELD' bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
 check "adv 수정분 판정 보존" "$before" "$(md5sum "$ST/$RUN/dev-02.md" | cut -d' ' -f1)"
 check "재사용 로그" 1 "$(grep -c '기존 산출물 재사용' "$TMP/out.txt")"
+
+echo "== W. GATE 판정 줄 — 헤더·강조 표기는 인정, 줄 없음·본문 언급은 중단 (fail-closed) =="
+# 러너가 TOO-LARGE 로 시작하는 줄만 찾던 시절엔 헤더형 TOO-LARGE 도, 판정 줄 없음도 진행했다
+reset; rc=$(runit T_GATE_LINE='## GATE: OK' T_REV=CLEAN T_ADV=UPHELD)
+check "## GATE: OK 진행" 0 "$rc"
+check "## GATE: OK 개발자 실행" 1 "$(cnt 'dev-*.md')"
+reset; rc=$(runit T_GATE_LINE='**GATE: OK**' T_REV=CLEAN T_ADV=UPHELD)
+check "**GATE: OK** 진행" 0 "$rc"
+reset; rc=$(runit T_GATE_LINE='## GATE: TOO-LARGE')
+check "## GATE: TOO-LARGE 정지" 2 "$rc"
+check "헤더형 TOO-LARGE 개발자 미실행" 0 "$(cnt 'dev-*.md')"
+reset; rc=$(runit T_GATE_LINE=)
+check "판정 줄 없음 중단" 1 "$rc"
+check "판정 줄 없음 개발자 미실행" 0 "$(cnt 'dev-*.md')"
+check "중단 메시지" 1 "$(grep -c 'GATE 판정 줄이 없다' "$TMP/out.txt")"
+reset; rc=$(runit T_GATE_LINE='- 이전엔 GATE: OK 였다')
+check "본문 언급만 있으면 중단" 1 "$rc"
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="

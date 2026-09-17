@@ -29,6 +29,8 @@ run_hook() { # $1 sid
 }
 
 mkspec() { printf '## 성공 기준\n\n1. 뭔가\n\nGATE: %s\n' "$1" > "$TMP/00-spec.md"; }
+# 판정 줄을 원문 그대로 쓴다 — 표기 변형 검사용
+mkraw()  { printf '## 성공 기준\n\n1. 뭔가\n\n%s\n' "$1" > "$TMP/00-spec.md"; }
 
 echo "== 1. CODE_LOOP_SPEC 없음 → 차단 (기존 동작 보존) =="
 unset CODE_LOOP_SPEC
@@ -51,6 +53,19 @@ check "TOO-LARGE" 2 "$(run_hook aaaaaaaa-4)"
 echo "== 5. GATE 줄 자체가 없는 파일 → 차단 (아무 파일이나 가리키면 안 된다) =="
 printf '아무 내용\n' > "$TMP/00-spec.md"
 check "GATE 줄 부재" 2 "$(run_hook aaaaaaaa-5)"
+
+echo "== 6~9. 판정 줄 표기 — spec 스텝(모델)이 마크다운으로 쓰는 경우 =="
+# 2026-09-17 실측: 전 run spec 25건 중 2건이 `## GATE: OK` 였고, 그중 하나는 개발자가
+# 5라운드 내내 이 게이트에 막혀 코드 0줄로 끝났다. 판정 SSOT = lib/code-loop-gate.sh
+export CODE_LOOP_SPEC="$TMP/00-spec.md"
+mkraw '## GATE: OK'
+check "## GATE: OK 인정" 0 "$(run_hook aaaaaaaa-6)"
+mkraw '**GATE: OK**'
+check "**GATE: OK** 인정" 0 "$(run_hook aaaaaaaa-7)"
+mkraw '## GATE: TOO-LARGE'
+check "## GATE: TOO-LARGE 차단" 2 "$(run_hook aaaaaaaa-8)"
+mkraw '- 이전엔 GATE: OK 였다'
+check "본문 중간 언급은 판정 아님" 2 "$(run_hook aaaaaaaa-9)"
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="
