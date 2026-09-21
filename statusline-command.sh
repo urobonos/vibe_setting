@@ -71,8 +71,9 @@ if [ -n "$seven_day" ]; then
 fi
 [ -n "$ctx" ] && usage="${usage:+${usage} }Ctx:${ctx}%%"
 
+# 첫 줄을 비워 실제 내용을 한 칸 아래로 내린다 — 출력 줄 수 = 표시 행 수
 if [ -n "$usage" ]; then
-  printf "${yellow}${cwd}${reset}${cyan}${git_branch}${reset} ${dim}|${reset} ${white}${usage}${reset}"
+  printf "\n${yellow}${cwd}${reset}${cyan}${git_branch}${reset} ${dim}|${reset} ${white}${usage}${reset}"
 else
-  printf "${yellow}${cwd}${reset}${cyan}${git_branch}${reset}"
+  printf "\n${yellow}${cwd}${reset}${cyan}${git_branch}${reset}"
 fi
