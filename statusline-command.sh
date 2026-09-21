@@ -10,7 +10,12 @@ if [ -n "$input" ]; then
   ctx=$(echo "$all_pcts" | sed -n '1p')
   five_hour=$(echo "$all_pcts" | sed -n '2p')
   seven_day=$(echo "$all_pcts" | sed -n '3p')
+  # resets_at 은 rate_limits 안에만 있다 (5h → 7d 순, unix epoch seconds)
+  all_resets=$(echo "$input" | grep -o '"resets_at":[0-9]*' | grep -o '[0-9]*$')
+  five_hour_reset=$(echo "$all_resets" | sed -n '1p')
+  seven_day_reset=$(echo "$all_resets" | sed -n '2p')
   sid=$(echo "$input" | grep -o '"session_id":"[^"]*"' | head -1 | sed 's/"session_id":"//;s/"//')
+  model_name=$(echo "$input" | grep -o '"display_name":"[^"]*"' | head -1 | sed 's/"display_name":"//;s/"//')
 fi
 
 [ -z "$cwd" ] && cwd=$(pwd)
@@ -19,6 +24,14 @@ five_hour=${five_hour:-}
 seven_day=${seven_day:-}
 ctx=${ctx:-}
 sid8=${sid:0:8}
+model_name=${model_name:-}
+
+# epoch(초) → 로컬 시각. 5h 는 당일이라 HH:MM, 7d 는 날짜가 바뀌므로 MM/DD HH:MM.
+# GNU date(-d @epoch) 없는 환경 대비 실패 시 필드 자체를 비운다 (깨진 시각 표시 금지).
+five_hour_reset_h=""
+[ -n "$five_hour_reset" ] && five_hour_reset_h=$(date -d "@$five_hour_reset" '+%H:%M' 2>/dev/null)
+seven_day_reset_h=""
+[ -n "$seven_day_reset" ] && seven_day_reset_h=$(date -d "@$seven_day_reset" '+%m/%d %H:%M' 2>/dev/null)
 
 # 5초 TTL 캐시 — Windows + Git Bash 환경에서 매 토큰마다 git fork 비용 누적 방지
 git_branch=""
@@ -46,9 +59,16 @@ dim='\033[2m'
 reset='\033[0m'
 
 usage=""
-[ -n "$sid8" ] && usage="sid:${sid8}"
-[ -n "$five_hour" ] && usage="${usage:+${usage} }5h:${five_hour}%%"
-[ -n "$seven_day" ] && usage="${usage:+${usage} }7d:${seven_day}%%"
+[ -n "$model_name" ] && usage="${model_name}"
+[ -n "$sid8" ] && usage="${usage:+${usage} }sid:${sid8}"
+if [ -n "$five_hour" ]; then
+  usage="${usage:+${usage} }5h:${five_hour}%%"
+  [ -n "$five_hour_reset_h" ] && usage="${usage}(${five_hour_reset_h})"
+fi
+if [ -n "$seven_day" ]; then
+  usage="${usage:+${usage} }7d:${seven_day}%%"
+  [ -n "$seven_day_reset_h" ] && usage="${usage}(${seven_day_reset_h})"
+fi
 [ -n "$ctx" ] && usage="${usage:+${usage} }Ctx:${ctx}%%"
 
 if [ -n "$usage" ]; then
