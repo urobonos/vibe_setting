@@ -334,9 +334,12 @@ verify_baseline_counts() {
 VERIFY_RETRY_CAP=2
 verify_gate() {
   local dir="$1" nn="$2" common="$3" try=0
-  while [ "$try" -lt "$VERIFY_RETRY_CAP" ]; do
+  while :; do
     if verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn"; then
       return 0
+    fi
+    if [ "$try" -ge "$VERIFY_RETRY_CAP" ]; then
+      break
     fi
     try=$((try + 1))
     echo "=== [dev-$nn] 셸 재검증 불일치 — 재보고 요청 $try/$VERIFY_RETRY_CAP"
