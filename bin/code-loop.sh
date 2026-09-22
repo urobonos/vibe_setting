@@ -393,11 +393,14 @@ VERIFY_REV_RETRY_CAP=2
 verify_rev_gate() {
   local dir="$1" nn="$2" common="$3" root try=0 bad_c bad_d
   root=$(worktree_of "$dir/00-spec.md")
-  while [ "$try" -lt "$VERIFY_REV_RETRY_CAP" ]; do
+  while :; do
     verify_rev_baseline_counts_file "$dir/rev-$nn-correctness.md" "$root"; bad_c=$?
     verify_rev_baseline_counts_file "$dir/rev-$nn-design.md" "$root"; bad_d=$?
     if [ "$bad_c" -eq 0 ] && [ "$bad_d" -eq 0 ]; then
       return 0
+    fi
+    if [ "$try" -ge "$VERIFY_REV_RETRY_CAP" ]; then
+      break
     fi
     try=$((try + 1))
     echo "=== [rev-$nn] 셸 재검증 불일치 — 리뷰어 재검토 요청 $try/$VERIFY_REV_RETRY_CAP"
