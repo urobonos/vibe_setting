@@ -44,8 +44,12 @@ M_REV="${CODE_LOOP_MODEL_REV:-sonnet}"
 # 클린을 못 깨면 루프가 거기서 끝나므로 마지막 방어선의 판단력은 내리지 않는다
 M_ADV="${CODE_LOOP_MODEL_ADV:-opus}"
 
-DEV_CAP=5   # 정규 라운드 캡 (code.md §"루프 종료 조건")
-ADV_CAP=2   # 적대적 게이트 캡 (code.md §"적대적 검증 게이트")
+# 2026-09-21 사용자 지시 "임시 캡제한 해제" — 기본 무제한(0). 되살리려면 환경변수로:
+#   CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2 code-loop.sh "요청"
+# 루프의 정상 종료는 캡이 아니라 판정이다 — dev 는 리뷰 CLEAN, adv 는 UPHELD.
+DEV_CAP="${CODE_LOOP_DEV_CAP:-0}"   # 정규 라운드 캡 · 0 = 무제한
+ADV_CAP="${CODE_LOOP_ADV_CAP:-0}"   # 적대적 게이트 캡 · 0 = 무제한
+cap_label() { if [ "${1:-0}" -gt 0 ]; then printf '%s' "$1"; else printf '무제한'; fi; }
 
 mkdir -p "$STATE_DIR"
 
@@ -275,9 +279,12 @@ $request"
 
   # ── dev-loop ──────────────────────────────────────────────────────────
   local n nn verdict=""
-  for n in $(seq 1 "$DEV_CAP"); do
+  n=0
+  while :; do
+    n=$((n + 1))
+    if [ "$DEV_CAP" -gt 0 ] && [ "$n" -gt "$DEV_CAP" ]; then break; fi
     nn=$(printf '%02d' "$n")
-    echo "=== dev-loop 라운드 $n/$DEV_CAP"
+    echo "=== dev-loop 라운드 $n/$(cap_label "$DEV_CAP")"
 
     if [ ! -s "$dir/dev-$nn.md" ]; then
       local prev_rev="" whys=""
@@ -314,7 +321,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
       CLEAN*)
         break ;;
       FINDINGS*)
-        if [ "$n" -eq "$DEV_CAP" ]; then
+        if [ "$DEV_CAP" -gt 0 ] && [ "$n" -eq "$DEV_CAP" ]; then
           echo "=== 캡 $DEV_CAP 소진 — 적대적 게이트를 돌리지 않는다 (깰 것이 없다)"
         fi ;;
       *)
@@ -328,9 +335,12 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
   case "$verdict" in
     CLEAN*)
       local m mm nn2
-      for m in $(seq 1 "$ADV_CAP"); do
+      m=0
+      while :; do
+        m=$((m + 1))
+        if [ "$ADV_CAP" -gt 0 ] && [ "$m" -gt "$ADV_CAP" ]; then break; fi
         mm=$(printf '%02d' "$m")
-        echo "=== adv-loop $m/$ADV_CAP"
+        echo "=== adv-loop $m/$(cap_label "$ADV_CAP")"
         if [ ! -s "$dir/adv-$mm.md" ]; then
           local adv_body="$common
 
@@ -362,7 +372,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
             # code.md: BROKEN 수정분은 반드시 리뷰 1라운드를 거친다. 그 라운드는 정규 캡에
             # 계상한다 — 게이트 캡이 정규 캡을 늘리는 통로가 되면 클린 직전에 라운드가 무한히 열린다
             n=$((n + 1))
-            if [ "$n" -gt "$DEV_CAP" ]; then
+            if [ "$DEV_CAP" -gt 0 ] && [ "$n" -gt "$DEV_CAP" ]; then
               echo "=== 정규 캡 소진 — 재현물을 잔여로 넘긴다"
               break
             fi
