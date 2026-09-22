@@ -217,6 +217,9 @@ $hist"
     return 1
   fi
 
+  # 리뷰어가 인용한 테스트 수치를 셸이 직접 재실행해 대조 — dev측 verify_gate 와 대칭
+  verify_rev_gate "$dir" "$nn" "$common" || return 1
+
   # 합본 + 반박 판정 — code.md 가 "본체" 에 맡긴 일이고, 그 본체도 여기선 단발이다
   local merge_body="$common
 
@@ -351,6 +354,82 @@ verify_gate() {
     fi
   done
   echo "=== [dev-$nn] 셸 재검증 재시도 소진($VERIFY_RETRY_CAP) — 중단하지 않고 리뷰어에게 넘긴다"
+  return 0
+}
+
+# rev-$nn-{correctness,design}.md 안의 "`cmd` → OK (N tests, M assertions)" idiom 을
+# 셸이 직접 재실행해 대조한다. dev측(BASELINE:/FILES:)과 달리 리뷰어 반환 양식엔
+# 구조화 필드가 없어 이 1종 idiom만 취급한다 (2026-09-22 실측: state/code-loop 상
+# rev 문서 63건이 이 정확한 형태 — 그 외 "무변경"·"바이트 일치" 서술은 자유서술에
+# 흩어져 있고 명령의 실제 측정 범위와 주장의 범위가 어긋나는 사례가 확인돼 자동
+# 대조 대상에서 제외했다. 새 필드를 리뷰어 계약에 추가하지 않는다 — 자유서술과
+# 중복 기재되거나 뉘앙스가 손실된다).
+verify_rev_baseline_counts_file() {
+  local f="$1" root="$2" fail=0 line cmd claim_n actual actual_n
+  [ -f "$f" ] || return 0
+  while IFS= read -r line; do
+    cmd=$(printf '%s' "$line" | sed -n 's/^[^`]*`\([^`]*\)`.*/\1/p')
+    [ -n "$cmd" ] || continue
+    claim_n=$(printf '%s' "$line" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
+    [ -n "$claim_n" ] || continue
+    if [ -n "$root" ]; then
+      actual=$(cd "$root" 2>/dev/null && eval "$cmd" 2>&1)
+    else
+      actual=$(eval "$cmd" 2>&1)
+    fi
+    actual_n=$(printf '%s' "$actual" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
+    if [ "$claim_n" != "$actual_n" ]; then
+      echo "!!! [$(basename "$f")] 리뷰 주장 재검증 불일치"
+      echo "    명령: $cmd"
+      echo "    주장: $claim_n"
+      echo "    실측: ${actual_n:-매치 없음}"
+      fail=1
+    fi
+  done < <(grep -E '`[^`]+`.*(→|->).*OK.*\([0-9]+ tests?,? *[0-9]+ assertions?\)' "$f")
+  return "$fail"
+}
+
+VERIFY_REV_RETRY_CAP=2
+verify_rev_gate() {
+  local dir="$1" nn="$2" common="$3" root try=0 bad_c bad_d
+  root=$(worktree_of "$dir/00-spec.md")
+  while [ "$try" -lt "$VERIFY_REV_RETRY_CAP" ]; do
+    verify_rev_baseline_counts_file "$dir/rev-$nn-correctness.md" "$root"; bad_c=$?
+    verify_rev_baseline_counts_file "$dir/rev-$nn-design.md" "$root"; bad_d=$?
+    if [ "$bad_c" -eq 0 ] && [ "$bad_d" -eq 0 ]; then
+      return 0
+    fi
+    try=$((try + 1))
+    echo "=== [rev-$nn] 셸 재검증 불일치 — 리뷰어 재검토 요청 $try/$VERIFY_REV_RETRY_CAP"
+    local fix_body="$common
+
+방금 반환한 판정 파일의 테스트 수치 주장이 셸의 독립 재실행과 다르다(run.log 의
+위 로그 참조). 실제 수치를 다시 확인해 같은 판정 파일을 갱신 반환한다 — 새
+라운드가 아니라 같은 rev-$nn 의 재검토다."
+    if [ "$bad_c" -ne 0 ]; then
+      rm -f "$dir/rev-$nn-correctness.md"
+      if ! run_step "rev-$nn-correctness" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-correctness.md")" \
+           "$dir/rev-$nn-correctness.md" \
+           "$(step_prompt "$AGENT_DIR/reviewer-correctness.md" \
+              "$fix_body
+판정 결과를 $dir/rev-$nn-correctness.md 에 쓴다.")"; then
+        echo "!!! [rev-$nn] correctness 재검토 실패 — 중단"
+        return 1
+      fi
+    fi
+    if [ "$bad_d" -ne 0 ]; then
+      rm -f "$dir/rev-$nn-design.md"
+      if ! run_step "rev-$nn-design" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-design.md")" \
+           "$dir/rev-$nn-design.md" \
+           "$(step_prompt "$AGENT_DIR/reviewer-design.md" \
+              "$fix_body
+판정 결과를 $dir/rev-$nn-design.md 에 쓴다.")"; then
+        echo "!!! [rev-$nn] design 재검토 실패 — 중단"
+        return 1
+      fi
+    fi
+  done
+  echo "=== [rev-$nn] 셸 재검증 재시도 소진($VERIFY_REV_RETRY_CAP) — 중단하지 않고 합본 단계로 넘긴다"
   return 0
 }
 

@@ -44,6 +44,8 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        │         기계검사·BASELINE 재실행 — 불일치면 [dev] 재보고 2회까지(캡 미계상)
        │    claude -p [rev-correctness] sonnet ┐ 병렬
        │    claude -p [rev-design]      sonnet ┘
+       │    └ 셸 독립 재검증 (verify_rev_gate) — 인용 테스트 수치 재실행,
+       │         불일치 역할만 개별 재검토 2회까지(캡 미계상)
        │    claude -p [merge]          sonnet  → rev-NN.md (+ VERDICT 줄)
        │    └ 셸이 VERDICT 만 읽고 분기
        │
@@ -181,6 +183,7 @@ MM = 1 .. 2
 
 ## Changelog
 
+- 2026-09-22: **rev-loop(리뷰어 병렬) 에도 셸 독립 재검증(`verify_rev_gate`) 대칭 삽입 (두 리뷰어 wait 직후·합본 이전).** `bin/code-loop.sh`만 수정 — 리뷰어 계약(`reviewer-{correctness,design}.md`)엔 신규 필드를 안 넣는다. 리뷰어가 인용하는 `` `명령` → OK (N tests, M assertions) `` idiom 만 재실행 대조(`verify_rev_baseline_counts_file`) — dev측과 달리 리뷰어 반환은 구조화 필드가 없어 "무변경"·"바이트 일치" 같은 자유서술 주장은 명령의 실제 측정 범위와 어긋나는 사례(실측)가 있어 자동대조 대상에서 뺐다. 불일치는 correctness/design 중 실제로 어긋난 역할만 개별 재검토 요청, 소진해도 합본을 막지 않는다.
 - 2026-09-22: **dev-loop 에 셸 독립 재검증(`verify_gate`) 삽입 (dev 직후·rev 이전).** `bin/code-loop.sh`·`step-developer.md`·`code.md` 3파일. 개발 Agent 반환의 `FILES` 기계검사(php -l·cs-fixer·phpstan)와 `BASELINE`(phpunit `N tests, M assertions` 형식 한정) 을 셸이 직접 재실행해 자기신고를 대체한다 — 리뷰어 토큰 다섯 배(읽기·쓰기·합치기·고치기·재확인)를 쓰기 전에 명령 1회로 거른다. 정규 DEV_CAP 은 안 쓰고 불일치 재보고는 2회 한도, 소진해도 런을 막지 않고 리뷰어에게 넘긴다(리뷰어는 이미 자체 재실행 판정이라 이중 방어). 00-spec.md 에 기계 판독용 `WORKTREE:` 줄 추가 — 기계검사가 `FILES` 상대경로를 풀 기준점. 실측(state/code-loop 전수)으로 BASELINE 이 phpunit 형식만은 아니라(diff·git status 류 다수) 자동판정 범위를 그 형식일 때로 한정
 - 2026-09-17: **GATE 판정 줄 읽기를 공용 함수로** (`hooks/lib/code-loop-gate.sh`) — 러너·hook 이 각자 `^GATE:` 를 grep 하다 갈라졌다. 헤더·강조 표기 인정, 판정 줄 없음은 중단(fail-closed, 이전엔 진행). ISS-5 세션 보고. hook 테스트 5 → 9, 드라이런 42 → 51 (수정 전 hook 2 FAIL · 러너 6 FAIL 로 반응 확인)
 
