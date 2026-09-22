@@ -40,6 +40,8 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        │
        ├ dev-loop  (라운드당 프로세스 4개, 캡 5)
        │    claude -p [dev]            sonnet  → dev-NN.md
+       │    └ 셸 독립 재검증 (LLM 프로세스 아님, verify_gate)
+       │         기계검사·BASELINE 재실행 — 불일치면 [dev] 재보고 2회까지(캡 미계상)
        │    claude -p [rev-correctness] sonnet ┐ 병렬
        │    claude -p [rev-design]      sonnet ┘
        │    claude -p [merge]          sonnet  → rev-NN.md (+ VERDICT 줄)
@@ -82,7 +84,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
 
 | 파일 | 쓰는 쪽 | 내용 |
 |------|---------|------|
-| `00-spec.md` | spec 스텝 | 요청 · 성공 기준 · 테스트 범위 · 비목표 · 커밋 type·scope · worktree 절대경로 · (형식 변경 시) 파급면·결함면 + `GATE:` 줄 |
+| `00-spec.md` | spec 스텝 | 요청 · 성공 기준 · 테스트 범위 · 비목표 · 커밋 type·scope · worktree 절대경로(+ 기계 판독용 `WORKTREE:` 줄) · (형식 변경 시) 파급면·결함면 + `GATE:` 줄 |
 | `dev-NN.md` | 개발자 | `FILES` / `TESTS` / `NOTES` / `BASELINE`(전·후) / **`WHY`** |
 | `rev-NN-{correctness,design}.md` | 리뷰어 2인 | 각자의 판정 |
 | `rev-NN.md` | merge 스텝 | 합본 + 반박 판정 결과 + `VERDICT:` 줄 |
@@ -179,6 +181,7 @@ MM = 1 .. 2
 
 ## Changelog
 
+- 2026-09-22: **dev-loop 에 셸 독립 재검증(`verify_gate`) 삽입 (dev 직후·rev 이전).** `bin/code-loop.sh`·`step-developer.md`·`code.md` 3파일. 개발 Agent 반환의 `FILES` 기계검사(php -l·cs-fixer·phpstan)와 `BASELINE`(phpunit `N tests, M assertions` 형식 한정) 을 셸이 직접 재실행해 자기신고를 대체한다 — 리뷰어 토큰 다섯 배(읽기·쓰기·합치기·고치기·재확인)를 쓰기 전에 명령 1회로 거른다. 정규 DEV_CAP 은 안 쓰고 불일치 재보고는 2회 한도, 소진해도 런을 막지 않고 리뷰어에게 넘긴다(리뷰어는 이미 자체 재실행 판정이라 이중 방어). 00-spec.md 에 기계 판독용 `WORKTREE:` 줄 추가 — 기계검사가 `FILES` 상대경로를 풀 기준점. 실측(state/code-loop 전수)으로 BASELINE 이 phpunit 형식만은 아니라(diff·git status 류 다수) 자동판정 범위를 그 형식일 때로 한정
 - 2026-09-17: **GATE 판정 줄 읽기를 공용 함수로** (`hooks/lib/code-loop-gate.sh`) — 러너·hook 이 각자 `^GATE:` 를 grep 하다 갈라졌다. 헤더·강조 표기 인정, 판정 줄 없음은 중단(fail-closed, 이전엔 진행). ISS-5 세션 보고. hook 테스트 5 → 9, 드라이런 42 → 51 (수정 전 hook 2 FAIL · 러너 6 FAIL 로 반응 확인)
 
 - 2026-09-16: 신설. 메인 컨텍스트 누적 실측(본체 Bash 73% · Read 17% · subagent 반환 7.6%)에 근거 — subagent 반환은 이미 절단돼 들어오므로 줄일 여지가 없고 남는 경로는 프로세스를 끊는 것뿐이었다. **루프 전체를 headless 1개로 빼는 안을 먼저 만들었다가 폐기했다**(러너가 라운드를 warm 하게 들면 누적이 메인에서 러너로 옮겨갈 뿐). 스텝을 경계로 삼는 현재 구조로 교체. 루프 계약 재정의 0 — 상태 매체만 warm → 결과문서로 바뀌었다. 드라이런 20케이스 통과(캡 소진·adv 재진입 계상·크기 게이트·VERDICT fail-closed·산출 미생성 재시도·재개 보존)

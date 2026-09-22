@@ -136,6 +136,20 @@ verdict_of() {
   grep -h '^VERDICT:' "$1" 2>/dev/null | tail -1 | sed 's/^VERDICT:[[:space:]]*//'
 }
 
+# 00-spec.md 의 WORKTREE: 한 줄 — 기계검사가 FILES 상대경로를 풀 기준점
+worktree_of() {
+  grep -h '^WORKTREE:' "$1" 2>/dev/null | tail -1 | sed 's/^WORKTREE:[[:space:]]*//'
+}
+
+# dev-NN.md 의 FILES: 섹션에서 "- {path} — ..." 줄의 경로만 뽑는다
+files_of() {
+  awk '
+    /^FILES:/ { f=1; next }
+    f && /^[A-Z][A-Z-]*:/ { exit }
+    f && /^- / { line=$0; sub(/^- /,"",line); sub(/ — .*/,"",line); sub(/[[:space:]]*$/,"",line); print line }
+  ' "$1"
+}
+
 # 에이전트 정의 본문을 프롬프트 앞에 붙인다. 이 프로세스가 곧 그 에이전트다
 # (Agent 도구로 spawn 하는 게 아니라 프로세스 자체가 역할을 수행한다)
 #
@@ -222,6 +236,124 @@ $hist"
   return 0
 }
 
+# dev-$nn.md 의 FILES: 목록에 php -l/php-cs-fixer/phpstan 을 셸이 직접 재실행한다.
+# step-developer.md §"반환 전 기계 검사"와 같은 3종 — 자기신고가 아니라 셸이 판정한다.
+# WORKTREE: 줄이 없거나(구버전 spec) 도구가 레포에 없으면 조용히 건너뛴다.
+verify_mechanical() {
+  local dir="$1" nn="$2" root fail=0 f abspath out
+  root=$(worktree_of "$dir/00-spec.md")
+  if [ -z "$root" ]; then
+    echo "--- [dev-$nn] WORKTREE: 줄 없음 — 기계검사 skip"
+    return 0
+  fi
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "$f" in *.php) ;; *) continue ;; esac
+    abspath="$root/$f"
+    [ -f "$abspath" ] || abspath="$f"
+    if [ ! -f "$abspath" ]; then
+      echo "!!! [dev-$nn] 기계검사: 파일 없음 — $f"
+      fail=1
+      continue
+    fi
+    if command -v php >/dev/null 2>&1; then
+      if ! out=$(php -l "$abspath" 2>&1); then
+        echo "!!! [dev-$nn] 기계검사 불일치 — php -l 실패: $f"
+        printf '%s\n' "$out" | sed 's/^/    /'
+        fail=1
+      fi
+    fi
+    if command -v php-cs-fixer >/dev/null 2>&1; then
+      if ! out=$(php-cs-fixer fix --dry-run --diff "$abspath" 2>&1); then
+        echo "!!! [dev-$nn] 기계검사 불일치 — php-cs-fixer: $f"
+        printf '%s\n' "$out" | sed 's/^/    /'
+        fail=1
+      fi
+    fi
+    if command -v phpstan >/dev/null 2>&1; then
+      if ! out=$(phpstan analyse "$abspath" 2>&1); then
+        echo "!!! [dev-$nn] 기계검사 불일치 — phpstan: $f"
+        printf '%s\n' "$out" | sed 's/^/    /'
+        fail=1
+      fi
+    fi
+  done < <(files_of "$dir/dev-$nn.md")
+  return "$fail"
+}
+
+# BASELINE 의 "$ {명령}" 을 재실행해 "N tests, M assertions" 주장과 대조한다.
+# phpunit 표준 형식일 때만 자동판정한다 — 실측(2026-09-22, dev-NN.md 전수 확인)으로
+# BASELINE 이 diff/git status 같은 산문형도 흔해, 그 형태까지 일반화하면 오탐이 는다.
+# 그 외 형태는 이 함수가 손대지 않고 재실행도 하지 않는다 (일반 명령 eval 은 phpunit
+# 형식이 잡힐 때만 — 범위를 넓히면 임의 명령 재실행의 부작용면이 같이 넓어진다).
+verify_baseline_counts() {
+  local dir="$1" nn="$2" root fail=0 cmd claim actual claim_n actual_n
+  root=$(worktree_of "$dir/00-spec.md")
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    claim=$(awk -v c="$cmd" '
+      index($0, "$ " c) { found=1; next }
+      found && /후[[:space:]]*[(:]/ { print; exit }
+    ' "$dir/dev-$nn.md")
+    case "$claim" in
+      *tests*assertions*) ;;
+      *) continue ;;
+    esac
+    claim_n=$(printf '%s' "$claim" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
+    [ -n "$claim_n" ] || continue
+    if [ -n "$root" ]; then
+      actual=$(cd "$root" 2>/dev/null && eval "$cmd" 2>&1)
+    else
+      actual=$(eval "$cmd" 2>&1)
+    fi
+    actual_n=$(printf '%s' "$actual" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
+    if [ "$claim_n" != "$actual_n" ]; then
+      echo "!!! [dev-$nn] 기계검사 불일치 — BASELINE 주장 vs 재실행 다름"
+      echo "    명령: $cmd"
+      echo "    주장(후): $claim_n"
+      echo "    실측: ${actual_n:-매치 없음}"
+      fail=1
+    fi
+  done < <(awk '/^BASELINE:/{b=1; next} b && /^[A-Z][A-Z-]*:/{exit} b && /^[[:space:]]*\$ /{sub(/^[[:space:]]*\$ /,""); print}' "$dir/dev-$nn.md")
+  return "$fail"
+}
+
+# dev-$nn.md 를 리뷰어에게 넘기기 전에 셸 독립 재실행으로 자기신고를 대체한다.
+# 불일치는 코드 결함이 아니라 보고 오류이므로 정규 DEV_CAP 을 소비하지 않고,
+# 별도의 작은 재시도만 소진한다 (2026-09-22 사용자 지시: "불일치시 캡소진안함").
+#
+# 재시도를 다 써도 불일치가 안 풀리면 런을 중단하지 않는다 — 이 게이트는 리뷰어를
+# 대신하는 판정자가 아니라 리뷰어 토큰을 아끼는 값싼 전처리다. 못 푼 불일치는 그대로
+# 리뷰어에게 넘긴다 — 리뷰어는 어차피 diff·BASELINE 을 자체 재실행해 판정하므로
+# (review_round 프롬프트 "worktree 의 diff 를 실제로 돌려 판정한다") 자기신고를 안
+# 믿는 건 똑같고, 못 고친 결함이면 FINDINGS 로 정규 캡을 쓰는 게 맞는 경로다.
+# 셸이 죽어야 하는 건 재보고 스텝 자체가 실패(에이전트 프로세스 오류)할 때뿐이다.
+VERIFY_RETRY_CAP=2
+verify_gate() {
+  local dir="$1" nn="$2" common="$3" try=0
+  while [ "$try" -lt "$VERIFY_RETRY_CAP" ]; do
+    if verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn"; then
+      return 0
+    fi
+    try=$((try + 1))
+    echo "=== [dev-$nn] 셸 재검증 불일치 — 재보고 요청 $try/$VERIFY_RETRY_CAP"
+    local fix_body="$common
+
+방금 반환한 $dir/dev-$nn.md 의 BASELINE·기계검사 주장이 셸의 독립 재실행과 다르다
+(run.log 의 위 로그 참조). 실제 상태를 다시 확인해 같은 파일을 갱신 반환한다 —
+새 라운드가 아니라 같은 dev-$nn.md 의 재보고다. 주장을 실측에 맞게 고치거나,
+실측이 틀렸다면 그 근거를 NOTES 에 남긴다."
+    rm -f "$dir/dev-$nn.md"
+    if ! run_step "dev-$nn" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn.md" \
+         "$(step_prompt "$AGENT_DIR/step-developer.md" "$fix_body")"; then
+      echo "!!! [dev-$nn] 재보고 실패 — 중단"
+      return 1
+    fi
+  done
+  echo "=== [dev-$nn] 셸 재검증 재시도 소진($VERIFY_RETRY_CAP) — 중단하지 않고 리뷰어에게 넘긴다"
+  return 0
+}
+
 run_loop() {
   local request="$1" run="$2" resume="${3:-}" dir="$STATE_DIR/$2"
   mkdir -p "$dir"
@@ -244,7 +376,9 @@ run_loop() {
 code.md 의 1단계(범위 확인)와 크기 게이트를 그대로 수행해 $dir/00-spec.md 를 쓴다.
 담을 것: 요청 · 성공 기준(검증 가능하게) · 테스트 범위(케이스 단위) · 비목표 ·
 커밋 type·scope · worktree 경로 · 형식 변경이면 파급면·결함면.
-worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는다.
+worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는다. 그와 별개로
+기계 판독용으로 정확히 한 줄 추가한다 (dev 반환분을 셸이 재검증할 때 쓴다):
+  WORKTREE: {절대경로}
 마지막 줄에 기계 판독용으로 정확히 한 줄을 쓴다:
   GATE: OK          (성공 기준 3개 이하 — 진행)
   GATE: TOO-LARGE   (4개 이상 — /taskflow:plan 으로 넘길 것)
@@ -310,6 +444,9 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
         echo "!!! dev-$nn 실패 — 중단"
         return 1
       fi
+      # 셸 독립 재검증 — 이번에 새로 반환된 dev-$nn.md 만 검증한다. resume 으로
+      # 기존 파일을 다시 만난 경우는 이전 프로세스에서 이미 통과했다고 간주한다
+      verify_gate "$dir" "$nn" "$common" || return 1
     fi
 
     # 리뷰어 2인 병렬 + 합본 — adv-loop 의 BROKEN 재진입도 같은 함수를 쓴다
