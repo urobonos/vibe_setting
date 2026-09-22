@@ -266,15 +266,30 @@ verify_mechanical() {
         fail=1
       fi
     fi
-    if command -v php-cs-fixer >/dev/null 2>&1; then
-      if ! out=$(php-cs-fixer fix --dry-run --diff "$abspath" 2>&1); then
+    local csfixer_bin=""
+    if [ -x "$root/vendor/bin/php-cs-fixer" ]; then
+      csfixer_bin="$root/vendor/bin/php-cs-fixer"
+    elif command -v php-cs-fixer >/dev/null 2>&1; then
+      csfixer_bin="php-cs-fixer"
+    fi
+    if [ -n "$csfixer_bin" ]; then
+      if ! out=$(cd "$root" && "$csfixer_bin" fix --dry-run --diff "$abspath" 2>&1); then
         echo "!!! [dev-$nn] 기계검사 불일치 — php-cs-fixer: $f"
         printf '%s\n' "$out" | sed 's/^/    /'
         fail=1
       fi
     fi
-    if command -v phpstan >/dev/null 2>&1; then
-      if ! out=$(phpstan analyse "$abspath" 2>&1); then
+    local phpstan_bin=""
+    if [ -x "$root/vendor/bin/phpstan" ]; then
+      phpstan_bin="$root/vendor/bin/phpstan"
+    elif command -v phpstan >/dev/null 2>&1; then
+      phpstan_bin="phpstan"
+    fi
+    if [ -n "$phpstan_bin" ]; then
+      # worktree 밖(러너 cwd)에서 돌리면 그 자리의 config(또는 config 없음)를 주워 무관한
+      # 클래스까지 "unknown class" 로 뜬다(실측 2026-09-22, run 20260922-160417) — 반드시
+      # worktree 루트에서, 그 worktree 자신의 phpstan 로 돈다.
+      if ! out=$(cd "$root" && "$phpstan_bin" analyse "$abspath" 2>&1); then
         echo "!!! [dev-$nn] 기계검사 불일치 — phpstan: $f"
         printf '%s\n' "$out" | sed 's/^/    /'
         fail=1
