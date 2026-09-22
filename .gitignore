@@ -104,3 +104,6 @@ state/
 
 # 로컬 머신 전용 python 별칭 백업 (WindowsApps 절대경로 심볼릭 링크 — 타 머신에서 무의미)
 backup/windowsapps-python-aliases-*/
+
+# vendor pool 캐시 (bin/vendor-pool.sh) — lock 해시별 실 vendor 사본, 로컬 머신 전용
+vendor-pool/
