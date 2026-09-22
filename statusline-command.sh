@@ -56,9 +56,12 @@ fi
 usage=""
 [ -n "$model_name" ] && usage="${model_name}"
 [ -n "$sid8" ] && usage="${usage:+${usage} / }${sid8}"
-# 7d/5h/ctx 3개 퍼센트를 6자리 코드로 결합 (순서: 7d·5h·ctx, 각 2자리 0-패딩 — 예: 071245)
+# 7d/5h/ctx 3개 퍼센트를 6자리 코드로 결합 (순서: 7d·5h·ctx, 각 2자리 0-패딩, 99 초과는 99 고정 — 예: 071245)
 if [ -n "$seven_day" ] || [ -n "$five_hour" ] || [ -n "$ctx" ]; then
-  pct_combined=$(printf "%02d%02d%02d" "${seven_day:-0}" "${five_hour:-0}" "${ctx:-0}")
+  sd=${seven_day:-0}; [ "$sd" -gt 99 ] 2>/dev/null && sd=99
+  fh=${five_hour:-0}; [ "$fh" -gt 99 ] 2>/dev/null && fh=99
+  cx=${ctx:-0}; [ "$cx" -gt 99 ] 2>/dev/null && cx=99
+  pct_combined=$(printf "%02d%02d%02d" "$sd" "$fh" "$cx")
   usage="${usage:+${usage} / }${pct_combined}"
 fi
 
