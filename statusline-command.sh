@@ -56,9 +56,9 @@ fi
 usage=""
 [ -n "$model_name" ] && usage="${model_name}"
 [ -n "$sid8" ] && usage="${usage:+${usage} / }${sid8}"
+[ -n "$ctx" ] && usage="${usage:+${usage} / }${ctx}%%"
 [ -n "$five_hour" ] && usage="${usage:+${usage} / }${five_hour}%%"
 [ -n "$seven_day" ] && usage="${usage:+${usage} / }${seven_day}%%"
-[ -n "$ctx" ] && usage="${usage:+${usage} / }${ctx}%%"
 
 # 첫 줄을 비워 실제 내용을 한 칸 아래로 내린다 — 출력 줄 수 = 표시 행 수
 if [ -n "$usage" ]; then
