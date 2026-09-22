@@ -7,7 +7,7 @@
     {
       "name": "hongcafe",
       "source": "./hongcafe",
-      "description": "HongCafe 도메인 — 코드(php8/mysql8) + API(api-team/api-test/api-spec-audit/sns-oauth) + 운영(prod-debug/db-migration/mirror-be-claude/dev-team) + 컨텍스트(global-context/debug-skill)"
+      "description": "HongCafe 도메인 — API(api-team/api-test) + 운영(prod-debug/db-migration/mirror-be-claude/dev-team) + 컨텍스트(global-context). 공통 백엔드 기술은 backend 플러그인"
     },
     {
       "name": "tools",
@@ -23,6 +23,11 @@
       "name": "git",
       "source": "./git",
       "description": "git 워크플로우 — worktree 정착(create 신규 분기/merge 기존 분기 ff-only) + 커밋 포맷 SSOT·push 안내(push)"
+    },
+    {
+      "name": "backend",
+      "source": "./backend",
+      "description": "백엔드 공통 기술 — 언어·DB(php8/mysql8/query-tuning) + API 계약(api-spec-audit/sns-oauth) + 디버깅(debug-skill). 특정 제품에 묶이지 않는다"
     }
   ]
 }

@@ -13,6 +13,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   미루지 않음 = ②가 안전장치). 격리 판단은 Claude 본체 (judgment 룰 → 기계 강제 불가).
 #   본 hook 은 그렇게 기록된 backlog 의 status:done → tasks/ 자동 이동만 담당한다.
 #
+# product 결정 = frontmatter → **인덱스 역조회** → 기본값 (2026-09-04 신설, `resolve_product_from_index`):
+#   이전엔 frontmatter `product:` 만 봐서, 그 필드가 없는 파일이 전부 `claude-harness` 로 갔다. 실측
+#   (2026-09-04): backlog 356건 중 `product:` 보유는 25건뿐이라 athena·infra·docs 항목이 harness 트리에
+#   한 덩어리로 쌓였다(그날 실사고 5건). **hook 은 이동 후 entry 제거를 위해 이미 전 project 인덱스를
+#   전수 스캔한다** — 이미 아는 정보를 결정에 안 쓴 것이 원인이라, 그 조회를 product 결정 앞으로 당겼다.
+#   대안이던 356건 frontmatter 백필은 채택하지 않았다: 인덱스 등재분이 123건(35%)뿐이고 나머지는 slug
+#   prefix 로 추정할 수밖에 없는데 prefix 충돌이 10종 이상이었다(`athena` 조차 harness/local-athena 로
+#   갈린다). 인덱스가 정답지이므로 사본을 356곳에 박제하는 대신 조회 시점에 읽는다.
+#
 # 경로 이관 (2026-08-06 배선 / 2026-08-07 실 데이터 이관 완료): 본문 저장처가 `memory/backlog_{slug}.md` → `docs/working/backlog/{yyyy-mm-dd}-{slug}.md`
 #   로 바뀌었다 (사용자 직접 열람 경로 통일). 신 경로만 지원(진입 게이트 기준) — 구 경로는 처리 대상 아님.
 #   frontmatter 구조(`metadata:` 하위 `status: pending|done`)는 불변.
@@ -180,6 +189,59 @@ all_index_files() {
   done < <(all_memory_dirs)
 }
 
+# ============= 헬퍼: project 디렉토리명 → product 이름 (2026-09-04) =============
+# `~/.claude/projects/{인코딩된 cwd}/` 의 디렉토리명은 원본 경로에서 `:`·`\`·`_` 가 **전부 `-` 로**
+# 치환된 뒤라 역변환이 1:1 이 아니다(`hongcafe_local_athena` → `hongcafe-local-athena`). 그래서
+# 문자열을 되돌리는 대신 **실재하는 product 디렉토리 목록과 접미사 대조**한다 — `docs/{product}` 가
+# 정답지이므로 없는 product 를 만들어낼 수 없다.
+#
+# **가장 긴 매칭을 고른다.** `C--Works-hongcafe-local-athena` 는 `*-athena`(product `athena` 가
+# 있다면)와 `*-hongcafe-local-athena` 양쪽에 매칭되므로, 짧은 쪽을 먼저 채택하면 **다른 product 로
+# 조용히 샌다**. worktree project(`…--claude-worktrees-{slug}`)는 어느 접미사에도 안 맞아 자동 배제된다.
+project_dir_to_product() {
+  local base d p norm best=""
+  base=$(basename "$1")
+  # harness home — `C:\Users\PV\.claude` 는 product 규칙상 `claude-harness` (product-resolver 와 동일)
+  [ "$base" = "C--Users-PV--claude" ] && { echo "claude-harness"; return 0; }
+  for d in "$HOME/.claude/docs"/*/; do
+    [ -d "$d" ] || continue
+    p=$(basename "$d")
+    # 공용 SSOT 디렉토리는 product 가 아니다 (아래 예약 이름 차단과 같은 목록)
+    case "$p" in working|indexing|references|hooks|scripts|share|source_tree|참조문서|schema) continue ;; esac
+    norm=$(printf '%s' "$p" | tr '_' '-')
+    case "$base" in
+      *-"$norm") [ "${#p}" -gt "${#best}" ] && best="$p" ;;
+    esac
+  done
+  [ -n "$best" ] || return 1
+  echo "$best"
+}
+
+# ============= 헬퍼: slug → product (전 project 인덱스 역조회, 2026-09-04) =============
+# **hook 은 이미 이 인덱스를 전수 스캔한다** — 이동 후 entry 제거(`:810` 부근)가 그것이다. 그런데
+# product 결정은 그보다 앞이라 frontmatter 만 보고, 없으면 전부 `claude-harness` 로 갔다. 실측
+# (2026-09-04): backlog 356건 중 `product:` 보유는 25건뿐이라 athena·infra·docs 항목이 한 덩어리로
+# harness 트리에 쌓였다. 이미 아는 정보를 결정에 쓰지 않은 것이 원인이다.
+#
+# **유일하게 매칭될 때만 채택한다.** 같은 slug 가 두 project 인덱스에 있으면 어느 쪽 소유인지
+# 판정 근거가 없으므로 실패로 반환해 기본값(`claude-harness`)에 맡긴다 — 틀린 곳으로 옮기는 것보다
+# 기본값에 모이는 편이 회수가 쉽다.
+resolve_product_from_index() {
+  local slug="$1" f proj hits uniq_n
+  [ -n "$slug" ] || return 1
+  hits=$(
+    while IFS= read -r f; do
+      # 날짜 prefix 는 형제 entry(같은 slug 다른 날짜) 도 같은 project 라 무관 — slug 로만 건다.
+      grep -qE "backlog[_/][0-9]{4}-[0-9]{2}-[0-9]{2}-${slug}(--[a-z0-9_-]+)?\.md" "$f" 2>/dev/null || continue
+      proj=$(dirname "$(dirname "$f")")   # …/projects/{X}/memory/MEMORY.md → …/projects/{X}
+      echo "$proj"
+    done < <(all_index_files) | sort -u
+  )
+  uniq_n=$(printf '%s' "$hits" | grep -c . )
+  [ "${uniq_n:-0}" -eq 1 ] || return 1
+  project_dir_to_product "$(printf '%s' "$hits" | head -1)"
+}
+
 # ============= 헬퍼: 구 경로(memory/backlog_*.md) 잔존 안내 =============
 # 신 경로만 지원(설계 결정) — 구 경로 파일은 처리 대상이 아니다. 잔존분이 별도 step 으로
 # 이관될 때까지 공백이 생기므로, 잔존 건수만 stderr 1줄로 안내한다 (개별 파일 나열은 노이즈라 금지).
@@ -280,6 +342,15 @@ except Exception:
     print("claude-harness")
 PYEOF
 )
+  # frontmatter 에 `product:` 가 없으면(= 위 python 이 기본값을 반환) 전 project 인덱스를 역조회한다
+  # (2026-09-04). python 은 미기재 시에도 `claude-harness` 를 출력하므로 그 값도 미확정으로 취급한다 —
+  # 진짜 harness 항목이면 인덱스도 harness project 를 가리켜 결과가 같다.
+  if [ -z "$product" ] || [ "$product" = "claude-harness" ]; then
+    local idx_product
+    if idx_product=$(resolve_product_from_index "$slug") && [ -n "$idx_product" ]; then
+      product="$idx_product"
+    fi
+  fi
   [ -z "$product" ] && product="claude-harness"
 
   # 비-product 예약 이름 차단(2026-08-07 콜드리뷰 M7, R2 M3 재정정 — 화이트리스트보다 먼저 검사) —

@@ -17,7 +17,8 @@ fi
 CWD="."; [[ "$STDIN_DATA" =~ \"cwd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && CWD="${BASH_REMATCH[1]}"
 
 # ===== 1. 문서 체크리스트 검증 — doc-unified-check.sh V4 (v_checklist_count) 가 수행 =====
-# 체크리스트 개수 검증(analyze/unified≥30, plan/result≥20)은 doc-unified-check.sh SSOT.
+# 체크리스트 개수 검증(전 단계 하한 5 — 존재 강제, 상한 없음)은 doc-unified-check.sh SSOT.
+# (2026-09-04 완화: 구 analyze/unified≥30·plan/result≥20 → 하한 5. 사유는 V4 주석)
 # (구 checklist-count-check.sh 는 doc-unified 로 통합되어 2026-07-14 삭제됨)
 
 # ===== 2. 테스트 동반 확인 (warning) =====

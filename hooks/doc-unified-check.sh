@@ -360,26 +360,24 @@ v_checklist_count() {
   STAGE=$(echo "$BN" | grep -oE '\-(analyze|plan|result|unified)\.md$' | sed -E 's/^-//;s/\.md$//')
   [ -z "$STAGE" ] && return 0
 
-  local MIN
-  case "$STAGE" in
-    analyze) MIN=30 ;;
-    plan)    MIN=20 ;;
-    result)  MIN=20 ;;
-    unified) MIN=30 ;;
-    *)       return 0 ;;
-  esac
+  # 임계 = "존재 강제" 하한이지 목표치가 아니다 (2026-09-04, 구 analyze/unified 30·plan/result 20).
+  # 실측 근거: tasks/ unified 667건 중앙값 40 인데 구 임계 미달이 226건(34%) — 그 미달분은 품질이
+  # 낮은 게 아니라 작은 작업이었다. 고정 하한이 작업 크기와 무관하게 걸려 형식 채우기(padding)를
+  # 부르는 쪽이 더 큰 비용이라 하한만 남기고 목표치는 권고로 내린다. 상한은 없다.
+  local MIN=5
   local COUNT
   COUNT=$(grep -cE '^[[:space:]]*-[[:space:]]+\[[[:space:]xX]\]' <<< "$CONTENT"); COUNT=${COUNT:-0}
   [ "$COUNT" -ge "$MIN" ] && return 0
 
   if [ -n "$CREATED" ] && [[ "$CREATED" < "2026-05-07" ]]; then
-    add_warn "[CHECKLIST hint — 역소급 면제 ${CREATED}] $FP: 체크리스트 ${COUNT}개 (필요: ${MIN}개)
-                  task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20."
+    add_warn "[CHECKLIST hint — 역소급 면제 ${CREATED}] $FP: 체크리스트 ${COUNT}개 (하한: ${MIN}개)
+                  task-docs §TD-4 — 하한 ${MIN}개(존재 강제). 개수 상한은 없다 — 작업이 요구하는 만큼 쓴다."
     return 0
   fi
-  add_block "[BLOCKED] $FP: 체크리스트 ${COUNT}개 부족 (필요: ${MIN}개)
-          task-docs §TD-4 — analyze≥30 / plan≥20 / result≥20 / unified≥30.
-          references/{analyze,plan,result,unified}-template.md SSOT 골격 prepend 후 보강하세요."
+  add_block "[BLOCKED] $FP: 체크리스트 ${COUNT}개 — 하한 ${MIN}개 미달
+          task-docs §TD-4 — 하한 ${MIN}개는 '검증 항목이 아예 없는 문서' 만 막는다.
+          개수 상한은 없다: 작업이 요구하는 만큼 쓰되, 숫자를 채우려 항목을 늘리지 않는다.
+          references/{analyze,plan,result,unified}-template.md 골격 참고."
 }
 
 # ══════════════════════════════════════════════════════════════
