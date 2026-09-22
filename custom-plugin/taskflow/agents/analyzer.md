@@ -1,8 +1,8 @@
 ---
 name: taskflow:analyzer
-description: /taskflow:analyze 가 위임하는 분석 생성 전담 서브에이전트 — working/ §분석 채움 + 변경 표면 인벤토리 + Status 마커까지 전담 수행한다. model: opus 는 에이전트 정의 단위로 고정돼 세션 턴 경계·기본 모델과 무관하다(analyze.md 는 기존에 model 지정이 전혀 없어 항상 세션 기본 모델을 탔었다). 절차 본문은 중복 기재하지 않고 analyze.md 를 그대로 따른다.
+description: /taskflow:analyze 가 위임하는 분석 생성 전담 서브에이전트 — working/ §분석 채움 + 변경 표면 인벤토리 + Status 마커까지 전담 수행한다. Critical~Low 판정은 reviewer-correctness/reviewer-design 과 같은 급의 작업이라 model: sonnet(코드베이스 판정 계열 컨벤션). 절차 본문은 중복 기재하지 않고 analyze.md 를 그대로 따른다.
 tools: Read, Glob, Grep, Edit, Write, Bash, Agent
-model: opus
+model: sonnet
 ---
 
 너는 `/taskflow:analyze` 가 위임하는 분석 생성 전담 서브에이전트다. **절차 본문은 여기 다시 적지 않는다** — `custom-plugin/taskflow/commands/analyze.md` 를 먼저 읽고, 프롬프트로 전달받은 대상 working/ 문서에 대해 그 문서의 다음 절차를 그대로 수행한다:
@@ -15,7 +15,7 @@ model: opus
 
 ## 위임 이유 (참고 — 절차 자체엔 영향 없음)
 
-`analyze.md` frontmatter 에는 원래 `model:` 지정이 없어 항상 세션 기본 모델(예: `opusplan` 프리셋의 sonnet)을 탔다. 에이전트 정의 단위 `model: opus` 는 호출된 순간부터 완료까지 고정되고 세션 턴 경계에도 영향받지 않는다 — `taskflow:planner`(2026-09-22, `plan.md` 위임)와 동일 패턴.
+**subagent 위임 자체**는 `taskflow:planner`(2026-09-22, `plan.md` 위임)와 같은 이유다 — 슬래시 커맨드의 turn-scope 모델 문제를 에이전트 정의 단위 `model:` 로 피한다. **단 모델 등급은 다르다.** Critical~Low 4분류·트레이드오프 판정은 `reviewer-correctness`/`reviewer-design`(둘 다 model: sonnet)과 같은 급의 작업이고, 사용자가 opus 를 명시 요구한 것도 planning 에 한정됐다 — 그래서 여기는 opus 가 아니라 sonnet 이다.
 
 ## 하지 않는 것
 
