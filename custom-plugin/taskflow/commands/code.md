@@ -20,6 +20,9 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
 1. 범위 확인 : 요청 → 대상 파일 · 성공 기준 · 테스트 범위 · 비목표 · 커밋 type·scope 확정
               성공 기준 4개 이상이면 여기서 정지 → /taskflow:plan 안내
 2. worktree  : git -C {repo} worktree add ~/.claude/worktrees/{sid8}-{slug} -b wip/{sid8}-{slug}
+              composer.lock 있는 PHP 레포면: bash ~/.claude/bin/vendor-pool.sh ensure {worktree 절대경로}
+              (신규 worktree 는 vendor 없이 시작 — pool 있으면 하드링크 클론 수 초, 없으면
+              최초 1회 composer install 후 pool 화. 없는 PHP 레포는 자동 skip)
 3. 개발      : subagent_type: taskflow:step-developer
               (요청 + 성공 기준 + 테스트 범위 + 비목표 + worktree 경로)
               → 반환 BASELINE 전·후 명령 동일성 교차 확인 (§"기준선을 교차 확인한다")
@@ -45,6 +48,7 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
 | **리뷰어 spawn 규약** (구성 2인·입력 조립·판정축 분담·반환 합본) | `custom-plugin/taskflow/commands/watch.md` §"코드 축 — 변경분 리뷰" |
 | 개발 Agent 운영 (warm 유지·`isolation` 금지·변경 실재 확인) | `custom-plugin/taskflow/commands/tick.md` §"step 개발" |
 | worktree 생성·정착 절차 | `custom-plugin/git/commands/{create,merge}.md` |
+| **신규 worktree vendor 채우기** (`ensure` — pool 하드링크 클론 · 없으면 composer install 후 pool 화) | `bin/vendor-pool.sh` |
 
 ## 대조 기준 — 1단계를 건너뛰지 않는다
 
@@ -318,6 +322,7 @@ fix(Payment): 코인 차감 실패 시 잔액 원복 누락 수정
 
 ## Changelog
 
+- 2026-09-22: **2단계(worktree)에 vendor pool 연동 추가.** 신규 worktree 는 vendor 가 gitignore 대상이라 매번 없이 시작해 여기서 매 run 이 걸렸다 — `bin/vendor-pool.sh ensure` 로 pool 있으면 하드링크 클론(수 초), 없으면 최초 1회 composer install 후 pool 화(다음부턴 재사용). PHP 레포 아니면 자동 skip. `bin/vendor-pool.sh`(build/convert/status)·`vendor-lock-stamp.sh` 는 그 전까지 미커밋 수동 스크립트였음 — 이번에 `ensure` 추가와 함께 최초 커밋
 - 2026-09-22: **리뷰어 판정 재검증(`verify_rev_gate`) 추가 — dev측 대칭.** 리뷰어가 인용하는 `` `명령` → OK (N tests, M assertions) `` idiom 을 셸이 직접 재실행해 대조한다. "무변경"·"바이트 일치" 서술은 명령 실측 범위와 주장 범위가 어긋나는 사례가 확인돼(실측: rev 문서 406건) 자동대조에서 뺐고, 이를 위해 리뷰어 계약에 신규 필드를 추가하지 않았다 — 이 idiom 1종만 다룬다. 불일치는 해당 역할(correctness/design)만 개별 재검토 요청(2회), 소진해도 합본을 막지 않는다.
 - 2026-09-22: **`code-loop.sh` 자동 러너의 기준선·기계검사 대조가 문자열 비교에서 독립 재실행으로 승격.** 여태 "같은 명령인가" 만 보고 실제 출력·통과 여부는 리뷰어가(비싸게) 재확인했다. 이제 셸이 dev 반환 직후·리뷰 전에 직접 재실행해 자기신고를 1차로 대체한다(`bin/code-loop.sh` `verify_mechanical`·`verify_baseline_counts`·`verify_gate`). 불일치 재시도는 정규 DEV_CAP 을 쓰지 않고, 재시도(2회) 소진 후에도 런을 막지 않고 리뷰어에게 넘긴다 — 리뷰어 대체가 아니라 리뷰어 토큰을 아끼는 전처리이기 때문이다. `BASELINE` 이 phpunit 표준 형식이 아닌 run(diff·git status 류)은 자동대조 대상 밖이고 기존대로 리뷰어가 판정한다(실측: `state/code-loop` 전수 확인 결과 비-phpunit 형식이 드물지 않다). 상세 = `step-developer.md` §"셸이 독립 재검증한다"
 - 2026-09-10: **§"기계 검사를 앞으로 당긴다" 신설 + 4-ter 를 no-op 기본으로.** 4-ter 는 "린터 --fix 1회 (없으면 건너뜀)" 이었는데 실측 레포에 린터가 설치돼 있지 않아 **항상 건너뛰고 있었다** — 기계가 처리하기로 한 `Low` 축이 매 라운드 리뷰어·개발자 손을 거치고 있었다. 검사를 개발 Agent 반환 직전으로 당기면 그 지적이 **생성 자체가 안 된다**. 도구 없는 레포는 no-op 이고 4-ter 가 원래대로 동작한다
