@@ -1,6 +1,7 @@
 ---
 description: 계획 단계 진입 — working/ §계획 채움 + step-01~nn 평면 파일 분해 생성 + 계획 재검토 1회 + 전체 점검. Status: Plan Complete 부착.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent
+model: opus
 argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 ---
 
