@@ -26,7 +26,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 | ③ **step 분해 + 평면 파일 생성** | WBS 를 step-01~nn 순차 단위로 분해. 각 step 을 `working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}-step-NN-{slug}.md` **평면 파일**로 Write. unified §계획에 **Step 분해 인덱스 표** 추가 | step 파일 N개 + 인덱스 표 |
 | ④ **계획 재검토 1회 (Plan Self-Review)** | 생성한 step 분해의 정합성을 1회 자체 검토 (누락 / 순서 / 의존 / 원자성 / 중복) | 재검토 통과 또는 보강 |
 | ⑤ **전체 계획 점검 (Plan Audit)** | 생성된 전체 step 집합을 통합 점검 (의존 그래프 무순환 / DoD 명확성 / 인덱스↔파일 정합 / 커버리지) | 점검 표 기록 |
-| ⑥ Status 마커 부착 | **기존 `Status:` 라인을 `Plan Complete` 로 덮어쓴다** — 문서 전체에 Status 는 1개. 라인 추가 금지 (부재 시에만 파일 끝에 1줄 신설) | 다음 단계 = `/taskflow:execute` 진입 신호 |
+| ⑥ Status 마커 부착 | **기존 `Status:` 라인을 `Plan Complete` 로 덮어쓴다** — 문서 전체에 Status 는 1개. 라인 추가 금지 (부재 시에만 파일 끝에 1줄 신설) + **계획 생성 모델 기록** (아래 §"종료 마커") | 다음 단계 = `/taskflow:execute` 진입 신호 |
 
 > **비필수 사이드이펙트 백로그 격리:** §계획 수립 중 발견한 (① 필수요소 아님 + ② 문제·버그 아님 + ③ 사이드이펙트급) 3조건 충족 항목은 step·WBS 로 끌어올리지 말고 backlog 메모리에만 기록. 하나라도 불충족 = 정상 계획 반영. SSOT = CLAUDE.md §4.5 "비필수 사이드이펙트 백로그 격리".
 
@@ -294,9 +294,12 @@ step 분해 직후 **1회** 자체 재검토. task-docs SKILL.md Part 6 "3-Round
 
 ```markdown
 Status: Plan Complete
+계획 생성 모델: {self-report — 예: Opus 5}
 ```
 
 > `Status: Plan Complete` 부착 시 사용자에게 `/taskflow:execute` 진입 신호. 부착하지 않으면 `/taskflow:execute` 진입해도 §계획 미완료 상태로 간주.
+
+> **`계획 생성 모델` 라인 (2026-09-22~, 필수).** 본 커맨드는 frontmatter `model: opus` 로 고정돼 있으나, 그 지정은 **턴 단위**로만 유효하다 — 공식 문서(`code.claude.com/docs/en/slash-commands`): "The override applies for the rest of the current turn... The session model resumes when you send your next prompt." §계획 진행 중 §3 Checkpoint 로 사용자 승인을 기다리며 턴이 끊기면, 재개 후 이어지는 부분은 새 턴이라 세션 기본 모델(예: `opusplan` 프리셋의 sonnet)로 조용히 되돌아갈 수 있다. 이 라인은 ⑥ 마커 부착 시점에 **실제 실행 중인 모델을 self-report** 해, 되돌림이 있었는지 사후 확인 가능하게 한다. 값은 그 시점 자기인식(예: "Sonnet 5")을 그대로 적는다 — 셸 검증 대상이 아니다(모델 자기인식엔 셸 재실행 대조 수단이 없다).
 
 ## 호출 예
 
@@ -346,6 +349,7 @@ Status: Plan Complete
 
 ## Changelog
 
+- 2026-09-22: ⑥ 마커에 `계획 생성 모델` self-report 라인 추가 — `model: opus` frontmatter 지정이 턴 단위로만 유효함(공식 문서 확인)에 따라, §3 승인 대기로 턴이 끊긴 뒤 세션 기본 모델로 되돌아갔는지 사후 확인용
 - 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 체크리스트 임계 `≥ 30` → 존재 강제(hook SSOT, 2026-09-04 에 5 로 인하된 것을 이 계열 4개가 놓쳤다) · V1 차단 강도 정정(경고다 — "tasks/ 이동 후" 는 차단이 아니라 강등 조건) · 실제로 차단하는 V5(e2e 5점)·V2(참조 출처) 행 추가. 값을 복사해 둔 것이 원인이라 숫자를 지우고 포인터만 남긴다
 - 2026-08-05: §파급면·§결함면 발동 축을 **골격 → 변경 성격**으로 이동 (경량 골격에도 필수화, §"파급면·결함면 — 골격 무관 공통" 신설). 근거 = 도입 후 실측 step 23개 중 파급면 보유 8개, 누락 쪽에 룰 근거였던 `image-upload` step-05·06 이 포함(경량 골격이라 섹션 부재) → 재검토 ④·Audit ⑤ 검사식이 공회전. 동반: 결함면에 **회귀·동시성** 2축 추가 (`cold-reviewer` §1 과 1:1) + DoD **검증 명령 행** 필수화 (`step-developer` `TESTS:` ↔ 리뷰어 6축 대조 기준) + Audit ⑤ 2행 추가
 - 2026-08-03: step `## 결함면` 추가 (경계값·예외/트랜잭션·타입계약, 해당 시) + 재검토 ④ 결함 체크. 근거 = 반려 지적 208건 중 이 3축이 75건이고 셋 다 `step-developer` 정의에 대응 항목이 없던 유일한 축. 전건 박제 안 함 (반려 2위 = 문서·기록 불일치 58건)
