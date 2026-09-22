@@ -1,6 +1,7 @@
 ---
 description: 분석 단계 진입 — working/ 단일 통합 문서 §분석 섹션 채움 (관점별 요약 / Critical~Low 4분류 / 우선순위 권고 / 타당성 검토 / 장기 영향). task-docs SKILL.md thin wrapper
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent
+model: opus
 argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 ---
 
@@ -9,6 +10,12 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 ## 인자
 
 - `$ARGUMENTS` = (선택) 작업명 kebab-case. 생략 시 `~/.claude/docs/working/YYYYMMDD/` 가장 최근 파일 자동 식별.
+
+## 실행 방식 — subagent 위임 (2026-09-22~)
+
+**아래 §"참조 범위"~§"종료 마커" 전체 절차는 main 세션이 직접 수행하지 않는다.** main 세션은 인자를 해석해 대상 working/ 문서 경로만 확정한 뒤(로컬 파일 조회), `Agent` 도구로 `taskflow:analyzer` 서브에이전트를 호출해 나머지 전부를 위임한다. 서브에이전트가 돌아오면 그 출력(참조범위 표 / Critical~Low 표 / 변경 표면 인벤토리 / T2 판정 / 최종 Status 라인 / §3 매칭 목록)을 그대로 화면에 낸다. **T1(gate=2) 판정 + `/taskflow:plan` 전이 여부(§"단계 전이")는 main 세션이 직접 수행한다** — 세션 상태·다음 슬래시 호출은 위임 범위 밖이다.
+
+**위임 이유:** 본 커맨드는 원래 frontmatter `model:` 지정이 없어 항상 세션 기본 모델(예: `opusplan` 프리셋의 sonnet)을 탔다. `taskflow:planner`(`plan.md`, 2026-09-22)와 동일 이유로 — 에이전트 정의 단위 `model:` 은 호출 전체에 고정돼 세션 턴 경계와 무관하다 — 분석 생성 본체를 `taskflow:analyzer` 에이전트로 옮겼다. 절차 SSOT = 본 파일(아래 섹션들), 위임 절차 자체의 SSOT = `custom-plugin/taskflow/agents/analyzer.md`.
 
 ## 참조 범위 (사전 전수 조사, 필수)
 
@@ -122,6 +129,7 @@ Status: Analysis Complete
 | **본 파일 §"변경 표면 인벤토리"** | **plan 원재료 4종 SSOT** — 소비처 = `plan.md` §"파급면·결함면 — 골격 무관 공통" + DoD 검증 행 |
 | **본 파일 §"종료 마커"** | **`Status: Analysis Complete` 부착 규약 SSOT** — 소비처 = `tick.md` 2단계 분기 / `working-scan.sh` 파싱 / `report-work` 진행률 |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"결정 escalation ladder" | 역방향 분류 판별식 SSOT — 본 슬래시의 짝 (execute 중 결정 막힘 시 L1 재진입 대상) |
+| **`~/.claude/custom-plugin/taskflow/agents/analyzer.md`** | **분석 생성 본체 위임 대상 (2026-09-22~) — 절차는 본 파일이 SSOT, 에이전트 정의는 model: opus 고정 + 프롬프트 계약(T2 보고까지, T1·전이 판단은 main 세션 소관)만** |
 
 ## §3 Checkpoint 우선 적용
 
@@ -142,6 +150,7 @@ Status: Analysis Complete
 
 ## Changelog
 
+- 2026-09-22: **분석 생성 본체를 `taskflow:analyzer` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/analyzer.md`, model: opus 고정) + frontmatter `model: opus` 추가(main 세션 몫인 인자 해석·위임·relay 용, belt-and-suspenders). 근거 = 본 커맨드가 원래 model 지정이 없어 항상 세션 기본 모델을 탔다는 점 — `plan.md`→`taskflow:planner` 위임(같은 날)과 동일 이유. T1(gate=2)·`/taskflow:plan` 전이 판단은 main 세션에 남긴다(세션 상태·다음 슬래시 호출은 위임 범위 밖)
 - 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 세 갈래였다 — ① 체크리스트 임계를 `≥ 30` 으로 복사해 뒀는데 hook 은 2026-09-04 에 5 로 내렸다(`unified-template.md`·`task-docs/SKILL.md` 는 그때 같이 고쳐졌고 이 계열 4개만 남았다) ② V1 차단 강도가 정반대였다 — "tasks/ 이동 후 exit 2" 로 적었으나 그 조건이 바로 **강등** 조건이고 `v_template_guard` 는 `add_block` 0건이다 ③ 실제로 차단하는 V5(e2e 5점)·V2(참조 출처)가 표에 아예 없었다. **값과 하드 줄번호를 지우고 hook 포인터만 남긴다** — 복사해 둔 값이 이 drift 를 만들었다 (CLAUDE.md §4.4)
 - 2026-08-05: `## 변경 표면 인벤토리` 신설 (호출부·read 경로 / 회귀 기준선 / 재사용 자산 / 테스트 커버 4종, 수정 대상 ≥1 조건부) + 동작 표 ③-2 행. 근거 = plan 의 §파급면·§결함면·DoD 검증이 심볼 단위 실측을 전제하는데 analyze 가 판정만 넘겨 plan 이 추측하거나 `해당 없음` 으로 비우던 경로 (`plan.md` 2026-08-05 정정과 짝)
 - 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + V4 임계를 등급 스케일로 적던 오기 정정 (당시 값 = 문서 총합 ≥ 30 평면값 — **그 값은 2026-09-04 에 인하됐다**. 현행 하한은 hook 이 SSOT) + 하드 줄번호 → 함수명
