@@ -11,6 +11,12 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 - `$ARGUMENTS` = (선택) 작업명 kebab-case. 생략 시 가장 최근 working/ 파일 자동 식별.
 
+## 실행 방식 — subagent 위임 (2026-09-22~)
+
+**아래 §"참조 범위"~§"종료 마커" 전체 절차는 main 세션이 직접 수행하지 않는다.** main 세션은 인자를 해석해 대상 working/ 문서 경로만 확정한 뒤(로컬 파일 조회라 opus 불필요), `Agent` 도구로 `taskflow:planner` 서브에이전트를 호출해 나머지 전부를 위임한다. 서브에이전트가 돌아오면 그 출력(참조범위 표 / 생성 파일 목록 / Plan Audit 표 / 최종 Status 라인 / Pending 승인대기 목록)을 그대로 화면에 낸다 — main 세션이 재가공하지 않는다.
+
+**위임 이유:** frontmatter `model: opus` 는 **현재 턴에만** 유효하다(공식 문서 `code.claude.com/docs/en/slash-commands`: 다음 프롬프트부터 세션 기본 모델로 복귀). §3 Checkpoint 로 계획 도중 턴이 끊기면 이어지는 부분이 조용히 세션 기본 모델(예: `opusplan` 프리셋의 sonnet)로 되돌아갈 수 있는데, 에이전트 정의의 `model:` 은 호출 단위로 고정돼 이 위험이 없다 — 그래서 계획 생성 본체를 `taskflow:planner` 에이전트로 옮겼다. 절차 SSOT = 본 파일(아래 섹션들), 위임 절차 자체의 SSOT = `custom-plugin/taskflow/agents/planner.md`.
+
 ## 참조 범위 (사전 전수 조사, 필수)
 
 진입 즉시 CLAUDE.md §4.3 "참조 범위 전수 조사" 절차(3 출처 전수 조사)를 수행하고, §4.4 위치 표기로 참조 결과 표를 화면 출력한 뒤 다음 단계로 진입한다. 3 출처 표·가시화 표 양식·`해당 없음` 행 생략 금지·직전 단계 sweep 재사용 규칙 = 모두 §4.3 SSOT.
@@ -299,7 +305,7 @@ Status: Plan Complete
 
 > `Status: Plan Complete` 부착 시 사용자에게 `/taskflow:execute` 진입 신호. 부착하지 않으면 `/taskflow:execute` 진입해도 §계획 미완료 상태로 간주.
 
-> **`계획 생성 모델` 라인 (2026-09-22~, 필수).** 본 커맨드는 frontmatter `model: opus` 로 고정돼 있으나, 그 지정은 **턴 단위**로만 유효하다 — 공식 문서(`code.claude.com/docs/en/slash-commands`): "The override applies for the rest of the current turn... The session model resumes when you send your next prompt." §계획 진행 중 §3 Checkpoint 로 사용자 승인을 기다리며 턴이 끊기면, 재개 후 이어지는 부분은 새 턴이라 세션 기본 모델(예: `opusplan` 프리셋의 sonnet)로 조용히 되돌아갈 수 있다. 이 라인은 ⑥ 마커 부착 시점에 **실제 실행 중인 모델을 self-report** 해, 되돌림이 있었는지 사후 확인 가능하게 한다. 값은 그 시점 자기인식(예: "Sonnet 5")을 그대로 적는다 — 셸 검증 대상이 아니다(모델 자기인식엔 셸 재실행 대조 수단이 없다).
+> **`계획 생성 모델` 라인 (2026-09-22~, 필수).** ⑥ 을 수행하는 주체는 위 §"실행 방식" 에 따라 `taskflow:planner` 서브에이전트다 — 그 에이전트 정의의 `model: opus` 는 호출 단위로 고정돼 슬래시 커맨드 frontmatter 와 달리 턴 경계에 영향받지 않는다(공식 문서 `code.claude.com/docs/en/slash-commands`: 커맨드 frontmatter 는 "현재 턴에만" 유효, 다음 프롬프트부터 세션 기본 모델로 복귀 — 이 위험을 피하려고 본체를 에이전트로 옮긴 것이 위임의 이유다). 이 라인은 그럼에도 **planner 자신의 실제 실행 모델을 self-report** 한다 — 조직 `availableModels` allowlist 가 opus 를 거부해 세션 기본 모델로 조용히 대체되는 경우(공식 문서에 명시된 별개 엣지케이스)까지는 에이전트 정의만으론 잡히지 않기 때문이다. 값은 planner 자기인식을 그대로 적는다 — 셸 검증 대상이 아니다.
 
 ## 호출 예
 
@@ -318,6 +324,7 @@ Status: Plan Complete
 | **본 파일 §"step 파일 양식"** | step 분해 평면 파일·인덱스 표 양식 SSOT |
 | `~/.claude/hooks/doc-unified-check.sh` V1 `v_template_guard` → `*unified*.md` 분기 | unified §계획 헤더 강제 |
 | `~/.claude/hooks/working-lifecycle.sh` | step 평면 파일 → steps/ 분배 이동 |
+| **`~/.claude/custom-plugin/taskflow/agents/planner.md`** | **계획 생성 본체 위임 대상 (2026-09-22~) — 절차는 본 파일이 SSOT, 에이전트 정의는 model: opus 고정 + 프롬프트 계약만** |
 
 ## §3 Checkpoint 우선 적용
 
@@ -349,6 +356,7 @@ Status: Plan Complete
 
 ## Changelog
 
+- 2026-09-22: **계획 생성 본체를 `taskflow:planner` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/planner.md`, model: opus 고정). main 세션은 인자 해석 후 위임·결과 relay 만 담당. 근거 = 슬래시 frontmatter `model:` 이 턴 단위로만 유효해 §3 승인 대기로 턴이 끊기면 세션 기본 모델로 되돌아갈 수 있다는 점(공식 문서 확인) — 에이전트 정의 단위 `model:` 은 그 위험이 없다
 - 2026-09-22: ⑥ 마커에 `계획 생성 모델` self-report 라인 추가 — `model: opus` frontmatter 지정이 턴 단위로만 유효함(공식 문서 확인)에 따라, §3 승인 대기로 턴이 끊긴 뒤 세션 기본 모델로 되돌아갔는지 사후 확인용
 - 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 체크리스트 임계 `≥ 30` → 존재 강제(hook SSOT, 2026-09-04 에 5 로 인하된 것을 이 계열 4개가 놓쳤다) · V1 차단 강도 정정(경고다 — "tasks/ 이동 후" 는 차단이 아니라 강등 조건) · 실제로 차단하는 V5(e2e 5점)·V2(참조 출처) 행 추가. 값을 복사해 둔 것이 원인이라 숫자를 지우고 포인터만 남긴다
 - 2026-08-05: §파급면·§결함면 발동 축을 **골격 → 변경 성격**으로 이동 (경량 골격에도 필수화, §"파급면·결함면 — 골격 무관 공통" 신설). 근거 = 도입 후 실측 step 23개 중 파급면 보유 8개, 누락 쪽에 룰 근거였던 `image-upload` step-05·06 이 포함(경량 골격이라 섹션 부재) → 재검토 ④·Audit ⑤ 검사식이 공회전. 동반: 결함면에 **회귀·동시성** 2축 추가 (`cold-reviewer` §1 과 1:1) + DoD **검증 명령 행** 필수화 (`step-developer` `TESTS:` ↔ 리뷰어 6축 대조 기준) + Audit ⑤ 2행 추가
