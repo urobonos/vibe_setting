@@ -9,8 +9,8 @@
 #   원본까지 지운다(실측 재현, 과거 vendor 소실 사고의 실제 메커니즘). 하드링크는
 #   그 경로에서 원본이 살아남는다(실측 확인) — 그래서 클론 방식을 쓴다.
 #
-# pool 위치: ~/.claude/vendor-pool/{lock-sha256 앞 16자}/
-#   디렉토리명은 표시용 프리픽스일 뿐, 정합 판정은 vendor/.lock-sha 의 전체 sha256 이 한다.
+# pool 위치: ~/.claude/vendor-pool/{pool_key 16자}/ — lock 해시 + composer.json autoload 섹션 해시
+#   (2026-09-23~, 그 전엔 lock 해시만). lock 정합 판정은 여전히 vendor/.lock-sha 의 전체 sha256 이 한다.
 #
 # 사용법:
 #   bash ~/.claude/bin/vendor-pool.sh build <vendor 원본 디렉토리>
@@ -39,6 +39,16 @@ STAMP_SH="${HARNESS_ROOT}/bin/vendor-lock-stamp.sh"
 MODE="$1"
 
 lock_sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
+# pool 디렉토리 키 = lock 해시 + composer.json autoload·autoload-dev 섹션.
+# lock 만 키로 쓰면 lock 불변 + autoload 매핑 변경(2026-09-23 develop 54695f7c)을
+# 같은 pool 로 보고 옛 autoload 를 계속 클론한다. .lock-sha stamp 는 lock 해시 그대로 둔다
+# (vendor-lock-stamp.sh 계약 유지) — 이 키는 디렉토리 선택에만 쓴다.
+pool_key() {
+    local root="$1" autoload
+    autoload=$(php -r '$j = json_decode(file_get_contents($argv[1]), true);
+        echo json_encode([$j["autoload"] ?? null, $j["autoload-dev"] ?? null]);' "$root/composer.json" 2>/dev/null)
+    printf '%s\n%s' "$(lock_sha "$root/composer.lock")" "$autoload" | sha256sum | cut -c1-16
+}
 to_winpath() { cygpath -w "$1" 2>/dev/null || echo "$1"; }
 
 cmd_build() {
@@ -47,8 +57,7 @@ cmd_build() {
     local lock="$(dirname "$vdir")/composer.lock"
     [ -f "$lock" ] || { echo "composer.lock 없음: $lock" >&2; exit 1; }
 
-    local sha; sha=$(lock_sha "$lock")
-    local pool="${POOL_ROOT}/${sha:0:16}"
+    local pool="${POOL_ROOT}/$(pool_key "$(dirname "$vdir")")"
 
     if [ -d "$pool" ]; then
         echo "pool 이미 존재: $pool (스킵)"
@@ -76,7 +85,7 @@ cmd_convert() {
     fi
 
     local sha; sha=$(lock_sha "$lock")
-    local pool="${POOL_ROOT}/${sha:0:16}"
+    local pool="${POOL_ROOT}/$(pool_key "$wt")"
     [ -d "$pool" ] || { echo "pool 없음 — 먼저 build 필요: $pool" >&2; exit 1; }
 
     local pool_stamp; pool_stamp=$(cat "$pool/.lock-sha" 2>/dev/null | tr -d '[:space:]')
@@ -135,8 +144,8 @@ cmd_ensure() {
     fi
 
     local sha; sha=$(lock_sha "$lock")
-    local pool="${POOL_ROOT}/${sha:0:16}"
-    if [ -d "$pool" ] && [ "$(cat "$pool/.lock-sha" 2>/dev/null | tr -d '[:space:]')" = "$sha" ]; then
+    local pool="${POOL_ROOT}/$(pool_key "$wt")"
+    if [ -d "$pool" ] &&[ "$(cat "$pool/.lock-sha" 2>/dev/null | tr -d '[:space:]')" = "$sha" ]; then
         echo "pool 적중 — 하드링크 클론: $pool -> $vdir"
         if powershell -NoProfile -ExecutionPolicy Bypass -File "$(to_winpath "$CLONE_PS1")" \
             -Source "$(to_winpath "$pool")" -Dest "$(to_winpath "$vdir")" && [ -f "$vdir/autoload.php" ]; then
