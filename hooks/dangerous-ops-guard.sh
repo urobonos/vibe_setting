@@ -111,6 +111,18 @@ gg_is() {
   esac
 }
 
+# ===== headless code-loop 스텝 전용 (code-loop.sh 가 CODE_LOOP_SPEC export) =====
+# claude -p 는 턴이 1개라 background 완료 알림을 받을 다음 턴이 없다 → 산출물 없이 종료.
+# stash 는 그 조기 종료 시 변경분을 숨긴 채 남긴다 (2026-09-23 ISS-181 step-01 2회 재현).
+if [ -n "${CODE_LOOP_SPEC:-}" ]; then
+  if [[ "$STDIN_DATA" =~ \"run_in_background\"[[:space:]]*:[[:space:]]*true ]]; then
+    block_exit "codeloop-background" "[BLOCKED] code-loop headless 스텝에서 run_in_background 금지 — 턴이 1개라 완료 알림을 받지 못하고 산출물 없이 끝난다. 같은 명령을 foreground 로 다시 실행하라 (오래 걸리면 대상 테스트를 좁혀라)."
+  fi
+  if printf '%s\n' "$LOWER_CMD" | grep -qE '(^|[;&|(]|[[:space:]])git([[:space:]]+-[cC][[:space:]]+[^[:space:]]+)*[[:space:]]+stash([[:space:]]*($|[;&|)])|[[:space:]]+(push|pop|apply|drop|save|clear|create|store|branch|-))'; then
+    block_exit "codeloop-stash" "[BLOCKED] code-loop headless 스텝에서 git stash 금지 — 조기 종료 시 변경분이 stash 에 갇힌다. 원복은 git show HEAD:<path> > <path> 또는 파일 복사로 하라 (stash list/show 조회는 허용)."
+  fi
+fi
+
 # ===== 파괴적 명령 차단 (exit 2) =====
 
 # 1. 파일 삭제 — rm -rf, rm -r, rm -f
