@@ -10,6 +10,7 @@ if [ -n "$input" ]; then
   ctx=$(echo "$all_pcts" | sed -n '1p')
   five_hour=$(echo "$all_pcts" | sed -n '2p')
   seven_day=$(echo "$all_pcts" | sed -n '3p')
+  total_in=$(echo "$input" | grep -o '"total_input_tokens":[0-9]*' | head -1 | grep -o '[0-9]*$')
   sid=$(echo "$input" | grep -o '"session_id":"[^"]*"' | head -1 | sed 's/"session_id":"//;s/"//')
   model_name=$(echo "$input" | grep -o '"display_name":"[^"]*"' | head -1 | sed 's/"display_name":"//;s/"//')
 fi
@@ -56,12 +57,18 @@ fi
 usage=""
 [ -n "$model_name" ] && usage="${model_name}"
 [ -n "$sid8" ] && usage="${usage:+${usage} / }${sid8}"
-# 7d/5h/ctx 3개 퍼센트를 6자리 코드로 결합 (순서: 7d·5h·ctx, 각 2자리 0-패딩, 99 초과는 99 고정 — 예: 071245)
+# 7d/5h/ctx(+ac) 퍼센트를 6~8자리 코드로 결합 (순서: 7d·5h·ctx·ac, 각 2자리 0-패딩, 99 초과는 99 고정 — 예: 071245)
 if [ -n "$seven_day" ] || [ -n "$five_hour" ] || [ -n "$ctx" ]; then
   sd=${seven_day:-0}; [ "$sd" -gt 99 ] 2>/dev/null && sd=99
   fh=${five_hour:-0}; [ "$fh" -gt 99 ] 2>/dev/null && fh=99
   cx=${ctx:-0}; [ "$cx" -gt 99 ] 2>/dev/null && cx=99
   pct_combined=$(printf "%02d%02d%02d" "$sd" "$fh" "$cx")
+  # 4번째 2자리 = autocompact 창 대비 사용률 (total_input_tokens*100/autoCompactWindow, 내림, 99 고정)
+  ac_window=$(grep -o '"autoCompactWindow":[[:space:]]*[0-9]*' "$HOME/.claude/settings.json" 2>/dev/null | grep -o '[0-9]*$')
+  if [ -n "$total_in" ] && [ -n "$ac_window" ] && [ "$ac_window" -gt 0 ] 2>/dev/null; then
+    ac=$(( total_in * 100 / ac_window )); [ "$ac" -gt 99 ] && ac=99
+    pct_combined="${pct_combined}$(printf "%02d" "$ac")"
+  fi
   usage="${usage:+${usage} / }${pct_combined}"
 fi
 
