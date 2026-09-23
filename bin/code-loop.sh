@@ -131,9 +131,13 @@ run_step() {
   return 1
 }
 
-# 결과문서 끝의 기계 판독용 한 줄. 없으면 계약 위반이므로 빈 값을 돌려 fail-closed
+# 결과문서 끝의 기계 판독용 한 줄. 없으면 계약 위반이므로 빈 값을 돌려 fail-closed.
+# 표기 인정 범위는 GATE 줄(hooks/lib/code-loop-gate.sh)과 같다 — 앞의 공백·`#`·`>`·`*`, 값 뒤의
+# 공백·`*` 허용(`## VERDICT: CLEAN` · `**VERDICT: UPHELD**`). 본문 언급(`- … VERDICT: …`)은 불인정.
+# 2026-09-24 ISS-966 run 에서 합본이 헤더 표기로 써 "VERDICT 줄 없음" 중단이 두 번 났다
 verdict_of() {
-  grep -h '^VERDICT:' "$1" 2>/dev/null | tail -1 | sed 's/^VERDICT:[[:space:]]*//'
+  grep -hE '^[[:space:]#>*]*VERDICT:' "$1" 2>/dev/null | tail -1 \
+    | sed -E 's/^[[:space:]#>*]*VERDICT:[[:space:]*]*//; s/[[:space:]*]+$//'
 }
 
 # 00-spec.md 의 WORKTREE: 한 줄 — 기계검사가 FILES 상대경로를 풀 기준점

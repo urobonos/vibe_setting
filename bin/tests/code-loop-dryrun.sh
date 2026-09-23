@@ -85,12 +85,12 @@ case "$base" in
     else
       n=$(printf '%s' "$base" | sed 's/rev-0*\([0-9]*\)\.md/\1/')
       v=$(pick "${T_REV:-CLEAN}" "$n"); [ -n "$v" ] || v=$(last "${T_REV:-CLEAN}")
-      printf '합본 (stub)\n\nVERDICT: %s\n' "$v" > "$out"
+      printf "합본 (stub)\n\n${T_VFMT:-VERDICT: %s}\n" "$v" > "$out"
     fi ;;
   adv-*.md)
     m=$(printf '%s' "$base" | sed 's/adv-0*\([0-9]*\)\.md/\1/')
     v=$(pick "${T_ADV:-UPHELD}" "$m"); [ -n "$v" ] || v=$(last "${T_ADV:-UPHELD}")
-    printf 'adversary (stub)\n\nVERDICT: %s\n' "$v" > "$out" ;;
+    printf "adversary (stub)\n\n${T_VFMT:-VERDICT: %s}\n" "$v" > "$out" ;;
   dev-*.md)
     printf 'FILES: x\nTESTS: y\nBASELINE: z\nWHY: stub\n' > "$out" ;;
   *)
@@ -243,6 +243,19 @@ check "판정 줄 없음 개발자 미실행" 0 "$(cnt 'dev-*.md')"
 check "중단 메시지" 1 "$(grep -c 'GATE 판정 줄이 없다' "$TMP/out.txt")"
 reset; rc=$(runit T_GATE_LINE='- 이전엔 GATE: OK 였다')
 check "본문 언급만 있으면 중단" 1 "$rc"
+
+echo "== X. VERDICT 판정 줄 — 헤더·강조 표기는 인정, 본문 언급은 중단 (fail-closed) =="
+# 2026-09-24 ISS-966 run: 합본 스텝이 `## VERDICT: …` 로 써서 러너가 "VERDICT 줄 없음" 으로
+# 두 번 중단했다. GATE 줄(W)은 헤더 표기를 인정하는데 VERDICT 줄만 못 읽는 비대칭이었다
+reset; rc=$(runit T_VFMT='## VERDICT: %s' T_REV=CLEAN T_ADV=UPHELD)
+check "헤더 표기 — 완주" 0 "$rc"
+check "헤더 표기 — adv 도달" 1 "$(cnt 'adv-*.md')"
+reset; rc=$(runit T_VFMT='**VERDICT: %s**' T_REV=CLEAN T_ADV='BROKEN,UPHELD')
+check "강조 표기 — adv 수정분 리뷰 통과 후 2회차" 2 "$(cnt 'adv-*.md')"
+check "강조 표기 — 판정 값에 ** 안 남음" 0 "$(grep -c 'UPHELD\*\*' "$TMP/out.txt")"
+reset; rc=$(runit T_VFMT='- 이전 판정은 VERDICT: %s 였다' T_REV=CLEAN T_ADV=UPHELD)
+check "본문 언급만 있으면 중단" 1 "$rc"
+check "본문 언급 — adv 미실행" 0 "$(cnt 'adv-*.md')"
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="
