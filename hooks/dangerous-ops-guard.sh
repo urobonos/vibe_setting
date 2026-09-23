@@ -167,7 +167,9 @@ fi
 # 6. Co-Authored-By trailer 차단 (라인 시작 + 콜론 형식만 매칭, 본문 단어 언급은 허용)
 # CLAUDE.md §4 "공동 작성자 trailer 라인 금지" SSOT 룰. trailer 형식(예: "Co-Authored-By: Claude...")만 차단.
 # 본문에 "Co-Authored-By 단일화" 같이 설명용 단어 사용은 통과 (이전 차단 false positive 회피).
-if [[ "$LOWER_CMD" =~ ^[[:space:]]*co-authored-by: ]]; then
+# bash =~ 의 ^ 는 문자열 전체 시작에만 걸려 heredoc·여러 줄 -m 의 trailer 를 놓친다 → 줄 단위 grep.
+# 별도 -m 인자·--trailer 로 넣는 trailer 도 같은 결과라 함께 잡는다.
+if printf '%s\n' "$LOWER_CMD" | grep -qE "(^|-m[[:space:]]+[\"']?|--trailer[=[:space:]]+[\"']?)[[:space:]]*co-authored-by:"; then
   block_exit "co-authored-by" "[BLOCKED] Co-Authored-By trailer 차단 — 커밋 메시지 끝의 Co-Authored-By: 형식 trailer 라인은 사용하지 마세요. (본문 내 단어 언급은 허용)"
 fi
 

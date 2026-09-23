@@ -8,7 +8,7 @@
 #   3. 충족 시 stdout 으로 system reminder 출력 → 다음 Claude 응답에서 자동 위임 정책 의식
 #
 # SSOT: 본 hook + 글로벌 CLAUDE.md §4 "자동 위임 정책 (Autonomous Iteration)"
-# 짝 hook: gate-approve.sh (UserPromptSubmit, 묶음 승인 키워드 감지 → gate=2 + mtime 갱신)
+# 짝 hook: gate-approve.sh (UserPromptSubmit, 묶음 승인 키워드 감지 → autoiter 마커 생성·mtime 갱신)
 
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 
@@ -69,7 +69,7 @@ cat <<EOF
   - self-critique 루프 = 각 단계 완료 후 산출물·hook 결과·실행 출력 직접 검증, FAIL/WARN 0건까지 자동 반복 (최대 5회)
   - 종료 조건 = (a) self-critique 0건 + 후속 권고 잔여 0건, (b) 사용자 '중단/보류/멈춰', (c) §3 Checkpoint 5조건 매칭, (d) self-critique 재시도 5회 초과
   - 결정 escalation ladder = USER-DECISION 부착 전 분류 필수 — 권한형(P1~P4)·불확실 = 즉시 사용자 / 정보 부족형(I1~I3) = bounded 재진입. SSOT = execute.md §"결정 escalation ladder"
-  - 단계 전이 = analyze 완료 + 수정 대상 ≥1건 + gate=2 → plan 자동 진입 / 진단성(수정 0건) = 전이 금지. SSOT = analyze.md §"단계 전이"
+  - 단계 전이 = analyze 완료 + 수정 대상 ≥1건 + 본 마커 활성 → plan 자동 진입 / 진단성(수정 0건) = 전이 금지. SSOT = analyze.md §"단계 전이"
   - §3 Checkpoint 우선 적용 — 비가역(삭제·force push·DB 변경)·광범위(3파일+ 아키텍처)·외부 시스템 변경은 사용자 명시 승인 필수
   - SSOT: CLAUDE.md §4 "자동 위임 정책 (Autonomous Iteration)"
 </system-reminder>

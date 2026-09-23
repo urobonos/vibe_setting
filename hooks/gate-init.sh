@@ -2,7 +2,8 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "gate-init" "enter" "pid=$$"
 # SessionStart Hook: 워크플로우 Gate 상태 초기화
-# Phase 3 Harness — 세션 시작 시 gate를 0(잠금)으로 리셋
+# 세션 시작 시 gate 를 2(Edit 허용)로 초기화 — 아래 "자동 순차 진행 정책" 참조.
+# gate=2 는 묶음 승인 신호가 아니다 (자동진행 활성 = /tmp/claude_autoiter_{sid} 마커, gate-approve.sh).
 #
 # Gate 레벨:
 #   0 = LOCKED   — Edit/Write 차단, 분석 필요

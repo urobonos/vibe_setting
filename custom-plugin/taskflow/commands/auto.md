@@ -15,11 +15,10 @@ argument-hint: "[작업 내용 — 선택]"
 ### 인자 비어있음 (`/taskflow:auto`)
 - 현재 세션의 **잔여 액션 전체 자동 진행**.
 - 대상 = 직전 응답의 후속 권고 / self-critique 미해결 항목 / 사용자 결정 보류 영역 / 작업 미완료 task.
-- 직전 응답이 Echo-Back Confirm 펜딩 상태이면 = 그 작업의 진행 승인으로 해석.
+- 직전 응답이 승인 요청으로 끝났으면 = 그 작업의 진행 승인으로 해석.
 
 ### 인자 있음 (`/taskflow:auto {내용}`)
 - `{내용}` = 작업 범위. 해당 작업을 묶음 승인 모드로 끝까지 자동 진행.
-- 진입 즉시 Echo-Back Confirm 1회 의도 정리 생략 (본 slash 자체가 명시 묶음 승인 신호).
 
 ## 직병렬 실행 지침
 
@@ -224,7 +223,7 @@ git ls-files --others --exclude-standard                  # untracked 신규 →
 - Active Task Registry: `hooks/lib/registry-utils.sh` + `working-{register,heartbeat,release,stale-cleanup}.sh` + `~/.claude/docs/working/REGISTRY.md` SSOT
 - QA 게이트 절차 본체: `~/.claude/custom-plugin/taskflow/commands/execute.md` §"QA 게이트" (활성화 조건 / 단일 subagent / untracked 포함 입력 / fail-closed 판정 SSOT — 본 슬래시는 sentinel 게이트·누적 커밋 입력·FAIL 루프 차이만 명시)
 
-**용어 매핑 (audit M12 명문 2026-05-20):** 본 슬래시의 "4축 자동화" = CLAUDE.md §4.4 (3) (a~d) 동일 구조. Echo-Back Confirm = §4.4 (1) / 권고안 자동 채택 = §4.4 (2) SSOT 정합. 본 슬래시는 §4.4 정책의 명시 진입점 wrapper, 정책 본문 SSOT 는 CLAUDE.md §4.4.
+**용어 매핑 (audit M12 명문 2026-05-20):** 본 슬래시의 "4축 자동화" = CLAUDE.md §4.4 (3) (a~d) 동일 구조. 권고안 자동 채택 = §4.4 (2) SSOT 정합 (Echo-Back Confirm 은 2026-09-23 폐기). 본 슬래시는 §4.4 정책의 명시 진입점 wrapper, 정책 본문 SSOT 는 CLAUDE.md §4.4.
 
 ## 호출 예
 

@@ -12,7 +12,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 ## 실행 방식 — subagent 위임 (2026-09-22~)
 
-**아래 §"참조 범위"~§"종료 마커" 전체 절차는 main 세션이 직접 수행하지 않는다.** main 세션은 인자를 해석해 대상 working/ 문서 경로만 확정한 뒤(로컬 파일 조회), `Agent` 도구로 `taskflow:analyzer` 서브에이전트를 호출해 나머지 전부를 위임한다. 서브에이전트가 돌아오면 그 출력(참조범위 표 / Critical~Low 표 / 변경 표면 인벤토리 / T2 판정 / 최종 Status 라인 / §3 매칭 목록)을 그대로 화면에 낸다. **T1(gate=2) 판정 + `/taskflow:plan` 전이 여부(§"단계 전이")는 main 세션이 직접 수행한다** — 세션 상태·다음 슬래시 호출은 위임 범위 밖이다.
+**아래 §"참조 범위"~§"종료 마커" 전체 절차는 main 세션이 직접 수행하지 않는다.** main 세션은 인자를 해석해 대상 working/ 문서 경로만 확정한 뒤(로컬 파일 조회), `Agent` 도구로 `taskflow:analyzer` 서브에이전트를 호출해 나머지 전부를 위임한다. 서브에이전트가 돌아오면 그 출력(참조범위 표 / Critical~Low 표 / 변경 표면 인벤토리 / T2 판정 / 최종 Status 라인 / §3 매칭 목록)을 그대로 화면에 낸다. **T1(autoiter 마커) 판정 + `/taskflow:plan` 전이 여부(§"단계 전이")는 main 세션이 직접 수행한다** — 세션 상태·다음 슬래시 호출은 위임 범위 밖이다.
 
 **위임 이유:** subagent 위임 자체는 `taskflow:planner`(`plan.md`, 2026-09-22)와 동일 이유(호출 단위로 고정되는 에이전트 정의를 통해 turn-scope 모델 문제를 원천 차단). **모델 등급은 다르다** — Critical~Low 판정은 `reviewer-correctness`/`reviewer-design`(둘 다 sonnet)과 같은 급이라 `taskflow:analyzer` 는 sonnet 이다. 절차 SSOT = 본 파일(아래 섹션들), 위임 절차 자체의 SSOT = `custom-plugin/taskflow/agents/analyzer.md`.
 
@@ -70,7 +70,7 @@ Status: Analysis Complete
 
 | 축 | 코드 | 조건 | 근거 |
 |---|------|------|------|
-| 의도 | T1 | `gate=2` (묶음 승인 활성) | 자동진행을 명시 요청한 상태에서만 |
+| 의도 | T1 | `/tmp/claude_autoiter_{sid}` 마커 존재·60분 이내 (묶음 승인 활성) | 자동진행을 명시 요청한 상태에서만 — gate=2 는 세션 시작마다 켜지므로 판정에 쓰지 않는다 |
 | 성격 | T2 | §분석에 **수정 대상 ≥ 1건** 도출 | 진단(audit)이면 0건 |
 
 - **T1 ∧ T2 → `/taskflow:plan` 자동 진입.** 전이 사유 1줄을 반드시 보고한다 (침묵 전이 금지).
@@ -124,7 +124,7 @@ Status: Analysis Complete
 | `~/.claude/hooks/doc-unified-check.sh` V1 `v_template_guard` → `*unified*.md` 분기 | unified §분석 헤더 강제 |
 | `~/.claude/hooks/doc-unified-check.sh` V4 `v_checklist_count` | unified 체크리스트 임계 — **값은 그 함수의 `MIN` 이 정한다** (여기 복사하지 않는다. 하드 줄번호도 안 쓴다 — 둘 다 hook 이 바뀌면 조용히 낡는다) |
 | `~/.claude/hooks/doc-unified-check.sh V6` | 타당성 검토 인용 강제 |
-| **본 파일 §"단계 전이 (→ plan)"** | **순방향 전이 조건 (T1 gate=2 / T2 수정 대상 ≥1) SSOT** — CLAUDE.md·reminder hook 이 참조 |
+| **본 파일 §"단계 전이 (→ plan)"** | **순방향 전이 조건 (T1 autoiter 마커 / T2 수정 대상 ≥1) SSOT** — CLAUDE.md·reminder hook 이 참조 |
 | **본 파일 §"변경 표면 인벤토리"** | **plan 원재료 4종 SSOT** — 소비처 = `plan.md` §"파급면·결함면 — 골격 무관 공통" + DoD 검증 행 |
 | **본 파일 §"종료 마커"** | **`Status: Analysis Complete` 부착 규약 SSOT** — 소비처 = `tick.md` 2단계 분기 / `working-scan.sh` 파싱 / `report-work` 진행률 |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"결정 escalation ladder" | 역방향 분류 판별식 SSOT — 본 슬래시의 짝 (execute 중 결정 막힘 시 L1 재진입 대상) |
@@ -145,10 +145,11 @@ Status: Analysis Complete
 
 ## 짝 슬래시
 
-앞 = `/taskflow:draft`(원본 파일 기반 시작 시) / 뒤 = `/taskflow:plan` — **T1(gate=2) ∧ T2(수정 대상 ≥1) 충족 시 본 슬래시가 자동 전이**(§"단계 전이"). `/taskflow:feasibility` 는 §분석 도중 병행. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
+앞 = `/taskflow:draft`(원본 파일 기반 시작 시) / 뒤 = `/taskflow:plan` — **T1(autoiter 마커) ∧ T2(수정 대상 ≥1) 충족 시 본 슬래시가 자동 전이**(§"단계 전이"). `/taskflow:feasibility` 는 §분석 도중 병행. 전체 맵 = `execute.md` §"워크플로우 맵" SSOT.
 
 ## Changelog
 
+- 2026-09-23: T1 판정을 `gate=2` → `/tmp/claude_autoiter_{sid}` 마커로 교체. gate-init 이 매 세션 gate=2 로 시작해 T1 이 항상 참이었다(자동진행 미요청에도 plan 자동 전이)
 - 2026-09-22: **모델 등급 정정 — `taskflow:analyzer` opus → sonnet, 본 파일 frontmatter `model: opus` 제거.** 직전 위임 커밋에서 `plan.md`→`taskflow:planner`(opus) 패턴을 그대로 유추 적용했는데, 근거가 없었다 — Critical~Low 판정은 `reviewer-correctness`/`reviewer-design`(둘 다 sonnet)과 같은 급이고, 사용자의 opus 명시 요구도 planning 에 한정됐지 analyze 에는 없었다. 사용자 질문("analyze가 opus가 필요함?")이 계기
 - 2026-09-22: **분석 생성 본체를 `taskflow:analyzer` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/analyzer.md`, model: opus 고정) + frontmatter `model: opus` 추가(main 세션 몫인 인자 해석·위임·relay 용, belt-and-suspenders). 근거 = 본 커맨드가 원래 model 지정이 없어 항상 세션 기본 모델을 탔다는 점 — `plan.md`→`taskflow:planner` 위임(같은 날)과 동일 이유. T1(gate=2)·`/taskflow:plan` 전이 판단은 main 세션에 남긴다(세션 상태·다음 슬래시 호출은 위임 범위 밖)
 - 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 세 갈래였다 — ① 체크리스트 임계를 `≥ 30` 으로 복사해 뒀는데 hook 은 2026-09-04 에 5 로 내렸다(`unified-template.md`·`task-docs/SKILL.md` 는 그때 같이 고쳐졌고 이 계열 4개만 남았다) ② V1 차단 강도가 정반대였다 — "tasks/ 이동 후 exit 2" 로 적었으나 그 조건이 바로 **강등** 조건이고 `v_template_guard` 는 `add_block` 0건이다 ③ 실제로 차단하는 V5(e2e 5점)·V2(참조 출처)가 표에 아예 없었다. **값과 하드 줄번호를 지우고 hook 포인터만 남긴다** — 복사해 둔 값이 이 drift 를 만들었다 (CLAUDE.md §4.4)

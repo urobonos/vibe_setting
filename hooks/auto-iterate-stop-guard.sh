@@ -161,11 +161,11 @@ fi
 # 카운터 증가 + Stop 차단 + 재진입 지시
 COUNT=$((COUNT + 1))
 echo "$COUNT" > "$COUNTER_FILE"
-log block "stop blocked, counter=${COUNT}, gate_age=${DIFF}s — request re-entry"
+log block "stop blocked, counter=${COUNT}, autoiter_age=${DIFF}s — request re-entry"
 
 cat >&2 <<EOF
 [자동 위임 정책 — Stop 차단 / 재진입 지시 (${COUNT}/5)]
-- 묶음 승인 ("자동 진행" 등) 활성 상태 (gate=2, mtime ${DIFF}s).
+- 묶음 승인 ("자동 진행" 등) 활성 상태 (autoiter 마커, ${DIFF}s 경과).
 - 작업 완료 신호 없음 → Stop 자동 차단 후 재진입.
 - Claude 는 직전 응답에서 제시한 잔여 권고 / self-critique 미해결 항목 / 후속 액션을 계속 진행한다.
 - 작업 완료 시 응답 마지막 줄에 sentinel 부착해 통과:

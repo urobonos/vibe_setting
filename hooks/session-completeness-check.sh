@@ -2,11 +2,11 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "session-completeness-check" "enter" "pid=$$"
 # Stop Hook: 세션 종료 시 산출물 누락 검증
-# exit 2 차단 — 산출물 미완성 시 세션 종료 차단
+# exit 0 경고 — 산출물 미완성 시 세션당 1회 stderr 안내 (차단 안 함, 사유 = 하단 "차단 또는 통과")
 #
 # 검증 항목:
 #   1. Edit/Write 이력 있는 세션 → history.md + YYYYMMDD/summary.md 기록 필수
-#   2. gate>=2(실행 단계) → 작업 폴더에 최소 1개의 단계 문서(analyze/plan/result 등) 존재 필수
+#   2. 코드 Edit/Write 이력 있는 세션 → 작업 폴더에 최소 1개의 단계 문서(analyze/plan/result 등) 존재 필수
 #
 # 정책 (v2.0): analyze.md + result.md 쌍 강제 제거.
 #   작업 성격에 따라 필요한 단계 문서 하나만 있어도 통과한다.
@@ -38,8 +38,6 @@ source "$SCRIPT_DIR/lib/product-resolver.sh" 2>/dev/null || {
 PRODUCT=$(resolve_product "$CWD")
 TASKS_DIR=$(product_tasks_dir "$CWD")
 
-GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
-CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
 EDIT_FLAG="/tmp/claude_edit_flag_${SESSION_ID}"
 NONCODE_FLAG="/tmp/claude_noncode_flag_${SESSION_ID}"
 
@@ -69,13 +67,14 @@ if [ -f "$EDIT_FLAG" ] && [ "$IS_NONCODE_ONLY" = false ]; then
   fi
 fi
 
-# --- 2. 단계 문서 존재 여부 (gate>=2 + 코드 수정 세션만) ---
+# --- 2. 단계 문서 존재 여부 (코드 수정 세션만) ---
+# gate>=2 는 gate-init 이 매 세션 2 로 시작해 항상 참이라 판정에 쓰지 않는다 (2026-09-23).
 # CLAUDE.md §File Paths 규칙:
 #   tasks/    → 코드 작업 완료 산출물 (analyze/plan/result 3종 또는 unified 단일 통합 — 2026-05-12~)
 #   output/   → 분석·문서 생성 프롬프트 ({제목}/*.md 산출물)
 #   working/  → 진행 중 단일 통합 작업 문서 (2026-05-12~, 완료 시 tasks/ 로 자동 이동)
 # 셋 중 하나라도 오늘자 산출물이 존재하면 통과 (경로 이중화 허용).
-if [ "$CURRENT" -ge 2 ] && [ "$IS_NONCODE_ONLY" = false ]; then
+if [ -f "$EDIT_FLAG" ] && [ "$IS_NONCODE_ONLY" = false ]; then
   TASK_DIR="$TASKS_DIR/$TODAY"
   OUTPUT_DIR=$(product_output_dir "$CWD")
   WORKING_DIR="$HOME/.claude/docs/working/$TODAY"

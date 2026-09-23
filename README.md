@@ -163,7 +163,7 @@
 | 카테고리 | 주요 훅 | 강제 내용 |
 |----------|---------|-----------|
 | **Gate·승인** | `gate-init` `gate-approve` `gate-enforce` | Gate 0→2 묶음 승인, 코드 변경 전 계획 문서 hard 차단 |
-| **자동 위임** | `prompt-echo-confirm` `auto-iterate-reminder` `auto-iterate-stop-guard` | Echo-Back Confirm, self-critique 루프 재진입(5회 한도), sentinel 검사 |
+| **자동 위임** | `auto-iterate-reminder` `auto-iterate-stop-guard` | self-critique 루프 재진입(5회 한도), sentinel 검사 |
 | **git 안전** | `worktree-enforce` `branch-enforce` `dangerous-ops-guard` `git-quality-gate` `phpunit-prd-guard` | worktree 강제, push·master 머지 차단, Co-Authored-By 금지, No Test No Merge |
 | **산출물** | `working-lifecycle` `working-register` `working-release` `working-heartbeat` `working-stale-cleanup` `doc-unified-check` `doc-index-maintain` `output-naming-check` `output-report-share-guard` `doc-quality` `author-field-check` | working/ 자동 이동, V1~V8 통합 검증, 인덱스 재생성, 날짜 prefix·7분류 네이밍 |
 | **세션** | `session-start` `session-checkpoint` `session-report` `session-completeness-check` `pre-idle-selfcheck` `persona-reminder` | 페르소나 주입, history/summary 기록 강제 |
