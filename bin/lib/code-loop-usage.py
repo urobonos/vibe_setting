@@ -9,7 +9,7 @@
 매핑 누락을 숨기지 않으려고 `스텝` 열에 `jsonl/run.log` 두 수를 같이 낸다.
 한쪽만 내면 "적게 나온 것"과 "적게 센 것"을 구분할 수 없다.
 """
-import json, os, re, sys, unicodedata
+import json, os, re, sys, time, unicodedata
 from pathlib import Path
 
 HOME  = Path(os.environ.get("CLAUDE_HOME") or os.path.expanduser("~/.claude"))
@@ -25,6 +25,10 @@ PRICE = {
 DEFAULT_PRICE = (2.0, 10.0)
 
 STEP_RE = re.compile(r"^--- (\d\d:\d\d:\d\d) \[([^\]]+)\]")
+
+# run.log 가 이만큼 안 바뀌었으면 살아 있다고 보지 않는다. 스텝 간격 실측(2,087건):
+# p99 78분 · 정상 최대 2시간 18분 → 3시간.
+STALE_SEC = 3 * 3600
 
 
 def usd(model, u):
@@ -75,6 +79,11 @@ def scan_runs():
             state = "완료"
         elif aborted:
             state = "중단"
+        elif time.time() - log.stat().st_mtime > STALE_SEC:
+            # "!!!" 마커는 스크립트가 스스로 멈출 때만 남는다 — 크래시·강제종료·세션
+            # 종료로 죽은 run 은 마커 없이 run.log 가 멈춘다 (2026-09-23 정체 6건 전부 사망).
+            idle_hours = int(time.time() - log.stat().st_mtime) // 3600
+            state = "%s 정체 %dh (중단 추정)" % (last_label or "시작", idle_hours)
         else:
             state = ("%s 진행" % last_label) if last_label else "시작"
         runs[d.name] = {"state": state, "steps": steps, "sess": 0, "ctx": [],
