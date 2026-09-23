@@ -109,6 +109,7 @@ if [ "$NEGATED" = true ]; then
   if echo "$LOWER_PROMPT" | grep -qE '(중단|보류|멈춰|stop|abort|cancel)'; then
     STOP_MARKER_FILE="/tmp/claude_stop_requested_${SESSION_ID}"
     touch "$STOP_MARKER_FILE" 2>/dev/null
+    rm -f "/tmp/claude_autoiter_${SESSION_ID}" 2>/dev/null
     log info "stop marker created (auto-iterate cancel) sid=$SESSION_ID"
   fi
   log skip "NEGATED prompt sid=$SESSION_ID prompt_len=${#PROMPT} — 승인 매칭 skip"
@@ -229,6 +230,12 @@ if [ "$APPROVED" = true ]; then
   fi
   echo "$NEW_LEVEL" > "$GATE_FILE"
   log info "SAVED sid=$SESSION_ID gate=$NEW_LEVEL"
+  # 자동 반복 모드는 gate=2(Edit 허용)와 별개 마커 — gate-init 이 매 세션 gate=2 로 시작하고
+  # 일반 승인어도 gate 를 다시 써서, gate 로 판정하면 평범한 Q&A 턴까지 Stop 가드가 붙잡았다.
+  if [ "$BUNDLED_APPROVED" = true ]; then
+    touch "/tmp/claude_autoiter_${SESSION_ID}" 2>/dev/null
+    log info "autoiter marker set sid=$SESSION_ID"
+  fi
 fi
 
 exit 0

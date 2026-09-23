@@ -3,7 +3,7 @@
 # PostToolUse Hook: 묶음 승인 활성 시 자동 위임 정책 system reminder 주입
 #
 # 동작:
-#   1. 묶음 승인 활성 상태 확인 (/tmp/claude_gate_${SESSION_ID} = 2, mtime 60분 이내)
+#   1. 묶음 승인 활성 상태 확인 (/tmp/claude_autoiter_${SESSION_ID} 존재, mtime 60분 이내)
 #   2. 미충족 시 즉시 통과 (exit 0)
 #   3. 충족 시 stdout 으로 system reminder 출력 → 다음 Claude 응답에서 자동 위임 정책 의식
 #
@@ -26,7 +26,7 @@ else
     SESSION_ID=${SESSION_ID:-default}
 fi
 
-GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
+AUTOITER_FILE="/tmp/claude_autoiter_${SESSION_ID}"
 
 # 디버그 로그 (2026-05-13 telemetry lib 마이그레이션)
 # shellcheck disable=SC1091
@@ -45,20 +45,15 @@ log() {
   log_event "auto-iterate-reminder" "$event" "$*"
 }
 
-# gate 파일 미존재 시 통과
-if [ ! -f "$GATE_FILE" ]; then
-    exit 0
-fi
-
-GATE_VALUE=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
-if [ "$GATE_VALUE" != "2" ]; then
+# 자동 반복 마커 미존재 시 통과 (gate=2 는 판정에 쓰지 않는다 — gate-approve.sh 참조)
+if [ ! -f "$AUTOITER_FILE" ]; then
     exit 0
 fi
 
 # mtime 60분 이내 확인 (자동 위임 정책 활성 기간)
-GATE_MTIME=$(stat -c %Y "$GATE_FILE" 2>/dev/null || stat -f %m "$GATE_FILE" 2>/dev/null || echo 0)
+MARKER_MTIME=$(stat -c %Y "$AUTOITER_FILE" 2>/dev/null || stat -f %m "$AUTOITER_FILE" 2>/dev/null || echo 0)
 NOW=$(date +%s)
-DIFF=$((NOW - GATE_MTIME))
+DIFF=$((NOW - MARKER_MTIME))
 
 if [ "$DIFF" -gt 3600 ]; then
     exit 0

@@ -78,7 +78,7 @@ self-critique(+QA) 통과 후 **사용자 명시 결정**으로 진입점 분기
 
 ## 4축 자동화 (CLAUDE.md §4 자동 위임 정책 정합)
 
-본 slash 호출 시 `gate-approve.sh` 가 본문 "자동 진행" 키워드를 매칭해 `/tmp/claude_gate_${SESSION_ID}` = 2 + mtime 갱신. 이후 60분 동안 다음 자동화가 활성:
+본 slash 호출 시 `gate-approve.sh` 가 본문 "자동 진행" 키워드를 매칭해 `/tmp/claude_autoiter_${SESSION_ID}` 마커를 생성(mtime 갱신)한다. 이후 60분 동안 다음 자동화가 활성 (`중단`/`보류`/`멈춰` = 마커 제거). gate=2 는 Edit/Write 허용 의미만 가지며 자동화 판정에 쓰지 않는다 — `gate-init.sh` 가 매 세션 gate=2 로 시작하므로 gate 로 판정하면 평범한 Q&A 턴까지 Stop 가드가 붙잡는다 (2026-09-23 분리):
 
 1. **후속 권고 자동 채택** — 옵션 분기 시 기본 옵션(가장 안전한 첫 번째) 즉시 채택.
 2. **self-critique 루프 (Claude 본체 책임)** — 산출물·코드·실행 결과 직접 검증, FAIL/WARN 0건일 때까지 반복 (최대 5회). **통과 후 코드 변경 + 외부 참조 문서 존재 시 QA 게이트(아래 §"QA 게이트") 진입(없으면 skip).**

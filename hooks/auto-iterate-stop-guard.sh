@@ -8,7 +8,7 @@
 #
 # 동작:
 #   1. 사용자 명시 중단 마커 확인 (/tmp/claude_stop_requested_${SESSION_ID}) → 있으면 통과
-#   2. 묶음 승인 활성 확인 (/tmp/claude_gate_${SESSION_ID} = 2, mtime 60분 이내)
+#   2. 묶음 승인 활성 확인 (/tmp/claude_autoiter_${SESSION_ID} 존재, mtime 60분 이내 — gate-approve.sh 가 묶음 키워드에만 생성)
 #   3. 미충족 시 즉시 통과 (exit 0) — 카운터 리셋
 #   4. 재진입 카운터 (/tmp/claude_iterate_count_${SESSION_ID}) 확인
 #      - 5회 초과 시 카운터 리셋 + exit 0 (무한 루프 방지)
@@ -35,7 +35,7 @@ else
     SESSION_ID=${SESSION_ID:-default}
 fi
 
-GATE_FILE="/tmp/claude_gate_${SESSION_ID}"
+AUTOITER_FILE="/tmp/claude_autoiter_${SESSION_ID}"
 COUNTER_FILE="/tmp/claude_iterate_count_${SESSION_ID}"
 STOP_MARKER="/tmp/claude_stop_requested_${SESSION_ID}"
 
@@ -125,26 +125,20 @@ EOF
     fi
 fi
 
-# gate 파일 미존재 → 묶음 승인 비활성 → 통과
-if [ ! -f "$GATE_FILE" ]; then
-    rm -f "$COUNTER_FILE" 2>/dev/null
-    exit 0
-fi
-
-GATE_VALUE=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
-if [ "$GATE_VALUE" != "2" ]; then
+# 자동 반복 마커 미존재 → 묶음 승인 비활성 → 통과 (gate=2 는 판정에 쓰지 않는다 — gate-approve.sh 참조)
+if [ ! -f "$AUTOITER_FILE" ]; then
     rm -f "$COUNTER_FILE" 2>/dev/null
     exit 0
 fi
 
 # mtime 60분 이내 확인
-GATE_MTIME=$(stat -c %Y "$GATE_FILE" 2>/dev/null || stat -f %m "$GATE_FILE" 2>/dev/null || echo 0)
+MARKER_MTIME=$(stat -c %Y "$AUTOITER_FILE" 2>/dev/null || stat -f %m "$AUTOITER_FILE" 2>/dev/null || echo 0)
 NOW=$(date +%s)
-DIFF=$((NOW - GATE_MTIME))
+DIFF=$((NOW - MARKER_MTIME))
 
 if [ "$DIFF" -gt 3600 ]; then
     rm -f "$COUNTER_FILE" 2>/dev/null
-    log skip "gate mtime expired (${DIFF}s > 3600s) — pass through"
+    log skip "autoiter marker expired (${DIFF}s > 3600s) — pass through"
     exit 0
 fi
 
