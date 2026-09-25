@@ -23,6 +23,8 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
               composer.lock 있는 PHP 레포면: bash ~/.claude/bin/vendor-pool.sh ensure {worktree 절대경로}
               (신규 worktree 는 vendor 없이 시작 — pool 있으면 하드링크 클론 수 초, 없으면
               최초 1회 composer install 후 pool 화. 없는 PHP 레포는 자동 skip)
+              vendor 를 junction·symlink 로 링크하지 않는다 · worktree 삭제는 `git worktree remove` 만
+              (링크된 vendor 는 remove --force 가 따라가 원본을 지운다 — ISS-285)
 3. 개발      : subagent_type: taskflow:step-developer
               (요청 + 성공 기준 + 테스트 범위 + 비목표 + worktree 경로)
               → 반환 BASELINE 전·후 명령 동일성 교차 확인 (§"기준선을 교차 확인한다")

@@ -258,6 +258,7 @@ echo "              cwd: $CWD" >&2
 echo "              조치:" >&2
 echo "                신규 작업 = git worktree add ~/.claude/worktrees/{sid}-{slug} -b wip/{sid}-{slug}" >&2
 echo "                기존 feature 수정 = git worktree add ~/.claude/worktrees/{sid}-{slug} feature/X" >&2
+echo "                이어서 (PHP 레포) = bash ~/.claude/bin/vendor-pool.sh ensure ~/.claude/worktrees/{sid}-{slug}  — vendor 링크 금지" >&2
 echo "              면제 14건: worktrees/* / state/sessions/*.lock / projects/*/memory/* /" >&2
 echo "                       /tmp/claude_* / .claude/docs/* / .claude/settings.json / .claude/settings.local.json /" >&2
 echo "                       C:/Works/infra/* (dev-team) / .claude/hooks/* / git check-ignore 매칭(untracked+ignored) / .claude/CLAUDE.md / .claude/commands/* / .claude/skills/* / .claude/README.md" >&2

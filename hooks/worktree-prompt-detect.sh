@@ -46,6 +46,7 @@ cat >&2 <<'EOF'
     SLUG="{작업 슬러그}"
     SID="${CLAUDE_SESSION_ID:0:8}"
     git worktree add ~/.claude/worktrees/${SID}-${SLUG} -b wip/${SID}-${SLUG}
+    bash ~/.claude/bin/vendor-pool.sh ensure ~/.claude/worktrees/${SID}-${SLUG}   # PHP 레포만 · vendor 링크 금지
   기존 feature 수정 시: feature/X 를 base 로 worktree 분기
     git worktree add ~/.claude/worktrees/${SID}-${SLUG} feature/X
   완료 시 진입점:

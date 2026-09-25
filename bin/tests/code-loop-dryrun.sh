@@ -16,6 +16,11 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"
 export PATH="$TMP/bin:$PATH"
+# 러너 기본 캡은 2026-09-21 부터 무제한(0)이다. 시나리오 C 처럼 지적이 영원히 남는 경우
+# 캡을 안 주면 루프가 끝나지 않는다 — 2026-09-24 02:2x 드라이런이 좀비로 남아 하루 넘게
+# 하위 프로세스를 띄운 원인이다. 이 테스트의 기대값(캡 5)을 명시하고, 실행마다 상한을 건다
+export CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2
+RUN_TIMEOUT=300   # 전체 실행 부하에서 시나리오 C(5라운드)가 120초를 넘긴다 — 무한 루프만 끊으면 된다
 ST="$HOME/.claude/state/code-loop"
 mkdir -p "$TMP/bin" "$ST" \
          "$HOME/.claude/custom-plugin/taskflow/agents" \
@@ -77,7 +82,8 @@ case "$base" in
   00-spec.md)
     # T_GATE_LINE 이 설정돼 있으면(빈 값 포함) 판정 줄을 원문 그대로 쓴다 — 표기 변형·줄 없음 검사용
     if [ -n "${T_GATE_LINE+x}" ]; then printf 'spec\n\n%s\n' "$T_GATE_LINE" > "$out"
-    else printf 'spec\n\nGATE: %s\n' "${T_GATE:-OK}" > "$out"; fi ;;
+    else printf 'spec\n\nGATE: %s\n' "${T_GATE:-OK}" > "$out"; fi
+    [ -n "${T_WT:-}" ] && printf 'WORKTREE: %s\n' "$T_WT" >> "$out" ;;
   rev-*-correctness.md|rev-*-design.md)
     printf 'reviewer (stub)\n' > "$out" ;;
   rev-*.md)
@@ -105,6 +111,13 @@ echo "stub: wrote $base"
 STUB
 chmod +x "$TMP/bin/claude"
 
+# ── vendor-pool.sh stub — 러너가 넘긴 인자만 남긴다 ─────────────────────────
+mkdir -p "$HOME/.claude/bin"
+cat > "$HOME/.claude/bin/vendor-pool.sh" <<'VPOOL'
+#!/usr/bin/env bash
+echo "$*" >> "$HOME/vendor-pool.calls"
+VPOOL
+
 # ── 하네스 ────────────────────────────────────────────────────────────────
 pass=0; fail=0
 check() {
@@ -112,7 +125,7 @@ check() {
   else printf '   FAIL %s — 기대 [%s] 실제 [%s]\n' "$1" "$2" "$3"; fail=$((fail + 1)); fi
 }
 reset() { find "$ST" -mindepth 1 -maxdepth 1 -type d -exec rm -r {} + 2>/dev/null; mkdir -p "$ST"; }
-runit() { env "$@" bash "$SUT" "드라이런 요청" > "$TMP/out.txt" 2>&1; echo $?; }
+runit() { env "$@" timeout "$RUN_TIMEOUT" bash "$SUT" "드라이런 요청" > "$TMP/out.txt" 2>&1; echo $?; }
 d()     { find "$ST" -mindepth 1 -maxdepth 1 -type d | head -1; }
 cnt()   { find "$(d)" -name "$1" 2>/dev/null | wc -l | tr -d ' '; }
 merged(){ find "$(d)" -name 'rev-0*.md' -not -name '*-correctness.md' -not -name '*-design.md' 2>/dev/null | wc -l | tr -d ' '; }
@@ -173,14 +186,14 @@ check "재시도 2회" 2 "$(grep -c 'dev-01\] model=.* try=' "$TMP/out.txt")"
 echo "== H. --resume — 기존 산출물 재실행 안 함 =="
 reset; runit T_REV='FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD > /dev/null
 RUN=$(basename "$(d)"); before=$(md5sum "$(d)/dev-01.md" | cut -d' ' -f1)
-env T_REV='FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+env T_REV='FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
 check "기존 산출물 보존" "$before" "$(md5sum "$ST/$RUN/dev-01.md" | cut -d' ' -f1)"
 
 echo "== I. stdout 이 끊겨도 루프는 완주한다 (SIGPIPE 내성) =="
 # 2026-09-16 회귀: tee 로 미러링하던 때는 호출자가 head 로 파이프를 닫으면 tee 가
 # SIGPIPE 로 죽고 루프까지 죽었다 (run.log 205 bytes 에서 중단, RESULT.md 미생성)
 reset
-env T_REV=CLEAN T_ADV=UPHELD bash "$SUT" "드라이런 요청" 2>&1 | head -3 > /dev/null
+env T_REV=CLEAN T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" "드라이런 요청" 2>&1 | head -3 > /dev/null
 check "완주" 1 "$(grep -c 'code-loop 종료' "$(d)/run.log" 2>/dev/null || echo 0)"
 check "RESULT 생성" 1 "$([ -s "$(d)/RESULT.md" ] && echo 1 || echo 0)"
 
@@ -223,7 +236,7 @@ reset; runit T_REV=CLEAN T_ADV='BROKEN,UPHELD' > /dev/null
 RUN=$(basename "$(d)")
 printf '판정: FILES 없음 — 고칠 코드가 없다\n' > "$ST/$RUN/dev-02.md"
 before=$(md5sum "$ST/$RUN/dev-02.md" | cut -d' ' -f1)
-env T_REV=CLEAN T_ADV='BROKEN,UPHELD' bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+env T_REV=CLEAN T_ADV='BROKEN,UPHELD' timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
 check "adv 수정분 판정 보존" "$before" "$(md5sum "$ST/$RUN/dev-02.md" | cut -d' ' -f1)"
 check "재사용 로그" 1 "$(grep -c '기존 산출물 재사용' "$TMP/out.txt")"
 
@@ -256,6 +269,28 @@ check "강조 표기 — 판정 값에 ** 안 남음" 0 "$(grep -c 'UPHELD\*\*' 
 reset; rc=$(runit T_VFMT='- 이전 판정은 VERDICT: %s 였다' T_REV=CLEAN T_ADV=UPHELD)
 check "본문 언급만 있으면 중단" 1 "$rc"
 check "본문 언급 — adv 미실행" 0 "$(cnt 'adv-*.md')"
+
+echo "== Y. 러너가 WORKTREE 의 vendor 를 직접 채운다 (ISS-285 후속) =="
+# 에이전트 재량에 두면 원본 vendor 로 junction 을 건다 — 그 worktree 를 --force 로 지우면
+# 원본 vendor 가 따라 지워진다(ISS-285). 그래서 러너가 WORKTREE: 줄을 읽고 ensure 를 부른다
+WT_PHP="$TMP/wt-php"; WT_NOLOCK="$TMP/wt-nolock"
+mkdir -p "$WT_PHP" "$WT_NOLOCK"; : > "$WT_PHP/composer.lock"
+reset; : > "$HOME/vendor-pool.calls"
+rc=$(runit T_WT="$WT_PHP" T_REV=CLEAN T_ADV=UPHELD)
+check "exit" 0 "$rc"
+check "ensure 1회 · 인자 = WORKTREE" "ensure $WT_PHP" "$(cat "$HOME/vendor-pool.calls")"
+vendor_line=$(grep -n '\[vendor\] ensure' "$(d)/run.log" | head -1 | cut -d: -f1)
+dev_line=$(grep -n '\[dev-01\]' "$(d)/run.log" | head -1 | cut -d: -f1)
+check "ensure 가 dev 보다 먼저" 1 "$([ -n "$vendor_line" ] && [ -n "$dev_line" ] && [ "$vendor_line" -lt "$dev_line" ] && echo 1 || echo 0)"
+check "spec 프롬프트에 링크 금지" 1 "$(grep -c 'junction·symlink 로 링크하지 않는다' "$SUT")"
+reset; : > "$HOME/vendor-pool.calls"
+runit T_WT="$WT_NOLOCK" T_REV=CLEAN T_ADV=UPHELD > /dev/null
+check "composer.lock 없으면 호출 안 함" 0 "$(wc -l < "$HOME/vendor-pool.calls" | tr -d ' ')"
+reset; : > "$HOME/vendor-pool.calls"
+runit T_REV=CLEAN T_ADV=UPHELD > /dev/null
+check "WORKTREE 줄 없으면 호출 안 함" 0 "$(wc -l < "$HOME/vendor-pool.calls" | tr -d ' ')"
+reset; runit T_WT="$WT_PHP" T_GATE=TOO-LARGE > /dev/null
+check "TOO-LARGE 면 호출 안 함" 0 "$(wc -l < "$HOME/vendor-pool.calls" | tr -d ' ')"
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="

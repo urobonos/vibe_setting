@@ -51,6 +51,7 @@ WIP_BRANCH="wip/${SESSION_ID}-${SLUG}"
 
 # 2) worktree + wip 분기 생성 (원본 repo 에서)
 git worktree add "$WORKTREE_PATH" -b "$WIP_BRANCH"
+bash ~/.claude/bin/vendor-pool.sh ensure "$WORKTREE_PATH"   # composer.lock 없으면 자동 skip · vendor 링크 금지 (ISS-285)
 
 # 3) worktree 안에서 작업 수행 (self-critique 루프 포함)
 #    - Edit/Write/MultiEdit 으로 코드 변경

@@ -483,6 +483,7 @@ code.md 의 1단계(범위 확인)와 크기 게이트를 그대로 수행해 $d
 worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는다. 그와 별개로
 기계 판독용으로 정확히 한 줄 추가한다 (dev 반환분을 셸이 재검증할 때 쓴다):
   WORKTREE: {절대경로}
+vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·symlink 로 링크하지 않는다.
 마지막 줄에 기계 판독용으로 정확히 한 줄을 쓴다:
   GATE: OK          (성공 기준 3개 이하 — 진행)
   GATE: TOO-LARGE   (4개 이상 — /taskflow:plan 으로 넘길 것)
@@ -514,6 +515,20 @@ $request"
   # 변수는 포인터일 뿐이고 통과 판정은 hook 이 파일 실재와 GATE: OK 로 한다
   # (SSOT = hooks/gate-enforce.sh plan-before 절)
   export CODE_LOOP_SPEC="$dir/00-spec.md"
+
+  # vendor 는 에이전트 재량에 두지 않고 러너가 채운다 (ISS-285 후속). 에이전트가 원본
+  # vendor 로 junction 을 걸면 `git worktree remove --force` 가 그걸 따라가 원본을 지운다
+  local spec_worktree
+  spec_worktree=$(worktree_of "$dir/00-spec.md")
+  if [ -n "$spec_worktree" ] && [ -f "$spec_worktree/composer.lock" ]; then
+    if [ -f "$CLAUDE_HOME/bin/vendor-pool.sh" ]; then
+      echo "--- [vendor] ensure: $spec_worktree"
+      bash "$CLAUDE_HOME/bin/vendor-pool.sh" ensure "$spec_worktree" \
+        || echo "!!! [vendor] ensure 실패 — vendor 없이 진행한다 (기계검사는 도구가 없으면 skip)"
+    else
+      echo "!!! [vendor] vendor-pool.sh 없음 — ensure skip"
+    fi
+  fi
 
   # ── dev-loop ──────────────────────────────────────────────────────────
   local n nn verdict=""

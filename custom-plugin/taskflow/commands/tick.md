@@ -190,7 +190,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 |----|----------------|
 | 문서 스캔 | `working_scan all 5` — 전 product (cwd 미참조), 5분 이내 수정분 제외 |
 | **작업 repo** | **claim 한 step 의 product** (cwd 아님) |
-| worktree 생성 | 그 product repo 에서 `git -C {repo} worktree add` |
+| worktree 생성 | 그 product repo 에서 `git -C {repo} worktree add` → 이어서 `bash ~/.claude/bin/vendor-pool.sh ensure {worktree 절대경로}` (composer.lock 없으면 자동 skip · vendor 링크 금지 — ISS-285) |
 
 **`cd` 로 옮겨다니지 않는다 — `git -C` 로만 대상 repo 를 조작한다** (규약·근거 SSOT = `watch.md` §"cwd 에 국한되지 않는다").
 
