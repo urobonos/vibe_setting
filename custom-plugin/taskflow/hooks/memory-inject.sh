@@ -1,6 +1,6 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "memory-inject" "enter" "pid=$$"
+source "$HOME/.claude/hooks/lib/log-helper.sh" 2>/dev/null && log_event "memory-inject" "enter" "pid=$$"
 # ─────────────────────────────────────────────────────────
 # SessionStart Hook: dream 이 선별한 top-N 사실을 세션 컨텍스트에 강제 주입
 # ─────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ MAX_LINES=40
 MAX_CHARS=4000
 STALE_DAYS=45
 
-source "$(dirname "$0")/lib/hook-input.sh" 2>/dev/null || exit 0
+source "$HOME/.claude/hooks/lib/hook-input.sh" 2>/dev/null || exit 0
 hook_read_stdin
 
 CWD=$(hook_parse_field "cwd")

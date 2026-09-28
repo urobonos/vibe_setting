@@ -22,13 +22,13 @@
 #   "미확정"이 이어지다가 시간이 지나면 자연히 실제 값으로 갱신된다.
 #
 # 사용:
-#   source ~/.claude/hooks/lib/watch-snapshot.sh
+#   source ~/.claude/custom-plugin/taskflow/scripts/watch-snapshot.sh
 #   watch_diff [scope]      # 변경분 출력 (A/M/D \t path \t 상세) — 스냅샷은 갱신 안 함
 #   watch_commit [scope]    # 현재 상태를 스냅샷으로 확정 (검증 완료 후 호출)
 
 WATCH_STATE_DIR="${WATCH_STATE_DIR:-$HOME/.claude/state/watch}"
 WATCH_MIN_AGE_SEC="${WATCH_MIN_AGE_SEC:-300}"
-_WATCH_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_WATCH_LIB_DIR="$HOME/.claude/hooks/lib"   # 하니스 공유 lib (working-scan.sh)
 # 로드 여부는 **함수 존재**로 판정한다. 전엔 `[ -z "$WORKING_ROOT" ]` 였는데, 그건 변수가
 #   설정됐는지를 물을 뿐이라 소비자가 WORKING_ROOT 를 먼저 지정하고 이 파일을 source 하면
 #   working-scan.sh 가 아예 안 읽혀 `working_scan: command not found` 로 죽었다.

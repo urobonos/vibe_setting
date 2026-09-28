@@ -52,7 +52,7 @@ python3 ~/.claude/custom-plugin/taskflow/scripts/dream-scan.py --project {slug} 
 - `MEMORY.md` 는 인덱스다 — 한 줄에 `- [제목](파일.md) — hook` 하나. 본문을 넣지 않는다.
 - hook 문장은 **검색 가능한 명사**를 담는다. 네이티브 recall 이 이 한 줄만 보고 파일을 열지 결정하기 때문이다.
 - 90일 이상 참조되지 않고 현행성이 끝난 항목은 삭제가 아니라 `~/.claude/docs/{product}/output/archive/` 로 이동 제안.
-- `memory/INJECT.md` = 매 세션 강제 주입할 top 5~10건. `hooks/memory-inject.sh` 가 읽는다. 상한 초과분은 넣지 않는다.
+- `memory/INJECT.md` = 매 세션 강제 주입할 top 5~10건. `custom-plugin/taskflow/hooks/memory-inject.sh` 가 읽는다. 상한 초과분은 넣지 않는다.
 
 ## 출력과 승인
 
@@ -85,4 +85,4 @@ python3 ~/.claude/custom-plugin/taskflow/scripts/dream-scan.py --project {slug} 
 
 자동 쓰기를 주지 않은 이유: 잘못된 통합은 조용히 누적되고, 메모리는 다음 세션의 판단 근거가 되므로 오염 비용이 비대칭적으로 크다.
 
-**SSOT:** 본 파일 + `custom-plugin/taskflow/scripts/dream-scan.py` + `hooks/memory-inject.sh`
+**SSOT:** 본 파일 + `custom-plugin/taskflow/scripts/dream-scan.py` + `custom-plugin/taskflow/hooks/memory-inject.sh`

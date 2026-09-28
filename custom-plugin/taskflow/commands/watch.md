@@ -66,7 +66,7 @@ D. 보고 + commit
 
 ```bash
 source ~/.claude/hooks/lib/working-scan.sh
-source ~/.claude/hooks/lib/watch-snapshot.sh
+source ~/.claude/custom-plugin/taskflow/scripts/watch-snapshot.sh
 
 watch_diff "${1:-all}"        # 변경분만 — 스냅샷은 안 건드림
 
@@ -496,8 +496,8 @@ watch 는 다른 세션의 `/loop`·tick·cron 을 정지·삭제·kill 하지 �
 `/taskflow:watch sessions [sid8 ...]` 는 문서가 아니라 **다른 세션 transcript** 를 본다. REGISTRY 에 안 잡히는 무인 loop 세션이 실재하기 때문이다 (2026-07-27 실측 — 132MB/96MB 로 돌던 두 세션이 REGISTRY·lock 어디에도 없었다).
 
 ```bash
-python3 ~/.claude/hooks/lib/transcript-tail.py 77af0d0f 346c3c39   # sid 지정
-python3 ~/.claude/hooks/lib/transcript-tail.py --top=5             # 최신 5개
+python3 ~/.claude/custom-plugin/taskflow/scripts/transcript-tail.py 77af0d0f 346c3c39   # sid 지정
+python3 ~/.claude/custom-plugin/taskflow/scripts/transcript-tail.py --top=5             # 최신 5개
 ```
 
 신호 4개 = 생존(mtime) / 현재 도구(마지막 `tool_use`) / **판단 대기**(`AUTO-ITERATE-USER-DECISION`) / 반복 횟수. 파일 끝 256KB 만 seek 하므로 132MB 파일도 상수 비용(두 개 동시 0.6초 실측).
@@ -534,19 +534,19 @@ A·B·C 세 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음`
 
 | 조각 | 역할 | SSOT |
 |------|------|------|
-| **변경 감지** | 스냅샷 diff (A/M/D) — 문서 축 + repo 축 | **`hooks/lib/watch-snapshot.sh`** |
-| 신선도 필터 | 5분 이내 수정분 제외 (`WATCH_MIN_AGE_SEC`, 기본 300초) | `hooks/lib/watch-snapshot.sh::watch_scan_now` |
+| **변경 감지** | 스냅샷 diff (A/M/D) — 문서 축 + repo 축 | **`custom-plugin/taskflow/scripts/watch-snapshot.sh`** |
+| 신선도 필터 | 5분 이내 수정분 제외 (`WATCH_MIN_AGE_SEC`, 기본 300초) | `custom-plugin/taskflow/scripts/watch-snapshot.sh::watch_scan_now` |
 | 감시 repo 목록 | 사용자 소유 목록 (자동 갱신 안 함) | `~/.claude/state/watch/repos.txt` |
 | working/ 스캔 + 완료 게이트 | `working_scan` · `working_gate_blockers` · **`working_rejections`**(미해소 반려 수) | `hooks/lib/working-scan.sh` |
 | **정체 병목 판정** | `working_stalled` — 1h+ 무진행에 tick claim 게이트(G1~G4/OK) 적용, 첫 실패 게이트 + 처리 산출 (`WORKING_STALL_SEC`, 기본 3600) | **`hooks/lib/working-scan.sh`** |
 | 세션 생존 판정 | `working_session_alive` — transcript mtime (`WORKING_SESSION_DEAD_SEC`, 기본 3600) | `hooks/lib/working-scan.sh` |
-| **문서 단위 lock** | `watch_doc_lock_acquire`/`_release`/`watch_doc_locked` — 키=문서 경로, TTL stale 회수 (`WATCH_LOCK_TTL_MIN`, 기본 30분) | **`hooks/lib/watch-snapshot.sh`** |
+| **문서 단위 lock** | `watch_doc_lock_acquire`/`_release`/`watch_doc_locked` — 키=문서 경로, TTL stale 회수 (`WATCH_LOCK_TTL_MIN`, 기본 30분) | **`custom-plugin/taskflow/scripts/watch-snapshot.sh`** |
 | claim 차단 조건 | `active` 일 때만 `TAKEN` — paused·ready-to-merge 는 안 막음 | `hooks/lib/registry-utils.sh:169` |
 | claim 해제 (lock 보호) | `registry_mark_stale` — 수동 awk+mv 금지 | `hooks/lib/registry-utils.sh` + 메모리 `feedback_shared-pool-lib-first` |
 | **orphan lock 판정** | `registry_orphan_locks` — REGISTRY 매칭 없는 lock 나열 (`ps cleanup` 과 공용) | **`hooks/lib/registry-utils.sh`** |
 | 결정 escalation 분류 | 권한형 P1~P4 / 정보 부족형 I1~I3 판별식 | `custom-plugin/taskflow/commands/execute.md` |
 | 정체 원인(문서 상태 미복귀) | Stop 시 REGISTRY 만 paused, 문서 `상태:` 불변 | `hooks/working-release.sh` |
-| 세션 관측 | transcript tail 신호 4개 | `hooks/lib/transcript-tail.py` |
+| 세션 관측 | transcript tail 신호 4개 | `custom-plugin/taskflow/scripts/transcript-tail.py` |
 | 주기 반복 | `/loop <interval> /taskflow:watch` | harness `/loop` 스킬 |
 | **ff머지 절차** | checkout→ff-only→worktree remove→branch -D | **`custom-plugin/git/commands/merge.md`** |
 | **문서 양식 검증** | V1~V8 통합 validator (stdin JSON) | **`hooks/doc-unified-check.sh`** |

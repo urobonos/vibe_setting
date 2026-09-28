@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/resume-banner.sh\"",
+            "timeout": 5,
+            "statusMessage": "작업 재개 추천 확인 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/memory-inject.sh\"",
+            "timeout": 5,
+            "statusMessage": "메모리 주입 확인 중..."
+          }
+        ]
+      }
+    ]
+  }
+}
