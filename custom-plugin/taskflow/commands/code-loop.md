@@ -181,7 +181,7 @@ MM = 1 .. 2
 | 개발 Agent 계약 | `custom-plugin/taskflow/agents/step-developer.md` |
 | 리뷰어 계약 2종 | `custom-plugin/taskflow/agents/reviewer-{correctness,design}.md` |
 | 적대적 검증 계약 | `custom-plugin/taskflow/agents/adversary.md` |
-| 리뷰어 합본 규약 | `custom-plugin/taskflow/commands/watch.md` §"코드 축" |
+| 리뷰어 합본 규약 | `custom-plugin/taskflow/references/review-contract.md` §"코드 축" |
 | **러너 (스텝 오케스트레이션 · VERDICT 분기 · 캡 · 재개)** | **`~/.claude/bin/code-loop.sh`** |
 | worktree 생성·정착 | `custom-plugin/git/commands/{create,merge}.md` |
 

@@ -294,7 +294,7 @@ $hist"
 
 두 리뷰어 판정을 합쳐 $dir/rev-$nn.md 를 쓴다.
   입력: $dir/rev-$nn-correctness.md · $dir/rev-$nn-design.md · $dir/dev-$nn.md · $dir/00-spec.md
-  합본 규칙 SSOT = $CMD_DIR/watch.md 의 코드 축 절
+  합본 규칙 SSOT = $CLAUDE_HOME/custom-plugin/taskflow/references/review-contract.md 의 코드 축 절
   REBUTTED 가 있으면 code.md 의 반박 판정 절에 있는 근거 3종을 직접 확인해
   수용·기각을 판정하고, 수용분은 REBUTTED-ACCEPTED 로 표시한다 (다음 라운드 재개봉 차단).
   BASELINE 전·후 명령이 다르거나 없으면 그 사실을 적는다 (관측 실패 — 라운드로 세지 않는다).

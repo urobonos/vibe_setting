@@ -160,31 +160,10 @@ done
 >
 > **앞으로의 매칭 비용을 줄이려면** tick 이 step 완료 시 `머지 전 리뷰 포인트` 에 worktree 경로를 실제로 적어야 한다 (tick.md 4단계 3에 이미 명시돼 있으나 실측 보유율 0/20). 그게 지켜지면 이 판정은 기계화된다.
 
-### 코드 축 — 변경분 리뷰 (무인 코드리뷰 계약 SSOT)
+### 코드 축 — 변경분 리뷰
 
-**본 절이 무인 코드리뷰 계약의 SSOT 다 — `/taskflow:tick` 의 리뷰 루프도 같은 계약을 쓴다** (`tick.md` §"step 코드리뷰 루프" 는 여기 포인터). 계약이 두 곳에 복붙되면 갈라지고, 갈라지는 순간 tick 이 통과시킨 것을 watch 가 **다른 기준으로** 반려해 왕복이 되살아난다.
+무인 코드리뷰 계약(리뷰어 2인 spawn·입력 조립·합본 규칙) = `custom-plugin/taskflow/references/review-contract.md` §"코드 축 — 변경분 리뷰" SSOT. 카탈로그 미등재 fallback 도 같은 파일.
 
-**`reviewer-correctness` · `reviewer-design` Agent 2개를 병렬 spawn** 해 **변경분만** 리뷰한다 (`subagent_type: taskflow:reviewer-correctness` · `taskflow:reviewer-design` — 플러그인 agent 는 `plugin:name` 형식이다. 정의 = `custom-plugin/taskflow/agents/reviewer-correctness.md` · `reviewer-design.md`). 전체 코드베이스 감사가 아니다.
-
-- **본체가 조립하는 것은 입력뿐이다** — worktree diff(또는 커밋 범위) + 그 step 문서의 §계획·DoD + **개발 Agent 반환의 `BASELINE`**. 두 리뷰어는 **같은 입력**을 받는다.
-- **`BASELINE` 을 빼지 않는다.** 리뷰어는 `근거: 실행` 을 계약으로 요구받는데(§6) 어느 명령이 이 변경을 덮는지를 매번 새로 찾는다 — 그 탐색이 전량 스위트로 넓히려는 유인이 되고, 이 환경에서 그건 실 테이블을 갈아엎는다. 개발 Agent 가 이미 돌려서 알고 있는 것을 전달만 하면 된다. 없으면(구 경로·문서 축) 그 사실을 입력에 명시한다 — 조용히 비우면 리뷰어가 스스로 찾는다.
-- 리뷰 관점 7축은 **둘로 갈라져 있다** — 기능 정합(§1 경계값·예외·회귀·동시성 / §5 호출부 전수 / §6 실행 검증) = `reviewer-correctness`, 설계 정합(§2 보안 / §3 단순성 / §4 재사용 / §7 범위) = `reviewer-design`. 판정 등급·"코드 수정 금지"·반환 양식과 함께 **전부 agent 정의에 박혀 있다**. 여기서 다시 적지 않는다.
-- **한 패스로 7축을 보지 않는다 (2026-08-19 축 분리).** 실측이 필요한 무거운 축(§6 돌려봐야 검증)이 얕아진다 — 구 `cold-reviewer` 정의 스스로가 그렇게 적어뒀다.
-- 반환 = 리뷰어별 `VERDICT: CLEAN | FINDINGS` + Critical~Low 지적의 `file:line` (양식 SSOT = agent 정의).
-
-**두 반환을 합치는 규칙 (본 절이 SSOT — 2인을 띄우는 모든 경로가 이걸 쓴다).**
-
-| 상황 | 처리 |
-|------|------|
-| 같은 `file:line` 에 양쪽 지적 | **높은 등급을 채택**한다 |
-| 상대 축 태그(`[design]`·`[correctness]`)가 붙은 지적 | **본체가 등급을 매기지 않는다.** 루프 경로면 다음 라운드에 해당 리뷰어가 판정하고, 1회 경로면 태그를 단 채로 잔여에 남긴다 |
-| 한쪽 `CLEAN` · 한쪽 `FINDINGS` | 합본은 `FINDINGS` 다. 한 축이 깨끗한 것은 종료 근거가 아니다 |
-
-**왜 프롬프트가 아니라 agent 정의인가.** 계약을 매번 프롬프트로 조립하면 라운드마다 문구가 달라지고 그 편차가 곧 리뷰 편차다(아래 §"watch 의 리뷰는 재확인이다" 가 인정하는 그 편차). 정의에 박아두면 spawn 마다 변하는 것이 diff 하나뿐이 된다.
-
-**리뷰어는 코드를 고치지 않는다.** 두 정의 모두 Edit·Write 도구가 없는 것이 그 강제다 (`dev-team` FE 멤버를 `Explore` 로 두는 것과 같은 기계적 차단 — 지시문은 어길 수 있어도 없는 도구는 못 쓴다). `simplify` 처럼 수정까지 하는 경로를 타지 않는다 — 무인 루프가 리뷰하면서 코드를 바꾸면 리뷰 대상 자체가 움직인다.
-
-> **카탈로그 미등재 fallback** = `tick.md` §"카탈로그 미등재 fallback" SSOT.
 
 ### watch 의 리뷰는 재확인이다 (2026-07-30~)
 

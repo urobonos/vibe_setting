@@ -29,7 +29,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 ## cold 리뷰 루프 (단계 ①.5 — 코드 변경이 있을 때만, 2026-07-31~ / 2026-08-27 루프 승격)
 
-**spawn 규약은 `watch.md` §"코드 축 — 변경분 리뷰" 가 SSOT 다** — 리뷰어 구성(`reviewer-correctness`·`reviewer-design` 2인 병렬)·입력 조립·판정축 7개 분담·반환 양식. 여기서 다시 적지 않는다. 입력 = 변경분 diff + 그 작업의 §계획·DoD.
+**spawn 규약은 `review-contract.md` §"코드 축 — 변경분 리뷰" 가 SSOT 다** — 리뷰어 구성(`reviewer-correctness`·`reviewer-design` 2인 병렬)·입력 조립·판정축 7개 분담·반환 양식. 여기서 다시 적지 않는다. 입력 = 변경분 diff + 그 작업의 §계획·DoD.
 
 **루프 제어는 `code.md` 가 SSOT 다** — 종료 조건(C·H·M 0)·캡(5회)·`Low` 처리·반박 판정·**적대적 검증 게이트**(`taskflow:adversary` · 캡 2회)·라운드 이력 형식·두 리뷰어 합본. 이것도 여기서 다시 적지 않는다.
 
@@ -48,7 +48,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 > **무인 경로와 겹치지 않는다.** `/taskflow:tick` 은 `/taskflow:review` 를 타지 않는다 (`tick.md` §"step 코드리뷰 루프"). 겹쳐 돌리면 같은 코드를 cold 로 두 번 본다.
 
-> **카탈로그 미등재 fallback** = `tick.md` §"카탈로그 미등재 fallback" SSOT.
+> **카탈로그 미등재 fallback** = `review-contract.md` §"카탈로그 미등재 fallback" SSOT.
 
 ## 직병렬 실행 지침
 

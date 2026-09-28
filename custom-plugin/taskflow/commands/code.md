@@ -29,7 +29,7 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
               (요청 + 성공 기준 + 테스트 범위 + 비목표 + worktree 경로)
               → 반환 BASELINE 전·후 명령 동일성 교차 확인 (§"기준선을 교차 확인한다")
 4. 리뷰 루프 : subagent_type: taskflow:reviewer-correctness · taskflow:reviewer-design 병렬 스폰
-              (라운드마다 새로 + 이전 라운드 이력 + BASELINE · spawn 규약 = watch.md §"코드 축")
+              (라운드마다 새로 + 이전 라운드 이력 + BASELINE · spawn 규약 = `review-contract.md` §"코드 축")
               → 지적을 합쳐 개발 Agent 에 SendMessage → 재리뷰
               → C·H·M 이 모두 0이 될 때까지, 5회
               → REBUTTED 가 오면 본체가 수용·기각을 판정하고 다음 리뷰어에게 이력으로 넘긴다
@@ -47,8 +47,8 @@ argument-hint: "{구현 요청} — 필수. 생략 시 진행 중 working/ step 
 | 기능 정합 리뷰어 (§1 경계값·예외·회귀·동시성 · §5 호출부 전수 · §6 실행 검증) | `custom-plugin/taskflow/agents/reviewer-correctness.md` |
 | 설계 정합 리뷰어 (§2 보안 · §3 단순성 · §4 재사용 · §7 범위) | `custom-plugin/taskflow/agents/reviewer-design.md` |
 | **적대적 검증 red-team** (반환 BROKEN/UPHELD·공격면 5축·재현 강제·`model: opus`) | `custom-plugin/taskflow/agents/adversary.md` |
-| **리뷰어 spawn 규약** (구성 2인·입력 조립·판정축 분담·반환 합본) | `custom-plugin/taskflow/commands/watch.md` §"코드 축 — 변경분 리뷰" |
-| 개발 Agent 운영 (warm 유지·`isolation` 금지·변경 실재 확인) | `custom-plugin/taskflow/commands/tick.md` §"step 개발" |
+| **리뷰어 spawn 규약** (구성 2인·입력 조립·판정축 분담·반환 합본) | `custom-plugin/taskflow/references/review-contract.md` §"코드 축 — 변경분 리뷰" |
+| 개발 Agent 운영 (warm 유지·`isolation` 금지·변경 실재 확인) | `custom-plugin/taskflow/references/review-contract.md` §"step 개발" |
 | worktree 생성·정착 절차 | `custom-plugin/git/commands/{create,merge}.md` |
 | **신규 worktree vendor 채우기** (`ensure` — pool 하드링크 클론 · 없으면 composer install 후 pool 화) | `bin/vendor-pool.sh` |
 
@@ -205,7 +205,7 @@ C·H·M 이 0이 되면 **종료 전에 `taskflow:adversary` 를 스폰한다.**
 
 라운드마다 `reviewer-correctness` · `reviewer-design` 을 **병렬 스폰**하고 지적을 합쳐 개발 Agent 에 넘긴다. 두 리뷰어는 **같은 이전 라운드 이력**을 받는다.
 
-**합본 규칙(등급 겹침·상대 축 태그·한쪽 CLEAN)은 `watch.md` §"코드 축" 이 SSOT 다** — 2인을 띄우는 경로가 여기만이 아니라서 규약 쪽에 둔다. 여기 소관은 **루프 특유의 것 하나뿐이다: 상대 축 태그가 붙은 지적은 다음 라운드에 해당 리뷰어가 등급을 판정한다** (1회 경로엔 다음 라운드가 없어 태그째 잔여로 남는다).
+**합본 규칙(등급 겹침·상대 축 태그·한쪽 CLEAN)은 `review-contract.md` §"코드 축" 이 SSOT 다** — 2인을 띄우는 경로가 여기만이 아니라서 규약 쪽에 둔다. 여기 소관은 **루프 특유의 것 하나뿐이다: 상대 축 태그가 붙은 지적은 다음 라운드에 해당 리뷰어가 등급을 판정한다** (1회 경로엔 다음 라운드가 없어 태그째 잔여로 남는다).
 
 ## 라운드 이력을 넘긴다
 
@@ -281,7 +281,7 @@ backlog 메모리로 밀지 않는다. §4.5 격리는 **"② 실제 문제·버
 
 ## §3 Checkpoint 우선 적용
 
-- 본 커맨드는 §3 우회 통로가 아니다. 개발 Agent 의 Write·Bash 에도 `worktree-enforce`·`dangerous-ops-guard`·`branch-enforce` 가 그대로 걸린다 (`tick.md` §"하니스 자동 상속" 실측).
+- 본 커맨드는 §3 우회 통로가 아니다. 개발 Agent 의 Write·Bash 에도 `worktree-enforce`·`dangerous-ops-guard`·`branch-enforce` 가 그대로 걸린다 (`review-contract.md` §"하니스 자동 상속" 실측).
 - **머지·push·master/main 접근은 하지 않는다.** worktree 정착은 사용자 명시 승인 후 `/git:create`·`/git:merge`.
 
 ## 정착은 1커밋으로
