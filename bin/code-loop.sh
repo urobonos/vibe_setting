@@ -192,6 +192,54 @@ agent_body() {
   awk '/^---$/{n++; next} n>=2' "$1"
 }
 
+# 개발자 반환의 한 절(REBUTTED·DEFERRED)에 주어진 등급의 항목(- [등급] …)이 있는가.
+# 필드 자체는 매 라운드 "REBUTTED: 없음" 으로 들어오므로 단어만 보면 전 라운드가 걸린다
+# (과거 537라운드 중 93%)
+dev_section_has() {
+  awk -v section="$2" -v grades="$3" '
+    $0 ~ "^[#*[:space:]]*" section "([[:space:]:*]|$)" { in_section = 1; next }
+    /^[#*[:space:]]*(FIXED|REBUTTED|DEFERRED|NOTES|FILES|TESTS|BASELINE|WHY|CRITERIA)([[:space:]:*]|$)/ { in_section = 0 }
+    in_section && $0 ~ "^[[:space:]]*[-*][[:space:]]*[*]*[[](" grades ")[]]" { found = 1 }
+    END { exit !found }' "$1" 2>/dev/null
+}
+
+# 두 리뷰어 판정을 셸이 결정적으로 합쳐 rev-NN.md 를 쓴다. 판단이 필요한 라운드면 1 을
+# 돌려 LLM 합본으로 넘긴다 — ① 개발자가 REBUTTED 로 반박했다(수용·기각 판정 필요)
+# ①' 개발자가 Critical~Medium 을 DEFERRED 로 넘겼다(리뷰어가 CLEAN 이어도 미해결 — ISS-969 rev-03)
+# ② 리뷰어 문서가 반환 양식을 벗어났다(VERDICT 가 CLEAN/FINDINGS 가 아니거나, CLEAN 인데
+# Critical~Medium 지적이 있거나, FINDINGS 인데 지적 줄이 하나도 안 읽힌다).
+# 중복 지적은 합치지 않는다 — 원문 그대로 두 목록을 싣고 개발자가 한 번에 고친다.
+merge_reviews_shell() {
+  local dir="$1" nn="$2" role f v lines blockers body="" c=0 h=0 m=0
+  dev_section_has "$dir/dev-$nn.md" REBUTTED 'Critical|High|Medium|Low' && return 1
+  dev_section_has "$dir/dev-$nn.md" DEFERRED 'Critical|High|Medium' && return 1
+  for role in correctness design; do
+    f="$dir/rev-$nn-$role.md"
+    v=$(verdict_of "$f"); v="${v%% *}"
+    lines=$(grep -E '^[[:space:]]*[-*][[:space:]]*\**\[(Critical|High|Medium|Low)\]' "$f")
+    blockers=$(printf '%s\n' "$lines" | grep -cE '\[(Critical|High|Medium)\]')
+    case "$v" in
+      CLEAN) [ "$blockers" -eq 0 ] || return 1 ;;
+      FINDINGS) [ -n "$lines" ] || return 1 ;;
+      *) return 1 ;;
+    esac
+    c=$((c + $(printf '%s\n' "$lines" | grep -c '\[Critical\]')))
+    h=$((h + $(printf '%s\n' "$lines" | grep -c '\[High\]')))
+    m=$((m + $(printf '%s\n' "$lines" | grep -c '\[Medium\]')))
+    body+="
+## $role — $v
+${lines:-지적 없음}
+"
+  done
+  {
+    echo "# rev-$nn 합본 (셸)"
+    echo
+    echo "> 반박·양식 이탈이 없어 셸이 합쳤다. 근거·재현은 원문: rev-$nn-correctness.md · rev-$nn-design.md"
+    echo "$body"
+    if [ $((c + h + m)) -eq 0 ]; then echo "VERDICT: CLEAN"; else echo "VERDICT: FINDINGS C=$c H=$h M=$m"; fi
+  } > "$dir/rev-$nn.md"
+}
+
 # 리뷰 1라운드 = 콜드 리뷰어 2인 병렬 + 합본. rev-NN.md 와 그 안의 VERDICT 줄을 남긴다.
 #
 # **dev-loop 와 adv-loop(BROKEN 재진입) 양쪽이 이 함수를 쓴다.** adversary 는 깨는
@@ -234,6 +282,12 @@ $hist"
 
   # 리뷰어가 인용한 테스트 수치를 셸이 직접 재실행해 대조 — dev측 verify_gate 와 대칭
   verify_rev_gate "$dir" "$nn" "$common" || return 1
+
+  # 판단이 필요 없는 라운드는 셸이 합친다 — 합본 스텝(LLM)은 run 시간의 7% 였다
+  if merge_reviews_shell "$dir" "$nn"; then
+    echo "--- [merge-$nn] 셸 합본 ($(verdict_of "$dir/rev-$nn.md"))"
+    return 0
+  fi
 
   # 합본 + 반박 판정 — code.md 가 "본체" 에 맡긴 일이고, 그 본체도 여기선 단발이다
   local merge_body="$common

@@ -46,7 +46,8 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        │    claude -p [rev-design]      opus   ┘
        │    └ 셸 독립 재검증 (verify_rev_gate) — 인용 테스트 수치 재실행,
        │         불일치 역할만 개별 재검토 2회까지, 재검토 후 매번 재확인
-       │    claude -p [merge]          sonnet  → rev-NN.md (+ VERDICT 줄)
+       │    셸 합본 (반박·양식 이탈 없음)         → rev-NN.md (+ VERDICT 줄)
+       │    └ 아니면 claude -p [merge] sonnet → rev-NN.md
        │    └ 셸이 VERDICT 만 읽고 분기
        │
        ├ adv-loop  (캡 2)
@@ -92,7 +93,7 @@ dev·rev 모델은 러너가 에이전트 정의(`step-developer.md` · `reviewe
 | `dev-NN.md` | 개발자 | `FILES` / `TESTS` / `NOTES` / `BASELINE`(전·후) / `CRITERIA`(기준별 증거) / **`WHY`** |
 | `.lock/pid` | 러너 | 루프 프로세스 PID. 살아 있으면 같은 run 의 재기동을 거부, 종료 시 제거 |
 | `rev-NN-{correctness,design}.md` | 리뷰어 2인 | 각자의 판정 |
-| `rev-NN.md` | merge 스텝 | 합본 + 반박 판정 결과 + `VERDICT:` 줄 |
+| `rev-NN.md` | 셸 합본 또는 merge 스텝 | 합본 + 반박 판정 결과 + `VERDICT:` 줄 |
 | `adv-MM.md` | adversary | 재현 또는 시도 나열 + `VERDICT:` 줄 |
 | `RESULT.md` | result 스텝 | 메인 반환용 — 변경 요약 · 라운드 로그 · 잔여 핸드오프 |
 
@@ -126,7 +127,7 @@ NN = 1 .. 5
                       → dev-NN.md (FILES/TESTS/NOTES/BASELINE/WHY)
 2. 리뷰어 2인  fresh 병렬  입력 = 00-spec.md + dev-NN.md + diff + rev-*.md 이력
                       → rev-NN-correctness.md · rev-NN-design.md
-3. merge      fresh   합본 + REBUTTED 근거 3종 확인 + BASELINE 전·후 동일성 확인
+3. merge      셸 → 반박·양식 이탈 시 fresh LLM   합본 + REBUTTED 근거 3종 확인 + BASELINE 전·후 동일성 확인
                       → rev-NN.md + VERDICT
 4. CLEAN → adv-loop / FINDINGS → NN+1 / 캡 소진 → adv 안 돈다 (깰 것이 없다)
 ```
@@ -186,6 +187,7 @@ MM = 1 .. 2
 
 ## Changelog
 
+- 2026-09-28: **합본 셸화 (`merge_reviews_shell`).** 개발자 반환에 실제 반박 항목(`REBUTTED:` 아래 `- [등급]`)이 없고 두 리뷰어 문서가 반환 양식(VERDICT + `- [등급]` 지적 줄)을 지키면 셸이 지적 줄을 이어붙이고 C/H/M 을 세어 `VERDICT` 줄을 쓴다. 판단이 필요한 라운드(반박 판정·양식 이탈)만 LLM 합본으로 폴백 — 합본 스텝은 run 시간의 7%(중앙 1.8분/라운드)였다. 과거 run 재생 대조로 셸 판정 = LLM 판정 확인
 - 2026-09-28: **run 잠금 + 성공 기준 증거 게이트.** ① `tee_run` 이 `{run}/.lock` 을 mkdir 원자 잠금으로 잡고 루프 PID 를 기록한다 — 살아 있으면 재기동 거부, 죽은 잠금은 인수, 종료 시 제거 (run `20260925-112255`: 진행 중 `--resume` 재기동 → dev-01 2개 동시 편집 → Fatal). ② spec 에 `CRITERIA: N`, dev 에 `CRITERIA` 섹션 — `verify_criteria` 가 `verify_gate` 맨 앞에서 기준 누락·미실행 자백을 되돌린다(재보고 캡 공유, 소진 시 리뷰어로). 구버전 spec 은 skip
 - 2026-09-22: **`verify_mechanical` phpstan/php-cs-fixer 오탐 수정 — worktree 밖 cwd + 전역 바이너리 사용.** off-by-one 수정(아래 항목) 배포 이후 첫 실전 재발 재검증에서 발견(run `20260922-160417`) — `phpstan analyse`가 러너 cwd(worktree 밖)에서 그대로 실행돼 그 자리의 config(또는 config 없음)를 주워 diff 와 무관한 클래스까지 "unknown class" 로 떴다. worktree 루트로 `cd` 후 그 worktree 자신의 `vendor/bin/{phpstan,php-cs-fixer}`(없으면 전역 바이너리로 폴백)를 쓰도록 수정. `bin/code-loop.sh`만 수정, 리뷰어/개발자 계약 불변
 - 2026-09-22: **`verify_gate`·`verify_rev_gate` 재시도 캡 off-by-one 수정.** 실전 첫 트리거(run `20260922-120222`, ISS-878)에서 발견 — 기존 루프는 "확인 → 불일치 시 재생성"을 CAP(2)회 반복하는데 확인이 재생성보다 먼저라, 캡이 소진되는 시점의 **마지막 재생성본은 재확인 없이 그대로 합본/다음 단계로 넘어갔다**(가장 확인이 필요한 마지막 시도가 검증을 안 받는 구조). 두 함수 모두 `while [ try -lt CAP ]`를 무한루프+break로 바꿔 "매 반복 top에서 항상 먼저 확인, 그 다음 캡 소진 판단" 순서로 정정 — 재시도 예산(최대 2회 재생성)은 그대로, 확인 횟수만 CAP+1(3회)로 정정. `bin/code-loop.sh`만 수정, 리뷰어/개발자 계약 불변

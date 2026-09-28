@@ -84,8 +84,11 @@ case "$base" in
     if [ -n "${T_GATE_LINE+x}" ]; then printf 'spec\n\n%s\n' "$T_GATE_LINE" > "$out"
     else printf 'spec\n\nGATE: %s\n' "${T_GATE:-OK}" > "$out"; fi
     [ -n "${T_WT:-}" ] && printf 'WORKTREE: %s\n' "$T_WT" >> "$out" ;;
-  rev-*-correctness.md|rev-*-design.md)
-    printf 'reviewer (stub)\n' > "$out" ;;
+  rev-*-correctness.md)
+    # T_RC/T_RD 가 있으면 반환 양식을 갖춘 리뷰어 문서 — 셸 합본 경로 검사용
+    printf '%b' "${T_RC:-reviewer (stub)\n}" > "$out" ;;
+  rev-*-design.md)
+    printf '%b' "${T_RD:-reviewer (stub)\n}" > "$out" ;;
   rev-*.md)
     if [ -n "${T_NOVERDICT:-}" ]; then printf '합본인데 VERDICT 없음\n' > "$out"
     else
@@ -98,7 +101,7 @@ case "$base" in
     v=$(pick "${T_ADV:-UPHELD}" "$m"); [ -n "$v" ] || v=$(last "${T_ADV:-UPHELD}")
     printf "adversary (stub)\n\n${T_VFMT:-VERDICT: %s}\n" "$v" > "$out" ;;
   dev-*.md)
-    printf 'FILES: x\nTESTS: y\nBASELINE: z\nWHY: stub\n' > "$out" ;;
+    printf 'FILES: x\nTESTS: y\nBASELINE: z\nWHY: stub\n%b\n' "${T_DEVNOTE:-}" > "$out" ;;
   *)
     printf 'stub\n' > "$out" ;;
 esac
@@ -291,6 +294,37 @@ runit T_REV=CLEAN T_ADV=UPHELD > /dev/null
 check "WORKTREE 줄 없으면 호출 안 함" 0 "$(wc -l < "$HOME/vendor-pool.calls" | tr -d ' ')"
 reset; runit T_WT="$WT_PHP" T_GATE=TOO-LARGE > /dev/null
 check "TOO-LARGE 면 호출 안 함" 0 "$(wc -l < "$HOME/vendor-pool.calls" | tr -d ' ')"
+
+echo "== Z. 합본 셸화 — 판단이 필요 없는 라운드만 셸, 나머지는 LLM 합본 =="
+RC_CLEAN='VERDICT: CLEAN\nBLOCKERS: 0\nFINDINGS: 없음\n'
+RC_HIGH='VERDICT: FINDINGS\nBLOCKERS: 1\nFINDINGS:\n- [High] a.php:3 — x → y | 근거: 실행\n- [Low] a.php:9 — n → m | 근거: 정적\n'
+RD_MED='VERDICT: FINDINGS\nBLOCKERS: 0\nFINDINGS:\n- [Medium] b.php:1 — p → q | 근거: 정적\n'
+RD_LOW='VERDICT: FINDINGS\nBLOCKERS: 0\nFINDINGS:\n- [Low] b.php:1 — p → q | 근거: 정적\n'
+llm_merge() { grep -c "merge-$1\] model=" "$TMP/out.txt"; }
+reset; rc=$(runit T_RC="$RC_CLEAN" T_RD="$RC_CLEAN" T_ADV=UPHELD)
+check "둘 다 CLEAN — 완주" 0 "$rc"
+check "둘 다 CLEAN — 셸 합본" 1 "$(grep -c 'merge-01\] 셸 합본 (CLEAN)' "$TMP/out.txt")"
+check "둘 다 CLEAN — LLM 합본 미호출" 0 "$(llm_merge 01)"
+check "둘 다 CLEAN — adv 도달" 1 "$(cnt 'adv-*.md')"
+reset; rc=$(runit CODE_LOOP_DEV_CAP=1 T_RC="$RC_HIGH" T_RD="$RD_MED")
+check "지적 잔존 — 건수 합산" 1 "$(grep -c 'VERDICT: FINDINGS C=0 H=1 M=1' "$(d)/rev-01.md")"
+check "지적 잔존 — 원문 지적 줄 보존" 3 "$(grep -c '^- \[' "$(d)/rev-01.md")"
+check "지적 잔존 — adv 미실행" 0 "$(cnt 'adv-*.md')"
+reset; rc=$(runit T_RC="$RC_CLEAN" T_RD="$RD_LOW" T_ADV=UPHELD)
+check "Low 만 — CLEAN 으로 통과" 1 "$(grep -c '셸 합본 (CLEAN)' "$TMP/out.txt")"
+reset; rc=$(runit T_RC="$RC_CLEAN" T_RD="$RC_CLEAN" T_DEVNOTE='REBUTTED:\n- [High] a.php:3 — 수정하지 않음. 근거: x\nDEFERRED: 없음' T_ADV=UPHELD)
+check "REBUTTED — LLM 합본으로" 1 "$(llm_merge 01)"
+check "REBUTTED — 셸 합본 안 함" 0 "$(grep -c '셸 합본' "$TMP/out.txt")"
+reset; rc=$(runit T_RC="$RC_CLEAN" T_RD="$RC_CLEAN" T_DEVNOTE='FIXED: 없음\nREBUTTED: 없음\nDEFERRED: 없음' T_ADV=UPHELD)
+check "REBUTTED: 없음 필드만 — 셸 합본" 1 "$(grep -c '셸 합본 (CLEAN)' "$TMP/out.txt")"
+reset; rc=$(runit T_RC="$RC_CLEAN" T_RD="$RC_CLEAN" T_DEVNOTE='DEFERRED:\n- [Critical] a.php:1 — 잔여로 넘김' T_ADV=UPHELD)
+check "Critical DEFERRED — LLM 합본으로" 1 "$(llm_merge 01)"
+reset; rc=$(runit T_RC="$RC_CLEAN" T_RD="$RC_CLEAN" T_DEVNOTE='DEFERRED:\n- [Low] a.php:1 — 잔여로 넘김' T_ADV=UPHELD)
+check "Low DEFERRED — 셸 합본" 1 "$(grep -c '셸 합본 (CLEAN)' "$TMP/out.txt")"
+reset; rc=$(runit T_RC='VERDICT: CLEAN\n- [Medium] a.php:1 — x → y\n' T_RD="$RC_CLEAN" T_ADV=UPHELD)
+check "CLEAN 인데 Medium — LLM 합본으로" 1 "$(llm_merge 01)"
+reset; rc=$(runit T_RC='VERDICT: FINDINGS\n지적은 본문에 산문으로\n' T_RD="$RC_CLEAN" T_ADV=UPHELD)
+check "FINDINGS 인데 지적 줄 없음 — LLM 합본으로" 1 "$(llm_merge 01)"
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="
