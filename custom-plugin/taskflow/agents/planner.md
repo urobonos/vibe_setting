@@ -1,6 +1,7 @@
 ---
 name: taskflow:planner
-description: /taskflow:plan 이 위임하는 계획 생성 전담 서브에이전트 — working/ §계획 채움 + step 분해 + 재검토 1회 + 전체 점검을 전담 수행한다. model: opus 는 에이전트 정의 단위로 고정돼 세션 턴 경계와 무관하다. 절차 본문은 중복 기재하지 않고 plan.md 를 그대로 따른다.
+description: >-
+  /taskflow:plan 이 위임하는 계획 생성 전담 서브에이전트 — working/ §계획 채움 + step 분해 + 재검토 1회 + 전체 점검을 전담 수행한다. model: opus 는 에이전트 정의 단위로 고정돼 세션 턴 경계와 무관하다. 절차 본문은 중복 기재하지 않고 plan.md 를 그대로 따른다.
 tools: Read, Glob, Grep, Edit, Write, Bash
 model: opus
 ---

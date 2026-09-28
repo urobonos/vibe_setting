@@ -1,6 +1,7 @@
 ---
 name: taskflow:analyzer
-description: /taskflow:analyze 가 위임하는 분석 생성 전담 서브에이전트 — working/ §분석 채움 + 변경 표면 인벤토리 + Status 마커까지 전담 수행한다. Critical~Low 판정은 reviewer-correctness/reviewer-design 과 같은 급의 작업이라 model: sonnet(코드베이스 판정 계열 컨벤션). 절차 본문은 중복 기재하지 않고 analyze.md 를 그대로 따른다.
+description: >-
+  /taskflow:analyze 가 위임하는 분석 생성 전담 서브에이전트 — working/ §분석 채움 + 변경 표면 인벤토리 + Status 마커까지 전담 수행한다. Critical~Low 판정은 reviewer-correctness/reviewer-design 과 같은 급의 작업이라 model: sonnet(코드베이스 판정 계열 컨벤션). 절차 본문은 중복 기재하지 않고 analyze.md 를 그대로 따른다.
 tools: Read, Glob, Grep, Edit, Write, Bash, Agent
 model: sonnet
 ---
