@@ -35,6 +35,7 @@ git branch -D wip/{sid}-{slug}
 
    - **충돌 시:** `git cherry-pick --abort` 로 클린 복구 후 사용자 보고 (Claude auto-resolve 금지) — worktree/wip 보존, 사용자 판단 대기.
    - **master/main 금지:** master/main HEAD 에서의 cherry-pick 은 `branch-enforce.sh §1.6` 차단 (merge §1.5 미러). PR 절차로 대체.
+   - **`-x` 금지:** `git cherry-pick -x` 를 쓰지 않는다. `-x` 가 남기는 `(cherry picked from commit <sha>)` 의 sha 는 정착 직후 `git branch -D` 로 지워지는 wip 커밋이라 **도달 불가 해시**가 된다 (§4 "정착 후 reachable 해시 기록" 과 정면 충돌). 이미 붙은 것은 `git filter-branch --msg-filter` 로 제거한다.
 
 ## Why
 

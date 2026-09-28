@@ -42,6 +42,7 @@ git branch -D wip/{sid}-{slug}
    - **사전 검사 (머지 커밋 존재):** cherry-pick **시작 전** `git rev-list --merges ${BASE}..wip/{sid}-{slug}` 로 wip 범위 내 머지 커밋을 확인한다 (개별 Bash 호출). 출력이 **1건 이상이면** 범위 cherry-pick 이 불가하므로 cherry-pick 을 **시작하지 않고** "wip 에 머지 커밋 N건 존재 — 범위 cherry-pick 불가, 수동 정착 필요" 를 사용자에게 보고하고 **정지**한다.
    - **충돌 시:** cherry-pick 중 충돌이 발생하면 자동 해결을 시도하지 않는다. 즉시 `git cherry-pick --abort` (개별 Bash 호출) 로 feature 분기를 원상 복구하고, **충돌 파일 목록** + "wip 분기는 그대로 보존됨, 수동 정착 또는 충돌 해결 후 재시도" 를 사용자에게 보고한다.
    - **master/main 금지:** master/main HEAD 에서의 cherry-pick 은 `branch-enforce.sh §1.6` 차단 (merge §1.5 미러). PR 절차로 대체.
+   - **`-x` 금지:** `git cherry-pick -x` 를 쓰지 않는다. `-x` 가 남기는 `(cherry picked from commit <sha>)` 의 sha 는 정착 직후 `git branch -D` 로 지워지는 wip 커밋이라 **도달 불가 해시**가 된다 (§4 "정착 후 reachable 해시 기록" 과 정면 충돌). 이미 붙은 것은 `git filter-branch --msg-filter` 로 제거한다.
 
 4. **정착 후 reachable 해시 기록 (추적성, 2026-06-02~):** ff-only 머지·cherry-pick 후 working/summary 에 기록하는 커밋 해시는 **정착 후 reachable 최종 해시**여야 한다 (`git rev-parse ${FEATURE}` / `git log -1 --format=%h`). 머지 전 wip 해시·rebase 이전 해시를 인용하면 HEAD 에서 도달 불가한 orphan 이 된다 (audit 2026-06-02 — BE summary 6개 해시 전부 orphan 인용, patch-id 로만 작업 확인됨). `/taskflow:retro` 단계에서 `git merge-base --is-ancestor` 로 재확인.
 
