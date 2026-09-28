@@ -123,6 +123,14 @@ if [ -n "${CODE_LOOP_SPEC:-}" ]; then
   fi
 fi
 
+# ===== 루트·드라이브·홈 전체 find 차단 (2026-09-28) =====
+# 도구 타임아웃은 Windows 에서 손자 프로세스를 죽이지 않는다 — 전체 스캔 find 는 호출이 끝난 뒤에도
+# 고아로 남아 코어를 점유한다 (2026-09-23 `find / -maxdepth 6` 이 코어 1개 100% → hook 전부 타임아웃).
+# 대화 기록 실측 find 2,801회 중 이 형태 53회. 좁은 경로의 find 는 금방 끝나므로 막지 않는다.
+if printf '%s\n' "$LOWER_CMD" | grep -qE "(^|[;&|(])[[:space:]]*find[[:space:]]+(-[hlp][[:space:]]+)*[\"']?(/|/[a-z]/?|[a-z]:[/\\\\]*|~/?|\\\$\{?home\}?/?|/[a-z]/users(/[^/[:space:]\"']+)?/?)[\"']?([[:space:]]|\$)"; then
+  block_exit "find-root-scan" "[BLOCKED] 루트·드라이브·홈 전체 find 금지 — 타임아웃 뒤에도 고아 프로세스로 남아 CPU 를 점유한다. 대신: Glob 도구(파일명) · Grep 도구(내용) · 셸이면 rg --files <좁힌 경로> 또는 git ls-files. find 를 꼭 써야 하면 시작 경로를 프로젝트 하위로 좁혀라 (CLAUDE.md §4.2 파일 탐색 도구)."
+fi
+
 # ===== 파괴적 명령 차단 (exit 2) =====
 
 # 1. 파일 삭제 — rm -rf, rm -r, rm -f
