@@ -12,55 +12,9 @@ argument-hint: "[토론 주제 — 생략 시 직전 응답 쟁점 토론]"
 
 - `$ARGUMENTS` = (선택) 토론할 주제·질문. 생략 시 직전 응답의 미해결 쟁점·옵션 분기를 자동 추출.
 
-## 동작 (2-Phase)
+## 동작
 
-| Phase | 처리 | Spawn |
-|-------|------|-------|
-| 0 | 쟁점 정리 — 핵심 질문 1~2 문장 정리 (Question Framing) | - |
-| 1 | **12 멤버 Agent 풀-병렬 spawn** (4 팀 × 3 멤버 = 12) — 각 멤버는 cold context 로 자기 관점만 발언 (300 자 이내) | 12 |
-| 2 | **4 Lead Agent 풀-병렬 spawn** (각 팀 1 Lead) — 자기 팀 멤버 3 의견 종합 → 팀 합의 (500 자 이내). Phase 1+2 총합 = **16 Agent** | 4 |
-| 3 | Cross-Team 종합 — 본 세션 Claude 가 4 팀 합의를 비교표로 정리 | - |
-| 4 | 사용자 의견 확인 → 최종 답변 | - |
-
-## 직병렬 실행 지침
-
-**원칙:** 본 슬래시는 이미 **본질적 병렬** (16 Agent 풀-병렬 spawn 고정). Phase 결절점만 직렬.
-
-| 태스크 | 직렬·병렬 | 방법 |
-|--------|----------|-----|
-| Phase 1 (12 멤버) + Phase 2 (4 Lead) | **본질적 병렬** | cold context 풀-병렬 spawn (§"16 Agent 풀-병렬 spawn 트리" 참조) |
-| Phase 0 / 3 / 4 | **직렬 결절점** | 쟁점 정리 → (병렬) → Cross-Team 종합 → 사용자 확인 |
-
-## 4 에이전트팀 구성
-
-| 팀 | Lead | 멤버 (3 명, 각각 독립 Agent) | 핵심 질문 |
-|----|------|-----------------------------|-----------|
-| **팀 A (구현/품질)** | Team-A Lead | Worker / Reviewer / Tester | "구현할 수 있는가? 품질 보장되는가?" |
-| **팀 B (설계/데이터)** | Team-B Lead | Architect / Data / Analyst | "설계가 요구사항을 충족? 데이터 구조 적절?" |
-| **팀 C (안정/보안/운영)** | Team-C Lead | Security / Performance / Ops | "안전한가? 성능·장애·운영에 견디는가?" |
-| **팀 D (전략/대안)** | Team-D Lead | Pragmatist / Visionary / Innovator | "더 나은 방법? 현실적? 혁신적 대안?" |
-
-## 16 Agent 풀-병렬 spawn 트리
-
-```
-Orchestrator (본 세션 Claude)
- │
- ├── 팀 A (4 Agent)  Lead + Worker + Reviewer + Tester
- ├── 팀 B (4 Agent)  Lead + Architect + Data + Analyst       ── 병렬
- ├── 팀 C (4 Agent)  Lead + Security + Performance + Ops
- └── 팀 D (4 Agent)  Lead + Pragmatist + Visionary + Innovator
-```
-
-## 비용 안내
-
-| 항목 | 풀-병렬 16 Agent |
-|------|------------------|
-| 실제 Agent spawn | 16 |
-| 토큰 비용 | 단독 4 Agent 대비 **4×** |
-| 응답 시간 | ~60~90 초 (Phase 별 병렬) |
-| 의견 깊이 | Cold context 독립 — 진정 다양 |
-
-비용 4 배는 의견 독립성 트레이드오프. 단순 질문에는 `/orchestration` 또는 직접 답변 권장.
+`debate` 스킬(`skills/debate/SKILL.md`)을 불러 그 절차를 그대로 따른다. 팀 구성·2-Phase spawn·prompt 양식·비용·출력 형식은 전부 스킬이 SSOT 다 — 여기 다시 적지 않는다 (진입점과 스킬 두 곳에 같은 표를 두면 한쪽만 고쳐져 갈라진다).
 
 ## 호출 방식
 
@@ -79,13 +33,6 @@ Orchestrator (본 세션 Claude)
 ## §3 Checkpoint 우선 적용
 
 본 슬래시는 토론만 수행한다. 토론 결과의 코드 반영·산출물 작성은 **별도 워크플로우** (`/taskflow:analyze` → `/taskflow:plan` → `/taskflow:execute`) 로 분리한다. 토론 즉시 mutation 도구 (Edit/Write/Bash mutation) 호출 금지. 16 Agent 풀-병렬 spawn = §3 "외부 API 호출" 매칭 (대량 토큰 소비) — 사용자 진행 승인 후 spawn.
-
-## Skip 조건
-
-| 영역 | 진행 여부 |
-|------|----------|
-| 의견 갈림·트레이드오프·아키텍처 결정·옵션 분기 | **필수** — 16 Agent 풀-병렬 spawn 으로 다양 관점 확보 |
-| 단순 사실 확인·코드 작성·플랜 요청 | **면제** — 직접 답변 또는 `/taskflow:execute`·`/taskflow:plan` 으로 종결 (16 Agent 비용 정당화 X) |
 
 ## SSOT
 
