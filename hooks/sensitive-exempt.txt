@@ -13,3 +13,4 @@
 # FE 소스가 아니라 BE 회귀 가드 도구이며, 프로젝트 CLAUDE.md §"tools 디렉토리 동기화" 가
 # "API 변경 시 tools/shared/ 갱신"을 BE 의무로 명시한다. 레포 전체에서 이 경로의 .js 는 1개.
 */tools/shared/js/*.js
+*/public/assets/js/*.js
