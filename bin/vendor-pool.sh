@@ -31,6 +31,7 @@
 #     vendor" 를 전제해 신규 worktree(git worktree add 직후, vendor 는 gitignore 대상이라
 #     처음부터 없음)에는 못 쓴다. pool 있으면 하드링크 클론(수 초) · 없으면 최초 1회
 #     `composer install` 후 pool 화(다음부턴 재사용). vendor 가 이미 있으면 convert 로 위임.
+#     원본 레포의 .env 도 없으면 복사한다(gitignore 라 worktree 에 안 따라온다, 2026-09-29).
 
 HARNESS_ROOT="${HOME}/.claude"
 POOL_ROOT="${HARNESS_ROOT}/vendor-pool"
@@ -131,10 +132,24 @@ cmd_convert() {
     echo "전환 완료: $vdir ($(find "$vdir" -type f | wc -l)개 파일, 구 vendor 제거)"
 }
 
+# .env 도 gitignore 대상이라 `git worktree add` 로는 따라오지 않는다. 없으면 DB 테스트가 전건 skip 되고
+# (SkipUnlessLocalSandboxTrait) 에이전트는 .env 생성을 §3 로 보고 멈춘다 — run 20260929-073124(ISS-971)
+# 에서 assertion 0건인 채 CLEAN 이 났다. 원본 레포(공통 .git 의 부모)의 .env 를 그대로 복사한다.
+# 이미 있으면 건드리지 않는다(worktree 에서 일부러 바꾼 값을 덮지 않는다).
+ensure_env() {
+    local wt="$1" common main
+    [ -e "$wt/.env" ] && return 0
+    common=$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+    main=$(dirname "$common")
+    [ "$main" != "$wt" ] && [ -f "$main/.env" ] || return 0
+    cp -p "$main/.env" "$wt/.env" && echo ".env 복사: $main/.env -> $wt/.env"
+}
+
 cmd_ensure() {
     local wt="$1"
     local vdir="$wt/vendor"
     local lock="$wt/composer.lock"
+    ensure_env "$wt"
     [ -f "$lock" ] || { echo "composer.lock 없음(PHP 레포 아님) — skip: $wt"; return 0; }
 
     if [ -e "$vdir" ]; then
