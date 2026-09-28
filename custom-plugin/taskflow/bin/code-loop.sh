@@ -170,7 +170,10 @@ files_of() {
   awk '
     /^FILES:/ { f=1; next }
     f && /^[A-Z][A-Z-]*:/ { exit }
-    f && /^- / { line=$0; sub(/^- /,"",line); sub(/ — .*/,"",line); sub(/[[:space:]]*$/,"",line); print line }
+    f && /^- / { line=$0; sub(/^- /,"",line)
+                 # 삭제한 파일은 검사할 게 없다 — "(삭제) 경로" 를 경로로 읽어 "파일 없음" 이 났다(run 20260929-073124)
+                 if (line ~ /^\((삭제|deleted)\)/) next
+                 sub(/ — .*/,"",line); sub(/[[:space:]]*$/,"",line); print line }
   ' "$1"
 }
 
@@ -513,6 +516,9 @@ verify_criteria() {
 #   MUTATIONS: {n}                                          (00-spec.md — 변이 기준 개수)
 #   MUTATION: {파일} | {원문 조각} ==> {변이 조각} | {phpunit 명령}   (spec 또는 dev-NN.md)
 MUTATION_RED_RE='FAILURES!|ERRORS!|Tests: [0-9]+.*(Failures|Errors): [1-9]'
+# 대조군이 exit 0 이어도 assertion 이 0 이면(전건 skip·테스트 0개) 변이도 당연히 통과한다 —
+# 그걸 GREEN(약한 테스트)으로 적으면 dev 가 고칠 수 없는 걸로 재보고만 소진한다(run 20260929-073124)
+MUTATION_VACUOUS_RE='Assertions: 0([^0-9]|$)|No tests executed|OK \(0 tests'
 
 mutation_lines() {
   grep -hE '^[[:space:]#>*-]*MUTATION:' "$@" 2>/dev/null \
@@ -589,6 +595,10 @@ verify_mutations() {
     out=$(cd "$scratch" && eval "$cmd" 2>&1); rc=$?
     if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then
       echo "--- [mut-$nn] 대조군이 green 이 아니다 — 판정 무효: $cmd" | tee -a "$report"
+      continue
+    fi
+    if printf '%s' "$out" | grep -qE "$MUTATION_VACUOUS_RE"; then
+      echo "--- [mut-$nn] 대조군 assertion 0(전건 skip·테스트 없음) — 실행 환경이 없어 판정 무효: $cmd" | tee -a "$report"
       continue
     fi
     cp -p "$scratch/$file" "$scratch/$file.mutation-orig"
@@ -1026,6 +1036,18 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
       echo
       cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
     echo "=== [§3 범위 변경] SCOPE_FILES 밖 수정 $(printf '%s\n' "$final_outside" | grep -c .)건 — RESULT.md 맨 위에 올림"
+  fi
+
+  # 마지막 dev 의 BASELINE 이 assertion 0 이면 이 CLEAN 은 실행 증거가 없다. 판정은 막지 않고
+  # 정착 전에 반드시 보이게 맨 위에 올린다 (run 20260929-073124: 23건 전건 skip 인 채 CLEAN·UPHELD)
+  local last_dev
+  last_dev=$(ls "$dir"/dev-*.md 2>/dev/null | sort | tail -1)
+  if [ -n "$last_dev" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미검증\]' "$dir/RESULT.md" \
+     && awk '/^BASELINE:/{f=1} f&&/^[A-Z][A-Z-]*:/&&!/^BASELINE:/{exit} f' "$last_dev" | grep -qE "$MUTATION_VACUOUS_RE"; then
+    { echo "> [미검증] 마지막 dev 의 BASELINE 이 assertion 0건(전건 skip 등) — 이 판정은 실행 증거 없이 났다. 정착 전에 실행 환경을 갖춰 다시 돌린다."
+      echo
+      cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
+    echo "=== [미검증] BASELINE assertion 0 — RESULT.md 맨 위에 올림"
   fi
 
   echo "=== $(date '+%F %T') code-loop 종료 (dev=$verdict adv=$adv_verdict)"

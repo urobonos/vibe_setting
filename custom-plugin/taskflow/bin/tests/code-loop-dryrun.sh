@@ -102,7 +102,7 @@ case "$base" in
     v=$(pick "${T_ADV:-UPHELD}" "$m"); [ -n "$v" ] || v=$(last "${T_ADV:-UPHELD}")
     printf "adversary (stub)\n%b\n${T_VFMT:-VERDICT: %s}\n" "${T_ADVNOTE:-}" "$v" > "$out" ;;
   dev-*.md)
-    printf 'FILES:\n%b\nTESTS: y\nBASELINE: z\nWHY: stub\n%b\n' "${T_DEVFILES:-- x}" "${T_DEVNOTE:-}" > "$out" ;;
+    printf 'FILES:\n%b\nTESTS: y\nBASELINE: %b\nWHY: stub\n%b\n' "${T_DEVFILES:-- x}" "${T_BASELINE:-z}" "${T_DEVNOTE:-}" > "$out" ;;
   *)
     printf 'stub\n' > "$out" ;;
 esac
@@ -377,6 +377,14 @@ check "변경 줄 에러 — 불일치" 1 "$([ "$(grep -c '기계검사 불일�
 # 기계검사가 매번 막혀도(파일 없음) 변이 줄 누락은 매 시도 드러나야 한다
 reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- missing.php' T_SPECNOTE='MUTATIONS: 1' T_REV=CLEAN T_ADV=UPHELD)
 check "기계검사 실패 중에도 변이 판정" 1 "$([ "$(grep -c 'MUTATION 줄은 0건' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+
+echo "== AE. assertion 0 BASELINE 은 RESULT 맨 위 [미검증] · FILES 의 (삭제) 는 기계검사 제외 (run 20260929-073124 ISS-971) =="
+reset; rc=$(runit T_BASELINE='전: OK, but some tests were skipped! Tests: 23, Assertions: 0, Skipped: 23' T_REV=CLEAN T_ADV=UPHELD)
+check "미검증 — RESULT 첫 줄" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미검증\]')"
+reset; rc=$(runit T_BASELINE='green 23 tests, 57 assertions' T_REV=CLEAN T_ADV=UPHELD)
+check "실행 증거 있으면 미검증 없음" 0 "$(grep -c '^> \[미검증\]' "$(d)/RESULT.md")"
+reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- (삭제) tests/gone.php' T_REV=CLEAN T_ADV=UPHELD)
+check "(삭제) 항목 — 파일 없음 아님" 0 "$(grep -c '파일 없음' "$TMP/out.txt")"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
