@@ -65,7 +65,7 @@ min_claude_md_version: "4.0"
 작업 문서(신규: unified 1개 / 기존: analyze+plan+result 3종)와 일일 요약(summary)을 표준 템플릿으로 생성·관리한다.
 보고용 산출물은 `~/.claude/docs/{product}/output/{category}/{제목}/{파일명}.md` 형식으로, 소프트웨어 개발 산출물 6종(SDP, SRS, SDD, IDD, STP, STD)은 `~/.claude/docs/{product}/specs/` 디렉토리에 생성·관리한다.
 
-**전역 문서 인덱스 (자동):** docs 하위 모든 .md(output/tasks/specs/working 등) 는 `~/.claude/docs/indexing/{product}.md` 전역 인덱스에 `doc-index-maintain.sh` PostToolUse hook 이 자동 등록한다(영역/타이틀/경로/수정일). 본 스킬이 작성하는 산출물도 별도 조치 없이 자동 인덱싱되므로 index 갱신을 수동으로 신경 쓰지 않는다. **직접 편집 금지**(자동 재생성). 정책 SSOT = CLAUDE.md §File Paths "indexing/{product}.md 전역 문서 인덱스".
+**전역 문서 인덱스 (자동):** docs 하위 모든 .md(output/tasks/specs/working 등) 는 `~/.claude/docs/indexing/{product}.md` 전역 인덱스에 `doc-index-maintain.sh` PostToolUse hook 이 자동 등록한다(영역/타이틀/경로/수정일). 본 스킬이 작성하는 산출물도 별도 조치 없이 자동 인덱싱되므로 index 갱신을 수동으로 신경 쓰지 않는다. **직접 편집 금지**(자동 재생성). 정책 SSOT = 본 절 + `doc-index-maintain.sh`.
 
 **`{product}` 결정 규칙:** `basename $CWD`. 단 `.claude` 는 `claude-harness` 로 치환. 구현은 `hooks/lib/product-resolver.sh`. 예:
 - `C:/Works/hongcafe_global_backend` → `hongcafe_global_backend`
@@ -101,6 +101,13 @@ min_claude_md_version: "4.0"
 > 이 면제는 `working-lifecycle.sh` 가 `mv` 로 옮기며 PreToolUse 를 우회하던 설계 의도를 hook 이 뒤늦게 따라잡은 것이다. 그 전까지 이동 완료된 step 문서는 **어떤 편집도 차단**돼 있었다(2026-08-03 실측 667건). 회귀 가드 = `hooks/tests/run-guard-tests.sh` §H.
 
 > 상세 형식·금지 패턴·예시는 `references/file-naming.md` 참조.
+
+### `output/` 카테고리 · 공유 문서 메타 (CLAUDE.md §File Paths 에서 이관, 2026-09-28)
+
+- **7분류:** `audit` / `verification` / `research` / `analysis` / `report` / `guide` / `archive`. 모호하면 **audit → verification → research → analysis** 순으로 먼저 맞는 쪽. 이름·면제 = `output-naming-check.sh` SSOT.
+- **공유용 단일 통합 문서** `output/report/.../{share,proposal,sharing}*.md` = 7메타 + 12섹션. SSOT = `output-report-share-guard.sh`.
+- **개발언어/기술스택 메타** (2026-06-01~): 작성 정보 박스 필수행. SSOT = `doc-unified-check.sh` V1 (`v_template_guard`).
+- **Active Task Registry** (2026-05-15~): `~/.claude/docs/working/REGISTRY.md` + `state/sessions/{slug}/{sid}.lock` 로 다세션 가시화, 4 hook 자동 갱신(비차단). 조회 = `/taskflow:load`. SSOT = `hooks/lib/registry-utils.sh`.
 
 ## 공통 규칙
 
