@@ -102,7 +102,7 @@ case "$base" in
     v=$(pick "${T_ADV:-UPHELD}" "$m"); [ -n "$v" ] || v=$(last "${T_ADV:-UPHELD}")
     printf "adversary (stub)\n%b\n${T_VFMT:-VERDICT: %s}\n" "${T_ADVNOTE:-}" "$v" > "$out" ;;
   dev-*.md)
-    printf 'FILES: x\nTESTS: y\nBASELINE: z\nWHY: stub\n%b\n' "${T_DEVNOTE:-}" > "$out" ;;
+    printf 'FILES:\n%b\nTESTS: y\nBASELINE: z\nWHY: stub\n%b\n' "${T_DEVFILES:-- x}" "${T_DEVNOTE:-}" > "$out" ;;
   *)
     printf 'stub\n' > "$out" ;;
 esac
@@ -357,6 +357,27 @@ reset; rc=$(runit T_SPECNOTE='MUTATIONS: 0' T_REV=CLEAN T_ADV=UPHELD)
 check "변이 기준 0 — 재보고 없음" 0 "$(grep -c '셸 재검증 불일치' "$TMP/out.txt")"
 
 echo
+echo "== AD. phpstan 은 변경 줄 에러만 · 변이는 기계검사와 독립 (run 20260928-230103 ISS-970) =="
+# 기존 에러 1건(변경 밖 줄)이 매 라운드 불일치를 내 변이 검증이 0회 돌았다
+WT_STAN="$TMP/wt-stan"; mkdir -p "$WT_STAN/vendor/bin"
+printf '<?php\n$a = 1;\n$b = 2;\n' > "$WT_STAN/a.php"
+git -C "$WT_STAN" init -q; git -C "$WT_STAN" add a.php
+git -C "$WT_STAN" -c user.email=t@t -c user.name=t commit -qm init
+printf '<?php\n$a = 1;\n$b = 3;\n' > "$WT_STAN/a.php"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$WT_STAN/vendor/bin/php-cs-fixer"
+chmod +x "$WT_STAN/vendor/bin/php-cs-fixer"
+stan() { printf '#!/usr/bin/env bash\necho "C:\\\\wt\\\\a.php:%s:Variable might not be defined."\nexit 1\n' "$1" > "$WT_STAN/vendor/bin/phpstan"; chmod +x "$WT_STAN/vendor/bin/phpstan"; }
+stan 2
+reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
+check "변경 밖 줄 에러 — 불일치 아님" 0 "$(grep -c '기계검사 불일치 — phpstan' "$TMP/out.txt")"
+check "변경 밖 줄 에러 — 기존 코드로 표기" 1 "$([ "$(grep -c '변경 밖 줄(기존 코드)' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+stan 3
+reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
+check "변경 줄 에러 — 불일치" 1 "$([ "$(grep -c '기계검사 불일치 — phpstan (변경 줄)' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+# 기계검사가 매번 막혀도(파일 없음) 변이 줄 누락은 매 시도 드러나야 한다
+reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- missing.php' T_SPECNOTE='MUTATIONS: 1' T_REV=CLEAN T_ADV=UPHELD)
+check "기계검사 실패 중에도 변이 판정" 1 "$([ "$(grep -c 'MUTATION 줄은 0건' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="

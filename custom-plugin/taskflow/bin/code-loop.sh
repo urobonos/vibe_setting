@@ -326,6 +326,30 @@ $hist"
   return 0
 }
 
+# phpstan 에러 중 이번 diff 가 건드린 줄에 있는 것만 낸다 (raw 형식 `경로:줄:메시지`).
+# 파일 전체를 판정하면 HEAD 에 이미 있던 에러까지 dev 탓이 된다 — run 20260928-230103(ISS-970)
+# 에서 무관한 `Custom_helper.php:453` 1건이 매 라운드 불일치를 내 재보고 한도를 다 썼고, dev 는
+# 그걸 없애려 범위 밖 코드를 고쳐 리뷰어 Medium 을 받았다. 추적 안 된 새 파일은 전 줄이 변경이다.
+# 변경 줄이 아닌 곳에 생긴 파급 에러는 놓친다 — 그건 리뷰어가 diff 를 돌려 잡는 몫이다.
+phpstan_new_errors() {
+  local root="$1" rel="$2" out="$3" changed
+  if ! git -C "$root" ls-files --error-unmatch -- "$rel" >/dev/null 2>&1; then
+    printf '%s\n' "$out" | grep -E '\.php:[0-9]+:'
+    return 0
+  fi
+  changed=$(git -C "$root" diff -U0 HEAD -- "$rel" | sed -nE 's/^@@ -[0-9,]+ \+([0-9]+)(,([0-9]+))? @@.*/\1 \3/p')
+  printf '%s\n' "$out" | grep -E '\.php:[0-9]+:' | while IFS= read -r line; do
+    local n start len
+    n=$(printf '%s' "$line" | sed -nE 's/^.*\.php:([0-9]+):.*$/\1/p')
+    [ -n "$n" ] || continue
+    while read -r start len; do
+      [ -n "$start" ] || continue
+      len="${len:-1}"; [ "$len" -eq 0 ] && len=1
+      if [ "$n" -ge "$start" ] && [ "$n" -lt $((start + len)) ]; then printf '%s\n' "$line"; break; fi
+    done <<< "$changed"
+  done
+}
+
 # dev-$nn.md 의 FILES: 목록에 php -l/php-cs-fixer/phpstan 을 셸이 직접 재실행한다.
 # step-developer.md §"반환 전 기계 검사"와 같은 3종 — 자기신고가 아니라 셸이 판정한다.
 # WORKTREE: 줄이 없거나(구버전 spec) 도구가 레포에 없으면 조용히 건너뛴다.
@@ -380,10 +404,20 @@ verify_mechanical() {
       # worktree 밖(러너 cwd)에서 돌리면 그 자리의 config(또는 config 없음)를 주워 무관한
       # 클래스까지 "unknown class" 로 뜬다(실측 2026-09-22, run 20260922-160417) — 반드시
       # worktree 루트에서, 그 worktree 자신의 phpstan 로 돈다.
-      if ! out=$(cd "$root" && "$phpstan_bin" analyse "$abspath" 2>&1); then
-        echo "!!! [dev-$nn] 기계검사 불일치 — phpstan: $f"
-        printf '%s\n' "$out" | sed 's/^/    /'
-        fail=1
+      if ! out=$(cd "$root" && "$phpstan_bin" analyse --no-progress --error-format=raw "$abspath" 2>&1); then
+        local fresh
+        if ! printf '%s\n' "$out" | grep -qE '\.php:[0-9]+:'; then
+          # 에러 줄이 없는 실패 = 도구 자체 오류(설정·메모리). 걸러낼 기준이 없으니 그대로 불일치다
+          echo "!!! [dev-$nn] 기계검사 불일치 — phpstan 실행 실패: $f"
+          printf '%s\n' "$out" | sed 's/^/    /'
+          fail=1
+        elif fresh=$(phpstan_new_errors "$root" "$f" "$out") && [ -n "$fresh" ]; then
+          echo "!!! [dev-$nn] 기계검사 불일치 — phpstan (변경 줄): $f"
+          printf '%s\n' "$fresh" | sed 's/^/    /'
+          fail=1
+        else
+          echo "--- [dev-$nn] phpstan: $f — 에러는 전부 변경 밖 줄(기존 코드), 불일치 아님"
+        fi
       fi
     fi
   done < <(files_of "$dir/dev-$nn.md")
@@ -626,12 +660,14 @@ VERIFY_RETRY_CAP=2
 verify_gate() {
   local dir="$1" nn="$2" common="$3" try=0
   while :; do
-    local mutation_rc=0
-    if verify_criteria "$dir" "$nn" && verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn"; then
-      verify_mutations "$dir" "$nn"; mutation_rc=$?
-      [ "$mutation_rc" -eq 2 ] && return 1
-      [ "$mutation_rc" -eq 0 ] && return 0
-    fi
+    # 변이는 앞 단계와 독립으로 돈다 — 앞이 막히면 변이를 한 번도 안 보고 재보고 한도를 다 쓴다
+    # (run 20260928-230103: phpstan 오판 3회로 변이 검증 0회). 변이는 자체 대조군(무변이 green)이
+    # 있어 코드가 깨져 있으면 판정 무효로 끝나므로 앞 결과에 기대지 않아도 된다
+    local mutation_rc=0 pre_ok=0
+    verify_criteria "$dir" "$nn" && verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn" || pre_ok=1
+    verify_mutations "$dir" "$nn"; mutation_rc=$?
+    [ "$mutation_rc" -eq 2 ] && return 1
+    [ "$pre_ok" -eq 0 ] && [ "$mutation_rc" -eq 0 ] && return 0
     if [ "$try" -ge "$VERIFY_RETRY_CAP" ]; then
       break
     fi
@@ -639,8 +675,8 @@ verify_gate() {
     echo "=== [dev-$nn] 셸 재검증 불일치 — 재보고 요청 $try/$VERIFY_RETRY_CAP"
     local fix_body="$common
 
-방금 반환한 $dir/dev-$nn.md 가 셸 재검증(CRITERIA → 기계검사 → BASELINE → 변이 순, 앞이
-실패하면 뒤는 안 돌았다)을 통과하지 못했다. 무엇이 걸렸는지는 run.log 의 위 !!! 줄에 있다. 실제 상태를 다시 확인해 같은 파일을 갱신 반환한다 —
+방금 반환한 $dir/dev-$nn.md 가 셸 재검증(CRITERIA → 기계검사 → BASELINE 순, 앞이 실패하면 뒤는
+안 돌았다. 변이는 이와 따로 매번 돈다)을 통과하지 못했다. 무엇이 걸렸는지는 run.log 의 위 !!! 줄에 있다. 실제 상태를 다시 확인해 같은 파일을 갱신 반환한다 —
 새 라운드가 아니라 같은 dev-$nn.md 의 재보고다. 주장을 실측에 맞게 고치거나,
 실측이 틀렸다면 그 근거를 NOTES 에 남긴다.
 CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행해 증거를 붙인다. 환경 탓에

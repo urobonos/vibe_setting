@@ -47,6 +47,7 @@
 
 ## commands/code-loop.md
 
+- 2026-09-29: **phpstan 은 변경 줄 에러만 · 변이 검증은 기계검사와 독립.** 첫 실전 run(20260928-230103, ISS-970)에서 파일 전체 phpstan 이 무관한 기존 에러 1건으로 매 라운드 불일치를 내 변이 검증이 0회 돌았고, dev 는 그 에러를 없애려 범위 밖 수정을 했다. `phpstan_new_errors` 가 `git diff -U0 HEAD` 의 변경 줄에 걸린 에러만 남긴다(추적 안 된 새 파일은 전 줄). dryrun AD 4건(수정 전 러너 4 FAIL 확인)
 - 2026-09-28: **범위 이탈 드러내기 (`scope_violations`).** spec `SCOPE_FILES: glob, …` 밖에서 바뀐 파일을 매 리뷰 라운드 `scope-NN.md` 로 리뷰어에게 넘기고, 종료 시 남아 있으면 RESULT.md 맨 위에 `> [§3 범위 변경]` 으로 올린다. 막지 않는다 — 필요한 범위 확장까지 막으면 교착된다. ISS-292 step-10: dev 가 비목표(`getCallListCount()` 내부)를 넘어 CallModel.php 를 고쳤는데 리뷰 2축이 범위 이탈을 결함으로 세지 않았다
 - 2026-09-28: **변이 red 셸 검증 (`verify_mutations`).** spec `MUTATIONS: N` + spec/dev `MUTATION: 파일 | 원문 ==> 변이 | phpunit 명령`. 셸이 일회용 스크래치 worktree(HEAD + dev diff + untracked + vendor-pool 하드링크, 이식 후 변경 파일 집합 일치 단언)에서 대조군 green 확인 → 실 소스 변이 → red 요구 → 스크래치 통째 제거. 대조군이 green 이 아니면 판정 무효(dev 탓 아님), dev worktree 파일 sha256 이 바뀌면 중단. 결과 `mut-NN.md` 는 리뷰어 입력. ISS-694: 변이를 흉내 내는 항상 참 테스트가 네 번 지적되고도 남았다
 - 2026-09-28: **adversary 재현 결함 강등 차단.** 재현까지 한 결함을 "성공 기준 밖" 으로 `잔여 의심` 에 내리고 UPHELD 를 선언하던 형태(UPHELD 8건 중 5건에서 본체가 정착 직전 추가 수정 — ISS-520·415·694)를 막는다. 정의: diff 가 바꾼 경로의 재현된 오동작 · diff 가 추가한 테스트의 판별력 0 재현 = 기준 밖이어도 BROKEN. 셸: UPHELD 반환의 `재현된 이탈:` 이 `없음` 이 아니면 BROKEN 으로 승격(`has_reproduced_deviation`)
