@@ -39,11 +39,11 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        ├ claude -p [spec]              sonnet  → 00-spec.md (+ GATE 줄)
        │
        ├ dev-loop  (라운드당 프로세스 4개, 캡 5)
-       │    claude -p [dev]            sonnet  → dev-NN.md
+       │    claude -p [dev]            opus    → dev-NN.md
        │    └ 셸 독립 재검증 (LLM 프로세스 아님, verify_gate)
        │         기계검사·BASELINE 재실행 — 불일치면 [dev] 재보고 2회까지, 재보고 후 매번 재확인
-       │    claude -p [rev-correctness] sonnet ┐ 병렬
-       │    claude -p [rev-design]      sonnet ┘
+       │    claude -p [rev-correctness] opus   ┐ 병렬
+       │    claude -p [rev-design]      opus   ┘
        │    └ 셸 독립 재검증 (verify_rev_gate) — 인용 테스트 수치 재실행,
        │         불일치 역할만 개별 재검토 2회까지, 재검토 후 매번 재확인
        │    claude -p [merge]          sonnet  → rev-NN.md (+ VERDICT 줄)
@@ -55,6 +55,8 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        │
        └ claude -p [result]            sonnet  → RESULT.md  ← 메인은 이것만 읽는다
 ```
+
+dev·rev 모델은 러너가 에이전트 정의(`step-developer.md` · `reviewer-correctness.md`)의 `model:` 에서 읽는다. 전환 = `/taskflow:models dev=… rev=…`, 1회만 바꿀 때 = `CODE_LOOP_MODEL_DEV` / `CODE_LOOP_MODEL_REV` 환경변수.
 
 **각 `claude -p` 의 프롬프트 = 에이전트 정의 전문 + 작업 지시다.** Agent 도구로 spawn 하는 것이 아니라 **프로세스 자체가 그 역할을 수행한다.** 그래서 정의 파일(`agents/*.md`)이 그대로 계약으로 작동하고, 모델은 정의 frontmatter 와 일치시킨다.
 

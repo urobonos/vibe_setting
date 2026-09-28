@@ -2,7 +2,7 @@
 name: cold-reviewer
 description: cold 코드리뷰어 (하위 호환 포인터) — 판정축은 reviewer-correctness(기능 정합) · reviewer-design(설계 정합) 두 정의로 분리됐다. 이 이름으로 호출되면 두 정의를 합쳐 적용한다. 코드는 고치지 않는다 (Edit/Write 도구 부재 = 기계적 강제).
 tools: Read, Glob, Grep, Bash
-model: sonnet
+model: opus
 ---
 
 **이 정의는 2026-08-19 에 두 개로 갈라졌다. 본 파일은 하위 호환 포인터다.**

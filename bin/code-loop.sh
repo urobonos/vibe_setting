@@ -36,10 +36,16 @@ GATE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/code-loop-g
 AGENT_DIR="$CLAUDE_HOME/custom-plugin/taskflow/agents"
 PERM="${CODE_LOOP_PERM:-auto}"
 
-# 스텝별 모델 — 에이전트 정의 frontmatter 와 일치시킨다 (정의가 SSOT, 여기는 사본)
+# 스텝별 모델 — 개발자·리뷰어는 에이전트 정의 frontmatter 의 model: 을 그대로 읽는다.
+# 사본을 두면 tick(Agent spawn)과 code-loop 가 다른 모델로 갈라진다. 전환 = /taskflow:models
+agent_model() {
+  sed -n '1,/^---$/{/^model:[[:space:]]*/{s///;s/[[:space:]]*$//;p;q;}}' "$AGENT_DIR/$1" 2>/dev/null
+}
 M_SPEC="${CODE_LOOP_MODEL_SPEC:-sonnet}"
-M_DEV="${CODE_LOOP_MODEL_DEV:-sonnet}"
-M_REV="${CODE_LOOP_MODEL_REV:-sonnet}"
+M_DEV="${CODE_LOOP_MODEL_DEV:-$(agent_model step-developer.md)}"
+M_DEV="${M_DEV:-sonnet}"
+M_REV="${CODE_LOOP_MODEL_REV:-$(agent_model reviewer-correctness.md)}"
+M_REV="${M_REV:-sonnet}"
 # adversary 는 opus 고정이다. 이 역할만 "리뷰어가 통과시킨 것을 깨는" 일이고,
 # 클린을 못 깨면 루프가 거기서 끝나므로 마지막 방어선의 판단력은 내리지 않는다
 M_ADV="${CODE_LOOP_MODEL_ADV:-opus}"
