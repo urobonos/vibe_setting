@@ -22,7 +22,7 @@ from google.oauth2.service_account import Credentials
 
 KEY = os.path.expanduser('~/.claude/custom-plugin/tools/.token/gsheet.token')
 DOC = '1ef2TzudeRfXzdAyKH7AmYwACFSjVgmafYHPMGwKurHQ'
-TAB = '요약'
+GID = 58416954   # `요약` 탭. 이름이 아니라 gid 로 잡는다 (rename 내성)
 DEFAULT_XLSX = r'C:\Works\hongcafe_local_athena\docs\wbs\2026-08-12-wbs-menu-summary.xlsx'
 
 HEAD_BG = {'red': 0.122, 'green': 0.220, 'blue': 0.392}   # 1F3864
@@ -49,7 +49,7 @@ def main():
 
     cred = Credentials.from_service_account_file(KEY, scopes=['https://www.googleapis.com/auth/spreadsheets'])
     sh = gspread.authorize(cred).open_by_key(DOC)
-    ws = sh.worksheet(TAB)
+    ws = sh.get_worksheet_by_id(GID)
 
     # --- 스냅샷 (덮어쓰기 전) ---
     # 레포 밖에 둔다 — 매 회차 생기는 운영 산출물이라 레포에 쌓이면 커밋 노이즈가 된다.
@@ -65,7 +65,7 @@ def main():
     # --- 값 밀어넣기 ---
     ws.clear()
     ws.update(rows, 'A1', value_input_option='RAW')
-    print('[%s] ← %r %d행 x %d열' % (TAB, title, len(rows), ncol))
+    print('[%s] ← %r %d행 x %d열' % (ws.title, title, len(rows), ncol))
 
     # --- 서식: 헤더행(4) · 합계행(마지막) · 진행률 퍼센트 · 소요 소수1 ---
     hdr_i = next((i for i, r in enumerate(rows) if str(r[0]).strip() == '단계'), 3)

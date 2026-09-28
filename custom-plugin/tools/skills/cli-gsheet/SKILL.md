@@ -38,9 +38,9 @@ description: 구글 시트 읽기·쓰기 스킬 (gspread + 서비스 계정). �
 
 | 용도 | 문서 ID | 탭 |
 |---|---|---|
-| 로컬 관리자 WBS | `1ef2TzudeRfXzdAyKH7AmYwACFSjVgmafYHPMGwKurHQ` | `개발WBS`(정본 547행) · `요약`(보고용) |
+| 로컬 관리자 WBS | `1ef2TzudeRfXzdAyKH7AmYwACFSjVgmafYHPMGwKurHQ` | `WBS`(정본 1016행) · `ISS` · `요약`(보고용) |
 
-`개발WBS` 는 `/tools:wbs-sync` 의 상태·담당자 SSOT 다. 열 구성·동기화 규약은 `custom-plugin/tools/commands/wbs-sync.md` SSOT.
+`WBS` 는 `/tools:wbs-sync` 의 상태·담당자 SSOT 다. **탭 이름은 바뀐다** — 2026-09-03 에 `개발WBS`→`WBS` 로 rename 됐고 그 사이 호출은 `WorksheetNotFound` 로 죽었다. 실패하면 이름을 추측하지 말고 `sh.worksheets()` 로 실제 목록을 찍는다. 열 구성·동기화 규약은 `custom-plugin/tools/commands/wbs-sync.md` SSOT.
 
 ## 접속
 
