@@ -10,7 +10,7 @@ cat <<'BANNER'
   • 탐색 3쿼리+ → Explore / 다파일 분석 → Team 1 / API 작업 → hongcafe:api-team / 의견 갈림 → /taskflow:debate
   • 병렬 spawn = 효율 상한까지 제안 (독립 태스크 min(16,cores−2), SSOT orchestration §2.3)
   • 직접 작업 허용 = 단일 파일 trivial 수정·단발성 조회 1회만 (사유 1줄 보고)
-  • 보고 = 결론 + 표/diff 만, 사족 제거 — 상세는 질문 시 (CLAUDE.md §4 "응답 간결")
+  • 보고 = 결론 + 판단 근거만 3~6줄, 표는 대조 필수 시만 — 상세는 질문 시 (CLAUDE.md §4 "응답 간결")
   • 상세: CLAUDE.md §4 "에이전트 우선 위임", skills/orchestration §0 "Agent-First Default"
 BANNER
 
