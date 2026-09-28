@@ -20,4 +20,4 @@ model: opus
 
 ## Changelog
 
-- 2026-08-19: 2축 분리 — 7개 축을 한 패스에 보면 실측이 필요한 축이 얕아진다. 본 파일은 하위 호환 포인터로만 남는다 (`tick.md`·`watch.md`·`review.md` 가 이 이름으로 참조 중이라 삭제하지 않는다)
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`agents/cold-reviewer.md` (2026-09-28 분리 — 실행 시 로드 불요)

@@ -301,10 +301,4 @@ done
 
 ## Changelog
 
-- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + load 필터 서술 정정(Status: Partial → 잔여 미체크 ≥1, Status 무관) + 하드 줄번호 제거
-- 2026-07-29: 발주문서(`## 원본 추적`) 보유 task 가 Done 되면 원본 경로에 `{yyyy-mm-dd}-통합사이드이펙트.md` 생성. 0건이면 미생성
-- 2026-07-29: 무인 마커 복원 (`pause` → `allow`) — 본 세션 sid 것만, Done 은 `tasks/` 이동 전에
-- 2026-07-16: 즉시 이동 모드 흡수 (`save now` — 구 `/taskflow:done`)
-- 2026-07-09: 정착 주체 정정
-- 2026-06-15: 분배 태그 정리 (DISPATCH)
-- 2026-05-14: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/save.md` (2026-09-28 분리 — 실행 시 로드 불요)

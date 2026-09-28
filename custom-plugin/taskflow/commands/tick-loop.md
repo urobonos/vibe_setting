@@ -119,8 +119,4 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 
 ## Changelog
 
-- 2026-08-04: **`/taskflow:tick-team` 폐기 흡수 (§3 사용자 승인).** 병렬 축은 본 커맨드의 슬롯(독립 프로세스)이 이미 대체하고 있었고, 4축 대조 3축 열세(워커 단위·leader 컨텍스트 누적·장애 격리)가 근거. 대조표는 §"왜 `tick-team` 이 없어졌나" 로 남겨 재제안을 막는다. tick-team 이 갖고 있던 SSOT 2개(`하니스 자동 상속`·`카탈로그 미등재 fallback`)는 `tick.md` 로 이관
-- 2026-07-28: graceful stop — 진행 중 tick 을 완주시키고 다음 iteration 만 막는다. 즉시 중단 = `stop --now`. 시그널 대신 플래그 파일
-- 2026-07-28: 병렬 슬롯 — `tick-loop <간격> <N>`, 상태를 `state/tick-loop/{슬롯}.*` 로 분리. 상한 `min(16, cores−2)`
-- 2026-07-28: 자식 kill 시 루프 잔존 픽스 (exit ≥128 break, `trap INT TERM`, `stop` 이 자식 먼저 kill)
-- 2026-07-28: 신설 — `/loop` 의 컨텍스트 누적(실측 5.1배) 대안. 매 iteration 새 프로세스 + detach
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/tick-loop.md` (2026-09-28 분리 — 실행 시 로드 불요)

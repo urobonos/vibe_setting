@@ -128,5 +128,4 @@ FINDINGS:
 
 ## Changelog
 
-- 2026-09-10: **`Bash` 변이 금지 명문화 + 실행 범위 타깃 한정.** "Edit/Write 부재 = 기계적 강제" 가 `sed -i`·`git checkout`·`git stash` 로 뚫려 있었고 이쪽이 더 위험하다 — 중단되면 되돌릴 주체가 없다(실측 2건: 리뷰 변이가 남은 RED 커밋 · 한도 종료 후 원 로직 복원 방치). 전량 스위트는 픽스처 마이그레이션이 실 테이블을 갈아엎은 실측(`ISS-720`)과 `dropTable` 로 stage 테이블 7개 소실 이력이 있는데, 여기는 3 Agent 가 **병렬로 도는 자리**라 한 번의 전량 실행이 나머지 둘의 근거를 함께 무너뜨린다. 동반: `exit 0` 을 green 으로 읽지 않음 · `BASELINE` 입력 수용
-- 2026-08-19: 신설 — `cold-reviewer` 에서 기능 정합 축(§1·§5·§6)을 분리. 7개 축을 한 패스에 보면 실측이 필요한 무거운 축이 얕아진다. 동반: `근거: 실행|정적` 필수화 · `BLOCKERS` 카운트 · 이전 라운드 이력 입력 · untracked 직접 조회 · 재현 시나리오 없는 `High` 강등
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`agents/reviewer-correctness.md` (2026-09-28 분리 — 실행 시 로드 불요)

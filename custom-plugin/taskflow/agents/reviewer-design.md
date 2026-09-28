@@ -117,5 +117,4 @@ FINDINGS:
 
 ## Changelog
 
-- 2026-09-10: **`Bash` 변이 금지 명문화.** "Edit/Write 부재 = 기계적 강제" 가 `sed -i`·`git checkout`·`git stash` 로 뚫려 있었다 — 중단되면 되돌릴 주체가 없어 변이가 커밋에 섞인다(실측 2건). 근거 SSOT = `reviewer-correctness.md` Changelog 동일 항목
-- 2026-08-19: 신설 — `cold-reviewer` 에서 설계 축(§2·§3·§4·§7)을 분리. 동반: 비목표 축 `[범위밖]` 강등 · `FIXED` 산출물 과설계 재지적 금지(루프 진동 차단) · 이전 라운드 이력 입력
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`agents/reviewer-design.md` (2026-09-28 분리 — 실행 시 로드 불요)

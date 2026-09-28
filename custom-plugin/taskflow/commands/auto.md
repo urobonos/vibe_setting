@@ -250,6 +250,4 @@ git ls-files --others --exclude-standard                  # untracked 신규 →
 
 ## Changelog
 
-- 2026-09-10: 직렬 필수 순서에 **기준선(코드 변경 전)** 삽입 — 절차 SSOT = `execute.md` §"step 순차 소비" 3-bis
-- 2026-05-13: worktree-first 확장
-- 2026-06-05: QA 게이트 연동
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/auto.md` (2026-09-28 분리 — 실행 시 로드 불요)

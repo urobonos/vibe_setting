@@ -474,10 +474,4 @@ cwd 미스매치 예시 (본 cwd = `C:\Works\hongcafe_global_backend`, 본 produ
 
 ## Changelog
 
-- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + 폐기 `/taskflow:dispatch` 안내 정정(plan 흡수) + `#tag claim` 헤딩 정렬
-- 2026-07-29: `{작업명}` 로드 시 `tick: allow` → `pause (by sid, 날짜)` 하강 (본 슬래시의 유일한 mutation). 복원 = `/taskflow:save`
-- 2026-07-22: 자동 실행 금지 명문화 — `#tag`·`{작업명}` 미지정 호출은 출력 후 정지
-- 2026-07-16: `#tag` 배타 claim·로드 흡수 (구 claim/consume)
-- 2026-06-18: cwd 필터 기본 해제 — 인자 없음 = 전 product 잔여 노출
-- 2026-06-15: 분배 풀 통합
-- 2026-05-14: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/load.md` (2026-09-28 분리 — 실행 시 로드 불요)

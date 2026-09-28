@@ -104,4 +104,4 @@ control 은 read-only 라 전파를 트리거하지 않는다. 처리 경로가 
 
 ## Changelog
 
-- 2026-07-23: 신설 → step ReadyToMerge + 완료 게이트 + working-scan 재사용
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/control.md` (2026-09-28 분리 — 실행 시 로드 불요)

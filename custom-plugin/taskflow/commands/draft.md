@@ -158,6 +158,4 @@ done
 
 ## Changelog
 
-- 2026-08-06: working/ 스캔 루트를 날짜 폴더(YYYYMMDD)로 한정 — backlog/·dispatch/ 등 비-날짜 폴더 제외 (선행 `working-scan.sh` a7081c6 · `working-lifecycle.sh` 7a5512a 와 동일 축)
-- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
-- 2026-06-23: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/draft.md` (2026-09-28 분리 — 실행 시 로드 불요)

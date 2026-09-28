@@ -115,5 +115,4 @@ argument-hint: "[작업명]  # 생략 시 현재 브랜치 기준 안내"
 
 ## Changelog
 
-- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵")
-- 2026-05-15: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/deploy.md` (2026-09-28 분리 — 실행 시 로드 불요)

@@ -73,4 +73,4 @@ argument-hint: "/{인자 슬래시} {인자}  # 예: /taskflow:auto module A B C
 
 ## Changelog
 
-- 2026-05-18: marker 시스템 전체 폐기 (parallel-mode-marker.sh + parallel-reminder.sh + `/taskflow:parallel비활성` 짝 슬래시 일괄 제거) — "단일 응답 내 instruction" 모델로 단순화. Why: marker 60분 활성 + hook 2개 = SSOT 분기·누적 복잡도 + Skill tool 미트리거 한계 (CLAUDE.md §4.4 "장기 관점 추천" 정합).
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/parallel.md` (2026-09-28 분리 — 실행 시 로드 불요)

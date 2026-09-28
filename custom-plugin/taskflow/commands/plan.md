@@ -364,12 +364,4 @@ Status: Plan Complete
 
 ## Changelog
 
-- 2026-09-22: **`Agent` 호출 시 `model: "opus"` 파라미터 명시 필수화** (신규 §"model 파라미터 명시 필수"). 근거 = frontmatter `model: opus` 단독 신뢰 시 세션 기본 모델(Sonnet 5)로 조용히 대체되는 사례 실측 — 글로벌 `settings.json` `env.CLAUDE_CODE_SUBAGENT_MODEL` 이 원인 후보. Agent 도구 호출 파라미터가 공식 우선순위 최상위라 명시하면 이 경로는 해소된다
-- 2026-09-22: **계획 생성 본체를 `taskflow:planner` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/planner.md`, model: opus 고정). main 세션은 인자 해석 후 위임·결과 relay 만 담당. 근거 = 슬래시 frontmatter `model:` 이 턴 단위로만 유효해 §3 승인 대기로 턴이 끊기면 세션 기본 모델로 되돌아갈 수 있다는 점(공식 문서 확인) — 에이전트 정의 단위 `model:` 은 그 위험이 없다
-- 2026-09-22: ⑥ 마커에 `계획 생성 모델` self-report 라인 추가 — `model: opus` frontmatter 지정이 턴 단위로만 유효함(공식 문서 확인)에 따라, §3 승인 대기로 턴이 끊긴 뒤 세션 기본 모델로 되돌아갔는지 사후 확인용
-- 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 체크리스트 임계 `≥ 30` → 존재 강제(hook SSOT, 2026-09-04 에 5 로 인하된 것을 이 계열 4개가 놓쳤다) · V1 차단 강도 정정(경고다 — "tasks/ 이동 후" 는 차단이 아니라 강등 조건) · 실제로 차단하는 V5(e2e 5점)·V2(참조 출처) 행 추가. 값을 복사해 둔 것이 원인이라 숫자를 지우고 포인터만 남긴다
-- 2026-08-05: §파급면·§결함면 발동 축을 **골격 → 변경 성격**으로 이동 (경량 골격에도 필수화, §"파급면·결함면 — 골격 무관 공통" 신설). 근거 = 도입 후 실측 step 23개 중 파급면 보유 8개, 누락 쪽에 룰 근거였던 `image-upload` step-05·06 이 포함(경량 골격이라 섹션 부재) → 재검토 ④·Audit ⑤ 검사식이 공회전. 동반: 결함면에 **회귀·동시성** 2축 추가 (`cold-reviewer` §1 과 1:1) + DoD **검증 명령 행** 필수화 (`step-developer` `TESTS:` ↔ 리뷰어 6축 대조 기준) + Audit ⑤ 2행 추가
-- 2026-08-03: step `## 결함면` 추가 (경계값·예외/트랜잭션·타입계약, 해당 시) + 재검토 ④ 결함 체크. 근거 = 반려 지적 208건 중 이 3축이 75건이고 셋 다 `step-developer` 정의에 대응 항목이 없던 유일한 축. 전건 박제 안 함 (반려 2위 = 문서·기록 불일치 58건)
-- 2026-07-29: step `## 파급면` 필수화 (read 경로 / 형제 / `해당 없음` 명시) + 재검토 ④ 파급 체크 + Plan Audit ⑤ 커버리지 행
-- 2026-05-29: step 스캐폴드 확장
-- 2026-05-15: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/plan.md` (2026-09-28 분리 — 실행 시 로드 불요)

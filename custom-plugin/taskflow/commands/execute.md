@@ -310,9 +310,4 @@ Status: Done   (시작 라인)
 
 ## Changelog
 
-- 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 실측 계기 = 문서 작업 2건이 연속으로 V5(e2e 5점)에 차단됐는데 **표에 그 행이 없었다.** 셋이 갈려 있었다 — ① 체크리스트 임계 `≥ 30`(2곳: 동작 5단계 ③ · hook 표)인데 hook 은 2026-09-04 에 5 로 인하 ② V1 을 "exit 2 (tasks/ 이동 후)" 로 적었으나 실제로는 `add_block` 0건이고 그 조건(`tasks/` + `Status: Done|Partial`)이 바로 **강등** 조건이다 ③ 실제 차단인 V5·V2 누락. **차단하는 것을 표 위로 올리고 값·하드 줄번호는 hook 에 위임한다** (CLAUDE.md §4.4)
-- 2026-09-10: **§"step 순차 소비" 에 3-bis 기준선(코드 변경 전) 추가.** 같은 개발 루프인데 **진입점에 따라 계약이 갈려 있었다** — `/taskflow:code`·`/taskflow:tick` 은 `step-developer` 가 착수 전 실행을 계약으로 지는데, 이 경로는 본체가 직접 코드를 써서 아무 계약이 없었다(grep 실증: 이 파일에 `step-developer` 0건). 버그=red 재현 / 신규=green 캡처 · **재현 실패 시 고치지 않고 보고** · 전·후 같은 명령. §"코드 변경 = verify + review 필수 체인" 의 앞쪽 짝이고, `/taskflow:auto` 는 이 절을 SSOT 로 상속한다
-- 2026-08-03: **`## 워크플로우 맵` 신설 = 슬래시 배치 SSOT 로 승격.** 11개 커맨드가 각자 갖고 있던 구 `## 차별점` 표(90줄, 내용이 서로 갈려 `save.md` 의 폐기 필터 drift 를 낳았다)를 여기 1벌로 모으고 나머지는 `## 짝 슬래시` 1~2줄 포인터로 축약. 무인 계열(tick·watch·control·code)이 11벌 어디에도 없던 누락도 함께 메움. 그룹 판정 기준 = **마커·claim 유무** (read-only·claim 없는 control·code 는 ② 아님)
-- 2026-05-15: 신설
-- 2026-05-29: step 순차 소비 연동
-- 2026-06-05: QA 게이트 추가
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/execute.md` (2026-09-28 분리 — 실행 시 로드 불요)

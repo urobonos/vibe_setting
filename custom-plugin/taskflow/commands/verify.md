@@ -86,5 +86,4 @@ e2e 5점 검증 진입 — 코드 수정 완료 판단을 위한 환경/스키�
 
 ## Changelog
 
-- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + `verify + review` 포인터 리터럴 정렬
-- 2026-05-15: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/verify.md` (2026-09-28 분리 — 실행 시 로드 불요)

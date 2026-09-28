@@ -100,4 +100,4 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 ## Changelog
 
-- 2026-05-15: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/feasibility.md` (2026-09-28 분리 — 실행 시 로드 불요)

@@ -143,4 +143,4 @@ docs/wbs/issue/pending/{YYYY-MM-DD}-ISS-{대역내 번호}-{slug}.md
 
 ## Changelog
 
-- 2026-09-04: 신설. 초안은 순회 도구를 자체 구현했으나 콜드 리뷰 2라운드 + 적대적 검증이 안전 판정을 세 번 뚫었고, 그 과정에서 대상 레포 `tools/regression/` 이 같은 문제를 이미 더 정확히 풀어둔 것을 발견해 **자체 구현을 폐기하고 wrapper 로 전환**했다.
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/sweep.md` (2026-09-28 분리 — 실행 시 로드 불요)

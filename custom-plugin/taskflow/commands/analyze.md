@@ -153,10 +153,4 @@ Status: Analysis Complete
 
 ## Changelog
 
-- 2026-09-23: T1 판정을 `gate=2` → `/tmp/claude_autoiter_{sid}` 마커로 교체. gate-init 이 매 세션 gate=2 로 시작해 T1 이 항상 참이었다(자동진행 미요청에도 plan 자동 전이)
-- 2026-09-22: **모델 등급 정정 — `taskflow:analyzer` opus → sonnet, 본 파일 frontmatter `model: opus` 제거.** 직전 위임 커밋에서 `plan.md`→`taskflow:planner`(opus) 패턴을 그대로 유추 적용했는데, 근거가 없었다 — Critical~Low 판정은 `reviewer-correctness`/`reviewer-design`(둘 다 sonnet)과 같은 급이고, 사용자의 opus 명시 요구도 planning 에 한정됐지 analyze 에는 없었다. 사용자 질문("analyze가 opus가 필요함?")이 계기
-- 2026-09-22: **분석 생성 본체를 `taskflow:analyzer` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/analyzer.md`, model: opus 고정) + frontmatter `model: opus` 추가(main 세션 몫인 인자 해석·위임·relay 용, belt-and-suspenders). 근거 = 본 커맨드가 원래 model 지정이 없어 항상 세션 기본 모델을 탔다는 점 — `plan.md`→`taskflow:planner` 위임(같은 날)과 동일 이유. T1(gate=2)·`/taskflow:plan` 전이 판단은 main 세션에 남긴다(세션 상태·다음 슬래시 호출은 위임 범위 밖)
-- 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 세 갈래였다 — ① 체크리스트 임계를 `≥ 30` 으로 복사해 뒀는데 hook 은 2026-09-04 에 5 로 내렸다(`unified-template.md`·`task-docs/SKILL.md` 는 그때 같이 고쳐졌고 이 계열 4개만 남았다) ② V1 차단 강도가 정반대였다 — "tasks/ 이동 후 exit 2" 로 적었으나 그 조건이 바로 **강등** 조건이고 `v_template_guard` 는 `add_block` 0건이다 ③ 실제로 차단하는 V5(e2e 5점)·V2(참조 출처)가 표에 아예 없었다. **값과 하드 줄번호를 지우고 hook 포인터만 남긴다** — 복사해 둔 값이 이 drift 를 만들었다 (CLAUDE.md §4.4)
-- 2026-08-05: `## 변경 표면 인벤토리` 신설 (호출부·read 경로 / 회귀 기준선 / 재사용 자산 / 테스트 커버 4종, 수정 대상 ≥1 조건부) + 동작 표 ③-2 행. 근거 = plan 의 §파급면·§결함면·DoD 검증이 심볼 단위 실측을 전제하는데 analyze 가 판정만 넘겨 plan 이 추측하거나 `해당 없음` 으로 비우던 경로 (`plan.md` 2026-08-05 정정과 짝)
-- 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + V4 임계를 등급 스케일로 적던 오기 정정 (당시 값 = 문서 총합 ≥ 30 평면값 — **그 값은 2026-09-04 에 인하됐다**. 현행 하한은 hook 이 SSOT) + 하드 줄번호 → 함수명
-- 2026-05-15: 신설
+> 변경 이력 = `custom-plugin/taskflow/CHANGELOG.md` §`commands/analyze.md` (2026-09-28 분리 — 실행 시 로드 불요)
