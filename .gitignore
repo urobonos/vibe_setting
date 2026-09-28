@@ -107,3 +107,14 @@ backup/windowsapps-python-aliases-*/
 
 # vendor pool 캐시 (bin/vendor-pool.sh) — lock 해시별 실 vendor 사본, 로컬 머신 전용
 vendor-pool/
+
+# 로컬 백업·스크래치·캐시 — 작업 중 롤백용 사본과 리뷰어 재현물, 머신 전용 (2026-09-28)
+backup/
+tmp/
+uploads/
+.php-cs-fixer.cache
+*.bak-*
+*.cap-backup
+# Claude Code 가 관리하는 스킬 동기화·휴지통 (UUID·타임스탬프 디렉토리)
+skills/synced/
+skills/.trash/
