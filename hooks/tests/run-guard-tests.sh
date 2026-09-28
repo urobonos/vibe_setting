@@ -1000,6 +1000,22 @@ BADGE_DATE=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $3}')
 BADGE_HREF=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $4}')
 REAL_BADGE_LINE=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $5}')
 
+# 실 인덱스에서 형태가 사라지면 합성 라인으로 대체한다 (2026-09-28). MEMORY.md 의 backlog 인덱스가
+# BACKLOG.md 포인터 1줄로 바뀌면서 배지·그룹라벨 형태가 production 에서 0건이 됐다 — 형태가 없다는
+# 이유로 스위트가 영구 red 가 되면 진짜 회귀가 묻힌다. 합성 라인도 href·slug·date 를 한 벌로 맞춰
+# 만들므로 위 "fallback 임의 날짜 금지"(href 날짜 ≠ 본문 파일명 날짜) 문제는 생기지 않는다.
+J11_SYNTH_DATE=2026-08-02
+if [ -z "$REAL_GROUP_LABEL_LINE" ]; then
+  GROUP_SLUG=synthgrouplabelslug; GROUP_DATE=$J11_SYNTH_DATE
+  GROUP_HREF="../../../docs/working/backlog/${GROUP_DATE}-${GROUP_SLUG}.md"
+  REAL_GROUP_LABEL_LINE="- [${GROUP_SLUG}](${GROUP_HREF}) · …"
+fi
+if [ -z "$REAL_BADGE_LINE" ]; then
+  BADGE_SLUG=synthbadgeslug; BADGE_DATE=$J11_SYNTH_DATE
+  BADGE_HREF="../../../docs/working/backlog/${BADGE_DATE}-${BADGE_SLUG}.md"
+  REAL_BADGE_LINE="- \`[진행]\` [${BADGE_SLUG}](${BADGE_HREF}) — 합성 픽스처 요약"
+fi
+
 # M1(2026-08-07 콜드리뷰 R2) — line 뿐 아니라 **HREF·SLUG·DATE 도 개별로 빈값 가드**한다. 이전엔
 # `grep -qF "$GROUP_HREF" "$MEM_J11"` 에서 GROUP_HREF 가 빈 문자열이면 `grep -qF ""` 는 항상 참이라
 # J-11a 가 무조건 PASS 했다 — line 이 비지 않았어도 정규식 추출이 실패해 href 만 빌 수 있어서
