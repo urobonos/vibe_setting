@@ -34,174 +34,18 @@ argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음
 **REGISTRY 우선 조회 (2026-05-15 신설):** `~/.claude/docs/working/REGISTRY.md` 마크다운 표 우선 조회 → 본 세션 sid 와 비교해 `[active by other]` / `[paused]` / `[orphan]` 3분류. 그 다음 working/ 직접 grep 으로 보강.
 
 ```bash
-# 0) 스캔 루트 — working/ 날짜 폴더(YYYYMMDD)만. working/dispatch/ 등 비-날짜 폴더는 잔여 스캔 대상 아님
-WORKING_GLOB="$HOME/.claude/docs/working/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
-
-# 0-bis) product 식별 — 현재 cwd 기준 (worktree 안 호출 시 원본 repo 역해석)
-source ~/.claude/hooks/lib/product-resolver.sh
-CURRENT_PRODUCT=$(resolve_product "$PWD")
-
-# 인자 분기 — TARGET_PRODUCT 결정
-# $ARGUMENTS = harness 가 프롬프트 치환 시점에 대체. bash 블록은 별도 프로세스라 위치 인자($1)를 상속하지 않는다.
-ARG="$ARGUMENTS"
-case "$ARG" in
-  ""|"all")     TARGET_PRODUCT="" ;;  # 인자 없음 = 전체 (2026-06-18 cwd 필터 기본 해제) / all = 동일
-  "latest")     TARGET_PRODUCT="$CURRENT_PRODUCT" ;;  # latest 자동 선택만 본 product (라우팅 정확도 유지)
-  *)
-    # 작업명 매칭 시도 — 파일명 prefix `{yyyy-mm-dd}-{product}-${ARG}.md` 1건이라도 있으면 작업명 모드.
-    # backlog slug 도 함께 확인한다(콜드리뷰 M8) — backlog 는 날짜 폴더 밖(working/backlog/)이라 위
-    # 글롭에 안 걸려서 이전엔 product 명으로 오분류 → 빈 목록으로 막다른 길이 됐다(실측
-    # `get-ip-address-undefined-fatal`).
-    # backlog glob 은 slug 전문을 날짜 바로 뒤에 앵커링한다(콜드리뷰 R5 M1) — `*-${ARG}.md` 는 `*` 가
-    # 임의 접두를 삼켜 ARG 가 slug 의 **접미사**에만 우연히 일치해도 매칭된다. 실측 충돌: product 명
-    # `infra` 로 `/taskflow:load infra` 호출 시 이관된 `{date}-ses-email-infra.md` 가 `*-infra.md` 에
-    # 걸려 product 필터가 조용히 풀린다. `[0-9]{4}-[0-9]{2}-[0-9]{2}-` 로 날짜를 고정해 ARG 가 slug
-    # 전체와 일치할 때만 작업명 모드로 전환되게 한다.
-    # `∪ ...-${ARG}--*.md`(2026-08-07 콜드리뷰 H3) — 298건 이관 중 4쌍(8건)이 slug 충돌로
-    # `{date}-{slug}--{product}.md` suffix 를 받았다(예: `us-sns-alarm-no-subscribers--infra.md`).
-    # suffix 없는 glob 만으로는 이 8건을 하나도 못 열어 인덱스 href 는 정상 갱신됐는데 여는 경로만
-    # 사라지는 형제 호출부 누락이 났다.
-    if compgen -G "$WORKING_GLOB/*-${ARG}.md" >/dev/null 2>&1 \
-      || compgen -G "$HOME/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${ARG}.md" >/dev/null 2>&1 \
-      || compgen -G "$HOME/.claude/docs/working/backlog/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-${ARG}--*.md" >/dev/null 2>&1; then
-      TARGET_PRODUCT=""  # 작업명 직접 매칭 → product 필터 해제 (인자 분기 ②에서 처리)
-    else
-      TARGET_PRODUCT="$ARG"  # product 명으로 간주
-    fi
-    ;;
-esac
-
-# 1) REGISTRY 우선 — 다른 세션 점유 + paused 본 세션 잔존 식별
-source ~/.claude/hooks/lib/registry-utils.sh
-registry_list_active                 # status=active 전체 (본인 sid 아니면 다른 세션 점유)
-
-# 2) 스캔 대상: ~/.claude/docs/working/YYYYMMDD/*.md
-# 조건: ## 잔여 작업 섹션에 미체크 항목(- [ ]) ≥ 1 (Status 무관 — Partial/Plan Complete/폐기 등 잔여 있으면 전부) AND product 필터
-#       (2026-06-18: Status: Partial 단독 → 잔여 미체크 기반으로 완화. "모든 잔여 작업" 노출)
-#
-# ★ 2그룹 표시 (2026-09-07 사용자 결정 — backlog `2026-08-05-load-residual-section-filter-blind`)
-#   아래 1차 필터(`grep -lE '^## 잔여 작업'`)는 **그 섹션이 없는 문서를 통째로 숨긴다.** 미체크가
-#   아무리 많아도 목록에 안 나와 다음 세션이 그 잔존을 모른다(은닉). 그렇다고 필터를 없애면
-#   체크리스트·Self-Critique 의 미체크까지 잔여로 잡혀 노이즈가 급증한다 — 그래서 **끄지 않고 나눈다.**
-#     그룹 A = 섹션 보유 + 그 안에 미체크 ≥1  → 지금까지처럼 상세 표시 (아래 로직 그대로)
-#     그룹 B = 섹션 **미보유** + 문서 전체 미체크 ≥1 → 별도 그룹으로 건수만
-#   그룹 B 는 "잔여인지 아닌지 모른다" 는 상태이므로 진입 경로를 주지 말고 **보강을 권고**한다:
-#     [잔여 섹션 없음] {파일명} — 미체크 N건 · `## 잔여 작업` 섹션 보강 후 재확인 권장
-#   B 가 0건이면 그 그룹 자체를 출력하지 않는다(빈 헤더로 화면을 늘리지 않는다).
-#   B 산출 = 그룹 A 와 같은 product 필터를 적용하되, 카운트는 섹션 제한 없이 문서 전체에서 센다:
-#     grep -LE '^## 잔여 작업' $WORKING_GLOB/*.md | while read c; do
-#       awk '/^- \[ \]/{n++} END{exit !(n>0)}' "$c" && echo "$c"; done
-#
-#   ★ B 안에서 step 평면 파일(`-step-NN-`)은 **파일명만 나열하지 말고 건수로 접는다.**
-#     2026-09-07 실측 = B 61건 중 43건이 step 파일이었다(A 는 8건뿐). step 의 미체크는 대개
-#     잔여가 아니라 그 step 자체의 체크리스트라, 전건 나열하면 원래 막으려던 노이즈가 그대로
-#     돌아온다. 그래서 B 를 다시 둘로 나눈다:
-#       B-1 비-step (실측 18건) → 파일명 + 미체크 수 표시 (최대 8행, 초과분은 "그 외 N건")
-#       B-2 step    (실측 43건) → "step 파일 N건 — 대부분 step 체크리스트, 필요 시 개별 확인" 1줄
-#     step 여부 판정 = 파일명에 `-step-` 포함 (평면 step 파일명 규약, working-lifecycle.sh SSOT).
-grep -lE '^## 잔여 작업' $WORKING_GLOB/*.md 2>/dev/null \
-  | while read cand; do
-      # 미체크 항목(- [ ]) ≥ 1 인 문서만 통과 (잔여 작업 섹션 안에서)
-      awk '/^## 잔여 작업/{fl=1;next} /^## /{fl=0} fl&&/^- \[ \]/{c++} END{exit !(c>0)}' "$cand" && echo "$cand"
-    done \
-  | while read f; do
-      base=$(basename "$f")
-      if [ -z "$TARGET_PRODUCT" ]; then
-        echo "$f"   # 전체 (인자 없음 / all / 작업명 매칭)
-      elif echo "$base" | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2}-${TARGET_PRODUCT}-"; then
-        echo "$f"
-      fi
-    done
-
-# 2-bis) 타 product 요약 — latest 분기에서만 1줄 표시 (인자 없음은 이제 전체 노출이라 불필요)
-if [ "$ARG" = "latest" ]; then
-  OTHER_COUNT=$(grep -lE '^## 잔여 작업' $WORKING_GLOB/*.md 2>/dev/null \
-    | while read cand; do
-        awk '/^## 잔여 작업/{fl=1;next} /^## /{fl=0} fl&&/^- \[ \]/{c++} END{exit !(c>0)}' "$cand" && echo "$cand"
-      done \
-    | while read f; do
-        base=$(basename "$f")
-        echo "$base" | grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2}-${CURRENT_PRODUCT}-" && continue
-        echo "$f"
-      done | wc -l)
-  echo "[타 product 잔존] $OTHER_COUNT 건 — '/taskflow:load all' 또는 '/taskflow:load {product}' 로 조회"
-fi
-
-# 3) 금일 이전 빈 폴더 자동 삭제 (working/ → tasks/ 이동 후 남은 빈 껍데기 정리)
-TODAY=$(date +%Y%m%d)
-for dir in ~/.claude/docs/working/*/; do
-  base=$(basename "$dir")
-  echo "$base" | grep -qE '^[0-9]{8}$' || continue
-  [ "$base" -ge "$TODAY" ] && continue
-  if [ -z "$(find "$dir" -maxdepth 1 -name '*.md' -print -quit 2>/dev/null)" ]; then
-    rmdir "$dir" 2>/dev/null && echo "[CLEAN] removed empty working folder: $base"
-  fi
-done
-
-# 3-bis) backlog 잔존 스캔 — working/backlog/*.md 중 status: done 이 아닌 문서 (product 필터 미적용,
-#   backlog 는 product 무분리 — custom-plugin/taskflow/hooks/backlog-lifecycle.sh 와 동일 소스 디렉토리 재사용)
-#   done 판정은 frontmatter(첫 `---` ~ 다음 `---`) 범위로 한정한다(콜드리뷰 H2) — 이전엔 파일 전체를
-#   grep 해 본문 코드블록 안 `status: done` 예시 텍스트에도 반응, hook 의 has_done_marker()(frontmatter
-#   전용)와 판정이 갈라져 실제로는 pending 인 문서가 목록에서 무경고로 사라졌다.
-#   name:/description: 앵커도 status: 와 동일하게 `^[[:space:]]*` 로 통일한다(콜드리뷰 M6) — status: 만
-#   들여쓰기 허용이면 frontmatter 가 `metadata:` 하위로 정규화되는 순간 이름/설명 추출만 조용히 깨진다.
-BACKLOG_DIR="$HOME/.claude/docs/working/backlog"
-# 파일당 6프로세스(basename+grep×2+sed×2+awk) → 전체 1회 awk 로 접음(2026-08-07 콜드리뷰 H2) —
-# 이관으로 이 디렉토리가 0건→298건이 되며 순수 이 스캔 발 `/taskflow:load` 가 실측 124초(2분
-# 타임아웃 재현) 블로킹됐다. find+awk 단일 패스 SSOT(`working-scan.sh`)와 동일 원리 재사용.
-# 출력 상한(§4.4 응답 간결 8행) — `[backlog 잔존]`(대량 정상 항목)만 8건으로 자르고 "+N건" 트레일러를
-# 붙인다. `[이동불가]`/`[이동실패]`는 실제 이상 신호(콜드리뷰 M2 실측 5건급)라 상한 없이 전부 노출한다.
-if [ -d "$BACKLOG_DIR" ] && compgen -G "$BACKLOG_DIR/*.md" >/dev/null 2>&1; then
-  # M4(2026-08-07 콜드리뷰 R2) — `FNR==1` 리셋은 레코드 기반이라 0바이트 파일에서 한 번도 안 돌아
-  # emit() 대상이 안 되고 cnt 에도 안 잡혔다(실측: 구현 CNT:7 vs 신 CNT:6, 빈 파일 1건 완전 소실).
-  # gawk BEGINFILE/ENDFILE(파일 존재 자체가 트리거, 레코드 유무 무관)로 파일 단위 순회를 보장한다.
-  BACKLOG_AWK_OUT=$(awk '
-    function emit() {
-      if (base == "") return
-      if (!valid_name) { printf "[backlog 잔존·이동불가] %s — 파일명 형식 불일치({yyyy-mm-dd}-{slug}.md 필요), 자동 이동 안 됨 — 수동 rename 필요\n", base; cnt++; return }
-      if (is_done && closed) { printf "[backlog 잔존·이동실패] %s | %s — status:done 인데 아직 working/backlog/ 에 있음(원인: mv 실패·비도구 쓰기·PostToolUse 미발화·product 디렉토리 미실재로 스킵 등), 원인 확인 필요\n", (name!=""?name:base), base; cnt++; return }
-      cnt++; normal_cnt++
-      if (normal_cnt <= 8) printf "[backlog 잔존] %s | %s | %s\n", (name!=""?name:base), (desc!=""?desc:"(설명 없음)"), base
-    }
-    BEGINFILE {
-      n=split(FILENAME, pp, "/"); base=pp[n]
-      valid_name = (base ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-.+\.md$/) ? 1 : 0
-      infm=0; closed=0; is_done=0; name=""; desc=""
-    }
-    $0 ~ /^---[[:space:]]*$/ && FNR==1 { infm=1; next }
-    infm && /^---[[:space:]]*$/ { infm=0; closed=1; next }
-    infm { l=tolower($0); if (l ~ /^[[:space:]]*status:[[:space:]]*done[[:space:]]*$/) is_done=1 }
-    # M5(2026-08-07 콜드리뷰 R2) — name/description 표시 추출은 done 판정(엄격, hook 과 동일 규칙
-    # 유지)과 분리한 완화 규칙을 쓴다. 첫 줄이 `---` 가 아닌 파일(선행 빈 줄 등)은 infm 이 끝까지
-    # 0이라 엄격 규칙만 쓰면 이름·설명이 통째로 비어 파일명으로 대체된다 — 그 문자열이 사용자가
-    # backlog 를 식별하는 유일한 근거라 표시만이라도 파일 앞 20줄에서 관대하게 찾는다(done 판정
-    # 정확성에는 영향 없음 — is_done/closed 는 위 엄격 infm 규칙만 사용).
-    FNR<=20 && name=="" && /^[[:space:]]*name:/ { line=$0; sub(/^[[:space:]]*name:[[:space:]]*/,"",line); name=line; next }
-    FNR<=20 && desc=="" && /^[[:space:]]*description:/ { line=$0; sub(/^[[:space:]]*description:[[:space:]]*/,"",line); gsub(/^"/,"",line); gsub(/"$/,"",line); desc=line; next }
-    ENDFILE { emit() }
-    END {
-      if (normal_cnt > 8) printf "[backlog 잔존] 그 외 %d건 더 (상세는 각 파일 직접 열람)\n", normal_cnt-8
-      printf "CNT:%d\n", cnt
-    }
-  ' "$BACKLOG_DIR"/*.md)
-  echo "$BACKLOG_AWK_OUT" | grep -v '^CNT:'
-  BACKLOG_CNT=$(echo "$BACKLOG_AWK_OUT" | grep '^CNT:' | sed 's/^CNT://')
-  [ -n "$BACKLOG_CNT" ] && [ "$BACKLOG_CNT" -gt 0 ] && echo "[backlog 잔존] 총 ${BACKLOG_CNT}건 (product 무분리 · status: done 제외 + 이동불가/이동실패는 done 무관 항상 포함) — 상세는 각 파일 직접 열람"
-fi
-
-# 4) DISPATCH 분배 풀 조회 — claim 가능(available) (여기는 목록 조회만 read-only; claim 은 #tag 분기)
-source ~/.claude/custom-plugin/taskflow/hooks/lib/dispatch-utils.sh
-# available 표시 — 분배 작업은 #tag prefix. product = 표 4번째 컬럼($4), working 잔존과 동일 필터(TARGET_PRODUCT)
-dispatch_list available | awk -F"$DISPATCH_FS" -v p="$TARGET_PRODUCT" '
-  $2=="tag" || $2=="" { next }
-  (p=="" || $4==p) { printf "[분배 available] #%s | %s | %s\n", $2, $3, $4; next }
-  { other++ }
-  END { if (other) printf "[타 product 분배] %d 건 — /taskflow:load all 로 조회\n", other }
-'
-# claimed(점유 중) 카운트 요약 — 상세·claim 은 #tag 분기
-CLAIMED_CNT=$(dispatch_list claimed | grep -cE '^\|')
-[ "${CLAIMED_CNT:-0}" -gt 0 ] && echo "[분배 풀] claimed(점유 중) ${CLAIMED_CNT} 건 — 상세는 /taskflow:load"
+bash ~/.claude/custom-plugin/taskflow/bin/load-scan.sh "$ARGUMENTS"
 ```
+
+스캔 절차(인자 분기·작업명 판정 글롭·그룹 A/B·빈 폴더 정리·backlog·DISPATCH) 는 스크립트가 SSOT 다 — 본문에 옮겨 적던 168줄을 2026-09-28 실행물로 뺐다 (모델이 매번 글롭·치환을 다시 조립하다 생긴 오분류 이력이 스크립트 주석에 남아 있다). 출력 태그로 결과를 읽는다:
+
+| 태그 | 의미 |
+|------|------|
+| `MODE:{all\|latest\|task\|product}` | 인자 판정 결과 — `task` 면 ② 작업명 분기로 간다 |
+| `[대상] {경로} \| 잔여 N \| {수정시각}` | 그룹 A — `## 잔여 작업` 섹션 안 미체크 ≥1. 목록·latest 선택의 대상 |
+| `[잔여 섹션 없음]` · `[step 잔여]` | 그룹 B — 섹션 없이 미체크만 있는 문서. 진입 경로를 주지 말고 보강을 권고한다 |
+| `[REGISTRY]` | status=active 행 — 본 세션 sid 와 비교해 `[active by other]`/`[paused]`/`[orphan]` 분류 |
+| `[backlog 잔존…]` · `[분배 …]` · `[타 product …]` · `[CLEAN]` | 그대로 사용자에게 옮긴다 |
 
 각 파일에 대해 메타 추출:
 
@@ -210,8 +54,8 @@ CLAIMED_CNT=$(dispatch_list claimed | grep -cE '^\|')
 | 날짜 | 파일명 `{yyyy-mm-dd}-` prefix |
 | product | 파일명 `{yyyy-mm-dd}-{product}-...` — product-resolver 산출 `CURRENT_PRODUCT` 와 비교해 매칭 확정 (product 이름에 `-` 포함 가능성은 product-resolver 가 보장하지 않으나, 실제 운용 product 가 `_` 또는 단일 토큰이므로 prefix 매칭으로 충분) |
 | 작업명 | 파일명 prefix `{yyyy-mm-dd}-{product}-` 제거 후 `.md` 제외 나머지 |
-| 잔여 개수 | `## 잔여 작업` 섹션 안 `- [ ]` 카운트 |
-| 마지막 수정 | `stat -c %y` |
+| 잔여 개수 | `[대상]` 줄의 `잔여 N` |
+| 마지막 수정 | `[대상]` 줄 끝 수정시각 |
 
 > **product 추출 정확도 노트:** 본 슬래시는 **product 필터링** 만 수행하므로 product 가 `-` 포함이어도 좌→우 prefix 매칭으로 안전 (CURRENT_PRODUCT 또는 인자 product 가 정답). product 가 미리 결정돼 있어서 작업명 토큰을 역추출할 필요 없음. 작업명 표시는 prefix 제거로 단순 분리.
 
