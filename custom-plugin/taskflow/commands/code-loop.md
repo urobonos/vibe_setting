@@ -86,8 +86,9 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
 
 | 파일 | 쓰는 쪽 | 내용 |
 |------|---------|------|
-| `00-spec.md` | spec 스텝 | 요청 · 성공 기준 · 테스트 범위 · 비목표 · 커밋 type·scope · worktree 절대경로(+ 기계 판독용 `WORKTREE:` 줄) · (형식 변경 시) 파급면·결함면 + `GATE:` 줄 |
-| `dev-NN.md` | 개발자 | `FILES` / `TESTS` / `NOTES` / `BASELINE`(전·후) / **`WHY`** |
+| `00-spec.md` | spec 스텝 | 요청 · 성공 기준 · 테스트 범위 · 비목표 · 커밋 type·scope · worktree 절대경로(+ 기계 판독용 `WORKTREE:` 줄) · 성공 기준 개수 `CRITERIA:` 줄 · (형식 변경 시) 파급면·결함면 + `GATE:` 줄 |
+| `dev-NN.md` | 개발자 | `FILES` / `TESTS` / `NOTES` / `BASELINE`(전·후) / `CRITERIA`(기준별 증거) / **`WHY`** |
+| `.lock/pid` | 러너 | 루프 프로세스 PID. 살아 있으면 같은 run 의 재기동을 거부, 종료 시 제거 |
 | `rev-NN-{correctness,design}.md` | 리뷰어 2인 | 각자의 판정 |
 | `rev-NN.md` | merge 스텝 | 합본 + 반박 판정 결과 + `VERDICT:` 줄 |
 | `adv-MM.md` | adversary | 재현 또는 시도 나열 + `VERDICT:` 줄 |
@@ -183,6 +184,7 @@ MM = 1 .. 2
 
 ## Changelog
 
+- 2026-09-28: **run 잠금 + 성공 기준 증거 게이트.** ① `tee_run` 이 `{run}/.lock` 을 mkdir 원자 잠금으로 잡고 루프 PID 를 기록한다 — 살아 있으면 재기동 거부, 죽은 잠금은 인수, 종료 시 제거 (run `20260925-112255`: 진행 중 `--resume` 재기동 → dev-01 2개 동시 편집 → Fatal). ② spec 에 `CRITERIA: N`, dev 에 `CRITERIA` 섹션 — `verify_criteria` 가 `verify_gate` 맨 앞에서 기준 누락·미실행 자백을 되돌린다(재보고 캡 공유, 소진 시 리뷰어로). 구버전 spec 은 skip
 - 2026-09-22: **`verify_mechanical` phpstan/php-cs-fixer 오탐 수정 — worktree 밖 cwd + 전역 바이너리 사용.** off-by-one 수정(아래 항목) 배포 이후 첫 실전 재발 재검증에서 발견(run `20260922-160417`) — `phpstan analyse`가 러너 cwd(worktree 밖)에서 그대로 실행돼 그 자리의 config(또는 config 없음)를 주워 diff 와 무관한 클래스까지 "unknown class" 로 떴다. worktree 루트로 `cd` 후 그 worktree 자신의 `vendor/bin/{phpstan,php-cs-fixer}`(없으면 전역 바이너리로 폴백)를 쓰도록 수정. `bin/code-loop.sh`만 수정, 리뷰어/개발자 계약 불변
 - 2026-09-22: **`verify_gate`·`verify_rev_gate` 재시도 캡 off-by-one 수정.** 실전 첫 트리거(run `20260922-120222`, ISS-878)에서 발견 — 기존 루프는 "확인 → 불일치 시 재생성"을 CAP(2)회 반복하는데 확인이 재생성보다 먼저라, 캡이 소진되는 시점의 **마지막 재생성본은 재확인 없이 그대로 합본/다음 단계로 넘어갔다**(가장 확인이 필요한 마지막 시도가 검증을 안 받는 구조). 두 함수 모두 `while [ try -lt CAP ]`를 무한루프+break로 바꿔 "매 반복 top에서 항상 먼저 확인, 그 다음 캡 소진 판단" 순서로 정정 — 재시도 예산(최대 2회 재생성)은 그대로, 확인 횟수만 CAP+1(3회)로 정정. `bin/code-loop.sh`만 수정, 리뷰어/개발자 계약 불변
 - 2026-09-22: **rev-loop(리뷰어 병렬) 에도 셸 독립 재검증(`verify_rev_gate`) 대칭 삽입 (두 리뷰어 wait 직후·합본 이전).** `bin/code-loop.sh`만 수정 — 리뷰어 계약(`reviewer-{correctness,design}.md`)엔 신규 필드를 안 넣는다. 리뷰어가 인용하는 `` `명령` → OK (N tests, M assertions) `` idiom 만 재실행 대조(`verify_rev_baseline_counts_file`) — dev측과 달리 리뷰어 반환은 구조화 필드가 없어 "무변경"·"바이트 일치" 같은 자유서술 주장은 명령의 실제 측정 범위와 어긋나는 사례(실측)가 있어 자동대조 대상에서 뺐다. 불일치는 correctness/design 중 실제로 어긋난 역할만 개별 재검토 요청, 소진해도 합본을 막지 않는다.

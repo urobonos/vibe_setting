@@ -340,6 +340,35 @@ verify_baseline_counts() {
   return "$fail"
 }
 
+# 00-spec.md 성공 기준마다 dev-$nn.md CRITERIA 에 증거 줄이 있는지 본다 (2026-09-28).
+# 패치 후 70 run 의 라운드1 고유 지적 중 8~9건이 "성공 기준을 실행하지 않은 채 반환"
+# (Skipped 를 통과로 읽음 · 변이 판별력 미시도 · spec 이 지정한 대조 생략)이었고, 개발자가
+# NOTES 에 스스로 "실행하지 못했다" 고 적은 경우도 그대로 리뷰 라운드를 태웠다.
+# 증거가 참인지는 리뷰어가 재실행해 판정한다 — 여기선 기준마다 줄이 있고 안 했다고
+# 자백하지 않았는지만 본다. CRITERIA: 줄이 없는 spec(구버전)은 건너뛴다.
+CRITERIA_UNDONE_RE='미실행|실행하지 (못|않)|실행 못|못 돌|돌리지 (못|않)|진행하지 (못|않)|미시도|시도하지 않|미확인|확인 못|못했|포기|넘어갔|빼먹|생략|TODO'
+verify_criteria() {
+  local dir="$1" nn="$2" want i line fail=0 section
+  want=$(sed -nE 's/^[[:space:]#>*]*CRITERIA:[[:space:]*]*([0-9]+)[[:space:]*]*$/\1/p' "$dir/00-spec.md" 2>/dev/null | tail -1)
+  [ -n "$want" ] || return 0
+  # 섹션 제목은 `CRITERIA:` 와 `## CRITERIA` 가 섞여 온다 (2026-09-24~28 dev-01 37건 중
+  # `## FIELD` 22 · `FIELD:` 15) — 둘 다 받고, 다음 필드 제목(어느 형식이든)에서 끊는다
+  section=$(awk '/^[[:space:]#>*]*CRITERIA[[:space:]*]*:?[[:space:]*]*$/{b=1; next}
+                 b && (/^[A-Z][A-Z-]*:/ || /^#+[[:space:]]/){exit} b' "$dir/dev-$nn.md")
+  for i in $(seq 1 "$want"); do
+    line=$(printf '%s\n' "$section" | grep -E "^[[:space:]*-]*\(?$i[).:][[:space:]]*[^[:space:]]" | head -1)
+    if [ -z "$line" ]; then
+      echo "!!! [dev-$nn] 성공 기준 $i/$want — CRITERIA 에 증거 줄 없음"
+      fail=1
+    elif printf '%s' "$line" | grep -qE "$CRITERIA_UNDONE_RE"; then
+      echo "!!! [dev-$nn] 성공 기준 $i/$want — 실행하지 않았다고 적혀 있음"
+      echo "    $line"
+      fail=1
+    fi
+  done
+  return "$fail"
+}
+
 # dev-$nn.md 를 리뷰어에게 넘기기 전에 셸 독립 재실행으로 자기신고를 대체한다.
 # 불일치는 코드 결함이 아니라 보고 오류이므로 정규 DEV_CAP 을 소비하지 않고,
 # 별도의 작은 재시도만 소진한다 (2026-09-22 사용자 지시: "불일치시 캡소진안함").
@@ -354,7 +383,7 @@ VERIFY_RETRY_CAP=2
 verify_gate() {
   local dir="$1" nn="$2" common="$3" try=0
   while :; do
-    if verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn"; then
+    if verify_criteria "$dir" "$nn" && verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn"; then
       return 0
     fi
     if [ "$try" -ge "$VERIFY_RETRY_CAP" ]; then
@@ -364,10 +393,12 @@ verify_gate() {
     echo "=== [dev-$nn] 셸 재검증 불일치 — 재보고 요청 $try/$VERIFY_RETRY_CAP"
     local fix_body="$common
 
-방금 반환한 $dir/dev-$nn.md 의 BASELINE·기계검사 주장이 셸의 독립 재실행과 다르다
-(run.log 의 위 로그 참조). 실제 상태를 다시 확인해 같은 파일을 갱신 반환한다 —
+방금 반환한 $dir/dev-$nn.md 가 셸 재검증(CRITERIA → 기계검사 → BASELINE 순, 앞이
+실패하면 뒤는 안 돌았다)을 통과하지 못했다. 무엇이 걸렸는지는 run.log 의 위 !!! 줄에 있다. 실제 상태를 다시 확인해 같은 파일을 갱신 반환한다 —
 새 라운드가 아니라 같은 dev-$nn.md 의 재보고다. 주장을 실측에 맞게 고치거나,
-실측이 틀렸다면 그 근거를 NOTES 에 남긴다."
+실측이 틀렸다면 그 근거를 NOTES 에 남긴다.
+CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행해 증거를 붙인다. 환경 탓에
+정말 못 돌리면 시도한 명령과 그 출력을 그 줄에 적는다 — 안 한 것을 한 것으로 적지 않는다."
     rm -f "$dir/dev-$nn.md"
     if ! run_step "dev-$nn" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn.md" \
          "$(step_prompt "$AGENT_DIR/step-developer.md" "$fix_body")"; then
@@ -483,6 +514,9 @@ code.md 의 1단계(범위 확인)와 크기 게이트를 그대로 수행해 $d
 worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는다. 그와 별개로
 기계 판독용으로 정확히 한 줄 추가한다 (dev 반환분을 셸이 재검증할 때 쓴다):
   WORKTREE: {절대경로}
+성공 기준에는 1부터 번호를 매기고, 그 개수를 기계 판독용 한 줄로 따로 쓴다 (dev 반환의
+기준별 증거를 셸이 대조할 때 쓴다):
+  CRITERIA: {성공 기준 개수}
 vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·symlink 로 링크하지 않는다.
 마지막 줄에 기계 판독용으로 정확히 한 줄을 쓴다:
   GATE: OK          (성공 기준 3개 이하 — 진행)
@@ -553,7 +587,9 @@ ${whys:+앞 라운드 기록: $whys — 각 파일의 WHY 섹션만 읽는다. �
 $prev_rev
 
 구현 후 $dir/dev-$nn.md 를 쓴다. 섹션:
-  FILES / TESTS / NOTES / BASELINE(착수 전·반환 전 같은 명령) / WHY
+  FILES / TESTS / NOTES / BASELINE(착수 전·반환 전 같은 명령) / CRITERIA / WHY
+CRITERIA 에는 00-spec.md 성공 기준마다 한 줄씩 \`{번호}: {실행한 명령·확인 방법} → {실제 결과}\`
+를 적는다. 셸이 기준마다 줄이 있는지 대조하고, 없거나 안 했다고 적힌 기준은 리뷰 전에 되돌린다.
 WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + 반박(REBUTTED)이면 근거
 3종(도달 불가 / 상위 처리 / 비목표 매칭) 중 무엇인지를 적는다. 다음 라운드의 나는
 이 WHY 만 보므로 여기 없으면 없는 것이다.
@@ -707,16 +743,43 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
 # 그때 진행을 볼 창구가 이 파일이다 (tail -f).
 tee_run() {
   local run="$1"; shift
-  local log="$STATE_DIR/$run/run.log"
-  mkdir -p "$STATE_DIR/$run"
+  local dir="$STATE_DIR/$run" log="$STATE_DIR/$run/run.log"
+  mkdir -p "$dir"
+  acquire_run_lock "$dir" || return 1
   echo "로그: $log"
   : >> "$log"
   run_loop "$@" >> "$log" 2>&1 &
-  local pid=$!
+  local pid=$! rc
+  # 잠금은 이 셸이 아니라 루프 프로세스를 가리킨다 — 호출한 셸이 먼저 죽어도 루프는 살아
+  # 있으므로, 그때 잠금이 죽은 것으로 읽히면 같은 run 에 두 번째 루프가 붙는다
+  echo "$pid" > "$dir/.lock/pid"
   # --pid 는 GNU coreutils 기능이다. 없으면 미러링을 포기하고 루프만 돌린다 —
   # 진행은 tail -f 로 따로 볼 수 있으므로 미러링 실패가 루프를 막아선 안 된다
   tail -n +1 -f --pid="$pid" "$log" 2>/dev/null || true
-  wait "$pid"
+  wait "$pid"; rc=$?
+  rm -f "$dir/.lock/pid"
+  rmdir "$dir/.lock" 2>/dev/null
+  return "$rc"
+}
+
+# 한 run 에는 루프 프로세스 하나만 붙는다. 2026-09-25 run 112255 에서 진행 중인 run 에
+# --resume 이 한 번 더 들어와 dev-01 두 개가 같은 worktree 를 동시에 고쳤고, 클래스
+# 중복선언 Fatal 끝에 둘 다 리뷰 전에 죽었다. mkdir 은 원자적이라 동시 기동 경합에서도
+# 하나만 이긴다. 잠금을 쥔 PID 가 이미 죽었으면(강제 종료 잔재) 넘겨받는다.
+acquire_run_lock() {
+  local lock="$1/.lock" holder
+  if mkdir "$lock" 2>/dev/null; then
+    echo "$$" > "$lock/pid"
+    return 0
+  fi
+  holder=$(cat "$lock/pid" 2>/dev/null)
+  if [ -n "$holder" ] && kill -0 "$holder" 2>/dev/null; then
+    echo "!!! 이미 실행 중인 run 이다 (PID $holder) — 중복 기동 거부: $1"
+    echo "    진행 상황: tail -f $1/run.log"
+    return 1
+  fi
+  echo "--- 죽은 잠금 인수 (PID ${holder:-기록 없음})"
+  echo "$$" > "$lock/pid"
 }
 
 case "${1:-}" in
