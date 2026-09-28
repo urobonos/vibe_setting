@@ -354,6 +354,10 @@ verify_mechanical() {
     elif command -v phpstan >/dev/null 2>&1; then
       phpstan_bin="phpstan"
     fi
+    # 테스트 파일은 phpstan 에서 뺀다 — 같은 파일에 정의한 스텁 클래스를 못 찾아
+    # class.notFound 가 쏟아진다(run 20260928-120313 ISS-694: 156 errors, 재보고 캡 소진).
+    # 도구 적용 범위 문제지 코드 결함이 아니다. php -l·php-cs-fixer 는 그대로 돈다
+    case "$f" in tests/*|*/tests/*) phpstan_bin="" ;; esac
     if [ -n "$phpstan_bin" ]; then
       # worktree 밖(러너 cwd)에서 돌리면 그 자리의 config(또는 config 없음)를 주워 무관한
       # 클래스까지 "unknown class" 로 뜬다(실측 2026-09-22, run 20260922-160417) — 반드시
@@ -366,6 +370,14 @@ verify_mechanical() {
     fi
   done < <(files_of "$dir/dev-$nn.md")
   return "$fail"
+}
+
+# 재실행 대상은 phpunit 실행 명령뿐이다. 리뷰어가 백틱에 경로만 적거나
+# (`tests/unit/Filters/` → OK (387 tests…) — ISS-694 run.log) 옵션 조각을 적으면 그 토큰을
+# eval 해 "매치 없음" 불일치가 났다. 임의 토큰 eval 의 부작용면도 여기서 닫는다
+is_phpunit_cmd() {
+  case "$1" in *[\;\&\|\>\<\`]*|*'$('*) return 1 ;; esac
+  printf '%s' "$1" | grep -qE '^([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |$)'
 }
 
 # BASELINE 의 "$ {명령}" 을 재실행해 "N tests, M assertions" 주장과 대조한다.
@@ -388,6 +400,7 @@ verify_baseline_counts() {
     esac
     claim_n=$(printf '%s' "$claim" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
     [ -n "$claim_n" ] || continue
+    is_phpunit_cmd "$cmd" || continue
     if [ -n "$root" ]; then
       actual=$(cd "$root" 2>/dev/null && eval "$cmd" 2>&1)
     else
@@ -490,6 +503,7 @@ verify_rev_baseline_counts_file() {
     [ -n "$cmd" ] || continue
     claim_n=$(printf '%s' "$line" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
     [ -n "$claim_n" ] || continue
+    is_phpunit_cmd "$cmd" || continue
     if [ -n "$root" ]; then
       actual=$(cd "$root" 2>/dev/null && eval "$cmd" 2>&1)
     else
