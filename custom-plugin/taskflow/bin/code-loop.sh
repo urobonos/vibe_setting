@@ -268,6 +268,7 @@ review_round() {
 
 너는 이 라운드의 콜드 리뷰어다. $dir/00-spec.md (대조 기준) 와 $dir/dev-$nn.md
 (이번 변경 + BASELINE) 를 읽고, worktree 의 diff 를 실제로 돌려 판정한다.
+셸 변이 검증 결과가 있으면 $dir/mut-$nn.md 도 읽는다 — GREEN 으로 남은 변이는 판별력 없는 테스트다.
 $hist"
 
   run_step "rev-$nn-correctness" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-correctness.md")" \
@@ -456,6 +457,125 @@ verify_criteria() {
   return "$fail"
 }
 
+# 성공 기준의 "변이 시 red" 를 셸이 실 소스 변이로 직접 확인한다 (2026-09-28).
+# ISS-694: 기준 5 "offline 을 MENU_AUTH_PATHS 에서 빼면 red" 를 dev 가 변이를 흉내 내는
+# 테스트(항상 참)로 "충족"했고 네 번 지적되고도 남았다 — red 요구는 자기신고로만 통과했다.
+#
+# 변이는 dev worktree 가 아니라 일회용 스크래치 worktree 에 가한다. 원복 실패가 구조적으로
+# 없다(통째로 지운다). 스크래치 = HEAD + dev 의 diff(add -N 포함) + untracked 파일 + vendor-pool
+# 하드링크 — junction 이 아니라서 --force 제거가 원본 vendor 를 지우지 않는다(vendor-pool.sh 머리말).
+#
+# 판정은 대조군이 있을 때만 한다: 변이 없이 같은 명령이 green 이어야 한다. green 이 아니면
+# (환경 누락 등) red 가 변이 때문인지 가를 수 없어 판정 무효로 적고 dev 를 탓하지 않는다.
+#
+#   MUTATIONS: {n}                                          (00-spec.md — 변이 기준 개수)
+#   MUTATION: {파일} | {원문 조각} ==> {변이 조각} | {phpunit 명령}   (spec 또는 dev-NN.md)
+MUTATION_RED_RE='FAILURES!|ERRORS!|Tests: [0-9]+.*(Failures|Errors): [1-9]'
+
+mutation_lines() {
+  grep -hE '^[[:space:]#>*-]*MUTATION:' "$@" 2>/dev/null \
+    | sed -E 's/^[[:space:]#>*-]*MUTATION:[[:space:]]*//; s/[[:space:]]+$//'
+}
+
+# 스크래치 worktree 에 dev worktree 의 현재 상태를 옮긴다. 옮긴 뒤 두 쪽의 변경 파일 집합이
+# 다르면 1 — add -N 을 안 한 새 파일이 diff 에서 빠지는 함정을 여기서 잡는다
+mutation_scratch_prepare() {
+  local root="$1" scratch="$2" patch
+  git -C "$root" worktree add --detach -q "$scratch" HEAD 2>/dev/null || return 1
+  patch=$(mktemp)
+  git -C "$root" diff HEAD --binary > "$patch"
+  if [ -s "$patch" ] && ! git -C "$scratch" apply --whitespace=nowarn "$patch" 2>/dev/null; then
+    rm -f "$patch"; return 1
+  fi
+  rm -f "$patch"
+  git -C "$root" ls-files --others --exclude-standard -z | while IFS= read -r -d '' f; do
+    mkdir -p "$scratch/$(dirname "$f")"
+    cp -p "$root/$f" "$scratch/$f"
+  done
+  if [ -f "$scratch/composer.lock" ]; then
+    bash "$HOME/.claude/bin/vendor-pool.sh" ensure "$scratch" >/dev/null 2>&1 || return 1
+  fi
+  [ "$(git -C "$root" status --porcelain | cut -c4- | sort)" = "$(git -C "$scratch" status --porcelain | cut -c4- | sort)" ]
+}
+
+mutation_scratch_remove() {
+  local root="$1" scratch="$2"
+  git -C "$root" worktree remove --force "$scratch" 2>/dev/null
+  git -C "$root" worktree prune 2>/dev/null
+  rmdir "$(dirname "$scratch")" 2>/dev/null
+}
+
+verify_mutations() {
+  local dir="$1" nn="$2" want root lines count scratch report fail=0 line file from to cmd out rc before_sha
+  report="$dir/mut-$nn.md"
+  want=$(sed -nE 's/^[[:space:]#>*]*MUTATIONS:[[:space:]*]*([0-9]+)[[:space:]*]*$/\1/p' "$dir/00-spec.md" 2>/dev/null | tail -1)
+  lines=$(mutation_lines "$dir/00-spec.md" "$dir/dev-$nn.md")
+  count=$(printf '%s' "$lines" | grep -c .)
+  [ "${want:-0}" -gt 0 ] || [ "$count" -gt 0 ] || return 0
+  if [ "$count" -lt "${want:-0}" ]; then
+    echo "!!! [dev-$nn] 변이 기준 ${want}건인데 MUTATION 줄은 ${count}건 — 변이 red 는 자기증명하지 말고 MUTATION 줄로 넘긴다"
+    fail=1
+  fi
+  [ "$count" -gt 0 ] || return "$fail"
+  root=$(worktree_of "$dir/00-spec.md")
+  if [ -z "$root" ] || [ ! -d "$root" ]; then
+    echo "!!! [dev-$nn] 변이 검증 불가 — WORKTREE 없음"
+    return "$fail"
+  fi
+  scratch="$(mktemp -d)/mut"
+  { echo "# 셸 변이 검증 (dev-$nn)"; echo; } > "$report"
+  if ! mutation_scratch_prepare "$root" "$scratch"; then
+    echo "--- [mut-$nn] 스크래치 준비 실패(이식 불일치) — 판정 무효" | tee -a "$report"
+    mutation_scratch_remove "$root" "$scratch"
+    return "$fail"
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    file=$(printf '%s' "$line" | sed -E 's/[[:space:]]*\|.*$//')
+    cmd=$(printf '%s' "$line" | sed -E 's/^.*\|[[:space:]]*//')
+    from=$(printf '%s' "$line" | sed -E 's/^[^|]*\|[[:space:]]*//; s/[[:space:]]*\|[^|]*$//; s/[[:space:]]*==>.*$//')
+    to=$(printf '%s' "$line" | sed -E 's/^[^|]*\|[[:space:]]*//; s/[[:space:]]*\|[^|]*$//; s/^.*==>[[:space:]]*//')
+    if ! is_phpunit_cmd "$cmd" || [ -z "$from" ] || [ ! -f "$scratch/$file" ]; then
+      echo "!!! [dev-$nn] MUTATION 줄 해석 불가 — $line" | tee -a "$report"
+      fail=1; continue
+    fi
+    before_sha=$(sha256sum "$root/$file" 2>/dev/null | cut -d' ' -f1)
+    out=$(cd "$scratch" && eval "$cmd" 2>&1); rc=$?
+    if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then
+      echo "--- [mut-$nn] 대조군이 green 이 아니다 — 판정 무효: $cmd" | tee -a "$report"
+      continue
+    fi
+    cp -p "$scratch/$file" "$scratch/$file.mutation-orig"
+    if ! python - "$scratch/$file" "$from" "$to" <<'PY'
+import sys
+path, before, after = sys.argv[1:]
+text = open(path, encoding="utf-8").read()
+if before not in text:
+    sys.exit(1)
+open(path, "w", encoding="utf-8", newline="").write(text.replace(before, after, 1))
+PY
+    then
+      echo "!!! [dev-$nn] 변이 원문 조각이 $file 에 없다 — $from" | tee -a "$report"
+      fail=1; continue
+    fi
+    out=$(cd "$scratch" && eval "$cmd" 2>&1); rc=$?
+    mv -f "$scratch/$file.mutation-orig" "$scratch/$file"
+    if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then
+      echo "- red ✓ $file: \`$from\` ==> \`$to\`" >> "$report"
+    else
+      echo "!!! [dev-$nn] 변이가 GREEN — 테스트가 이 변이를 판별하지 못한다: $file \`$from\` ==> \`$to\`" | tee -a "$report"
+      fail=1
+    fi
+    if [ "$(sha256sum "$root/$file" 2>/dev/null | cut -d' ' -f1)" != "$before_sha" ]; then
+      echo "!!! [dev-$nn] dev worktree 의 $file 이 변이 검증 중 바뀌었다 — 중단"
+      mutation_scratch_remove "$root" "$scratch"
+      return 2
+    fi
+  done <<< "$lines"
+  mutation_scratch_remove "$root" "$scratch"
+  return "$fail"
+}
+
 # dev-$nn.md 를 리뷰어에게 넘기기 전에 셸 독립 재실행으로 자기신고를 대체한다.
 # 불일치는 코드 결함이 아니라 보고 오류이므로 정규 DEV_CAP 을 소비하지 않고,
 # 별도의 작은 재시도만 소진한다 (2026-09-22 사용자 지시: "불일치시 캡소진안함").
@@ -470,8 +590,11 @@ VERIFY_RETRY_CAP=2
 verify_gate() {
   local dir="$1" nn="$2" common="$3" try=0
   while :; do
+    local mutation_rc=0
     if verify_criteria "$dir" "$nn" && verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn"; then
-      return 0
+      verify_mutations "$dir" "$nn"; mutation_rc=$?
+      [ "$mutation_rc" -eq 2 ] && return 1
+      [ "$mutation_rc" -eq 0 ] && return 0
     fi
     if [ "$try" -ge "$VERIFY_RETRY_CAP" ]; then
       break
@@ -480,12 +603,15 @@ verify_gate() {
     echo "=== [dev-$nn] 셸 재검증 불일치 — 재보고 요청 $try/$VERIFY_RETRY_CAP"
     local fix_body="$common
 
-방금 반환한 $dir/dev-$nn.md 가 셸 재검증(CRITERIA → 기계검사 → BASELINE 순, 앞이
+방금 반환한 $dir/dev-$nn.md 가 셸 재검증(CRITERIA → 기계검사 → BASELINE → 변이 순, 앞이
 실패하면 뒤는 안 돌았다)을 통과하지 못했다. 무엇이 걸렸는지는 run.log 의 위 !!! 줄에 있다. 실제 상태를 다시 확인해 같은 파일을 갱신 반환한다 —
 새 라운드가 아니라 같은 dev-$nn.md 의 재보고다. 주장을 실측에 맞게 고치거나,
 실측이 틀렸다면 그 근거를 NOTES 에 남긴다.
 CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행해 증거를 붙인다. 환경 탓에
-정말 못 돌리면 시도한 명령과 그 출력을 그 줄에 적는다 — 안 한 것을 한 것으로 적지 않는다."
+정말 못 돌리면 시도한 명령과 그 출력을 그 줄에 적는다 — 안 한 것을 한 것으로 적지 않는다.
+변이가 GREEN 으로 걸렸으면 보고가 아니라 테스트를 고친다 — 그 테스트는 약속한 동작을 판별하지
+못한다. 결과는 $dir/mut-$nn.md 에 있다.
+갱신한 반환은 같은 경로 $dir/dev-$nn.md 에 다시 쓴다."
     rm -f "$dir/dev-$nn.md"
     if ! run_step "dev-$nn" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn.md" \
          "$(step_prompt "$AGENT_DIR/step-developer.md" "$fix_body")"; then
@@ -605,6 +731,11 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
 성공 기준에는 1부터 번호를 매기고, 그 개수를 기계 판독용 한 줄로 따로 쓴다 (dev 반환의
 기준별 증거를 셸이 대조할 때 쓴다):
   CRITERIA: {성공 기준 개수}
+성공 기준 중 "이 변이에서 red" 를 요구하는 것의 개수를 한 줄로 쓴다 (없으면 0). 변이는 셸이
+실 소스에 직접 가해 확인한다 — 테스트 안에서 변이를 흉내 내는 방식은 판별력이 0 이 된다(ISS-694):
+  MUTATIONS: {변이 기준 개수}
+대상 코드가 이미 있어 원문을 지금 확정할 수 있으면 변이마다 한 줄씩 쓴다 (새로 짤 코드면 dev 가 쓴다):
+  MUTATION: {파일 상대경로} | {원문 조각} ==> {변이 조각} | {phpunit 명령}
 vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·symlink 로 링크하지 않는다.
 마지막 줄에 기계 판독용으로 정확히 한 줄을 쓴다:
   GATE: OK          (성공 기준 3개 이하 — 진행)

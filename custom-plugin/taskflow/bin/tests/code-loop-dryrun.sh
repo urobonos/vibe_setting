@@ -83,7 +83,8 @@ case "$base" in
     # T_GATE_LINE 이 설정돼 있으면(빈 값 포함) 판정 줄을 원문 그대로 쓴다 — 표기 변형·줄 없음 검사용
     if [ -n "${T_GATE_LINE+x}" ]; then printf 'spec\n\n%s\n' "$T_GATE_LINE" > "$out"
     else printf 'spec\n\nGATE: %s\n' "${T_GATE:-OK}" > "$out"; fi
-    [ -n "${T_WT:-}" ] && printf 'WORKTREE: %s\n' "$T_WT" >> "$out" ;;
+    [ -n "${T_WT:-}" ] && printf 'WORKTREE: %s\n' "$T_WT" >> "$out"
+    [ -n "${T_SPECNOTE:-}" ] && printf '%b\n' "$T_SPECNOTE" >> "$out" ;;
   rev-*-correctness.md)
     # T_RC/T_RD 가 있으면 반환 양식을 갖춘 리뷰어 문서 — 셸 합본 경로 검사용
     printf '%b' "${T_RC:-reviewer (stub)\n}" > "$out" ;;
@@ -335,6 +336,13 @@ check "재현된 이탈 없음 — 승격 안 함" 0 "$(grep -c '셸 승격' "$T
 check "재현된 이탈 없음 — adv 1회로 종료" 1 "$(cnt 'adv-*.md')"
 reset; rc=$(runit T_REV=CLEAN T_ADV=UPHELD T_ADVNOTE='재현된 이탈: 없음.')
 check "없음. (마침표) — 승격 안 함" 0 "$(grep -c '셸 승격' "$TMP/out.txt")"
+
+echo "== AB. 변이 기준이 있는데 MUTATION 줄이 없으면 재보고 (verify_gate 배선) =="
+reset; rc=$(runit T_SPECNOTE='MUTATIONS: 1' T_REV=CLEAN T_ADV=UPHELD)
+check "변이 줄 누락 — 재보고 요청" 1 "$([ "$(grep -c 'MUTATION 줄은 0건' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+check "변이 줄 누락 — 소진 후에도 완주" 0 "$rc"
+reset; rc=$(runit T_SPECNOTE='MUTATIONS: 0' T_REV=CLEAN T_ADV=UPHELD)
+check "변이 기준 0 — 재보고 없음" 0 "$(grep -c '셸 재검증 불일치' "$TMP/out.txt")"
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="
