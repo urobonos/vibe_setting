@@ -16,15 +16,16 @@ HOME  = Path(os.environ.get("CLAUDE_HOME") or os.path.expanduser("~/.claude"))
 STATE = HOME / "state" / "code-loop"
 PROJ  = HOME / "projects"
 
-# per-1M USD (base_input, output). cache_read = base*0.1, cache_write(1h TTL) = base*2
+# per-1M USD (base_input, cache_read, output). cache_write(1h TTL) = base*2.
+# 캐시읽기는 base 비율이 모델마다 다르다 — Opus 5.5 는 base*0.05 라 소넷과 같은 $0.20
 PRICE = {
-    "claude-opus-5":              (5.0, 25.0),
+    "claude-opus-5":              (5.0, 0.50, 25.0),
     # `--model opus` 가 이 ID 로 풀린다. 빠져 있던 동안 DEFAULT(sonnet 단가)로 절반만 셌다
-    "claude-opus-5-5":            (4.0, 20.0),
-    "claude-sonnet-5":            (2.0, 10.0),
-    "claude-haiku-4-5-20251001":  (1.0,  5.0),
+    "claude-opus-5-5":            (4.0, 0.20, 20.0),
+    "claude-sonnet-5":            (2.0, 0.20, 10.0),
+    "claude-haiku-4-5-20251001":  (1.0, 0.10,  5.0),
 }
-DEFAULT_PRICE = (2.0, 10.0)
+DEFAULT_PRICE = (2.0, 0.20, 10.0)
 
 STEP_RE = re.compile(r"^--- (\d\d:\d\d:\d\d) \[([^\]]+)\]")
 
@@ -34,8 +35,8 @@ STALE_SEC = 3 * 3600
 
 
 def usd(model, u):
-    base, out = PRICE.get(model, DEFAULT_PRICE)
-    return (u["in"] * base + u["cr"] * base * 0.1
+    base, cache_read, out = PRICE.get(model, DEFAULT_PRICE)
+    return (u["in"] * base + u["cr"] * cache_read
             + u["cw"] * base * 2.0 + u["out"] * out) / 1e6
 
 
