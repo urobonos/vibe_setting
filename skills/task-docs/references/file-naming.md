@@ -19,7 +19,7 @@ step 평면 파일만 날짜 prefix 를 면제한다: `tasks/YYYYMMDD/{작업명
 
 **면제 범위는 날짜 prefix 뿐이다.** 제네릭 단독 이름 금지는 그대로라 `steps/summary.md`·`steps/report.md` 는 차단되고, `steps/` 아래 한 단계만 허용되므로 `steps/sub/x.md` 도 차단된다.
 
-강제 = `hooks/output-naming-check.sh` (`IS_STEP_FILE` 판정) + `hooks/gate-enforce.sh` (경로 패턴). 회귀 가드 = `hooks/tests/run-guard-tests.sh` §H.
+강제 = `hooks/output-naming-check.sh` (`IS_STEP_FILE` 판정) + `custom-plugin/taskflow/hooks/gate-enforce.sh` (경로 패턴). 회귀 가드 = `hooks/tests/run-guard-tests.sh` §H.
 
 `{yyyy-mm-dd}` 는 작업 시작일(파일 최초 생성일) ISO-8601 표기 (예: `2026-04-27`). 파일을 같은 날 다시 수정하더라도 prefix 는 유지한다.
 

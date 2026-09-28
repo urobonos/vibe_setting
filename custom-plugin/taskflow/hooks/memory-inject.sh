@@ -1,6 +1,10 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$HOME/.claude/hooks/lib/log-helper.sh" 2>/dev/null && log_event "memory-inject" "enter" "pid=$$"
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "memory-inject" "enter" "pid=$$"
 # ─────────────────────────────────────────────────────────
 # SessionStart Hook: dream 이 선별한 top-N 사실을 세션 컨텍스트에 강제 주입
 # ─────────────────────────────────────────────────────────
@@ -19,7 +23,7 @@ MAX_LINES=40
 MAX_CHARS=4000
 STALE_DAYS=45
 
-source "$HOME/.claude/hooks/lib/hook-input.sh" 2>/dev/null || exit 0
+source "$HARNESS_LIB/hook-input.sh" 2>/dev/null || exit 0
 hook_read_stdin
 
 CWD=$(hook_parse_field "cwd")

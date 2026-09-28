@@ -139,7 +139,7 @@ for dir in ~/.claude/docs/working/*/; do
 done
 
 # 3-bis) backlog 잔존 스캔 — working/backlog/*.md 중 status: done 이 아닌 문서 (product 필터 미적용,
-#   backlog 는 product 무분리 — hooks/backlog-lifecycle.sh 와 동일 소스 디렉토리 재사용)
+#   backlog 는 product 무분리 — custom-plugin/taskflow/hooks/backlog-lifecycle.sh 와 동일 소스 디렉토리 재사용)
 #   done 판정은 frontmatter(첫 `---` ~ 다음 `---`) 범위로 한정한다(콜드리뷰 H2) — 이전엔 파일 전체를
 #   grep 해 본문 코드블록 안 `status: done` 예시 텍스트에도 반응, hook 의 has_done_marker()(frontmatter
 #   전용)와 판정이 갈라져 실제로는 pending 인 문서가 목록에서 무경고로 사라졌다.
@@ -190,7 +190,7 @@ if [ -d "$BACKLOG_DIR" ] && compgen -G "$BACKLOG_DIR/*.md" >/dev/null 2>&1; then
 fi
 
 # 4) DISPATCH 분배 풀 조회 — claim 가능(available) (여기는 목록 조회만 read-only; claim 은 #tag 분기)
-source ~/.claude/hooks/lib/dispatch-utils.sh
+source ~/.claude/custom-plugin/taskflow/hooks/lib/dispatch-utils.sh
 # available 표시 — 분배 작업은 #tag prefix. product = 표 4번째 컬럼($4), working 잔존과 동일 필터(TARGET_PRODUCT)
 dispatch_list available | awk -F"$DISPATCH_FS" -v p="$TARGET_PRODUCT" '
   $2=="tag" || $2=="" { next }
@@ -368,7 +368,7 @@ grep -qE '^(tick|무인):[[:space:]]*(allow|허용)' "$UNIFIED" || exit 0   # al
 > **점유 선확인 = `dispatch_claim` 내장:** 배타 lock + `TAKEN` 거부가 타 세션 침범을 원천 차단한다 (별도 §0 게이트 불요 — lock 이 곧 게이트). 어떤 분배 작업을 하기로 판단했더라도 분배 문서를 직접 열지 말고 **항상 이 claim 을 먼저** 거친다 (claim 이 `TAKEN` 이면 타 세션 소유).
 
 ```bash
-source ~/.claude/hooks/lib/dispatch-utils.sh
+source ~/.claude/custom-plugin/taskflow/hooks/lib/dispatch-utils.sh
 SID8="${CLAUDE_SESSION_ID:0:8}"
 [ -z "$SID8" ] && SID8="<현재 세션 sid 8자 — Claude 본체 기입>"
 OUT=$(dispatch_claim "{tag}" "$SID8"); RC=$?
@@ -415,8 +415,8 @@ RESULT="${OUT%%|*}"; DOC="${OUT#*|}"
 |------|------|
 | `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" | working/ 경로 정책 |
 | **`~/.claude/hooks/lib/product-resolver.sh`** | **cwd → product 산출 (worktree 안 호출 시 원본 repo 역해석)** |
-| **`~/.claude/hooks/lib/dispatch-utils.sh`** | **DISPATCH 분배 풀 조회(`dispatch_list`, read-only) + `#tag` claim/done(`dispatch_claim`/`dispatch_done`, mutation) — 본 슬래시가 직접 호출** |
-| `~/.claude/hooks/working-lifecycle.sh` | working/ → tasks/ 이동 본체 (본 슬래시는 read-only, 호출 안 함) |
+| **`~/.claude/custom-plugin/taskflow/hooks/lib/dispatch-utils.sh`** | **DISPATCH 분배 풀 조회(`dispatch_list`, read-only) + `#tag` claim/done(`dispatch_claim`/`dispatch_done`, mutation) — 본 슬래시가 직접 호출** |
+| `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` | working/ → tasks/ 이동 본체 (본 슬래시는 read-only, 호출 안 함) |
 | `~/.claude/skills/task-docs/references/unified-template.md` | unified 양식 (Status / 잔여 작업 섹션 위치) |
 | **`~/.claude/custom-plugin/taskflow/commands/save.md`** | **짝 슬래시 — Status: Partial 마킹 + `## 잔여 작업` 섹션 작성 (잔존 작업 생성자)** |
 | `~/.claude/custom-plugin/taskflow/commands/auto.md` | 잔여 일괄 처리 시 후속 진입점 |

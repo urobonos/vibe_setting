@@ -1,6 +1,10 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "backlog-lifecycle" "enter" "pid=$$"
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "backlog-lifecycle" "enter" "pid=$$"
 # backlog-lifecycle.sh — working backlog 완료 시 tasks/ 자동 이동 (2026-05-13 시행, 2026-08-06 경로 배선,
 #   2026-08-07 실 데이터 298건 이관 실행 — 콜드리뷰 L1: 배선일과 실행일을 혼용하지 않는다)
 #
@@ -68,9 +72,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   8. stderr 로 이동 결과 1줄 보고 (+ 구 경로에 동일 slug 잔존 시 고아 경고, 콜드리뷰 Medium-7)
 
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || true
+source "$HARNESS_LIB/path-utils.sh" 2>/dev/null || true
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/product-resolver.sh" 2>/dev/null || true
+source "$HARNESS_LIB/product-resolver.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 
@@ -93,7 +97,7 @@ DOCS_ROOT="$HOME/.claude/docs"
 BACKLOG_SRC_DIR=$(normalize_path "$DOCS_ROOT/working/backlog")
 
 # MEMORY.md/BACKLOG.md read-modify-write lock (콜드리뷰 M4) — mkdir 원자적 lock + TTL stale 회수.
-# dispatch-utils.sh::dispatch_lock_acquire/release(hooks/lib/dispatch-utils.sh)와 동일 패턴 재사용
+# dispatch-utils.sh::dispatch_lock_acquire/release(custom-plugin/taskflow/hooks/lib/dispatch-utils.sh)와 동일 패턴 재사용
 # (새 lock 메커니즘 작성 금지). DISPATCH_LOCK 과 별도 경로 — backlog index 갱신이 DISPATCH.md CRUD 를
 # 불필요하게 막지 않도록 전용 lock 파일을 쓴다.
 # 동일 mkdir+TTL 패턴 3곳 복제(dispatch-utils.sh:55 / registry-utils.sh:24 / 여기) — 공용 lib 승격은

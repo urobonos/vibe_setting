@@ -239,7 +239,7 @@ Status: Done   (시작 라인)
 | `~/.claude/skills/task-docs/references/unified-template.md` § 실행 | unified 양식 SSOT |
 | `~/.claude/custom-plugin/taskflow/commands/plan.md` §"step 파일 양식" | step 분해·인덱스 양식 SSOT (본 슬래시가 소비) |
 | `~/.claude/hooks/doc-unified-check.sh` V1 `v_template_guard` → `*unified*.md` 분기 | unified §실행 헤더 강제 |
-| `~/.claude/hooks/working-lifecycle.sh` | Status: Done 자동 이동 + step 분배 본체 |
+| `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` | Status: Done 자동 이동 + step 분배 본체 |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"QA 게이트" (본 파일) | QA 게이트 절차 SSOT (활성화 조건 / 단일 subagent / fail-closed 판정 / known-limitations) |
 | `~/.claude/custom-plugin/taskflow/commands/execute.md` §"결정 escalation ladder" (본 파일) | **분류 판별식 (P1~P4 / I1~I3) + fail-safe + ladder 절차 + bounded + 로그 표 SSOT** — CLAUDE.md·auto.md·reminder hook 이 참조 |
 | `~/.claude/custom-plugin/taskflow/commands/analyze.md` §"단계 전이 (→ plan)" | 순방향 전이 조건 (T1·T2) SSOT — 본 슬래시의 짝 |

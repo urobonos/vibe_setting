@@ -89,8 +89,8 @@ argument-hint: "[작업명]  # 생략 시 본 세션 전체 회고"
 | `~/.claude/CLAUDE.md` §4.1 "Persistence (필수)" | 정책 SSOT (history.md / summary.md 기록 의무) |
 | `~/.claude/skills/task-docs/SKILL.md` | history.md / summary.md 양식 SSOT |
 | `~/.claude/skills/task-docs/references/unified-template.md` § 회고 | 양식 SSOT |
-| `~/.claude/hooks/session-completeness-check.sh` | history/summary 동시 갱신 강제 |
-| `~/.claude/hooks/working-lifecycle.sh` | Status: Done 자동 이동 본체 |
+| `~/.claude/custom-plugin/taskflow/hooks/session-completeness-check.sh` | history/summary 동시 갱신 강제 |
+| `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` | Status: Done 자동 이동 본체 |
 
 **책임 분담선 (audit M14 명문 2026-05-20):** 본 슬래시 책임 = history.md + summary.md 기록 (Persistence §4.1). push·머지·정착 영역 = `/taskflow:deploy` 책임 (별 SSOT). 본 슬래시 = read-only or `~/.claude/docs/` mutation 만, 외부 git 명령 0.
 

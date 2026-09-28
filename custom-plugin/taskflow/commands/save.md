@@ -70,7 +70,7 @@ Status: Done
 
 (시작 라인) 부착 + `## Self-Critique` 보강 → `working-lifecycle.sh` PostToolUse hook 발동 → `~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{yyyy-mm-dd}-{작업명}-unified.md` 이동.
 
-> **잔여 섹션 미체크박스 가드 (2026-07-23):** `move_working_to_tasks()` 는 `## 잔여/TODO/Follow-up` 섹션에 미체크박스(`- [ ]`)가 있으면 이동을 **차단**한다 (`has_residual_unchecked`, exit 없이 `return 1` + stderr). 즉 잔여가 남은 문서에 `Status: Done` 을 붙여도 자동 이동되지 않는다 — "잔여 0건" 판정을 hook 이 강제한다. 강제 이동이 필요하면 `save now`(구 `/taskflow:done` 흡수)로 우회한다 (Self-Critique 위험기록 체크박스는 잔여 섹션 밖이라 제외). SSOT = `hooks/lib/template-patterns.sh::has_residual_unchecked` + `docs/claude-harness/tasks/20260723/done-gate-residual-block/`.
+> **잔여 섹션 미체크박스 가드 (2026-07-23):** `move_working_to_tasks()` 는 `## 잔여/TODO/Follow-up` 섹션에 미체크박스(`- [ ]`)가 있으면 이동을 **차단**한다 (`has_residual_unchecked`, exit 없이 `return 1` + stderr). 즉 잔여가 남은 문서에 `Status: Done` 을 붙여도 자동 이동되지 않는다 — "잔여 0건" 판정을 hook 이 강제한다. 강제 이동이 필요하면 `save now`(구 `/taskflow:done` 흡수)로 우회한다 (Self-Critique 위험기록 체크박스는 잔여 섹션 밖이라 제외). SSOT = `custom-plugin/taskflow/hooks/lib/template-patterns.sh::has_residual_unchecked` + `docs/claude-harness/tasks/20260723/done-gate-residual-block/`.
 
 > **코드 변경 동반 시 verify+review 필수 (2026-07-14):** 마감 대상 작업이 **코드 파일(php/js/ts/py/sql)** 을 변경했다면 `Status: Done` 부착 **전** `/taskflow:verify`(e2e 5점)·`/taskflow:review` 체인 완료를 확인한다 (CLAUDE.md §4.3 "코드 라이프사이클 게이트" + `execute.md` §"코드 변경 = verify + review 필수 체인" 동일 문구 — 줄번호로 가리키지 않는다. 이 파일들은 배치마다 흔들려 하드 줄번호가 곧 죽는다). 미완료 시 verify+review 먼저 수행 후 Done 판정 — QA-after 규율이 `/taskflow:save` 의 Done 경로로 우회되지 않도록. 코드 변경 없는 문서·분석 작업은 비대상.
 
@@ -161,9 +161,9 @@ working_gate_blockers "{product}" "{작업명}"
 
 ```bash
 # 인자 없음 — 전체 일괄 즉시 이동 (판정 생략)
-bash ~/.claude/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSubmit","prompt":"/taskflow:done"}'
+bash ~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSubmit","prompt":"/taskflow:done"}'
 # 특정 작업만
-bash ~/.claude/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSubmit","prompt":"/taskflow:done {작업명}"}'
+bash ~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh <<< '{"hook_event_name":"UserPromptSubmit","prompt":"/taskflow:done {작업명}"}'
 ```
 
 > **`save` (판정) vs `save now` (즉시):** 기본 `save` = 잔여 판정 → Done/Partial 분기 (분기 A/B 위). `save now` = 판정 없이 강제 이동 (Status 무관, 긴급). 자연어 `작업 완료`·`tasks 이동`·`done` 키워드도 `working-lifecycle.sh` UserPromptSubmit 경로가 직접 처리 (부정문 가드·확인 스텝 = hook 내장).
@@ -199,7 +199,7 @@ grep -qE "^(tick|무인):[[:space:]]*pause[[:space:]]*\(by ${SID8}," "$UNIFIED" 
 ### 본 세션 claim 태그 식별 (sid 기반)
 
 ```bash
-source ~/.claude/hooks/lib/dispatch-utils.sh
+source ~/.claude/custom-plugin/taskflow/hooks/lib/dispatch-utils.sh
 # 본 세션 sid — REGISTRY 갱신과 동일 체계 (환경 미노출 시 Claude 본체 기입)
 SID8="${CLAUDE_SESSION_ID:0:8}"
 [ -z "$SID8" ] && SID8="<현재 세션 sid 8자 — Claude 본체 기입>"
@@ -254,12 +254,12 @@ done
 | SSOT | 역할 |
 |------|------|
 | `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + §4.3 "branch·worktree·push·머지 통합 정책" | 정책 SSOT |
-| `~/.claude/hooks/working-lifecycle.sh` | Status: Done 자동 이동 본체 |
-| **`~/.claude/hooks/lib/dispatch-utils.sh`** | **본 세션 claim DISPATCH 태그 정리 (`dispatch_done`/`dispatch_release`/`dispatch_list claimed`) — ④ 단계** |
+| `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` | Status: Done 자동 이동 본체 |
+| **`~/.claude/custom-plugin/taskflow/hooks/lib/dispatch-utils.sh`** | **본 세션 claim DISPATCH 태그 정리 (`dispatch_done`/`dispatch_release`/`dispatch_list claimed`) — ④ 단계** |
 | **`~/.claude/custom-plugin/git/commands/{create,merge}.md`** | **① 정착 절차 정본 — 명령 순서 / 개별 Bash 호출 강제 / ff-only 실패 시 cherry-pick fallback / Claude 자동 실행 (2026-06-04~)** |
 | `~/.claude/hooks/branch-enforce.sh` | push (§1) + master/main merge·checkout·switch (§1.5) + master/main HEAD cherry-pick (§1.6) 차단. **`worktree remove`·`branch -D` 는 본 hook 비대상** (`branch -D wip/*` 단독은 `git-guard.py` 면제) |
 | `~/.claude/skills/task-docs/references/unified-template.md` | 양식 SSOT (잔여 작업 섹션 포함) |
-| `~/.claude/hooks/working-lifecycle.sh` (즉시 이동) | `save now` = 구 `/taskflow:done` 흡수 (판정 생략 강제 이동 + dispatch_purge_done), 2026-07-16 |
+| `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` (즉시 이동) | `save now` = 구 `/taskflow:done` 흡수 (판정 생략 강제 이동 + dispatch_purge_done), 2026-07-16 |
 | `~/.claude/custom-plugin/taskflow/commands/auto.md` | 자동진행 맥락의 ① 정착 진입점 요약 (절차 본문은 위 `git/commands/{create,merge}.md` 정본) |
 | **`~/.claude/custom-plugin/taskflow/commands/load.md`** | **짝 슬래시 — Status: Partial 잔존 작업 불러오기 (다음 세션 진입점)** |
 | `~/.claude/custom-plugin/taskflow/commands/save.md` (본 파일) | 세션 마감 통합 저장 — worktree + 문서 + 잔여 동시 처리 |

@@ -243,7 +243,7 @@ TASKS=$(product_tasks_dir "$PWD")     # ~/.claude/docs/$PRODUCT/tasks
 
 ## working/ 단일 통합 워크플로우 (2026-05-12 시행, 필수)
 
-> **SSOT:** 본 섹션 + `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + `~/.claude/hooks/working-lifecycle.sh` (자동 이동 강제) + `~/.claude/custom-plugin/taskflow/commands/save.md` §"즉시 이동 모드" (수동 진입점) + `~/.claude/skills/task-docs/references/unified-template.md` (양식 SSOT).
+> **SSOT:** 본 섹션 + `~/.claude/CLAUDE.md` §File Paths "working/ 단일 통합 문서" + `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` (자동 이동 강제) + `~/.claude/custom-plugin/taskflow/commands/save.md` §"즉시 이동 모드" (수동 진입점) + `~/.claude/skills/task-docs/references/unified-template.md` (양식 SSOT).
 
 ### 1. 작업 시작 — working/ 단일 통합 문서 생성
 
@@ -359,7 +359,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 
 ## backlog 메모리 워크플로우
 
-> SSOT = CLAUDE.md §4.5 "backlog 메모리 정책" + "비필수 사이드이펙트 백로그 격리" + `hooks/backlog-lifecycle.sh`. 본 섹션은 task-docs 진입점에서의 운영 요약이다 (CLAUDE.md 가 참조하는 SSOT 섹션).
+> SSOT = CLAUDE.md §4.5 "backlog 메모리 정책" + "비필수 사이드이펙트 백로그 격리" + `custom-plugin/taskflow/hooks/backlog-lifecycle.sh`. 본 섹션은 task-docs 진입점에서의 운영 요약이다 (CLAUDE.md 가 참조하는 SSOT 섹션).
 
 본 세션의 **잔여 후속 / 시간 트리거 / 사용자 결정 보류** 작업, 그리고 **코드 작업 중 발견한 비필수·무해·사이드이펙트급 항목**은 working/ 문서·산출물·코드 TODO 로 끌어올리지 않고 backlog 메모리 단일 파일에 격리 기록한다.
 
@@ -367,7 +367,7 @@ product 별 분리 디렉토리는 두지 않는다. **Why:** 단일 디렉토�
 
 - 경로: `~/.claude/docs/working/backlog/{yyyy-mm-dd}-{slug}.md` (단일 파일, product 무분리, slug = kebab-case, 날짜 prefix = 생성일)
 - frontmatter: `name` / `description` (1줄) / `type: backlog` / `status: pending|in_progress|done` / `source` / `target_date` (선택) / `product` (기본 claude-harness) / `created` / `completed` (status=done 시 hook 자동 채움)
-- **`product:` 실재 전제(2026-08-07 콜드리뷰 S2/M9):** status=done 자동 이동 시 `product:` 값은 `~/.claude/docs/{product}/` 가 **이미 실재해야** 한다(`claude-harness` 는 예외 — 항상 자기부트스트랩). 미실재·오탈자면 이동이 스킵되고 원본이 `working/backlog/` 에 남는다(유령 트리 생성 방지, 조용한 오귀속 방지). `working`/`indexing`/`references`/`hooks`/`scripts`/`share`/`source_tree`/`참조문서` 는 product 가 아닌 공용 SSOT 예약 이름이라 값으로 쓸 수 없다. SSOT = `hooks/backlog-lifecycle.sh::move_backlog_to_tasks()`.
+- **`product:` 실재 전제(2026-08-07 콜드리뷰 S2/M9):** status=done 자동 이동 시 `product:` 값은 `~/.claude/docs/{product}/` 가 **이미 실재해야** 한다(`claude-harness` 는 예외 — 항상 자기부트스트랩). 미실재·오탈자면 이동이 스킵되고 원본이 `working/backlog/` 에 남는다(유령 트리 생성 방지, 조용한 오귀속 방지). `working`/`indexing`/`references`/`hooks`/`scripts`/`share`/`source_tree`/`참조문서` 는 product 가 아닌 공용 SSOT 예약 이름이라 값으로 쓸 수 없다. SSOT = `custom-plugin/taskflow/hooks/backlog-lifecycle.sh::move_backlog_to_tasks()`.
 - 발생 project 의 `memory/BACKLOG.md` 해당 라벨 섹션에 entry 1줄 추가 필수 — `- [slug](../../../docs/working/backlog/{yyyy-mm-dd}-{slug}.md) — 한 줄 요약` (href = `.claude/projects/{project}/memory/` 기준 상대경로). **`MEMORY.md` 에는 쓰지 않는다** — 매 세션 always-on 이라 BACKLOG.md 포인터 1줄만 둔다 (2026-09-28). BACKLOG.md 가 없는 project 는 새로 만들고 MEMORY.md `## Backlog` 에 포인터 1줄을 단다
 - **파일명 충돌 규약(2026-08-07, 298건 이관 중 4쌍 실측 — product 무분리 + 날짜 prefix 구조상 서로 다른
   project 가 같은 날 같은 slug 를 쓰면 충돌한다)**: 저장 직전 `{yyyy-mm-dd}-{slug}.md` 가 이미 존재하면

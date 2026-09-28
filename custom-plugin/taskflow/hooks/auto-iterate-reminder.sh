@@ -1,4 +1,8 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 # auto-iterate-reminder.sh
 # PostToolUse Hook: 묶음 승인 활성 시 자동 위임 정책 system reminder 주입
 #
@@ -13,7 +17,7 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 
 # shellcheck disable=SC1091
-source "$(dirname "$0")/lib/hook-input.sh" 2>/dev/null || true
+source "$HARNESS_LIB/hook-input.sh" 2>/dev/null || true
 
 if declare -f hook_init >/dev/null 2>&1; then
     hook_init
@@ -30,7 +34,7 @@ AUTOITER_FILE="/tmp/claude_autoiter_${SESSION_ID}"
 
 # 디버그 로그 (2026-05-13 telemetry lib 마이그레이션)
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null || {
   LOG_FILE="$HOME/.claude/auto-iterate-reminder.log"
   log_event() {
     local hook="$1" event="$2"; shift 2

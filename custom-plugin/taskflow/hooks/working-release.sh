@@ -1,6 +1,10 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-release" "enter" "pid=$$"
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "working-release" "enter" "pid=$$"
 # working-release.sh — Stop hook 진입 시 본인 세션 active entry 를 status=paused 로 변경 + lock 정리
 #
 # SSOT: ~/.claude/docs/claude-harness/tasks/20260515/active-task-registry/2026-05-15-active-task-registry-unified.md
@@ -13,7 +17,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 # Done 자동 이동은 working-lifecycle.sh 가 별도 처리 — 본 hook 은 lifecycle 보조.
 
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/registry-utils.sh" 2>/dev/null || exit 0
+source "$HARNESS_LIB/registry-utils.sh" 2>/dev/null || exit 0
 
 STDIN_DATA=$(cat)
 

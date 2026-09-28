@@ -545,7 +545,7 @@ A·B·C 세 트랙 모두 조용할 때만 `[watch — scope=all] 변동 없음`
 | claim 해제 (lock 보호) | `registry_mark_stale` — 수동 awk+mv 금지 | `hooks/lib/registry-utils.sh` + 메모리 `feedback_shared-pool-lib-first` |
 | **orphan lock 판정** | `registry_orphan_locks` — REGISTRY 매칭 없는 lock 나열 (`ps cleanup` 과 공용) | **`hooks/lib/registry-utils.sh`** |
 | 결정 escalation 분류 | 권한형 P1~P4 / 정보 부족형 I1~I3 판별식 | `custom-plugin/taskflow/commands/execute.md` |
-| 정체 원인(문서 상태 미복귀) | Stop 시 REGISTRY 만 paused, 문서 `상태:` 불변 | `hooks/working-release.sh` |
+| 정체 원인(문서 상태 미복귀) | Stop 시 REGISTRY 만 paused, 문서 `상태:` 불변 | `custom-plugin/taskflow/hooks/working-release.sh` |
 | 세션 관측 | transcript tail 신호 4개 | `custom-plugin/taskflow/bin/transcript-tail.py` |
 | 주기 반복 | `/loop <interval> /taskflow:watch` | harness `/loop` 스킬 |
 | **ff머지 절차** | checkout→ff-only→worktree remove→branch -D | **`custom-plugin/git/commands/merge.md`** |

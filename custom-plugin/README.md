@@ -64,10 +64,11 @@
 
 | 둔다 | 기준 |
 |------|------|
-| **플러그인 안** | 그 플러그인 기능에만 쓰이는 hook·bin·스크립트 (예: `taskflow/hooks/memory-inject.sh`, `taskflow/bin/code-loop.sh`) |
-| **글로벌 `~/.claude/hooks/`** | 하니스 전역 가드 (worktree-enforce · dangerous-ops-guard · gate-enforce 등), 글로벌 hook 도 쓰는 공유 lib (`hooks/lib/working-scan.sh` 등), 가드 면제 판정 (`hooks/lib/code-loop-gate.sh` — 플러그인이 전역 가드를 스스로 느슨하게 만들지 못하게) |
+| **플러그인 안** | 그 플러그인 개념에 속하는 hook·lib·bin. taskflow = working/ 문서 생명주기(`working-*`)·단계 게이트(`gate-*`)·자동 위임(`auto-iterate-*`)·backlog·세션 완결성·share 문서 가드·code-loop 러너와 그 게이트 판정(`hooks/lib/code-loop-gate.sh`) |
+| **글로벌 `~/.claude/hooks/`** | 도메인 무관 안전 가드 (worktree-enforce · branch-enforce · dangerous-ops-guard · sensitive-file-guard 등), 글로벌 hook 도 쓰는 공유 lib (`log-helper` · `hook-input` · `path-utils` · `product-resolver` · `registry-utils` · `working-scan`) |
 
-의존 방향은 **플러그인 → 글로벌** 한쪽만. 글로벌 hook·lib 가 플러그인 파일을 참조하지 않는다.
+- 의존 방향은 **플러그인 → 글로벌** 한쪽만. 글로벌 hook·lib 가 플러그인 파일을 source 하지 않는다. 플러그인 hook 은 공유 lib 를 `$HOME/.claude/hooks/lib/` 로 참조하고, 플러그인 소유 lib 는 자기 `hooks/lib/` 에서 상대경로로 읽는다.
+- **플러그인을 끄면 그 hook 도 꺼진다.** taskflow 를 비활성화하면 단계 게이트·working 생명주기 강제도 멈춘다 — 의도된 동작.
 
 ## 5. 결합 금지
 

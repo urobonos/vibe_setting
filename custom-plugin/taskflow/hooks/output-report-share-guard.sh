@@ -1,6 +1,10 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "output-report-share-guard" "enter" "pid=$$"
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "output-report-share-guard" "enter" "pid=$$"
 # PreToolUse:Edit|Write|MultiEdit Hook — 공유용 단일 통합 문서 양식 강제 (2026-05-12 신설)
 #
 # 대상 경로:
@@ -28,8 +32,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #
 # 근거: ~/.claude/CLAUDE.md §File Paths "공유용 단일 통합 문서" 룰
 
-source "$(dirname "$0")/lib/hook-input.sh"
-source "$(dirname "$0")/lib/path-utils.sh"
+source "$HARNESS_LIB/hook-input.sh"
+source "$HARNESS_LIB/path-utils.sh"
 hook_read_stdin
 hook_parse_file_path
 

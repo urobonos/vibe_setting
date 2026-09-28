@@ -3,7 +3,7 @@
 # 핵심 질문 = "환경변수만 세우면 열리는가" — 열리면 그건 우회 통로다.
 set -uo pipefail
 
-HOOK="${1:-$(cd "$(dirname "$0")/.." && pwd)/gate-enforce.sh}"
+HOOK="${1:-$(cd "$(dirname "$0")/../.." && pwd)/hooks/gate-enforce.sh}"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 CODE="$TMP/target.py"; : > "$CODE"
 

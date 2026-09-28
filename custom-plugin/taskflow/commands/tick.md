@@ -355,7 +355,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | step 순차 소비 | step-01~nn 의존 순서 | `execute.md` + `plan.md` §"step 파일 양식" |
 | **step 스캔 + 완료 게이트** | working/ 훑기 · `working_gate_blockers` · **`working_rejections`**(반려 소비 모드 판정) | **`hooks/lib/working-scan.sh`** |
 | **dev 검증 환경** | 로컬 docker 스택 ensure(up) / 헬스체크 / down(사람 전용) | **`~/.claude/custom-plugin/taskflow/bin/dev-stack.sh`** |
-| ReadyToMerge = 비종결 | 자동이동 안 됨 | `hooks/working-lifecycle.sh:54` |
+| ReadyToMerge = 비종결 | 자동이동 안 됨 | `custom-plugin/taskflow/hooks/working-lifecycle.sh:54` |
 | step 머지 + 완료 판정 | 사용자 | `custom-plugin/taskflow/commands/save.md` |
 | 대기 큐 리뷰 | step ReadyToMerge + NeedsDecision | `custom-plugin/taskflow/commands/control.md` |
 | **문서 없는 단발 실행** | 같은 개발·리뷰 루프를 claim·상태 전이 없이 1회 (대조 기준 = 호출자 확정 성공 기준) | `custom-plugin/taskflow/commands/code.md` |

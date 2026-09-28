@@ -1,4 +1,8 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # UserPromptSubmit Hook: 사용자 승인 감지 → Gate 레벨 증가
 # Phase 3 Harness — 승인 키워드가 포함된 짧은 메시지 감지
@@ -7,14 +11,14 @@
 # 조건: 메시지 길이 50자 이하 + 승인 키워드 포함
 
 # shellcheck disable=SC1091
-source "$(dirname "$0")/lib/hook-input.sh"
+source "$HARNESS_LIB/hook-input.sh"
 hook_read_stdin
 
 # --- 디버그 로그 설정 (2026-05-13 telemetry lib 마이그레이션) ---
 # 신규 = lib/log-helper.sh 의 log_event 사용 (~/.claude/logs/gate-approve.log ndjson)
 # fallback = lib 로드 실패 시 기존 free-text 포맷 보존
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null || {
   LOG_FILE="$HOME/.claude/gate-approve.log"
   log_event() {
     local hook="$1" event="$2"; shift 2
@@ -195,7 +199,7 @@ if [ "$APPROVED" = true ]; then
     # --- 글로벌 경로 해석 ---
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     # shellcheck disable=SC1091
-    source "$SCRIPT_DIR/lib/product-resolver.sh" 2>/dev/null && {
+    source "$HARNESS_LIB/product-resolver.sh" 2>/dev/null && {
       TASK_DIR="$(product_tasks_dir "$CWD")/$TODAY"
     } || {
       TASK_DIR="$CWD/docs/tasks/$TODAY"

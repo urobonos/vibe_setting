@@ -30,8 +30,8 @@ CLAUDE_HOME="$HOME/.claude"
 STATE_DIR="$CLAUDE_HOME/state/code-loop"
 CMD_DIR="$CLAUDE_HOME/custom-plugin/taskflow/commands"
 # 크기 게이트 판정 줄 읽기 — hook(gate-enforce.sh)과 같은 함수를 쓴다. 러너 위치 기준으로
-# 찾으므로 worktree 의 러너는 같은 worktree 의 lib 를 읽는다 (SSOT = hooks/lib/code-loop-gate.sh)
-GATE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/hooks/lib/code-loop-gate.sh"   # {root}/custom-plugin/taskflow/bin → {root}
+# 찾으므로 worktree 의 러너는 같은 worktree 의 lib 를 읽는다 (SSOT = custom-plugin/taskflow/hooks/lib/code-loop-gate.sh)
+GATE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/code-loop-gate.sh"   # taskflow/bin → taskflow/hooks/lib
 . "$GATE_LIB" 2>/dev/null
 AGENT_DIR="$CLAUDE_HOME/custom-plugin/taskflow/agents"
 PERM="${CODE_LOOP_PERM:-auto}"
@@ -143,7 +143,7 @@ run_step() {
 }
 
 # 결과문서 끝의 기계 판독용 한 줄. 없으면 계약 위반이므로 빈 값을 돌려 fail-closed.
-# 표기 인정 범위는 GATE 줄(hooks/lib/code-loop-gate.sh)과 같다 — 앞의 공백·`#`·`>`·`*`, 값 뒤의
+# 표기 인정 범위는 GATE 줄(custom-plugin/taskflow/hooks/lib/code-loop-gate.sh)과 같다 — 앞의 공백·`#`·`>`·`*`, 값 뒤의
 # 공백·`*` 허용(`## VERDICT: CLEAN` · `**VERDICT: UPHELD**`). 본문 언급(`- … VERDICT: …`)은 불인정.
 # 2026-09-24 ISS-966 run 에서 합본이 헤더 표기로 써 "VERDICT 줄 없음" 중단이 두 번 났다
 verdict_of() {
@@ -626,7 +626,7 @@ $request"
   # 세션 SID8 로 REGISTRY 를 찾는데, 스텝마다 새 프로세스라 매번 새 SID8 이 나와
   # 원천적으로 닿지 못한다. 그 대신 이 경로의 00-spec.md 를 §계획으로 인정한다.
   # 변수는 포인터일 뿐이고 통과 판정은 hook 이 파일 실재와 GATE: OK 로 한다
-  # (SSOT = hooks/gate-enforce.sh plan-before 절)
+  # (SSOT = custom-plugin/taskflow/hooks/gate-enforce.sh plan-before 절)
   export CODE_LOOP_SPEC="$dir/00-spec.md"
 
   # vendor 는 에이전트 재량에 두지 않고 러너가 채운다 (ISS-285 후속). 에이전트가 원본

@@ -1,6 +1,10 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "working-lifecycle" "enter" "pid=$$"
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "working-lifecycle" "enter" "pid=$$"
 # working-lifecycle.sh — working/ 단일 통합 문서 자동 이동 (2026-05-12 시행)
 #
 # SSOT: CLAUDE.md §File Paths "working/ 단일 통합 문서" + skills/task-docs/SKILL.md §"working/ 단일 통합 워크플로우"
@@ -22,10 +26,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   7. stderr 로 이동 결과 1줄 보고
 
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null || true
+source "$HARNESS_LIB/path-utils.sh" 2>/dev/null || true
 # stdin JSON 파싱 lib (bash-primary + python/grep fallback + CR 제거) — FILE_PATH/PROMPT 추출용
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/hook-input.sh" 2>/dev/null || true
+source "$HARNESS_LIB/hook-input.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 
@@ -60,7 +64,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/template-patterns.sh" 2>/dev/null || 
 
 # Active Task Registry entry/lock 정리 함수 (lib 가용 시에만, 2026-05-15)
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/registry-utils.sh" 2>/dev/null || true
+source "$HARNESS_LIB/registry-utils.sh" 2>/dev/null || true
 
 has_completion_markers() {
   has_status_done "$1" && has_self_critique_h2 "$1"
@@ -468,7 +472,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
     # dispatch done 문서 정리 (2026-06-15 — /taskflow:done 통합)
     #  working/ 이동과 대칭: 완료된 분배 문서를 {product}/tasks/{today}/dispatch-archive/ 로 이동.
     #  dispatch_purge_done 이 lock 안 원자 처리 → 다중 세션 race 차단. 미가용 시 비차단 skip.
-    #  SSOT: hooks/lib/dispatch-utils.sh::dispatch_purge_done
+    #  SSOT: custom-plugin/taskflow/hooks/lib/dispatch-utils.sh::dispatch_purge_done
     if source "$(dirname "${BASH_SOURCE[0]}")/lib/dispatch-utils.sh" 2>/dev/null; then
       purge_result="$(dispatch_purge_done 2>/dev/null)"
       [ -n "$purge_result" ] && echo "[working-lifecycle] $purge_result" >&2

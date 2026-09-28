@@ -1,6 +1,10 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "session-completeness-check" "enter" "pid=$$"
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "session-completeness-check" "enter" "pid=$$"
 # Stop Hook: 세션 종료 시 산출물 누락 검증
 # exit 0 경고 — 산출물 미완성 시 세션당 1회 stderr 안내 (차단 안 함, 사유 = 하단 "차단 또는 통과")
 #
@@ -14,7 +18,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 # stdin 파싱 = lib/hook-input.sh SSOT (M5 2026-08-03 — grep+sed 재구현 제거).
 # lib 도 bash 정규식 primary 라 2026-07-16 "python3 경로 제거" 최적화 의도는 그대로 유지된다.
 # shellcheck disable=SC1091
-source "$(dirname "${BASH_SOURCE[0]}")/lib/hook-input.sh"
+source "$HARNESS_LIB/hook-input.sh"
 hook_read_stdin
 hook_parse_session_id
 hook_parse_cwd
@@ -31,7 +35,7 @@ WARNINGS=""
 # 모든 산출물은 ~/.claude/docs/{product}/tasks/ 하위에 생성된다.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/lib/product-resolver.sh" 2>/dev/null || {
+source "$HARNESS_LIB/product-resolver.sh" 2>/dev/null || {
   echo "[session-completeness-check] product-resolver.sh 로드 실패" >&2
   exit 0
 }

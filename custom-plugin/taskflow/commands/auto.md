@@ -215,9 +215,9 @@ git ls-files --others --exclude-standard                  # untracked 신규 →
 ## SSOT
 
 - 본문 정책: CLAUDE.md §4 "자동 위임 정책 (Autonomous Iteration)" + §4.3 "자동진행 worktree-first 정책"
-- 키워드 매칭: `hooks/gate-approve.sh` (묶음 승인 정규식 + stop marker 생성)
-- Stop 차단/재진입 + 정착 reminder: `hooks/auto-iterate-stop-guard.sh`
-- reminder 주입: `hooks/auto-iterate-reminder.sh`
+- 키워드 매칭: `custom-plugin/taskflow/hooks/gate-approve.sh` (묶음 승인 정규식 + stop marker 생성)
+- Stop 차단/재진입 + 정착 reminder: `custom-plugin/taskflow/hooks/auto-iterate-stop-guard.sh`
+- reminder 주입: `custom-plugin/taskflow/hooks/auto-iterate-reminder.sh`
 - **정착 절차 본체: `custom-plugin/git/commands/{create,merge}.md`** (명령 순서 / 개별 Bash 호출 강제 / ff-only 실패 시 cherry-pick fallback / Claude 자동 실행 2026-06-04~ SSOT — 본 슬래시는 진입점 지목과 제약 요약만)
 - worktree 면제 + 분기 정책: `hooks/branch-enforce.sh` (`~/.claude/worktrees/*` case + wip/* 분기 자동 통과)
 - product 역해석: `hooks/lib/product-resolver.sh` (`resolve_origin_cwd` → working/ 단일 통합 문서 경로 정합)

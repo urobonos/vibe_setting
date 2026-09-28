@@ -92,7 +92,7 @@ control 은 read-only 라 전파를 트리거하지 않는다. 처리 경로가 
 | **working/ 스캔 + 완료 게이트** | `working_scan` · `working_gate_blockers` | **`hooks/lib/working-scan.sh`** |
 | status 정의 | ReadyToMerge(step) / NeedsDecision(task) | `custom-plugin/taskflow/commands/tick.md` |
 | 처리 진입 | 머지·완료 = save / 결정 = load | `custom-plugin/taskflow/commands/{save,load}.md` |
-| 해소 후 전파 | Done 시 이동·인덱스·REGISTRY·step | `hooks/working-lifecycle.sh` + `survey.md §전파` |
+| 해소 후 전파 | Done 시 이동·인덱스·REGISTRY·step | `custom-plugin/taskflow/hooks/working-lifecycle.sh` + `survey.md §전파` |
 | SessionStart 요약판 | 1줄 자동 배너 | `hooks/agent-first-banner.sh` (cwd 추천 블록) |
 
 ## 호출 예

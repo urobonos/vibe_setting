@@ -1,7 +1,11 @@
 #!/bin/bash
+# 공유 lib 는 하니스 hooks/lib 에 있다. 스크립트 위치 기준으로 찾아 $HOME 을 바꾼 테스트에서도
+# 같은 파일을 쓰고, 플러그인이 캐시 사본으로 로드돼 상대경로가 없으면 $HOME 으로 되돌아간다
+HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/null && pwd)"
+[ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
-source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "gate-enforce" "enter" "pid=$$"
-source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh" 2>/dev/null  # is_hard_code_file (plan-before 게이트, 2026-07-08)
+source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "gate-enforce" "enter" "pid=$$"
+source "$HARNESS_LIB/path-utils.sh" 2>/dev/null  # is_hard_code_file (plan-before 게이트, 2026-07-08)
 source "$(dirname "${BASH_SOURCE[0]}")/lib/code-loop-gate.sh" 2>/dev/null  # code_loop_gate (code-loop spec 판정, 2026-09-17)
 # PreToolUse Hook: Gate 미통과 시 Edit/Write/MultiEdit 차단 + Agent 검증
 # Phase 3 Harness — v2 (비코드 경로 완화)

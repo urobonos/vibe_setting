@@ -14,6 +14,124 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/memory-inject.sh\"",
             "timeout": 5,
             "statusMessage": "메모리 주입 확인 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-init.sh\"",
+            "timeout": 5,
+            "statusMessage": "워크플로우 Gate 초기화..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/working-stale-cleanup.sh\"",
+            "timeout": 10,
+            "statusMessage": "Active Task Registry stale lock 정리 중..."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-approve.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/working-lifecycle.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/backlog-lifecycle.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/working-lifecycle.sh\"",
+            "timeout": 10,
+            "statusMessage": "working/ 단일 통합 자동 이동 검증 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/backlog-lifecycle.sh\"",
+            "timeout": 10,
+            "statusMessage": "memory backlog 완료 자동 이동 검증 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/auto-iterate-reminder.sh\"",
+            "timeout": 5,
+            "statusMessage": "자동 위임 정책 reminder 주입 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/working-heartbeat.sh\"",
+            "timeout": 5,
+            "statusMessage": "Active Task Registry heartbeat 갱신 중..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/output-report-share-guard.sh\"",
+            "timeout": 15,
+            "statusMessage": "공유용 단일 통합 문서 양식 검증 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/working-register.sh\"",
+            "timeout": 5,
+            "statusMessage": "Active Task Registry 등록 중..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|Task|SubagentSpawn",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/gate-enforce.sh\"",
+            "timeout": 15,
+            "statusMessage": "워크플로우 Gate 검증 중..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/auto-iterate-stop-guard.sh\"",
+            "timeout": 5,
+            "statusMessage": "자동 위임 정책 Stop 차단 검증 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-completeness-check.sh\"",
+            "timeout": 10,
+            "statusMessage": "산출물 완전성 검증 중..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/working-release.sh\"",
+            "timeout": 5,
+            "statusMessage": "Active Task Registry 세션 release 중..."
           }
         ]
       }

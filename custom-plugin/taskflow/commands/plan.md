@@ -168,7 +168,7 @@ DoD 마지막 줄은 **실행 명령**이다. "동작 확인" 같은 문장이 �
 병렬그룹이 지정된 step 을 **다세션/에이전트가 나눠 처리**할 때, plan 이 해당 그룹 step 들을 DISPATCH 풀에 자동 등록한다 (구 `/taskflow:dispatch` 슬래시 흡수 — 별도 슬래시 호출 불요). 단일 세션 순차 처리면 등록 생략.
 
 ```bash
-source ~/.claude/hooks/lib/dispatch-utils.sh
+source ~/.claude/custom-plugin/taskflow/hooks/lib/dispatch-utils.sh
 source ~/.claude/hooks/lib/product-resolver.sh
 PRODUCT=$(resolve_product "$PWD")
 # 병렬그룹 지정 step 마다 (독립 = 의존 0, 자기완결 풀사이클 step 파일이 곧 분배 문서)
@@ -331,7 +331,7 @@ Status: Plan Complete
 | `~/.claude/skills/task-docs/references/unified-template.md` § 계획 | unified 양식 SSOT |
 | **본 파일 §"step 파일 양식"** | step 분해 평면 파일·인덱스 표 양식 SSOT |
 | `~/.claude/hooks/doc-unified-check.sh` V1 `v_template_guard` → `*unified*.md` 분기 | unified §계획 헤더 강제 |
-| `~/.claude/hooks/working-lifecycle.sh` | step 평면 파일 → steps/ 분배 이동 |
+| `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` | step 평면 파일 → steps/ 분배 이동 |
 | **`~/.claude/custom-plugin/taskflow/agents/planner.md`** | **계획 생성 본체 위임 대상 (2026-09-22~) — 절차는 본 파일이 SSOT, 에이전트 정의는 model: opus 고정 + 프롬프트 계약만** |
 
 ## §3 Checkpoint 우선 적용

@@ -152,7 +152,7 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 
 작업분석 문서는 **라이브 마스터 인덱스**다. 분석 대상 작업이 완료(`Status: Done` → working/ → tasks/ 자동 이동)되면, 그 완료가 작업분석 문서의 `대상 작업 인덱스` 표에 **자동 전파**된다. 별도 슬래시·수동 갱신 불필요.
 
-**전파 흐름** (`hooks/working-lifecycle.sh` `move_working_to_tasks()` 확장):
+**전파 흐름** (`custom-plugin/taskflow/hooks/working-lifecycle.sh` `move_working_to_tasks()` 확장):
 
 1. plan 문서가 완료 이동될 때, hook 이 **이동 직전** 그 문서에서 작업분석 backlink (`작업분석-*.md` 출처) 를 grep.
 2. backlink 가 가리키는 작업분석 문서를 열어 `| {작업명} |` 행을 찾는다 (작업명 = plan 파일명 `{date}-{product}-{작업명}.md` 세그먼트 = 인덱스 표 키 컬럼).
@@ -163,7 +163,7 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 
 **다중 참조:** 한 plan 이 작업분석을 여러 번 받으면(재실행 누적) `출처:` backlink 가 여러 건 쌓인다. hook 은 **중복 제거 후 모든 작업분석 문서**를 갱신한다(첫 1건만 갱신 시 나머지가 `⏳ Plan` 으로 stale 잔존하는 것을 방지 — silent cap 금지).
 
-> **깨진 링크 해소가 전파의 본질:** lifecycle hook 은 완료 시 plan 을 `working/` → `tasks/.../unified.md` 로 **mv 이동**(`working-lifecycle.sh::move_working_to_tasks`)한다. Phase 3 인덱스가 박은 working/ 링크는 완료 순간 깨진다 — 전파가 바로 그 링크를 tasks/ 실경로로 갱신 + 상태 `✓` 로 마킹해 마스터 인덱스를 **라이브**로 유지한다. SSOT: 본 절 + `hooks/working-lifecycle.sh` 전파 블록.
+> **깨진 링크 해소가 전파의 본질:** lifecycle hook 은 완료 시 plan 을 `working/` → `tasks/.../unified.md` 로 **mv 이동**(`working-lifecycle.sh::move_working_to_tasks`)한다. Phase 3 인덱스가 박은 working/ 링크는 완료 순간 깨진다 — 전파가 바로 그 링크를 tasks/ 실경로로 갱신 + 상태 `✓` 로 마킹해 마스터 인덱스를 **라이브**로 유지한다. SSOT: 본 절 + `custom-plugin/taskflow/hooks/working-lifecycle.sh` 전파 블록.
 
 ## 직병렬 실행 지침
 
@@ -241,7 +241,7 @@ Phase 0~1 에서 스캔·정독한 **모든** 대상 작업을 빠짐없이 링�
 | `~/.claude/hooks/lib/product-resolver.sh` | cwd → product 산출 (Phase 0 필터) |
 | `~/.claude/custom-plugin/taskflow/commands/plan.md` §"step 파일 양식" / Status: Plan Complete | 스캔 대상 마커·WBS 구조 SSOT |
 | `~/.claude/custom-plugin/taskflow/commands/auto.md` · `~/.claude/custom-plugin/taskflow/commands/parallel.md` | 분석 결과 후속 실행 진입점 |
-| `~/.claude/hooks/working-lifecycle.sh` | Plan Complete 가 working/ 에 잔존하는 이유 (Done 만 tasks/ 이동) + **전파** (완료 이동 시 작업분석 인덱스 행 역갱신 — `move_working_to_tasks()` 전파 블록) |
+| `~/.claude/custom-plugin/taskflow/hooks/working-lifecycle.sh` | Plan Complete 가 working/ 에 잔존하는 이유 (Done 만 tasks/ 이동) + **전파** (완료 이동 시 작업분석 인덱스 행 역갱신 — `move_working_to_tasks()` 전파 블록) |
 
 ## Changelog
 
