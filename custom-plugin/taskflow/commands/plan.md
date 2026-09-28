@@ -13,9 +13,17 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 ## 실행 방식 — subagent 위임 (2026-09-22~)
 
-**아래 §"참조 범위"~§"종료 마커" 전체 절차는 main 세션이 직접 수행하지 않는다.** main 세션은 인자를 해석해 대상 working/ 문서 경로만 확정한 뒤(로컬 파일 조회라 opus 불필요), `Agent` 도구로 `taskflow:planner` 서브에이전트를 호출해 나머지 전부를 위임한다. 서브에이전트가 돌아오면 그 출력(참조범위 표 / 생성 파일 목록 / Plan Audit 표 / 최종 Status 라인 / Pending 승인대기 목록)을 그대로 화면에 낸다 — main 세션이 재가공하지 않는다.
+**아래 §"참조 범위"~§"종료 마커" 전체 절차는 main 세션이 직접 수행하지 않는다.** main 세션은 인자를 해석해 대상 working/ 문서 경로만 확정한 뒤(로컬 파일 조회라 opus 불필요), `Agent` 도구로 `taskflow:planner` 서브에이전트를 호출해 나머지 전부를 위임한다 — **이때 `model: "opus"` 를 Agent 도구 호출 파라미터로 반드시 함께 전달한다** (아래 §"model 파라미터 명시 필수" 참조, frontmatter 단독 신뢰 금지). 서브에이전트가 돌아오면 그 출력(참조범위 표 / 생성 파일 목록 / Plan Audit 표 / 최종 Status 라인 / Pending 승인대기 목록)을 그대로 화면에 낸다 — main 세션이 재가공하지 않는다.
 
 **위임 이유:** frontmatter `model: opus` 는 **현재 턴에만** 유효하다(공식 문서 `code.claude.com/docs/en/slash-commands`: 다음 프롬프트부터 세션 기본 모델로 복귀). §3 Checkpoint 로 계획 도중 턴이 끊기면 이어지는 부분이 조용히 세션 기본 모델(예: `opusplan` 프리셋의 sonnet)로 되돌아갈 수 있는데, 에이전트 정의의 `model:` 은 호출 단위로 고정돼 이 위험이 없다 — 그래서 계획 생성 본체를 `taskflow:planner` 에이전트로 옮겼다. 절차 SSOT = 본 파일(아래 섹션들), 위임 절차 자체의 SSOT = `custom-plugin/taskflow/agents/planner.md`.
+
+## model 파라미터 명시 필수 (2026-09-22~)
+
+`Agent` 도구로 `taskflow:planner` 를 호출할 때 **`model: "opus"` 를 호출 파라미터로 반드시 함께 전달한다.** 에이전트 정의 frontmatter 의 `model: opus` 만으로 충분하다고 가정하지 않는다.
+
+**근거:** 2026-09-22 실측 — frontmatter 만 지정하고 Agent 호출 파라미터를 생략한 1차 위임이 세션 기본 모델(Sonnet 5)로 조용히 실행됐다(종료마커 self-report 로 확인). 원인 후보는 (a) 글로벌 `settings.json` 의 `env.CLAUDE_CODE_SUBAGENT_MODEL` 이 frontmatter 보다 우선했거나 (b) 조직 `availableModels` 정책이 서버 관리 계층에서 opus 를 거부한 것 — 로컬 `settings.json`·`settings.local.json`·`managed-settings.json`·레지스트리 전수 확인 결과 (a) 만 로컬에서 실체가 확인됐고 (b) 는 로컬 파일로는 검증 불가능하다. 어느 쪽이든 **Agent 도구 호출 시점의 `model` 파라미터가 공식 우선순위상 최상위**이므로, 명시하면 (a) 는 반드시 해소되고 (b) 인 경우에만 그래도 대체된다(그 경우는 조직 관리자 확인이 필요하며 본 지침으로는 해결되지 않는다). 즉 명시는 비용 없는 상위 호환 조치다.
+
+**적용:** `Agent({subagent_type: "taskflow:planner", model: "opus", prompt: ...})` — main 세션이 위임 시 항상 이 파라미터를 포함한다.
 
 ## 참조 범위 (사전 전수 조사, 필수)
 
@@ -356,6 +364,7 @@ Status: Plan Complete
 
 ## Changelog
 
+- 2026-09-22: **`Agent` 호출 시 `model: "opus"` 파라미터 명시 필수화** (신규 §"model 파라미터 명시 필수"). 근거 = frontmatter `model: opus` 단독 신뢰 시 세션 기본 모델(Sonnet 5)로 조용히 대체되는 사례 실측 — 글로벌 `settings.json` `env.CLAUDE_CODE_SUBAGENT_MODEL` 이 원인 후보. Agent 도구 호출 파라미터가 공식 우선순위 최상위라 명시하면 이 경로는 해소된다
 - 2026-09-22: **계획 생성 본체를 `taskflow:planner` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/planner.md`, model: opus 고정). main 세션은 인자 해석 후 위임·결과 relay 만 담당. 근거 = 슬래시 frontmatter `model:` 이 턴 단위로만 유효해 §3 승인 대기로 턴이 끊기면 세션 기본 모델로 되돌아갈 수 있다는 점(공식 문서 확인) — 에이전트 정의 단위 `model:` 은 그 위험이 없다
 - 2026-09-22: ⑥ 마커에 `계획 생성 모델` self-report 라인 추가 — `model: opus` frontmatter 지정이 턴 단위로만 유효함(공식 문서 확인)에 따라, §3 승인 대기로 턴이 끊긴 뒤 세션 기본 모델로 되돌아갔는지 사후 확인용
 - 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 체크리스트 임계 `≥ 30` → 존재 강제(hook SSOT, 2026-09-04 에 5 로 인하된 것을 이 계열 4개가 놓쳤다) · V1 차단 강도 정정(경고다 — "tasks/ 이동 후" 는 차단이 아니라 강등 조건) · 실제로 차단하는 V5(e2e 5점)·V2(참조 출처) 행 추가. 값을 복사해 둔 것이 원인이라 숫자를 지우고 포인터만 남긴다
