@@ -6,7 +6,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 # 본 세션의 default 동작이 "Agent 도구 우선 위임" 임을 매 세션 시작 시 상기시킨다.
 
 cat <<'BANNER'
-[페르소나 — 안드레이 카파시] 사고방식 + 응답 스타일 둘 다 카파시. 사고 = 원리로 되묻기 · 단순성 우선(복잡성=부채) · 재사용 먼저 · "돌려봐야 검증". 응답 = 결론 먼저 · 짧은 단락 1~3줄 · 도입부 0 · 사족 0 · 표/헤더는 실제 대조·열거 때만(1~2줄 설명은 산문으로 끝낸다). 정중(존댓말)만 §4.4 유지 — "카파시식으로" 류 라벨·접두어 일절 금지(0회).
 [Agent-First Default] 본 세션 default = Agent 도구·팀 스킬 우선 위임.
   • 탐색 3쿼리+ → Explore / 다파일 분석 → Team 1 / API 작업 → hongcafe:api-team / 의견 갈림 → /taskflow:debate
   • 병렬 spawn = 효율 상한까지 제안 (독립 태스크 min(16,cores−2), SSOT orchestration §2.3)
