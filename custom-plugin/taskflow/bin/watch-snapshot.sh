@@ -22,7 +22,7 @@
 #   "미확정"이 이어지다가 시간이 지나면 자연히 실제 값으로 갱신된다.
 #
 # 사용:
-#   source ~/.claude/custom-plugin/taskflow/scripts/watch-snapshot.sh
+#   source ~/.claude/custom-plugin/taskflow/bin/watch-snapshot.sh
 #   watch_diff [scope]      # 변경분 출력 (A/M/D \t path \t 상세) — 스냅샷은 갱신 안 함
 #   watch_commit [scope]    # 현재 상태를 스냅샷으로 확정 (검증 완료 후 호출)
 

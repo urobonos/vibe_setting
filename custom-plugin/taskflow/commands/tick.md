@@ -202,7 +202,7 @@ unified §계획에 **Step 분해 인덱스 표**가 있으면 unified 통짜가
 **step 개발에 착수하기 전에 검증 환경을 먼저 확보한다.**
 
 ```bash
-bash ~/.claude/bin/dev-stack.sh up     # idempotent — 이미 떠 있으면 즉시 반환
+bash ~/.claude/custom-plugin/taskflow/bin/dev-stack.sh up     # idempotent — 이미 떠 있으면 즉시 반환
 ```
 
 e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`backend:php8` §e2e 검증), 살아 있는 환경 없이는 verify 가 애초에 완결되지 않는다. 코드를 다 고친 뒤 검증 단계에서 스택이 없다는 걸 발견하면 그 iteration 이 통째로 낭비되므로 **착수 전**에 세운다.
@@ -354,7 +354,7 @@ tick 은 이 게이트에 **관여하지 않는다** — step 을 ReadyToMerge �
 | 결정 마감 | escalation ladder P1~P4 / I1~I3 | `execute.md` §"결정 escalation ladder" |
 | step 순차 소비 | step-01~nn 의존 순서 | `execute.md` + `plan.md` §"step 파일 양식" |
 | **step 스캔 + 완료 게이트** | working/ 훑기 · `working_gate_blockers` · **`working_rejections`**(반려 소비 모드 판정) | **`hooks/lib/working-scan.sh`** |
-| **dev 검증 환경** | 로컬 docker 스택 ensure(up) / 헬스체크 / down(사람 전용) | **`~/.claude/bin/dev-stack.sh`** |
+| **dev 검증 환경** | 로컬 docker 스택 ensure(up) / 헬스체크 / down(사람 전용) | **`~/.claude/custom-plugin/taskflow/bin/dev-stack.sh`** |
 | ReadyToMerge = 비종결 | 자동이동 안 됨 | `hooks/working-lifecycle.sh:54` |
 | step 머지 + 완료 판정 | 사용자 | `custom-plugin/taskflow/commands/save.md` |
 | 대기 큐 리뷰 | step ReadyToMerge + NeedsDecision | `custom-plugin/taskflow/commands/control.md` |

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 개발자·리뷰어 모델 전환 — 에이전트 정의 frontmatter 의 model: 줄을 바꾼다.
-# code-loop(bin/code-loop.sh)와 tick(Agent spawn)이 모두 이 줄을 읽으므로 여기 한 곳만 바꾸면 된다.
+# code-loop(custom-plugin/taskflow/bin/code-loop.sh)와 tick(Agent spawn)이 모두 이 줄을 읽으므로 여기 한 곳만 바꾸면 된다.
 #
 # 사용: set-models.sh                    현재 값 표시
 #       set-models.sh dev=opus rev=opus  역할별 전환 (opus | sonnet | haiku)

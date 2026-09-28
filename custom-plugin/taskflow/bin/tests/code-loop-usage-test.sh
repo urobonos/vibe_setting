@@ -5,7 +5,7 @@
 # 그래서 "세는가" 만큼 "안 세야 할 것을 안 세는가" 를 같이 본다.
 set -uo pipefail
 
-HELPER="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/lib/code-loop-usage.py}"
+HELPER="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/code-loop-usage.py}"
 PY=$(command -v python 2>/dev/null || command -v python3 2>/dev/null)
 [ -n "$PY" ] || { echo "python 없음 — 테스트 불가"; exit 1; }
 

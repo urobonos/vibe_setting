@@ -6,7 +6,7 @@
 # 캡 · VERDICT 분기 · 크기 게이트 · fail-closed · 재시도 · 재개.
 # 모델 판단 품질은 여기 대상이 아니다 (그건 실제 run 의 라운드 수가 말한다).
 #
-# 사용: bash bin/tests/code-loop-dryrun.sh
+# 사용: bash custom-plugin/taskflow/bin/tests/code-loop-dryrun.sh
 set -uo pipefail
 
 SUT="$(cd "$(dirname "$0")/.." && pwd)/code-loop.sh"

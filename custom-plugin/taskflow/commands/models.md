@@ -4,10 +4,10 @@ allowed-tools: Bash
 argument-hint: "[dev=opus|sonnet|haiku] [rev=opus|sonnet|haiku]  # 생략 = 현재 값 표시"
 ---
 
-개발 루프의 모델 레벨을 바꾸는 단일 진입점이다. 역할별 모델은 에이전트 정의 frontmatter 의 `model:` 한 곳에만 있고, `bin/code-loop.sh` 와 `/taskflow:tick` 의 Agent spawn 이 모두 그 값을 읽는다. 그래서 여기서 바꾸면 두 경로가 함께 바뀐다.
+개발 루프의 모델 레벨을 바꾸는 단일 진입점이다. 역할별 모델은 에이전트 정의 frontmatter 의 `model:` 한 곳에만 있고, `custom-plugin/taskflow/bin/code-loop.sh` 와 `/taskflow:tick` 의 Agent spawn 이 모두 그 값을 읽는다. 그래서 여기서 바꾸면 두 경로가 함께 바뀐다.
 
 ```bash
-bash ~/.claude/custom-plugin/taskflow/scripts/set-models.sh $ARGUMENTS
+bash ~/.claude/custom-plugin/taskflow/bin/set-models.sh $ARGUMENTS
 ```
 
 | 역할 | 정의 파일 |

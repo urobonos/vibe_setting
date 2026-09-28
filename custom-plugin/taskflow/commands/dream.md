@@ -35,7 +35,7 @@ ls $M | sed 's/_.*//' | sort | uniq -c | sort -rn | head
 ### ② GATHER
 
 ```bash
-python3 ~/.claude/custom-plugin/taskflow/scripts/dream-scan.py --project {slug} --days 30
+python3 ~/.claude/custom-plugin/taskflow/bin/dream-scan.py --project {slug} --days 30
 ```
 
 스크립트는 추출만 한다. **무엇을 메모리로 승격할지 판단은 이 단계가 아니라 ③ 에서 Claude 가 한다.**
@@ -85,4 +85,4 @@ python3 ~/.claude/custom-plugin/taskflow/scripts/dream-scan.py --project {slug} 
 
 자동 쓰기를 주지 않은 이유: 잘못된 통합은 조용히 누적되고, 메모리는 다음 세션의 판단 근거가 되므로 오염 비용이 비대칭적으로 크다.
 
-**SSOT:** 본 파일 + `custom-plugin/taskflow/scripts/dream-scan.py` + `custom-plugin/taskflow/hooks/memory-inject.sh`
+**SSOT:** 본 파일 + `custom-plugin/taskflow/bin/dream-scan.py` + `custom-plugin/taskflow/hooks/memory-inject.sh`

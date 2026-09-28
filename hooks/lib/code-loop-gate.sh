@@ -3,7 +3,7 @@
 #
 # 쓰는 곳 두 군데가 같은 답을 내야 한다:
 #   hooks/gate-enforce.sh  plan-before 게이트 — OK 일 때만 code-loop 개발자 편집 허용
-#   bin/code-loop.sh       크기 게이트 분기 — OK 진행 / TOO-LARGE 정지 / 없음 중단
+#   custom-plugin/taskflow/bin/code-loop.sh       크기 게이트 분기 — OK 진행 / TOO-LARGE 정지 / 없음 중단
 # 둘이 각자 패턴을 들고 있다가 갈라졌다. hook 은 줄 맨 앞 `GATE:` 만 읽어서 spec 이
 # `## GATE: OK` 로 쓰면 개발자가 5라운드 내내 코드를 못 썼고(iss-910 후속 run),
 # 러너는 `GATE: TOO-LARGE` 로 시작하는 줄만 봐서 헤더형 TOO-LARGE 와 GATE 줄 없음을

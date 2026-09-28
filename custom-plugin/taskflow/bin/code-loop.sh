@@ -31,7 +31,7 @@ STATE_DIR="$CLAUDE_HOME/state/code-loop"
 CMD_DIR="$CLAUDE_HOME/custom-plugin/taskflow/commands"
 # 크기 게이트 판정 줄 읽기 — hook(gate-enforce.sh)과 같은 함수를 쓴다. 러너 위치 기준으로
 # 찾으므로 worktree 의 러너는 같은 worktree 의 lib 를 읽는다 (SSOT = hooks/lib/code-loop-gate.sh)
-GATE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/code-loop-gate.sh"
+GATE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/hooks/lib/code-loop-gate.sh"   # {root}/custom-plugin/taskflow/bin → {root}
 . "$GATE_LIB" 2>/dev/null
 AGENT_DIR="$CLAUDE_HOME/custom-plugin/taskflow/agents"
 PERM="${CODE_LOOP_PERM:-auto}"
@@ -77,7 +77,7 @@ cmd_status() {
   # 끝나므로 자기가 쓴 양을 모른다. 집계는 헬퍼에 맡기고, 헬퍼가 없거나 python 이
   # 없으면 목록만 내고 계속한다 (조회가 집계에 종속되면 안 된다).
   local helper py
-  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/code-loop-usage.py"
+  helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/code-loop-usage.py"
   py=$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)
   if [ -n "$py" ] && [ -f "$helper" ]; then
     if CLAUDE_HOME="$CLAUDE_HOME" "$py" "$helper"; then return 0; fi

@@ -5,10 +5,10 @@ allowed-tools: Bash
 argument-hint: "[간격 — 60 / 30m / 1h, 생략 시 1800초] [N — 병렬 슬롯 수, 생략 시 1] | --once | stop [슬롯] | status"
 ---
 
-`~/.claude/bin/tick-loop.sh` 의 thin wrapper. 로직 재구현 0 — 인자를 그대로 넘긴다.
+`~/.claude/custom-plugin/taskflow/bin/tick-loop.sh` 의 thin wrapper. 로직 재구현 0 — 인자를 그대로 넘긴다.
 
 ```bash
-bash ~/.claude/bin/tick-loop.sh "$@"
+bash ~/.claude/custom-plugin/taskflow/bin/tick-loop.sh "$@"
 ```
 
 ## 왜 `/loop` 이 아니라 이것인가
@@ -101,7 +101,7 @@ graceful stop 요청 — 3개 슬롯, 진행 중 tick 은 완주합니다
 
 | 조각 | SSOT |
 |------|------|
-| **러너 본체** | `~/.claude/bin/tick-loop.sh` |
+| **러너 본체** | `~/.claude/custom-plugin/taskflow/bin/tick-loop.sh` |
 | iteration 1회분 로직 | `custom-plugin/taskflow/commands/tick.md` |
 | 대기 큐 소비 | `custom-plugin/taskflow/commands/control.md` |
 | 정지 금지 근거 | 메모리 `feedback_no-autonomous-loop-kill` |

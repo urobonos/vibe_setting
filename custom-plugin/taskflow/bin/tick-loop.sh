@@ -185,7 +185,7 @@ case "${1:-}" in
       echo "전체 정지 완료"
     else
       echo "${STOP_WAIT}s 안에 ${DONE}/${TOTAL} 만 종료했다 — 남은 슬롯은 tick 이 아직 진행 중이다." >&2
-      echo "  즉시 세우려면: bash ~/.claude/bin/tick-loop.sh stop --now" >&2
+      echo "  즉시 세우려면: bash ~/.claude/custom-plugin/taskflow/bin/tick-loop.sh stop --now" >&2
       exit 1
     fi
     exit 0
@@ -247,6 +247,6 @@ case "${1:-}" in
     fi
     [ "$STARTED" -lt "$WANT" ] && echo "요청 $WANT 개 중 $STARTED 개만 기동 (나머지는 슬롯 사용 중)" >&2
     echo "로그: $SLOT_DIR/{슬롯}.log"
-    echo "정지: bash ~/.claude/bin/tick-loop.sh stop"
+    echo "정지: bash ~/.claude/custom-plugin/taskflow/bin/tick-loop.sh stop"
     ;;
 esac

@@ -4,15 +4,15 @@ allowed-tools: Bash, Read, Glob, Grep, Skill
 argument-hint: "{구현 요청} — 필수. 오래 걸리므로 run_in_background 로 띄운다"
 ---
 
-`~/.claude/bin/code-loop.sh` 의 thin wrapper. **로직 재구현 0 — 인자를 그대로 넘긴다.**
+`~/.claude/custom-plugin/taskflow/bin/code-loop.sh` 의 thin wrapper. **로직 재구현 0 — 인자를 그대로 넘긴다.**
 
 ```bash
-bash ~/.claude/bin/code-loop.sh "$@"
+bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh "$@"
 ```
 
 **`run_in_background: true` 로 띄운다.** 루프 1회가 스텝 7개 이상(1라운드 클린 기준)이라 Bash 도구 타임아웃(10분)을 넘긴다. 완료되면 하니스가 알려주고, 그때 `RESULT.md` 만 읽는다 — 중간에 폴링하지 않는다. 폴링하면 메인 컨텍스트를 아끼려고 만든 커맨드가 메인 컨텍스트를 쓴다.
 
-인자가 없으면 러너가 usage 를 낸다. 진행 중인 run 조회는 `bash ~/.claude/bin/code-loop.sh status`, 미완주분 재개는 `--resume {run}`.
+인자가 없으면 러너가 usage 를 낸다. 진행 중인 run 조회는 `bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh status`, 미완주분 재개는 `--resume {run}`.
 
 ### 진행 상황을 눈으로 보려면
 
@@ -34,7 +34,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
 
 ```
 메인 세션
-  └ bash ~/.claude/bin/code-loop.sh "{요청}"      ← run_in_background 로 띄운다
+  └ bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh "{요청}"      ← run_in_background 로 띄운다
        │
        ├ claude -p [spec]              sonnet  → 00-spec.md (+ GATE 줄)
        │
@@ -171,7 +171,7 @@ MM = 1 .. 2
 
 **개발자를 끊는 것이 이 커맨드의 유일한 실질 리스크다.** warm 유지보다 나쁘면 **라운드 수가 먼저 늘어난다** — 같은 지적이 재발하거나 반박 근거를 못 만들어서다. 비교 baseline = `/taskflow:code` 의 1라운드 클린율.
 
-**라운드 수가 유의미하게 늘면 개발자만 warm 으로 되돌린다** (리뷰어·adversary 는 원래 cold 라 무관). 되돌릴 지점 = `bin/code-loop.sh` 의 dev 스텝 + 본 파일 §dev-loop.
+**라운드 수가 유의미하게 늘면 개발자만 warm 으로 되돌린다** (리뷰어·adversary 는 원래 cold 라 무관). 되돌릴 지점 = `custom-plugin/taskflow/bin/code-loop.sh` 의 dev 스텝 + 본 파일 §dev-loop.
 
 ## SSOT
 
@@ -182,7 +182,7 @@ MM = 1 .. 2
 | 리뷰어 계약 2종 | `custom-plugin/taskflow/agents/reviewer-{correctness,design}.md` |
 | 적대적 검증 계약 | `custom-plugin/taskflow/agents/adversary.md` |
 | 리뷰어 합본 규약 | `custom-plugin/taskflow/references/review-contract.md` §"코드 축" |
-| **러너 (스텝 오케스트레이션 · VERDICT 분기 · 캡 · 재개)** | **`~/.claude/bin/code-loop.sh`** |
+| **러너 (스텝 오케스트레이션 · VERDICT 분기 · 캡 · 재개)** | **`~/.claude/custom-plugin/taskflow/bin/code-loop.sh`** |
 | worktree 생성·정착 | `custom-plugin/git/commands/{create,merge}.md` |
 
 ## Changelog
