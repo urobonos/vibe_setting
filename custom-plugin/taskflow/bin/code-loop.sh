@@ -264,11 +264,19 @@ review_round() {
 
   local hist=""
   [ "$n" -gt 1 ] && hist="라운드 이력: $dir/rev-*.md — 이미 닫힌 판정을 다시 열지 않는다."
+  local scope_note="" outside
+  outside=$(scope_violations "$dir")
+  if [ -n "$outside" ]; then
+    { echo "# spec SCOPE_FILES 밖 변경 (라운드 $nn)"; echo; printf '%s\n' "$outside" | sed 's/^/- /'; } > "$dir/scope-$nn.md"
+    echo "--- [scope-$nn] SCOPE_FILES 밖 변경 $(printf '%s\n' "$outside" | grep -c .)건"
+    scope_note="spec SCOPE_FILES 밖에서 바뀐 파일이 있다: $dir/scope-$nn.md — 비목표를 넘었는지 판정한다."
+  fi
   local rev_body="$common
 
 너는 이 라운드의 콜드 리뷰어다. $dir/00-spec.md (대조 기준) 와 $dir/dev-$nn.md
 (이번 변경 + BASELINE) 를 읽고, worktree 의 diff 를 실제로 돌려 판정한다.
 셸 변이 검증 결과가 있으면 $dir/mut-$nn.md 도 읽는다 — GREEN 으로 남은 변이는 판별력 없는 테스트다.
+$scope_note
 $hist"
 
   run_step "rev-$nn-correctness" "$M_REV" "$(agent_tools "$AGENT_DIR/reviewer-correctness.md")" \
@@ -576,6 +584,30 @@ PY
   return "$fail"
 }
 
+# spec 의 SCOPE_FILES 밖에서 바뀐 파일을 한 줄씩 낸다 (2026-09-28). 막지 않고 드러내기만 한다 —
+# 필요한 범위 확장까지 막으면 run 이 교착된다. ISS-292 step-10: dev-02 가 비목표
+# (getCallListCount() 내부 수정 금지)를 넘어 CallModel.php 를 고쳤는데 리뷰어 2축은 수정이
+# 옳은지만 보고 범위 이탈을 결함으로 세지 않았다. SCOPE_FILES 줄이 없으면(구 spec) 아무것도 안 낸다.
+#   SCOPE_FILES: {glob}, {glob} ...   (worktree 루트 기준, * 는 / 도 넘는다)
+scope_violations() {
+  local dir="$1" root scope changed glob inside
+  scope=$(sed -nE 's/^[[:space:]#>*-]*SCOPE_FILES:[[:space:]]*//p' "$dir/00-spec.md" 2>/dev/null | tail -1 | tr ',' ' ')
+  [ -n "$scope" ] || return 0
+  root=$(worktree_of "$dir/00-spec.md")
+  [ -n "$root" ] && [ -d "$root" ] || return 0
+  git -C "$root" -c core.quotepath=off status --porcelain --untracked-files=all | cut -c4- | sed 's/^.* -> //; s/^"//; s/"$//' \
+    | while IFS= read -r changed; do
+        inside=0
+        set -f
+        for glob in $scope; do
+          # shellcheck disable=SC2053 — glob 매칭이 의도다
+          [[ "$changed" == $glob ]] && { inside=1; break; }
+        done
+        set +f
+        [ "$inside" -eq 1 ] || printf '%s\n' "$changed"
+      done
+}
+
 # dev-$nn.md 를 리뷰어에게 넘기기 전에 셸 독립 재실행으로 자기신고를 대체한다.
 # 불일치는 코드 결함이 아니라 보고 오류이므로 정규 DEV_CAP 을 소비하지 않고,
 # 별도의 작은 재시도만 소진한다 (2026-09-22 사용자 지시: "불일치시 캡소진안함").
@@ -736,6 +768,9 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
   MUTATIONS: {변이 기준 개수}
 대상 코드가 이미 있어 원문을 지금 확정할 수 있으면 변이마다 한 줄씩 쓴다 (새로 짤 코드면 dev 가 쓴다):
   MUTATION: {파일 상대경로} | {원문 조각} ==> {변이 조각} | {phpunit 명령}
+수정을 허용하는 경로를 기계 판독용 한 줄로 쓴다 (worktree 루트 기준 glob, 쉼표 구분, * 는 / 도 넘는다 —
+테스트 파일 경로도 넣는다). 셸이 이 밖의 변경을 리뷰어와 결과문서에 드러낸다:
+  SCOPE_FILES: {glob}, {glob}
 vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·symlink 로 링크하지 않는다.
 마지막 줄에 기계 판독용으로 정확히 한 줄을 쓴다:
   GATE: OK          (성공 기준 3개 이하 — 진행)
@@ -941,6 +976,16 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
 이것만 메인이 읽는다 — 여기 없는 것은 메인에 존재하지 않는다. 간결하게 쓴다."
   if ! run_step result "$M_SPEC" "" "$dir/RESULT.md" "$result_body"; then
     echo "!!! RESULT.md 생성 실패"
+  fi
+
+  local final_outside
+  final_outside=$(scope_violations "$dir")
+  if [ -n "$final_outside" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[§3 범위 변경\]' "$dir/RESULT.md"; then
+    { echo "> [§3 범위 변경] spec SCOPE_FILES 밖 수정 — 정착 전에 범위 확장 여부를 결정해야 한다:"
+      printf '%s\n' "$final_outside" | sed 's/^/>   - /'
+      echo
+      cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
+    echo "=== [§3 범위 변경] SCOPE_FILES 밖 수정 $(printf '%s\n' "$final_outside" | grep -c .)건 — RESULT.md 맨 위에 올림"
   fi
 
   echo "=== $(date '+%F %T') code-loop 종료 (dev=$verdict adv=$adv_verdict)"
