@@ -99,7 +99,7 @@ case "$base" in
   adv-*.md)
     m=$(printf '%s' "$base" | sed 's/adv-0*\([0-9]*\)\.md/\1/')
     v=$(pick "${T_ADV:-UPHELD}" "$m"); [ -n "$v" ] || v=$(last "${T_ADV:-UPHELD}")
-    printf "adversary (stub)\n\n${T_VFMT:-VERDICT: %s}\n" "$v" > "$out" ;;
+    printf "adversary (stub)\n%b\n${T_VFMT:-VERDICT: %s}\n" "${T_ADVNOTE:-}" "$v" > "$out" ;;
   dev-*.md)
     printf 'FILES: x\nTESTS: y\nBASELINE: z\nWHY: stub\n%b\n' "${T_DEVNOTE:-}" > "$out" ;;
   *)
@@ -325,6 +325,16 @@ reset; rc=$(runit T_RC='VERDICT: CLEAN\n- [Medium] a.php:1 — x → y\n' T_RD="
 check "CLEAN 인데 Medium — LLM 합본으로" 1 "$(llm_merge 01)"
 reset; rc=$(runit T_RC='VERDICT: FINDINGS\n지적은 본문에 산문으로\n' T_RD="$RC_CLEAN" T_ADV=UPHELD)
 check "FINDINGS 인데 지적 줄 없음 — LLM 합본으로" 1 "$(llm_merge 01)"
+
+echo "== AA. UPHELD 인데 재현된 이탈 — 셸이 BROKEN 으로 승격 =="
+reset; rc=$(runit T_REV=CLEAN T_ADV=UPHELD T_ADVNOTE='재현된 이탈: 0년 날짜가 통과 (스크래치 테스트)\n잔여 의심: 없음')
+check "재현된 이탈 — 승격 로그" 1 "$([ "$(grep -c '셸 승격' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+check "재현된 이탈 — dev 재진입" 1 "$([ "$(grep -c 'dev-loop 재진입' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+reset; rc=$(runit T_REV=CLEAN T_ADV=UPHELD T_ADVNOTE='재현된 이탈: 없음\n잔여 의심: 재현 못한 경합')
+check "재현된 이탈 없음 — 승격 안 함" 0 "$(grep -c '셸 승격' "$TMP/out.txt")"
+check "재현된 이탈 없음 — adv 1회로 종료" 1 "$(cnt 'adv-*.md')"
+reset; rc=$(runit T_REV=CLEAN T_ADV=UPHELD T_ADVNOTE='재현된 이탈: 없음.')
+check "없음. (마침표) — 승격 안 함" 0 "$(grep -c '셸 승격' "$TMP/out.txt")"
 
 echo
 echo "===== PASS $pass / FAIL $fail ====="

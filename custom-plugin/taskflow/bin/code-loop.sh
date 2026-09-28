@@ -151,6 +151,15 @@ verdict_of() {
     | sed -E 's/^[[:space:]#>*]*VERDICT:[[:space:]*]*//; s/[[:space:]*]+$//'
 }
 
+# adversary UPHELD 의 "재현된 이탈:" 값이 "없음" 이 아닌가. 재현까지 한 결함을
+# 성공 기준 밖이라며 잔여 의심으로 내리는 강등을 셸이 되돌리는 fail-safe (2026-09-28,
+# UPHELD 8건 중 5건에서 남은 결함을 본체가 정착 직전에 고쳤다). 줄이 없으면(구 양식) 손대지 않는다
+has_reproduced_deviation() {
+  local value
+  value=$(grep -hE '^[[:space:]#>*-]*재현된 이탈:' "$1" 2>/dev/null | tail -1     | sed -E 's/^[[:space:]#>*-]*재현된 이탈:[[:space:]*]*//; s/[[:space:]*.]+$//')
+  [ -n "$value" ] && [ "${value#없음}" = "$value" ]
+}
+
 # 00-spec.md 의 WORKTREE: 한 줄 — 기계검사가 FILES 상대경로를 풀 기준점
 worktree_of() {
   grep -h '^WORKTREE:' "$1" 2>/dev/null | tail -1 | sed 's/^WORKTREE:[[:space:]]*//'
@@ -719,7 +728,9 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
   대조 기준      $dir/00-spec.md
   클린 판정 근거  $dir/rev-*.md 전문 (REBUTTED-ACCEPTED 포함)
   변경·BASELINE  $dir/dev-*.md + worktree diff
-재현 없이 지적하지 않는다. 결과를 $dir/adv-$mm.md 에 쓰고 마지막 줄에 정확히 한 줄:
+재현 없이 지적하지 않는다. 재현한 것은 성공 기준 밖이어도 잔여 의심으로 내리지 않는다
+(adversary.md §\"재현된 이탈은 기준 밖이어도 BROKEN\"). UPHELD 면 \`재현된 이탈: 없음\` 줄을 쓴다.
+결과를 $dir/adv-$mm.md 에 쓰고 마지막 줄에 정확히 한 줄:
   VERDICT: UPHELD           (못 깼다 — 시도 나열 필수)
   VERDICT: BROKEN           (깼다 — 재현 명령·출력 필수)
   VERDICT: BROKEN-UNDECIDED (입력이 부족해 판정 못 함)"
@@ -731,6 +742,10 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
         fi
         adv_verdict=$(verdict_of "$dir/adv-$mm.md")
         echo "=== adv 판정: ${adv_verdict:-(없음)}"
+        if [ "${adv_verdict%% *}" = UPHELD ] && has_reproduced_deviation "$dir/adv-$mm.md"; then
+          adv_verdict="BROKEN (재현된 이탈 — 셸 승격)"
+          echo "=== UPHELD 인데 재현된 이탈이 적혀 있다 — BROKEN 으로 승격"
+        fi
         case "$adv_verdict" in
           UPHELD*)
             break ;;

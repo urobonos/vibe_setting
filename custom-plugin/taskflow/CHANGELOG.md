@@ -46,6 +46,7 @@
 
 ## commands/code-loop.md
 
+- 2026-09-28: **adversary 재현 결함 강등 차단.** 재현까지 한 결함을 "성공 기준 밖" 으로 `잔여 의심` 에 내리고 UPHELD 를 선언하던 형태(UPHELD 8건 중 5건에서 본체가 정착 직전 추가 수정 — ISS-520·415·694)를 막는다. 정의: diff 가 바꾼 경로의 재현된 오동작 · diff 가 추가한 테스트의 판별력 0 재현 = 기준 밖이어도 BROKEN. 셸: UPHELD 반환의 `재현된 이탈:` 이 `없음` 이 아니면 BROKEN 으로 승격(`has_reproduced_deviation`)
 - 2026-09-28: **합본 셸화 (`merge_reviews_shell`).** 개발자 반환에 실제 반박 항목(`REBUTTED:` 아래 `- [등급]`)이 없고 두 리뷰어 문서가 반환 양식(VERDICT + `- [등급]` 지적 줄)을 지키면 셸이 지적 줄을 이어붙이고 C/H/M 을 세어 `VERDICT` 줄을 쓴다. 판단이 필요한 라운드(반박 판정·양식 이탈)만 LLM 합본으로 폴백 — 합본 스텝은 run 시간의 7%(중앙 1.8분/라운드)였다. 과거 run 재생 대조로 셸 판정 = LLM 판정 확인
 - 2026-09-28: **run 잠금 + 성공 기준 증거 게이트.** ① `tee_run` 이 `{run}/.lock` 을 mkdir 원자 잠금으로 잡고 루프 PID 를 기록한다 — 살아 있으면 재기동 거부, 죽은 잠금은 인수, 종료 시 제거 (run `20260925-112255`: 진행 중 `--resume` 재기동 → dev-01 2개 동시 편집 → Fatal). ② spec 에 `CRITERIA: N`, dev 에 `CRITERIA` 섹션 — `verify_criteria` 가 `verify_gate` 맨 앞에서 기준 누락·미실행 자백을 되돌린다(재보고 캡 공유, 소진 시 리뷰어로). 구버전 spec 은 skip
 - 2026-09-22: **`verify_mechanical` phpstan/php-cs-fixer 오탐 수정 — worktree 밖 cwd + 전역 바이너리 사용.** off-by-one 수정(아래 항목) 배포 이후 첫 실전 재발 재검증에서 발견(run `20260922-160417`) — `phpstan analyse`가 러너 cwd(worktree 밖)에서 그대로 실행돼 그 자리의 config(또는 config 없음)를 주워 diff 와 무관한 클래스까지 "unknown class" 로 떴다. worktree 루트로 `cd` 후 그 worktree 자신의 `vendor/bin/{phpstan,php-cs-fixer}`(없으면 전역 바이너리로 폴백)를 쓰도록 수정. `bin/code-loop.sh`만 수정, 리뷰어/개발자 계약 불변
