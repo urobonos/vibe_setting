@@ -488,7 +488,11 @@ mutation_lines() {
 # 스크래치 worktree 에 dev worktree 의 현재 상태를 옮긴다. 옮긴 뒤 두 쪽의 변경 파일 집합이
 # 다르면 1 — add -N 을 안 한 새 파일이 diff 에서 빠지는 함정을 여기서 잡는다
 mutation_scratch_prepare() {
-  local root="$1" scratch="$2" patch
+  local root="$1" scratch="$2" patch stale
+  # 이전 검증이 도중에 죽어(kill·low-memory reap — SIGKILL 은 trap 이 못 잡는다) 남긴 스크래치를
+  # 먼저 쓸어낸다. prune 은 디렉토리가 사라진 등록만 지우므로 살아 있는 고아는 직접 제거한다
+  git -C "$root" worktree list --porcelain | sed -n 's/^worktree //p' | grep -E '/code-loop-mut$' \
+    | while IFS= read -r stale; do mutation_scratch_remove "$root" "$stale"; done
   git -C "$root" worktree add --detach -q "$scratch" HEAD 2>/dev/null || return 1
   patch=$(mktemp)
   git -C "$root" diff HEAD --binary > "$patch"
@@ -530,7 +534,7 @@ verify_mutations() {
     echo "!!! [dev-$nn] 변이 검증 불가 — WORKTREE 없음"
     return "$fail"
   fi
-  scratch="$(mktemp -d)/mut"
+  scratch="$(mktemp -d)/code-loop-mut"
   { echo "# 셸 변이 검증 (dev-$nn)"; echo; } > "$report"
   if ! mutation_scratch_prepare "$root" "$scratch"; then
     echo "--- [mut-$nn] 스크래치 준비 실패(이식 불일치) — 판정 무효" | tee -a "$report"
