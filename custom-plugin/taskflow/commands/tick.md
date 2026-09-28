@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 무인 loop 1-iteration 러너 — **cwd 무관 전체 스캔**으로 진행 가능 step 1건 claim → Status 분기 → 개발 → **cold Agent 코드리뷰 루프(클린까지)** → **적대적 검증 게이트(클린 반증)** → verify → 그 step 에 `Status: ReadyToMerge`(머지 준비) 부착. 머지·push 안 함(§3). 판단 필요 시 unified `NeedsDecision` 마감. 모든 step ReadyToMerge 되면 정지(사용자 step 머지 대기). harness `/loop <interval> /taskflow:tick` 로 반복. 로직 재구현 0.
 allowed-tools: Bash, Edit, Write, Read, Glob, Grep, Skill, Agent, PowerShell
 argument-hint: "[작업명|#tag — 생략 시 자동 claim] | allow [작업명] | deny [작업명]"

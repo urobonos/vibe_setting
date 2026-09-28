@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 대기 큐 리뷰 — cwd product 의 `ReadyToMerge` step(머지 준비) + `NeedsDecision` task(판단 대기) + task별 완료 게이트 상태를 리스트업 + 처리 진입 안내. read-only(목록 후 정지, mutation 0). `/taskflow:tick`(무인 생산)의 소비 대시보드. 짝 = `/taskflow:tick`
 allowed-tools: Bash, Read, Glob, Grep
 argument-hint: "[all — 선택. 생략=cwd product / all=전체 product]"

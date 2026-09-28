@@ -48,12 +48,12 @@ BANNER
         echo "[작업 재개 — cwd product=$PRODUCT]"
         printf '%s\n' "$REC" | while IFS=$'\t' read -r tag list; do
           case "$tag" in
-            ND) echo "  ⚠️ 판단 필요: $list → /taskflow:control (판단사항 확인 후 결정)" ;;
-            RM) echo "  ✅ 머지 준비 step: $list → /taskflow:control → /taskflow:save (step 머지)" ;;
+            ND) echo "  ⚠️ 판단 필요: $list → /taskflow:load (판단사항 확인 후 결정)" ;;
+            RM) echo "  ✅ 머지 준비 step: $list → /taskflow:save (step 머지)" ;;
             IP) echo "  ▶ 진행 중: $list → /taskflow:load latest (이어서)" ;;
           esac
         done
-        echo "  (신규 = /taskflow:analyze {작업} · 무인 = /loop 30m /taskflow:tick · 대기 큐 = /taskflow:control)"
+        echo "  (신규 = /taskflow:analyze {작업})"
       fi
     fi
   fi

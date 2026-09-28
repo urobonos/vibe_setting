@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: 태스크 감시 루프 1-iteration — working/ 문서를 스냅샷 대비 diff 해서 **변경분만** 검증한다. 코드 작업이면 코드리뷰, 문서 작업이면 정합성 검증. `ReadyToMerge` 는 **반려 이력과 무관하게 리뷰를 먼저 돌린 뒤** 대조해서, 클린이면 머지 사다리(ff-only→범위 cherry-pick→non-merge 개별)로 끝까지 정착시키고 지적이 있으면 `Pending` 복귀시켜 재작업 대상으로 되돌린다. **1시간 이상 무진행인 문서는 tick 이 왜 못 잡는지 게이트를 특정해 병목을 제거한다** — 죽은 `active` claim 해제 · step `In Progress` → `Pending` 복귀 (사용자 판단 대기건은 제외). 변경 없으면 1줄로 종료(no-op). `/loop 5m /taskflow:watch` 로 무인 반복. 짝 = `/taskflow:control`(대기 큐) · `/taskflow:tick`(생산)
 allowed-tools: Bash, Read, Glob, Grep, Skill, Edit, Agent
 argument-hint: "[product|all — 생략 시 all. `sessions` = 다른 세션 진행 관측]"

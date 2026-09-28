@@ -1,4 +1,5 @@
 ---
+disable-model-invocation: true
 description: tick 무인 루프 기동·정지 — `/taskflow:tick` 을 **매번 새 프로세스**로 반복 실행해 컨텍스트 누적을 0 으로 만든다. harness `/loop` 이 한 세션에 iteration 을 쌓아 컨텍스트가 5배까지 늘던 문제의 대안. detach 기동이라 호출한 세션을 블로킹하지 않는다. 짝 = `/taskflow:tick`(1회분) · `/taskflow:control`(대기 큐)
 allowed-tools: Bash
 argument-hint: "[간격 — 60 / 30m / 1h, 생략 시 1800초] [N — 병렬 슬롯 수, 생략 시 1] | --once | stop [슬롯] | status"
