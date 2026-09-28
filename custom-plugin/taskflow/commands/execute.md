@@ -197,17 +197,14 @@ step 소비 중 "사용자가 결정해야 할 것 같다"고 느끼는 지점�
 
 ## 강제 hook
 
+공통 차단 3종(V5 e2e 5점 · V2 참조 출처 · V4 체크리스트) = `references/doc-gate-hooks.md`. 아래는 이 단계에만 걸리는 행이다.
+
 | Hook | 검증 | 차단 강도 |
 |------|------|----------|
-| `doc-unified-check.sh V5` | **e2e 5점** (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock) — working+unified 둘 다. **문서 생성기·마크다운처럼 축이 안 걸리는 작업도 통과하려면 "해당 없음 + 근거" 를 적어야 한다** (빈 칸은 안 봤다와 구분되지 않는다) | **exit 2** |
-| `doc-unified-check.sh V2` | `## 참조 출처` + `[참조: ...]` ≥ 1건 | **exit 2** |
-| `doc-unified-check.sh V4` | unified 체크리스트 **존재 강제** — 하한 숫자는 적지 않는다 (hook 이 SSOT). 평면값이라 등급 스케일이 없다 (§4.3 "단계 고정, 등급 무관") | exit 2 |
 | `output-naming-check.sh` | step 평면 파일 Edit = working/ DEPTH=1 통과 | exit 2 (위반 시) |
 | `doc-unified-check.sh V1` | unified §실행 헤더 (실행 요약 / Self-Critique / 테스트 결과 / 잔여 이슈 / 변경 기록 / 롤백 / 변경 영향 기록 / 재발 방지 / SSOT 일관성 / Status: Done\|Partial) — `v_template_guard` `*unified*.md` 분기 | **경고** — tasks/ 하위 + `Status: Done\|Partial` 은 차단이 아니라 **강등** 조건이다 |
 | `working-lifecycle.sh` | `^Status:\s*Done` + `## Self-Critique` 동시 시 PostToolUse 자동 이동 — unified → tasks/, step 평면 → tasks/.../steps/NN-{slug}.md 분배 | (lifecycle 트리거) |
 | QA 행 기록 (규율) | **QA 활성 시 §실행 §테스트 결과에 `QA(문서대조): PASS\|FAIL\|해당 없음` 행 기록** (auditable claim). **hook 완전강제 없음** — working-lifecycle=전 product 영향, doc-template-guard=자동이동 mv 미발동(둘 다 부적합). fail-open 은 **self-scoping(외부 문서 시만 QA)** 으로 표면 자체를 축소해 관리 | (규율 + 표면 축소) |
-
-> **차단하는 것을 위에 둔다.** 구 표는 경고인 V1 을 맨 위에 "exit 2" 로 적고 실제로 막는 V5·V2 를 아예 빼놨다 — 따라가면 안 막힐 것에 대비하고 막히는 것에 놀란다 (2026-09-16 실측: 문서 작업 2건이 연속으로 V5 에 차단됐는데 표에 그 행이 없었다). **임계값 숫자는 여기 복사하지 않는다** — 구 `≥ 30` 을 복사해 뒀다가 2026-09-04 인하를 이 계열 4개 커맨드가 통째로 놓쳤다 (CLAUDE.md §4.4 "신규 룰 작성 관습" — 값·좌표는 hook 에 위임하고 포인터만 둔다).
 
 ## 자동 이동 트리거
 

@@ -293,16 +293,13 @@ step 분해 직후 **1회** 자체 재검토. task-docs SKILL.md Part 6 "3-Round
 
 ## 강제 hook
 
+공통 차단 3종(V5 e2e 5점 · V2 참조 출처 · V4 체크리스트) = `references/doc-gate-hooks.md`. 아래는 이 단계에만 걸리는 행이다.
+
 | Hook | 검증 | 차단 강도 |
 |------|------|----------|
-| `doc-unified-check.sh V5` | **e2e 5점** (env / 함수·클래스 / DB 스키마 / 프로덕션 curl / mock) — working+unified 둘 다. 해당 없는 축도 **"해당 없음 + 근거"** 로 적어야 통과한다 | **exit 2** |
-| `doc-unified-check.sh V2` | `## 참조 출처` + `[참조: ...]` ≥ 1건 | **exit 2** |
-| `doc-unified-check.sh V4` | unified 체크리스트 **존재 강제** — 하한 숫자는 적지 않는다 (hook 이 SSOT). 평면값이라 등급 스케일이 없다 (§4.3 "단계 고정, 등급 무관") | exit 2 |
 | `output-naming-check.sh` | working/ step 평면 파일 = DEPTH=1 + `{yyyy-mm-dd}-` prefix | exit 2 (위반 시) |
 | `doc-unified-check.sh V1` | unified §계획 헤더 (작업 등급 S/M/L / Blueprint / 수정 대상 / 실행 계획 / WBS) — `v_template_guard` `*unified*.md` 분기 | **경고** — tasks/ 하위 + `Status: Done\|Partial` 은 차단이 아니라 **강등** 조건이다 |
 | `working-lifecycle.sh` | 완료 시 step 평면 파일 → `tasks/.../steps/NN-{slug}.md` 분배 mv | (lifecycle 트리거) |
-
-> **차단하는 것을 위에 둔다.** 구 표는 경고인 V1 을 맨 위에 "exit 2" 로 적고 실제로 막는 V5·V2 를 아예 빼놨다. **임계값 숫자는 여기 복사하지 않는다** — 구 `≥ 30` 을 복사해 뒀다가 2026-09-04 인하를 이 계열 4개 커맨드가 통째로 놓쳤다 (CLAUDE.md §4.4 — 값은 hook 에 위임).
 
 ## 종료 마커
 
