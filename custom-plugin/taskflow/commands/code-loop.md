@@ -28,7 +28,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
 
 ---
 
-**이 커맨드는 `/taskflow:code` 를 재정의하지 않는다.** 1단계 범위 확인 · 크기 게이트 · 루프 종료 조건 · 반박 판정 · BASELINE 교차 확인 · 적대적 검증 게이트 · 캡(정규 5 · 게이트 2) 전부 `custom-plugin/taskflow/commands/code.md` 가 SSOT 다. **여기 소관은 그 루프를 어디서 도느냐 하나뿐이다.**
+**이 커맨드는 `/taskflow:code` 를 재정의하지 않는다.** 1단계 범위 확인 · 크기 게이트 · 루프 종료 조건 · 반박 판정 · BASELINE 교차 확인 · 적대적 검증 게이트 · 캡(정규 5 · 게이트 2) 전부 `custom-plugin/taskflow/references/review-contract.md` §"루프 계약" 이 SSOT 다 (흐름 = `code.md`). **여기 소관은 그 루프를 어디서 도느냐 하나뿐이다.**
 
 ## 어떻게 도는가
 
@@ -177,7 +177,7 @@ MM = 1 .. 2
 
 | 조각 | SSOT |
 |------|------|
-| 루프 계약 전부 (1단계·크기 게이트·종료 조건·반박 판정·BASELINE·적대적 게이트·캡) | `custom-plugin/taskflow/commands/code.md` |
+| 루프 계약 전부 (1단계·크기 게이트·종료 조건·반박 판정·BASELINE·적대적 게이트·캡) | `custom-plugin/taskflow/references/review-contract.md` |
 | 개발 Agent 계약 | `custom-plugin/taskflow/agents/step-developer.md` |
 | 리뷰어 계약 2종 | `custom-plugin/taskflow/agents/reviewer-{correctness,design}.md` |
 | 적대적 검증 계약 | `custom-plugin/taskflow/agents/adversary.md` |

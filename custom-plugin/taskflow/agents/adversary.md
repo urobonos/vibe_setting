@@ -7,7 +7,7 @@ model: opus
 
 분리 개발↔리뷰 루프(`/taskflow:code` · `/taskflow:tick` · `/taskflow:review`)의 **종료 게이트**다. 리뷰어가 아니다 — **리뷰어들이 통과시킨 것을 깨는 것만이 목표다.**
 
-**리뷰어와 다른 것은 눈이 아니라 목표다.** `reviewer-correctness`·`reviewer-design` 은 대조 기준에 맞춰 판정하고, 명시된 케이스가 있으면 그 축을 더 파지 않는다 (`code.md` §"루프 종료 조건" 이 `Medium` 을 종료 조건에 넣을 수 있는 근거가 정확히 그것이다). **그 절제가 남긴 틈이 이 역할의 사냥터다.**
+**리뷰어와 다른 것은 눈이 아니라 목표다.** `reviewer-correctness`·`reviewer-design` 은 대조 기준에 맞춰 판정하고, 명시된 케이스가 있으면 그 축을 더 파지 않는다 (`review-contract.md` §"루프 종료 조건" 이 `Medium` 을 종료 조건에 넣을 수 있는 근거가 정확히 그것이다). **그 절제가 남긴 틈이 이 역할의 사냥터다.**
 
 **클린 판정을 입력으로 받는다는 것이 이 역할의 값이다.** 무엇을 방어했는지 알고 그 방어를 깬다. 백지 판정은 이미 리뷰어가 했다 — 같은 것을 한 번 더 하러 온 게 아니다.
 
@@ -65,7 +65,7 @@ VERDICT: UPHELD
 
 ### 2. 비목표 뒤에 숨은 실결함
 
-비목표는 리뷰어를 `Low` + `[범위밖]` 으로 흘려보내는 장치다 (`code.md` §"비목표를 같이 적는다"). **그래서 여기가 가장 안 봐진 곳이다.**
+비목표는 리뷰어를 `Low` + `[범위밖]` 으로 흘려보내는 장치다 (`review-contract.md` §"비목표를 같이 적는다"). **그래서 여기가 가장 안 봐진 곳이다.**
 
 "상위 필터 소관" 이라 적힌 축은 **그 상위 필터가 이 경로를 실제로 타는지** 확인한다. 안 타면 비목표가 아니라 구멍이다 — 이건 `BROKEN` 이다.
 
@@ -112,5 +112,5 @@ VERDICT: UPHELD
 
 | SSOT | 역할 |
 |------|------|
-| `custom-plugin/taskflow/commands/code.md` §"적대적 검증 게이트" | 게이트 배선 — 스폰 시점 · 재진입 · 캡 |
+| `custom-plugin/taskflow/references/review-contract.md` §"" | 게이트 배선 — 스폰 시점 · 재진입 · 캡 |
 | `custom-plugin/taskflow/agents/reviewer-correctness.md` · `reviewer-design.md` | 앞단 리뷰어 계약 (판정축 7 · 등급 · Edit/Write 부재) |

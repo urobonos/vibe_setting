@@ -249,7 +249,7 @@ e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이라(`backend:php
 
 ### 적대적 검증 게이트 (지적 0건 직후 · 필수)
 
-**지적 0건은 종료 후보이지 종료가 아니다.** `subagent_type: taskflow:adversary` 를 스폰해 **그 클린을 깨보게 한다** — 계약·배선 SSOT = `code.md` §"적대적 검증 게이트" + `agents/adversary.md`. 여기서 다시 정의하지 않는다.
+**지적 0건은 종료 후보이지 종료가 아니다.** `subagent_type: taskflow:adversary` 를 스폰해 **그 클린을 깨보게 한다** — 계약·배선 SSOT = `review-contract.md` §"적대적 검증 게이트" + `agents/adversary.md`. 여기서 다시 정의하지 않는다.
 
 **무인 경로라서 더 필요하다.** 사람 경로는 결과를 보는 눈이 하나 더 있지만 여기는 없다. §2-bis 2 의 실측(테스트 green 인 채 통과한 [Critical])이 정확히 이 자리에서 새던 것이고, 리뷰 루프를 붙여 한 겹 막았어도 **리뷰어는 그 step 의 대조 기준 안에서만 본다.**
 

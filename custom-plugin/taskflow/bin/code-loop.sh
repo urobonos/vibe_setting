@@ -295,7 +295,7 @@ $hist"
 두 리뷰어 판정을 합쳐 $dir/rev-$nn.md 를 쓴다.
   입력: $dir/rev-$nn-correctness.md · $dir/rev-$nn-design.md · $dir/dev-$nn.md · $dir/00-spec.md
   합본 규칙 SSOT = $CLAUDE_HOME/custom-plugin/taskflow/references/review-contract.md 의 코드 축 절
-  REBUTTED 가 있으면 code.md 의 반박 판정 절에 있는 근거 3종을 직접 확인해
+  REBUTTED 가 있으면 $CLAUDE_HOME/custom-plugin/taskflow/references/review-contract.md 의 반박 판정 절에 있는 근거 3종을 직접 확인해
   수용·기각을 판정하고, 수용분은 REBUTTED-ACCEPTED 로 표시한다 (다음 라운드 재개봉 차단).
   BASELINE 전·후 명령이 다르거나 없으면 그 사실을 적는다 (관측 실패 — 라운드로 세지 않는다).
 마지막 줄에 기계 판독용으로 정확히 한 줄:
@@ -580,14 +580,14 @@ run_loop() {
   fi
 
   local common="결과문서 디렉토리: $dir
-루프 계약 SSOT = $CMD_DIR/code.md · 결과문서 규약 SSOT = $CMD_DIR/code-loop.md
+루프 계약 SSOT = $CLAUDE_HOME/custom-plugin/taskflow/references/review-contract.md (루프 계약 절) · 흐름 = $CMD_DIR/code.md · 결과문서 규약 SSOT = $CMD_DIR/code-loop.md
 필요한 문서는 직접 Read 한다. 머지·push 하지 않는다."
 
   # ── 1단계: 범위 확정 + worktree ───────────────────────────────────────
   if [ ! -s "$dir/00-spec.md" ]; then
     local spec_body="$common
 
-code.md 의 1단계(범위 확인)와 크기 게이트를 그대로 수행해 $dir/00-spec.md 를 쓴다.
+루프 계약의 1단계(범위 확인)와 크기 게이트를 그대로 수행해 $dir/00-spec.md 를 쓴다.
 담을 것: 요청 · 성공 기준(검증 가능하게) · 테스트 범위(케이스 단위) · 비목표 ·
 커밋 type·scope · worktree 경로 · 형식 변경이면 파급면·결함면.
 worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는다. 그와 별개로

@@ -48,7 +48,7 @@ git branch -D wip/{sid}-{slug}
 
 ## squash 정착 — `/taskflow:code` 산 worktree
 
-**`wip/{sid8}-{slug}` 패턴(= `/taskflow:code` 분리 루프 산출물)은 squash 머지가 기본이다.** 라운드별 중간 상태를 이력에 남기지 않는다 (근거 = `custom-plugin/taskflow/commands/code.md` §"정착은 1커밋으로").
+**`wip/{sid8}-{slug}` 패턴(= `/taskflow:code` 분리 루프 산출물)은 squash 머지가 기본이다.** 라운드별 중간 상태를 이력에 남기지 않는다 (근거 = `custom-plugin/taskflow/references/review-contract.md` §"").
 
 각 명령을 **개별 Bash 호출**로 실행한다 (`&&`/`;` 결합 금지 — 위 3의 결합 금지 이유 그대로).
 

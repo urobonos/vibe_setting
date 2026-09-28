@@ -31,7 +31,7 @@ argument-hint: "[작업명]  # 생략 시 진행 중 working/ 문서 식별"
 
 **spawn 규약은 `review-contract.md` §"코드 축 — 변경분 리뷰" 가 SSOT 다** — 리뷰어 구성(`reviewer-correctness`·`reviewer-design` 2인 병렬)·입력 조립·판정축 7개 분담·반환 양식. 여기서 다시 적지 않는다. 입력 = 변경분 diff + 그 작업의 §계획·DoD.
 
-**루프 제어는 `code.md` 가 SSOT 다** — 종료 조건(C·H·M 0)·캡(5회)·`Low` 처리·반박 판정·**적대적 검증 게이트**(`taskflow:adversary` · 캡 2회)·라운드 이력 형식·두 리뷰어 합본. 이것도 여기서 다시 적지 않는다.
+**루프 제어는 `review-contract.md` §"루프 계약" 이 SSOT 다** — 종료 조건(C·H·M 0)·캡(5회)·`Low` 처리·반박 판정·**적대적 검증 게이트**(`taskflow:adversary` · 캡 2회)·라운드 이력 형식·두 리뷰어 합본. 이것도 여기서 다시 적지 않는다.
 
 **왜 self-critique 만으로 끝내지 않는가.** ① 은 자기가 쓴 코드를 자기가 보는 것이고, 그때 안 보이는 것이 있다. "사람이 결과를 즉시 보니 cold 가 불필요하다" 는 판단이 앞서 있었으나, 실제로 사용자는 **결과 요약을 보지 diff 전체를 읽지 않는다** — 그래서 사람 경로에도 독립 판정이 필요하다 (근거 실측 = `tick.md` §2-bis 2, 테스트 green 인 채 통과한 [Critical]).
 
