@@ -6,7 +6,7 @@ description: >
   기존(<2026-05-12)=analyze/plan/result 3종 분리 보존.
   보고용=output/{category}/, IEEE 산출물(SDP/SRS/SDD/IDD/STP/STD)=specs/.
   backlog 메모리(잔여·후속·시간 트리거)=docs/working/backlog/{yyyy-mm-dd}-{slug}.md, status:done 시 자동 이동.
-  경로·규칙 상세는 글로벌 CLAUDE.md §File Paths 참조.
+  경로·명명·output 7분류·indexing·Registry 상세 = 본 스킬 SSOT (CLAUDE.md §File Paths 는 앵커만).
 triggers:
   - "/task-docs"
   - "/task-docs specs"
