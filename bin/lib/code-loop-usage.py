@@ -19,6 +19,8 @@ PROJ  = HOME / "projects"
 # per-1M USD (base_input, output). cache_read = base*0.1, cache_write(1h TTL) = base*2
 PRICE = {
     "claude-opus-5":              (5.0, 25.0),
+    # `--model opus` 가 이 ID 로 풀린다. 빠져 있던 동안 DEFAULT(sonnet 단가)로 절반만 셌다
+    "claude-opus-5-5":            (4.0, 20.0),
     "claude-sonnet-5":            (2.0, 10.0),
     "claude-haiku-4-5-20251001":  (1.0,  5.0),
 }
