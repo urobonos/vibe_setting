@@ -702,6 +702,28 @@ J4_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
 if ! grep -qF 'multiprojslug' "$FH/.claude/projects/projB/memory/MEMORY.md"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4] harness-home 아닌 별도 project(projB) index entry 가 제거 안 됨"); fi
 if ! echo "$J4_OUT" | grep -qF '전 project index'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4] 정상 제거됐는데 aggregate notfound 경고가 오탐으로 뜸"); fi
 
+# J-4b. 2026-09-28 — athena 는 인덱스를 `backlog-index.md` 로 둔다(MEMORY.md 200줄 한도 분리). all_index_files 가
+#   MEMORY.md/BACKLOG.md 만 보면 이동 후 이 파일에 죽은 링크가 남는다(실측 13건).
+mkdir -p "$FH/.claude/projects/projC/memory"
+cat > "$FH/.claude/projects/projC/memory/backlog-index.md" <<'EOF'
+# Backlog 인덱스 — testprod
+
+- [bindexslug](../../../docs/working/backlog/2026-08-01-bindexslug.md) — entry only in backlog-index.md
+EOF
+cat > "$FH/.claude/docs/working/backlog/2026-08-01-bindexslug.md" <<'EOF'
+---
+name: bindexslug
+metadata:
+  status: done
+  product: testprod
+---
+x
+EOF
+backlog_payload "$FH/.claude/docs/working/backlog/2026-08-01-bindexslug.md"
+J4B_OUT=$(HOME="$FH" bash "$HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
+if ! grep -qF 'bindexslug' "$FH/.claude/projects/projC/memory/backlog-index.md"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4b] backlog-index.md entry 가 제거 안 됨(인덱스 스캔 사각지대)"); fi
+if ! echo "$J4B_OUT" | grep -qF '전 project index'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4b] backlog-index.md 에 있는데 notfound 경고가 뜸"); fi
+
 # J-3b. H1(R4) — 실 MEMORY.md 표기 재현: 링크 텍스트가 34자로 절단돼 slug 와 다른 항목도 href 로 제거돼야 한다
 #   (실측 사례: `[api-keys-unset-all-envs-pbx-blocke](backlog_api-keys-unset-all-envs-pbx-blocked.md)`)
 mkdir -p "$FH/.claude/projects/projTrunc/memory"

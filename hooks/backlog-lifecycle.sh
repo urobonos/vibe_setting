@@ -180,12 +180,15 @@ all_memory_dirs() {
   done
 }
 
-# ============= 헬퍼: 전 프로젝트 index 파일(MEMORY.md/BACKLOG.md) 목록 =============
+# ============= 헬퍼: 전 프로젝트 index 파일(MEMORY.md/BACKLOG.md/backlog-index.md) 목록 =============
+# backlog-index.md = athena 가 MEMORY.md 200줄 한도로 분리한 인덱스(2026-09-07). 빠지면 이동 후 죽은
+# 링크가 남는다(2026-09-28 실측 13건).
 all_index_files() {
   local d
   while IFS= read -r d; do
     [ -f "$d/MEMORY.md" ] && echo "$d/MEMORY.md"
     [ -f "$d/BACKLOG.md" ] && echo "$d/BACKLOG.md"
+    [ -f "$d/backlog-index.md" ] && echo "$d/backlog-index.md"
   done < <(all_memory_dirs)
 }
 
@@ -878,7 +881,7 @@ PYEOF
   # 17 project 에 0.275s, history/summary 는 각 1회 쓰기 — hook timeout 10s 대비 무시할 수준이다.
   if [ "$any_found" -eq 0 ]; then
     index_incomplete=1
-    echo "[backlog-lifecycle] slug '$slug' — 전 project index(MEMORY.md/BACKLOG.md 전수)에서 entry 미발견, 수동 정리 필요" >&2
+    echo "[backlog-lifecycle] slug '$slug' — 전 project index(MEMORY.md/BACKLOG.md/backlog-index.md 전수)에서 entry 미발견, 수동 정리 필요" >&2
   fi
 
   # 구/신 동시 존재 고아 감지 — 전 project 순회(콜드리뷰 R4 M2) — 이전엔 harness home 프로젝트
