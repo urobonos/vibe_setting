@@ -106,8 +106,7 @@ CLAUDE.md·스킬·hook·커맨드 전체의 상위 원칙. 신규 룰은 충돌
 - **응답 톤 (필수 / 존댓말):** 항상 존댓말. `~함·~임·~할까·~인데` 종결 금지. 단답도 "진행하겠습니다".
 - **장기 관점 추천 (필수):** 장기 누적 비용 우선 — **(a) 비가역 = 사전 투자 / (b) 가역 = 사후 처리 (선제 강제 비추천) / (c) 변동성 낮은 사실 = 강제 금지.** 장기 best 에 "(추천)". SSOT `orchestration` §3.5.
 - **신규 룰 작성 관습 (필수, 재팽창 방지):** `rules/harness-authoring.md`.
-- **응답 간결 (Concise Reporting, 필수):** 모든 답변 = 결론 1~2줄 + 표/diff 1개 + 잔여 액션 1줄. 사족·진행 서술·도입부 0. 표 **8행 이내** (초과분은 "나머지 N건은 요청 시"), 열거 요청도 분류·요약 후 선택 요청. **면제:** Before/After · 타당성 검토 · 변경 영향 기록 · `tasks/` 산출물. 개인 선호 = [[feedback_concise-answers]].
-- **답변 깊이 (Anticipatory Depth, 필수):** 질문 답변은 다음에 궁금해할 것까지 한 단계 깊게. 깊이는 내용이지 분량이 아니다 — 충돌 시 형식은 "응답 간결" 우선.
+- **응답 간결 (Concise Reporting, 필수):** 모든 답변 = 결론 + 판단에 필요한 근거만, **3~6줄**. 사족·진행 서술·도입부·묻지 않은 확장 0. 표·diff 는 **대조가 필수일 때만** (8행 이내, 초과분은 "나머지 N건은 요청 시"), 열거 요청도 분류·요약 후 선택 요청. **면제:** Before/After · 타당성 검토 · 변경 영향 기록 · `tasks/` 산출물. 개인 선호 = [[feedback_concise-answers]].
 - **자동 위임 정책 (Autonomous Iteration, 필수):** 묶음 키워드(`자동 진행`·`권장으로 진행`·`auto 진행`) = 문제 0건까지 자체 반복. 활성 = `/tmp/claude_autoiter_{sid}` 마커 (일반 승인어·Q&A 는 대상 아님). **(3) 4축** = (a) 후속 권고 자동 채택 / (b) self-critique 재시도 5회 / (c) 종료 sentinel / (d) Stop 차단 재진입 5회 — hook 이 주입. **(3-2) 결정 escalation ladder** = `execute.md`.
   - **응답 마지막 줄 sentinel 필수:** `[AUTO-ITERATE-DONE]` (잔여 0건) / `[AUTO-ITERATE-USER-DECISION]` (§3 매칭·옵션 분기·외부 시스템 변경 잔여). 자연어 "완료" 는 통과 불가.
   - **우선순위 (deadlock 방지):** **§3 Checkpoint > 실행 책임 > 자동 위임 > Auto mode.** Auto mode 강행 명시에도 §3 우선 (본 룰 자체 수정 포함). 재진입이 보호 우회 통로가 되지 않는다.
