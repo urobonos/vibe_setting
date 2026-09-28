@@ -30,6 +30,7 @@
 
 ## commands/analyze.md
 
+- 2026-09-28: 강제 hook 표의 공통 차단 3행(V5·V2·V4)을 `references/doc-gate-hooks.md` 로 추출
 - 2026-09-23: T1 판정을 `gate=2` → `/tmp/claude_autoiter_{sid}` 마커로 교체. gate-init 이 매 세션 gate=2 로 시작해 T1 이 항상 참이었다(자동진행 미요청에도 plan 자동 전이)
 - 2026-09-22: **모델 등급 정정 — `taskflow:analyzer` opus → sonnet, 본 파일 frontmatter `model: opus` 제거.** 직전 위임 커밋에서 `plan.md`→`taskflow:planner`(opus) 패턴을 그대로 유추 적용했는데, 근거가 없었다 — Critical~Low 판정은 `reviewer-correctness`/`reviewer-design`(둘 다 sonnet)과 같은 급이고, 사용자의 opus 명시 요구도 planning 에 한정됐지 analyze 에는 없었다. 사용자 질문("analyze가 opus가 필요함?")이 계기
 - 2026-09-22: **분석 생성 본체를 `taskflow:analyzer` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/analyzer.md`, model: opus 고정) + frontmatter `model: opus` 추가(main 세션 몫인 인자 해석·위임·relay 용, belt-and-suspenders). 근거 = 본 커맨드가 원래 model 지정이 없어 항상 세션 기본 모델을 탔다는 점 — `plan.md`→`taskflow:planner` 위임(같은 날)과 동일 이유. T1(gate=2)·`/taskflow:plan` 전이 판단은 main 세션에 남긴다(세션 상태·다음 슬래시 호출은 위임 범위 밖)
@@ -91,6 +92,7 @@
 
 ## commands/execute.md
 
+- 2026-09-28: 강제 hook 표의 공통 차단 3행(V5·V2·V4)을 `references/doc-gate-hooks.md` 로 추출
 - 2026-09-16: **§강제 hook 표 drift 정정 (analyze·plan·execute·review 동시).** 실측 계기 = 문서 작업 2건이 연속으로 V5(e2e 5점)에 차단됐는데 **표에 그 행이 없었다.** 셋이 갈려 있었다 — ① 체크리스트 임계 `≥ 30`(2곳: 동작 5단계 ③ · hook 표)인데 hook 은 2026-09-04 에 5 로 인하 ② V1 을 "exit 2 (tasks/ 이동 후)" 로 적었으나 실제로는 `add_block` 0건이고 그 조건(`tasks/` + `Status: Done|Partial`)이 바로 **강등** 조건이다 ③ 실제 차단인 V5·V2 누락. **차단하는 것을 표 위로 올리고 값·하드 줄번호는 hook 에 위임한다** (CLAUDE.md §4.4)
 - 2026-09-10: **§"step 순차 소비" 에 3-bis 기준선(코드 변경 전) 추가.** 같은 개발 루프인데 **진입점에 따라 계약이 갈려 있었다** — `/taskflow:code`·`/taskflow:tick` 은 `step-developer` 가 착수 전 실행을 계약으로 지는데, 이 경로는 본체가 직접 코드를 써서 아무 계약이 없었다(grep 실증: 이 파일에 `step-developer` 0건). 버그=red 재현 / 신규=green 캡처 · **재현 실패 시 고치지 않고 보고** · 전·후 같은 명령. §"코드 변경 = verify + review 필수 체인" 의 앞쪽 짝이고, `/taskflow:auto` 는 이 절을 SSOT 로 상속한다
 - 2026-08-03: **`## 워크플로우 맵` 신설 = 슬래시 배치 SSOT 로 승격.** 11개 커맨드가 각자 갖고 있던 구 `## 차별점` 표(90줄, 내용이 서로 갈려 `save.md` 의 폐기 필터 drift 를 낳았다)를 여기 1벌로 모으고 나머지는 `## 짝 슬래시` 1~2줄 포인터로 축약. 무인 계열(tick·watch·control·code)이 11벌 어디에도 없던 누락도 함께 메움. 그룹 판정 기준 = **마커·claim 유무** (read-only·claim 없는 control·code 는 ② 아님)
@@ -104,6 +106,7 @@
 
 ## commands/load.md
 
+- 2026-09-28: ① 잔존 작업 스캔 168줄을 `bin/load-scan.sh` 로 추출(본문은 호출 1줄 + 출력 태그 표). 주석으로만 있던 그룹 B(섹션 없는 미체크 문서)를 실제로 구현. 구 블록과 인자 5종 출력 대조 일치
 - 2026-08-03: 구 `## 차별점` 표 → `## 짝 슬래시` 포인터로 축약 (전체 맵 SSOT = `execute.md` §"워크플로우 맵") + 폐기 `/taskflow:dispatch` 안내 정정(plan 흡수) + `#tag claim` 헤딩 정렬
 - 2026-07-29: `{작업명}` 로드 시 `tick: allow` → `pause (by sid, 날짜)` 하강 (본 슬래시의 유일한 mutation). 복원 = `/taskflow:save`
 - 2026-07-22: 자동 실행 금지 명문화 — `#tag`·`{작업명}` 미지정 호출은 출력 후 정지
@@ -118,6 +121,7 @@
 
 ## commands/plan.md
 
+- 2026-09-28: 강제 hook 표의 공통 차단 3행(V5·V2·V4)을 `references/doc-gate-hooks.md` 로 추출
 - 2026-09-22: **`Agent` 호출 시 `model: "opus"` 파라미터 명시 필수화** (신규 §"model 파라미터 명시 필수"). 근거 = frontmatter `model: opus` 단독 신뢰 시 세션 기본 모델(Sonnet 5)로 조용히 대체되는 사례 실측 — 글로벌 `settings.json` `env.CLAUDE_CODE_SUBAGENT_MODEL` 이 원인 후보. Agent 도구 호출 파라미터가 공식 우선순위 최상위라 명시하면 이 경로는 해소된다
 - 2026-09-22: **계획 생성 본체를 `taskflow:planner` 서브에이전트로 위임** (신규 `custom-plugin/taskflow/agents/planner.md`, model: opus 고정). main 세션은 인자 해석 후 위임·결과 relay 만 담당. 근거 = 슬래시 frontmatter `model:` 이 턴 단위로만 유효해 §3 승인 대기로 턴이 끊기면 세션 기본 모델로 되돌아갈 수 있다는 점(공식 문서 확인) — 에이전트 정의 단위 `model:` 은 그 위험이 없다
 - 2026-09-22: ⑥ 마커에 `계획 생성 모델` self-report 라인 추가 — `model: opus` frontmatter 지정이 턴 단위로만 유효함(공식 문서 확인)에 따라, §3 승인 대기로 턴이 끊긴 뒤 세션 기본 모델로 되돌아갔는지 사후 확인용
@@ -213,3 +217,7 @@
 - 2026-07-28: 해소를 독립 B 트랙으로 분리. **A 하위 단계 배치 철회** — `ReadyToMerge` 가 스냅샷에 박혀 있어 머지 대상이 영구 0건이 됐다
 - 2026-07-28: 축별 검증(코드=리뷰 / 문서=정합성) + `ReadyToMerge` 자동 해소. read-only 계약 해제
 - 2026-07-27: 신설 — 스냅샷 diff 기반 변경분 검증 + sessions 관측 모드
+
+## commands/debate.md
+
+- 2026-09-28: 스킬 본문을 재수록하던 동작·팀 구성·spawn 트리·비용·Skip 표를 걷어내고 스킬 포인터만 남김 (116 → 63줄)
