@@ -108,6 +108,8 @@ case "$base" in
 esac
 # 스텝마다 실제로 넘어온 도구 제한과 프롬프트 첫 줄을 남긴다 — 리뷰어에게 Edit/Write 가
 # 새는지, frontmatter 가 프롬프트에 섞이는지를 테스트가 검사할 수 있게
+# 프롬프트 전문 — 러너가 조립한 문자열이 잘리지 않았는지 검사용 (2026-09-28 따옴표 절단 사고)
+[ -n "${T_PROMPTDIR:-}" ] && printf '%s' "$prompt" > "$T_PROMPTDIR/$base.prompt"
 if [ -n "${T_TOOLSLOG:-}" ]; then
   printf '%s|%s|%s|%s\n' "$base" "$tools" "$(printf '%s' "$prompt" | head -1)" "$strict" >> "$T_TOOLSLOG"
 fi
@@ -129,7 +131,7 @@ check() {
   else printf '   FAIL %s — 기대 [%s] 실제 [%s]\n' "$1" "$2" "$3"; fail=$((fail + 1)); fi
 }
 reset() { find "$ST" -mindepth 1 -maxdepth 1 -type d -exec rm -r {} + 2>/dev/null; mkdir -p "$ST"; }
-runit() { env "$@" timeout "$RUN_TIMEOUT" bash "$SUT" "드라이런 요청" > "$TMP/out.txt" 2>&1; echo $?; }
+runit() { env "$@" timeout "$RUN_TIMEOUT" bash "$SUT" "드라이런 요청" > "$TMP/out.txt" 2>&1; local rc=$?; cat "$TMP/out.txt" >> "$TMP/all-out.txt"; echo $rc; }
 d()     { find "$ST" -mindepth 1 -maxdepth 1 -type d | head -1; }
 cnt()   { find "$(d)" -name "$1" 2>/dev/null | wc -l | tr -d ' '; }
 merged(){ find "$(d)" -name 'rev-0*.md' -not -name '*-correctness.md' -not -name '*-design.md' 2>/dev/null | wc -l | tr -d ' '; }
@@ -140,6 +142,16 @@ check "exit" 0 "$rc"
 check "dev 라운드수" 1 "$(cnt 'dev-*.md')"
 check "adv 회차" 1 "$(cnt 'adv-*.md')"
 check "RESULT 생성" 1 "$([ -s "$(d)/RESULT.md" ] && echo 1 || echo 0)"
+
+# 프롬프트 조립 무결성 — 프롬프트 본문의 큰따옴표가 bash 문자열을 끊으면 `local` 이 조각을 변수명으로
+# 받아 오류를 내고 나머지(요청·GATE 지시)가 조용히 잘린다. stub 은 경로만 보고 파일을 써서 이걸 못 봤다
+check "셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/out.txt")"
+reset; export T_PROMPTDIR="$TMP/prompts"; rm -rf "$T_PROMPTDIR"; mkdir -p "$T_PROMPTDIR"
+rc=$(runit T_REV=CLEAN T_ADV=UPHELD)
+check "spec 프롬프트에 요청 본문" 1 "$(grep -c '드라이런 요청' "$T_PROMPTDIR/00-spec.md.prompt")"
+check "spec 프롬프트에 GATE 지시" 1 "$(grep -c 'GATE: TOO-LARGE' "$T_PROMPTDIR/00-spec.md.prompt")"
+check "dev 프롬프트가 spec 을 가리킴" 1 "$([ "$(grep -c '00-spec.md' "$T_PROMPTDIR/dev-01.md.prompt")" -ge 1 ] && echo 1 || echo 0)"
+unset T_PROMPTDIR
 
 echo "== B. 3라운드 후 클린 =="
 reset; rc=$(runit T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=0 M=2,CLEAN' T_ADV=UPHELD)
@@ -345,5 +357,7 @@ reset; rc=$(runit T_SPECNOTE='MUTATIONS: 0' T_REV=CLEAN T_ADV=UPHELD)
 check "변이 기준 0 — 재보고 없음" 0 "$(grep -c '셸 재검증 불일치' "$TMP/out.txt")"
 
 echo
+# 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
+check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="
 [ "$fail" -eq 0 ]
