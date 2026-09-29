@@ -613,8 +613,11 @@ mutation_scratch_prepare() {
       echo "vendor-pool ensure 실패"; return 1
     fi
   fi
-  a=$(git -C "$root" status --porcelain | cut -c4- | sort)
-  b=$(git -C "$scratch" status --porcelain | cut -c4- | sort)
+  # --untracked-files=all — 기본값은 새 디렉토리 속 untracked 를 디렉토리 한 줄로 접는다. dev 쪽은 add -N
+  # 이라 파일 단위, 스크래치 쪽은 untracked 라 디렉토리 한 줄이 되어 새 디렉토리를 만드는 step 은
+  # 늘 불일치였다 (run 20260929-110429 mut-01, 위 진단 로그로 확정)
+  a=$(git -C "$root" status --porcelain --untracked-files=all | cut -c4- | sort)
+  b=$(git -C "$scratch" status --porcelain --untracked-files=all | cut -c4- | sort)
   if [ "$a" != "$b" ]; then
     { echo "root 에만:";    comm -23 <(printf '%s\n' "$a") <(printf '%s\n' "$b") | sed 's/^/  /'
       echo "scratch 에만:"; comm -13 <(printf '%s\n' "$a") <(printf '%s\n' "$b") | sed 's/^/  /'; } >> "$err"
