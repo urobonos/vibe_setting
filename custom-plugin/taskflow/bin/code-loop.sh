@@ -704,16 +704,33 @@ verify_mutations() {
       continue
     fi
     cp -p "$scratch/$file" "$scratch/$file.mutation-orig"
-    if ! python - "$scratch/$file" "$from" "$to" <<'PY'
+    # 조각은 한 줄·파일 안 유일이어야 한다. 이스케이프(\n·\t)는 풀지 않는다 — PHP 소스엔 FQCN
+    # (\App\Libraries\notify…)·정규식('\d')·"\n" 처럼 리터럴 백슬래시가 흔해, 풀면 지금 맞는 조각이
+    # 틀어진다. 여러 곳에 있는데 첫 위치만 바꾸면 의도와 다른 곳을 변이해 red/green 을 조용히 오판한다
+    # (run 760 여러 줄 조각 관측 · ISS-THKING 제안, 2026-09-29)
+    local mrc=0
+    python - "$scratch/$file" "$from" "$to" <<'PY' || mrc=$?
 import sys
 path, before, after = sys.argv[1:]
 text = open(path, encoding="utf-8").read()
-if before not in text:
+n = text.count(before)
+if n == 0:
     sys.exit(1)
+if n > 1:
+    print(n)
+    sys.exit(2)
 open(path, "w", encoding="utf-8", newline="").write(text.replace(before, after, 1))
 PY
-    then
-      echo "!!! [dev-$nn] 변이 원문 조각이 $file 에 없다 — $from" | tee -a "$report"
+    if [ "$mrc" = 1 ]; then
+      case "$from" in
+        *'\n'*|*'\t'*) echo "!!! [dev-$nn] 변이 원문 조각이 $file 에 없다 — 여러 줄 조각은 지원하지 않는다(\\n·\\t 를 풀지 않는다), 파일 안에서 유일한 한 줄로 — $from" | tee -a "$report" ;;
+        *)          echo "!!! [dev-$nn] 변이 원문 조각이 $file 에 없다 — $from" | tee -a "$report" ;;
+      esac
+      mv -f "$scratch/$file.mutation-orig" "$scratch/$file"
+      fail=1; continue
+    elif [ "$mrc" != 0 ]; then
+      echo "!!! [dev-$nn] MUTATION 줄 해석 불가 — 모호: 조각이 $file 안 여러 곳에 있다(유일한 한 줄로) — $from" | tee -a "$report"
+      mv -f "$scratch/$file.mutation-orig" "$scratch/$file"
       fail=1; continue
     fi
     out=$(cd "$scratch" && eval "$cmd" 2>&1); rc=$?
@@ -921,6 +938,8 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
   MUTATIONS: {변이 기준 개수}
 대상 코드가 이미 있어 원문을 지금 확정할 수 있으면 변이마다 한 줄씩 쓴다 (새로 짤 코드면 dev 가 쓴다):
   MUTATION: {파일 상대경로} | {원문 조각} ==> {변이 조각} | {phpunit 명령}
+원문 조각은 한 줄이고 그 파일 안에서 유일해야 한다 — 여러 곳에 있으면 셸이 '모호' 로 해석 불가 처리하고,
+줄바꿈을 넣은 조각은 찾지 못한다. 여러 줄 변경이면 그 변경을 대표하는 고유한 한 줄을 고른다.
 수정을 허용하는 경로를 기계 판독용 한 줄로 쓴다 (worktree 루트 기준 glob, 쉼표 구분, * 는 / 도 넘는다 —
 테스트 파일 경로도 넣는다). 셸이 이 밖의 변경을 리뷰어와 결과문서에 드러낸다:
   SCOPE_FILES: {glob}, {glob}

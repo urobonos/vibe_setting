@@ -47,6 +47,9 @@
 
 ## commands/code-loop.md
 
+- 2026-09-29: MUTATION 조각 = 한 줄·파일 안 유일. 러너는 이스케이프를 풀지 않는다(PHP 소스의 리터럴 `
+`·FQCN 을 깨뜨린다). 0곳이면 기존대로 "없다"(조각에 `
+`·`	` 가 있으면 "여러 줄 조각 미지원" 원인 문구), 2곳 이상이면 첫 위치를 조용히 변이하지 않고 "모호" 로 해석 불가 — 첫 매치 치환이 의도와 다른 곳을 변이해 red/green 을 오판할 수 있었다(run 760 · ISS-THKING). spec 프롬프트·step-developer 규약에 반영, step-developer FILES 는 한 줄 한 파일 명시
 - 2026-09-29: 요청에 `WORKTREE:` 줄이 있으면 vendor-pool ensure(하드링크 ~72초)를 spec 과 겹쳐 백그라운드로 돌리고 spec 뒤에 join — spec 프롬프트에 vendor 명령(phpunit·spark·phpstan·composer) 금지 공지. spec 이 다른 worktree 를 고르면 직렬 ensure 로 폴백, 요청에 없으면 기존 직렬 그대로. 러너가 worktree 를 미리 만드는 안은 미포함. dryrun AH
 - 2026-09-29: 변이 스크래치 대조를 `git status --untracked-files=all` 로 — 기본값이 새 디렉토리 속 untracked 를 디렉토리 한 줄로 접어, 새 디렉토리를 만드는 step 은 늘 "변경 파일 집합 불일치" 로 변이 판정이 무효였다(run 20260929-110429 mut-01, 같은 날 추가한 단계별 진단으로 확정)
 - 2026-09-29: **스텝 시간 상한 · 변이 스크래치 경합/진단 · phpstan excludePaths.** ① `claude -p` 를 `timeout --foreground --kill-after=60` 로 감싼다 — 상한은 성공 run 222개 스텝 최대 소요의 약 2~2.5배(dev 180분 · spec/adv/rev/dev(adv) 100분 · merge/result 40분, `CODE_LOOP_STEP_TIMEOUT_MIN` 로 일괄 재정의). 124/137 이면 run 폴더 `TIMEOUT.md` 기록 · 재시도 없음. 초과 시 trap 이 그 시점 winpid 로 `taskkill //T` — timeout 만으로는 python.exe 가 남았다(실 claude 재현, 수정 후 3/3 잔존 0). 출력은 파이프 대신 파일로 받아 살아남은 자손이 sed 를 막지 못하게 한다 ② 고아 스크래치 청소는 `owner.pid` 소유 러너가 죽은 것만(동시 run 이 남의 진행 중 스크래치를 지우던 경합) ③ 스크래치 준비 실패를 worktree add / diff apply / vendor-pool ensure / 변경 파일 집합 불일치 4단계로 나누고 stderr·경로 목록 차이를 `mut-NN.md` 에 남긴다(run 20260929-091648 간헐 실패 원인 미상) ④ phpstan 이 `No files found to analyse` 뿐이면(에러 줄 없음) skip(excludePaths) — view 만 바꾼 run 이 재보고를 소진했다(run 723). dryrun AF·AG
