@@ -97,8 +97,11 @@ command -v python3 >/dev/null 2>&1 && _WT_PY=python3
 _WT_TO=""
 command -v timeout >/dev/null 2>&1 && _WT_TO="timeout 2"
 TOOL_NAME=""
+# bash 정규식 primary (2026-09-29) — tool_name 은 escape 없는 식별자라 python 기동이 불필요하다.
+#   페이로드에서 tool_name 이 tool_input 보다 앞에 오므로 첫 매칭 = 최상위 키 (아래 grep 백스톱과 같은 가정).
+[[ "$PAYLOAD" =~ \"tool_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && TOOL_NAME="${BASH_REMATCH[1]}"
 # shellcheck disable=SC2086  # _WT_TO 는 "timeout 2" 두 토큰으로 분리돼야 한다
-[ -n "$_WT_PY" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | $_WT_TO "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
+[ -z "$TOOL_NAME" ] && [ -n "$_WT_PY" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | $_WT_TO "$_WT_PY" -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_name',''))" 2>/dev/null)
 [ -z "$TOOL_NAME" ] && TOOL_NAME=$(printf '%s' "$PAYLOAD" | grep -o '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
 
 case "$TOOL_NAME" in
@@ -114,8 +117,6 @@ case "$TOOL_NAME" in
     FILE_PATH=$(echo "$FILE_PATH" | sed 's|\\|/|g')
     ;;
   Bash)
-    # shellcheck disable=SC2086
-    COMMAND=$(echo "$PAYLOAD" | $_WT_TO python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',{}).get('command',''))" 2>/dev/null)
     # 파일 시스템 mutation 만 검사 (git 명령은 branch-enforce 잔존 영역).
     # raw glob → shlex 토큰화 (2026-06-04, v5c): 명령 텍스트(echo 문자열·주석) 내 '>'/'rm' false-positive 방지.
     #   - operator(|/||/&&/;/&/()/|&) 뒤 토큰 = 명령 위치 → mutation 명령 감지 (단일 | 누수 방지, re.split 미사용)
@@ -129,10 +130,13 @@ case "$TOOL_NAME" in
     #   - 미해석 토큰($VAR/명령치환/backtick)·`..` traversal·대상 미추출(dd·옵션만·trailing redirect)·파서 실패
     #     = __UNRESOLVED__ → 종전대로 pwd 기준 차단 (fail-closed 불변)
     #   - 출력 양식: 1행 = '1'/'0' (mutation 여부), 2행~ = 대상 경로 (또는 __UNRESOLVED__)
+    # command 추출을 이 파서 안으로 합침 (2026-09-29): 구판은 추출 1회 + 파싱 1회 = python 2회였고,
+    #   둘 다 python3 하드코딩이었다. JSON 파싱 실패 = 출력 공백 = 아래 IS_MUTATION != "0" → 차단 (fail-closed 불변).
     # shellcheck disable=SC2086
-    PARSE=$(printf '%s' "$COMMAND" | $_WT_TO python3 -c "
-import sys, shlex, re
-cmd = sys.stdin.read().replace('\n', ' ; ')   # 따옴표 밖 newline = 절 분리 (따옴표 안은 shlex 보존)
+    PARSE=$(printf '%s' "$PAYLOAD" | $_WT_TO "${_WT_PY:-python3}" -c "
+import sys, shlex, re, json
+cmd = (json.load(sys.stdin).get('tool_input') or {}).get('command') or ''
+cmd = cmd.replace('\n', ' ; ')   # 따옴표 밖 newline = 절 분리 (따옴표 안은 shlex 보존)
 MUT = {'rm','mv','cp','mkdir','touch','tee','dd','truncate'}
 OPS = {'|','||','&&',';','&','(',')','|&'}   # |& = 결합 파이프(2>&1|), punctuation_chars 가 단일토큰화
 WRAP = {'sudo','xargs','command','exec','nohup','env'}   # 다음 토큰 command-position 유지
