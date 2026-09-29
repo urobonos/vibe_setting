@@ -230,7 +230,10 @@ if is_exempt_path "$FILE_PATH"; then exit 0; fi
 #   cwd 가 repo 여도 target 이 repo 밖이면 통과 — cwd-only 과잉차단 해소 (worktree 안 파일·
 #   repo 밖 임시경로 오차단 3회 실증). 신규 디렉토리는 **존재하는 최근접 조상**으로 판정하여
 #   dirname 미존재 → repo 밖 오판 통과(우회 구멍)를 회피한다.
-_wt_tdir=$(_wt_nearest_dir "$FILE_PATH")
+# 대상이 디렉토리면 그 자체로 판정 (2026-09-29): Bash 모드는 대상 미해석 시 FILE_PATH=cwd(디렉토리)인데,
+#   dirname 부터 벗기면 cwd=레포 루트에서 부모(레포 밖)를 보고 통과했다 — `dd of=x`·python 장애 시 `rm` 이 exit 0.
+#   #10 check-ignore 는 구 기준(dirname) 유지 — ignored 중첩 레포 디렉토리를 그 레포 안에서 질의하면 비면제로 뒤집힌다.
+if [ -d "$FILE_PATH" ]; then _wt_tdir="$FILE_PATH"; else _wt_tdir=$(_wt_nearest_dir "$FILE_PATH"); fi
 if [ -d "$_wt_tdir" ] && ! git -C "$_wt_tdir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 0
 fi
