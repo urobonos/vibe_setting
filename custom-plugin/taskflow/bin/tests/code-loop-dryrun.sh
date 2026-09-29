@@ -84,6 +84,12 @@ pick() { printf '%s' "$1" | cut -d, -f"$2"; }
 last() { printf '%s' "$1" | rev | cut -d, -f1 | rev; }
 case "$base" in
   00-spec.md)
+    # 착수 불가 반환 — 00-spec.md 없이 RESULT.md 판정 줄만 (T_SPEC_DECLINE_RC 로 exit 코드 지정)
+    if [ -n "${T_SPEC_DECLINE:-}" ]; then
+      printf '# 결과\n\n## 판정: 미착수 (stub)\n\n재진입 조건: 없음\n' > "$(dirname "$out")/RESULT.md"
+      exit "${T_SPEC_DECLINE_RC:-0}"
+    fi
+    [ -n "${T_SPEC_NOOUT:-}" ] && exit 0
     # T_GATE_LINE 이 설정돼 있으면(빈 값 포함) 판정 줄을 원문 그대로 쓴다 — 표기 변형·줄 없음 검사용
     if [ -n "${T_GATE_LINE+x}" ]; then printf 'spec\n\n%s\n' "$T_GATE_LINE" > "$out"
     else printf 'spec\n\nGATE: %s\n' "${T_GATE:-OK}" > "$out"; fi
@@ -431,6 +437,19 @@ reset; : > "$HOME/vendor-pool.calls"; runreq T_WT="$VB" T_REV=CLEAN T_ADV=UPHELD
 check "명시 없음 — bg 없음" 0 "$(grep -c 'ensure (bg)' "$TMP/out.txt")"
 check "명시 없음 — 기존 직렬 1회" "ensure $VB" "$(cat "$HOME/vendor-pool.calls")"
 unset T_PROMPTDIR
+
+echo "== AI. spec 의 착수 불가 반환은 실패가 아니라 반환(종료 3) (run 20260929-141832 ISS-746) =="
+reset; rc=$(runit T_SPEC_DECLINE=1)
+check "반환 — 종료 3" 3 "$rc"
+check "반환 — spec 재시도 없음" 1 "$(grep -c '\[spec\] model=' "$TMP/out.txt")"
+check "반환 — 반환 기록" 1 "$([ "$(grep -c '반환(착수 불가)' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+check "반환 — 실패 기록 없음" 0 "$(grep -c '1단계 실패' "$TMP/out.txt")"
+check "반환 — dev 안 돎" 0 "$(cnt 'dev-*.md')"
+reset; rc=$(runit T_SPEC_NOOUT=1)
+check "산출·RESULT 없음 — 실패(1)" 1 "$rc"
+check "산출·RESULT 없음 — 기존대로 재시도" 2 "$(grep -c '\[spec\] model=' "$TMP/out.txt")"
+reset; rc=$(runit T_SPEC_DECLINE=1 T_SPEC_DECLINE_RC=1)
+check "미착수라도 exit≠0 — 실패(1)" 1 "$rc"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"

@@ -89,7 +89,8 @@ cmd_status() {
     [ -d "$d" ] || continue
     found=1; run=$(basename "$d")
     rounds=$(find "$d" -maxdepth 1 -name 'rev-*.md' 2>/dev/null | wc -l | tr -d ' ')
-    if [ -f "$d/RESULT.md" ]; then state="완료"; else state="미완"; fi
+    if [ ! -f "$d/00-spec.md" ] && spec_declined "$d"; then state="반환"
+    elif [ -f "$d/RESULT.md" ]; then state="완료"; else state="미완"; fi
     printf '%-46s %s  리뷰라운드 %s\n' "$run" "$state" "$rounds"
   done
   if [ "$found" = 1 ]; then
@@ -183,9 +184,20 @@ run_step() {
       echo "--- [$label] ok ($(wc -c < "$out") bytes)"
       return 0
     fi
+    if [ "$label" = spec ] && [ "$rc" = 0 ] && spec_declined "$(dirname "$out")"; then
+      echo "--- [$label] 반환(착수 불가) — RESULT.md 판정: 미착수"
+      return 3
+    fi
     echo "--- [$label] 산출 파일 없음: $out (exit=$rc)"
   done
   return 1
+}
+
+# spec 이 구현 대신 착수 불가를 반환했는가 — 00-spec.md 없이 RESULT.md 의 판정 줄이 `## 판정: 미착수`.
+# 이걸 산출 없음으로 읽으면 spec 을 한 번 더 태우고 "1단계 실패" 로 끝나 허브가 정상 반환과
+# 크래시를 가를 수 없었다 (run 20260929-141832 ISS-746, 재시도 ~3분)
+spec_declined() {
+  grep -qE '^[[:space:]#]*판정:[[:space:]]*미착수' "$1/RESULT.md" 2>/dev/null
 }
 
 # 결과문서 끝의 기계 판독용 한 줄. 없으면 계약 위반이므로 빈 값을 돌려 fail-closed.
@@ -944,6 +956,9 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
 테스트 파일 경로도 넣는다). 셸이 이 밖의 변경을 리뷰어와 결과문서에 드러낸다:
   SCOPE_FILES: {glob}, {glob}
 vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·symlink 로 링크하지 않는다.
+구현할 것이 없으면(코드 작업이 남지 않았거나 사용자 결정·§3 판단이 미결) worktree·00-spec.md 를 만들지 않고
+$dir/RESULT.md 에만 남긴다. 판정 줄은 정확히 한 줄 \`## 판정: 미착수\` 이고 그 아래에 이유와 재진입 조건을 적는다 —
+러너는 이것을 실패가 아니라 반환으로 기록한다.
 마지막 줄에 기계 판독용으로 정확히 한 줄을 쓴다:
   GATE: OK          (성공 기준 3개 이하 — 진행)
   GATE: TOO-LARGE   (4개 이상 — /taskflow:plan 으로 넘길 것)
@@ -966,12 +981,17 @@ $request"
 (러너 공지) 이 worktree 의 vendor 는 지금 러너가 채우는 중이다. 이 단계에서는 vendor 를 쓰는
 명령(phpunit · spark · phpstan · composer)을 실행하지 않는다 — 범위 확정에는 필요 없다."
     fi
-    if ! run_step spec "$M_SPEC" "" "$dir/00-spec.md" "$spec_body"; then
-      vendor_bg_join
+    # 종료 코드: 0 완료 · 1 실패 · 2 크기 게이트(TOO-LARGE) · 3 반환(착수 불가, 코드 변경 없음)
+    local spec_rc=0
+    run_step spec "$M_SPEC" "" "$dir/00-spec.md" "$spec_body" || spec_rc=$?
+    vendor_bg_join
+    if [ "$spec_rc" = 3 ]; then
+      echo "=== $(date '+%F %T') 반환(착수 불가) — 코드 변경 없이 종료. 판정·재진입 조건: $dir/RESULT.md"
+      return 3
+    elif [ "$spec_rc" != 0 ]; then
       echo "!!! 1단계 실패 — 중단"
       return 1
     fi
-    vendor_bg_join
   fi
 
   # 세 갈래다. 판정 줄이 없으면 진행하지 않는다 (fail-closed, code-loop.md §VERDICT 계약) —

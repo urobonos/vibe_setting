@@ -78,7 +78,11 @@ def scan_runs():
                     aborted = True
         except OSError:
             pass
-        if (d / "RESULT.md").is_file():
+        if (d / "RESULT.md").is_file() and not (d / "00-spec.md").is_file() \
+                and re.search(r"^[ \t#]*판정:[ \t]*미착수", (d / "RESULT.md").read_text(encoding="utf-8", errors="replace"), re.M):
+            # spec 이 착수 불가로 반환한 run — 완료와 섞이면 "무엇이 끝났나" 가 부풀려진다 (ISS-746)
+            state = "반환"
+        elif (d / "RESULT.md").is_file():
             state = "완료"
         elif aborted:
             state = "중단"
