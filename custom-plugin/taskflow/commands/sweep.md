@@ -76,10 +76,10 @@ pwsh tools/regression/sandbox-serve.ps1        # 기본 :8080
 연번을 그때그때 따면 반드시 충돌한다. 각 worktree 는 자기 base 커밋의 `issue/` 만 본다.
 
 ```bash
-ls docs/wbs/issue/*/ | grep -oE 'ISS-[0-9]{3}'                    # ① 로컬 3폴더
+ls docs/wbs/issue/*/ | grep -oE 'ISS-[0-9]{3,}'                   # ① 로컬 3폴더 ({3} 이면 ISS-1001 이 ISS-100 으로 잘린다)
 git fetch --quiet origin                                           # ②
 git ls-tree -r --name-only origin/develop docs/wbs/issue/          # ③ 원격 실재
-git log --all --oneline | grep -oE 'ISS-[0-9]{3}'                  # ④ 커밋 메시지
+git log --all --oneline | grep -oE 'ISS-[0-9]{3,}'                 # ④ 커밋 메시지
 ```
 
 **`max+1` 로 자르지 않는다** — 모든 세션이 같은 규칙을 쓰면 같은 칸에서 다시 만난다. 표가 "이후 참여자" 몫으로 명시한 빈 구간에서 자르고 표에 행을 먼저 추가한다.
