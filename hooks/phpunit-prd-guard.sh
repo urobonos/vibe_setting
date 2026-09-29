@@ -14,37 +14,31 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   - .env 미존재
 #   - hostname이 localhost/127.0.0.1/private IP
 #   - phpunit.xml.dist가 CI_ENVIRONMENT=testing 를 강제하는 경우 (화이트리스트 방어)
+#
+# 파싱 (2026-09-29): 구판은 python eval 로 tool_name 을 먼저 뽑고 실패 시 공백 → "Bash 아님" 으로
+#   통과했다 = python 장애(WindowsApps 별칭 등)에 조용히 fail-open, 그리고 매 Bash 호출마다 python 1회.
+#   → 원문에 phpunit 이 없으면 즉시 통과(파싱 0), 있을 때만 hook-input.sh(bash→python→awk 3단)로 해석.
+#   명령을 끝내 못 읽으면 phpunit 후보로 간주하고 .env 검사로 진행한다 (fail-closed).
+#   matcher 가 Bash 라 tool_name 검사는 두지 않는다.
 
 STDIN_DATA=$(cat)
+case "$STDIN_DATA" in
+  *phpunit*) ;;
+  *) exit 0 ;;
+esac
 
-# 값은 반드시 shlex.quote 로 감싼다 — 큰따옴표로 감싸 eval 하면 명령 문자열 안의
-# 백틱·$( ) 가 이 훅 프로세스에서 실행된다. 작은따옴표 안에 있어도, 분류기를 거치지 않고.
-# 2026-09-17 실측: 문서 sed 치환의 코드 표기 백틱이 seed-sandbox --restore 를 실행해
-# 샌드박스 DB 124행이 지워졌다 (binlog 로 확정 · printf 프로브로 재현).
-eval "$(echo "$STDIN_DATA" | python3 -c "
-import json, shlex, sys
-try:
-    data = json.load(sys.stdin)
-    tn = data.get('tool_name', '')
-    ti = data.get('tool_input', {})
-    cmd = ti.get('command', '')
-    cwd = data.get('cwd', '')
-    print('TOOL_NAME=' + shlex.quote(tn))
-    print('COMMAND=' + shlex.quote(cmd.replace('\n', ' ')))
-    print('CWD=' + shlex.quote(cwd))
-except:
-    print('TOOL_NAME=\"\"')
-    print('COMMAND=\"\"')
-    print('CWD=\"\"')
-" 2>/dev/null)"
-
-# Bash 외 도구 무시
-if [ "$TOOL_NAME" != "Bash" ]; then
-  exit 0
+if ! source "${BASH_SOURCE[0]%/*}/lib/hook-input.sh" 2>/dev/null; then
+  echo "[PHPUNIT-PRD-GUARD BLOCKED] hook-input.sh 로드 실패 — phpunit 명령의 DB 대상 판정 불가 (fail-closed)" >&2
+  exit 2
 fi
 
-# phpunit 명령 아니면 무시 (단어 경계 매칭)
-if ! echo "$COMMAND" | grep -qE '(^|[[:space:]/;&|])phpunit($|[[:space:];&|])'; then
+hook_parse_command
+# cwd 는 escape 해석판으로 — Windows 경로의 `\\` 가 원문 그대로 남으면 .env 를 못 찾아 통과한다
+CWD=$(hook_json_string cwd)
+[ -z "$CWD" ] && CWD=$(pwd)
+
+# phpunit 명령 아니면 무시 (단어 경계 매칭). 명령을 못 읽었으면(공백) 검사를 계속한다.
+if [ -n "$COMMAND" ] && ! echo "$COMMAND" | grep -qE '(^|[[:space:]/;&|])phpunit($|[[:space:];&|])'; then
   exit 0
 fi
 
