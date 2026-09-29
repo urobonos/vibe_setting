@@ -101,14 +101,48 @@ cmd_status() {
   fi
 }
 
+# 스텝 1회 시간 상한(분). 성공 run 222개의 스텝 소요(claude 기동 ~ 세션 마지막 기록) 최대치의
+# 약 2~2.5배다 (2026-09-29 실측): dev 88.4분 → 180 · dev(adv) 46.8 → 100 · spec 38.3 / adv 40.0 /
+# rev 37.9 → 100 · merge 16.4 / result 19.4 → 40. 전 스텝 일괄 재정의 = CODE_LOOP_STEP_TIMEOUT_MIN
+step_timeout_min() {
+  if [ -n "${CODE_LOOP_STEP_TIMEOUT_MIN:-}" ]; then echo "$CODE_LOOP_STEP_TIMEOUT_MIN"; return; fi
+  case "$1" in
+    *"(adv)")        echo 100 ;;
+    dev-*)           echo 180 ;;
+    merge-*|result)  echo 40 ;;
+    *)               echo 100 ;;
+  esac
+}
+
+# claude 를 시간 상한 안에서 돌린다. $1 분 / $2 출력 파일 / 나머지 = claude 인자, stdin 은 그대로 claude 로 간다.
+# 상한을 넘기면 124. timeout 만으로는 claude 가 띄운 자식(Bash 도구의 bash·python 등)이 남는다
+# (2026-09-29 재현: rc=124 뒤 python.exe 잔존). 그래서 --foreground 로 TERM 을 안쪽 bash 만 받게
+# 하고, 그 trap 이 claude 래퍼의 *그 시점* winpid 로 taskkill //T 를 건다 — 기동 직후에 읽은 winpid 는
+# 래퍼가 exec 하기 전 값이라 트리 뿌리가 아니었다(같은 날 재현, 수정 후 실 claude 3/3 잔존 0).
+# 출력은 파이프가 아니라 파일로 받는다 — 트리 종료를 빠져나간 자손이 파이프를 쥐고 있으면 뒤의
+# sed 가 그 자손이 끝날 때까지 막혀 상한이 무의미해진다(같은 날 stub 재현). taskkill 이 없으면 kill
+claude_with_timeout() {
+  local min="$1" outf="$2"; shift 2
+  /usr/bin/timeout --foreground --kill-after=60 "${min}m" bash -c '
+    o="$1"; shift
+    claude "$@" <&0 > "$o" 2>&1 &
+    c=$!
+    trap '\''w=$(cat /proc/$c/winpid 2>/dev/null)
+          { [ -n "$w" ] && taskkill //T //F //PID "$w" >/dev/null 2>&1; } || kill "$c" 2>/dev/null
+          exit 124'\'' TERM
+    wait "$c"' _ "$outf" "$@"
+}
+
 # 스텝 1개 = claude -p 1회. 출력 파일이 생겼는지로 성공을 판정한다 — exit 0 은
 # 모델이 "못 하겠다"고 말하고 끝난 경우에도 나오므로 성공 신호가 못 된다
 # $1 라벨 / $2 모델 / $3 허용 도구(비면 제한 없음) / $4 산출 파일 / $5 프롬프트
 run_step() {
-  local label="$1" model="$2" tools="$3" out="$4" prompt="$5" rc try=0
+  local label="$1" model="$2" tools="$3" out="$4" prompt="$5" rc try=0 limit log
+  limit=$(step_timeout_min "$label")
   while [ "$try" -lt 2 ]; do
     try=$((try + 1))
     echo "--- $(date '+%T') [$label] model=$model tools=${tools:-*} try=$try"
+    log=$(mktemp)
     cd "$CLAUDE_HOME" || return 1
     # 프롬프트는 stdin 으로 준다. 인자로 주면 두 군데서 깨진다 (2026-09-16 실측):
     #   (a) 에이전트 정의가 --- 로 시작해서 CLI 가 옵션으로 파싱한다
@@ -124,15 +158,27 @@ run_step() {
     # 41.3K(opus). 스텝 3,131 세션 전수에서 Skill 호출 1회·메모리 파일 읽기 3회뿐이었고,
     # 메모리 파일은 꺼도 경로로 직접 읽힌다 (2026-09-28).
     if [ -n "$tools" ]; then
-      printf '%s' "$prompt" | CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude -p --model "$model" \
+      printf '%s' "$prompt" | CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude_with_timeout "$limit" "$log" -p --model "$model" \
         --strict-mcp-config --disable-slash-commands \
-        --allowed-tools "$tools" --permission-mode "$PERM" 2>&1 | sed 's/^/    /'
+        --allowed-tools "$tools" --permission-mode "$PERM"
     else
-      printf '%s' "$prompt" | CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude -p --model "$model" \
+      printf '%s' "$prompt" | CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude_with_timeout "$limit" "$log" -p --model "$model" \
         --strict-mcp-config --disable-slash-commands \
-        --permission-mode "$PERM" 2>&1 | sed 's/^/    /'
+        --permission-mode "$PERM"
     fi
     rc=${PIPESTATUS[1]}
+    sed 's/^/    /' "$log"; rm -f "$log"
+    # 124 = 상한 도달(137 = TERM 뒤 60초 안에도 안 끝나 KILL). 결과문서에 TIMEOUT 으로 남긴다.
+    # 멈춘 스텝은 다시 돌려도 같은 자리에서 멈출 공산이 커서 재시도하지 않는다
+    if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then
+      echo "TIMEOUT: [$label] try=$try ${limit}분 초과 (exit=$rc, $(date '+%F %T'))" >> "$(dirname "$out")/TIMEOUT.md"
+      if [ -s "$out" ]; then
+        echo "--- [$label] TIMEOUT(${limit}분) — 산출 파일은 있어 그대로 쓴다 ($(wc -c < "$out") bytes)"
+        return 0
+      fi
+      echo "!!! [$label] TIMEOUT(${limit}분) — 산출 파일 없음, 재시도하지 않는다"
+      return 1
+    fi
     if [ -s "$out" ]; then
       echo "--- [$label] ok ($(wc -c < "$out") bytes)"
       return 0
@@ -409,7 +455,13 @@ verify_mechanical() {
       # worktree 루트에서, 그 worktree 자신의 phpstan 로 돈다.
       if ! out=$(cd "$root" && "$phpstan_bin" analyse --no-progress --error-format=raw "$abspath" 2>&1); then
         local fresh
-        if ! printf '%s\n' "$out" | grep -qE '\.php:[0-9]+:'; then
+        if printf '%s\n' "$out" | grep -q 'No files found to analyse' \
+           && ! printf '%s\n' "$out" | grep -qE '\.php:[0-9]+:'; then
+          # 넘긴 파일이 phpstan.neon 의 excludePaths 안이다(app/Views 등). 제외 판정은 phpstan 자신에게
+          # 맡긴다 — 러너가 neon 을 따로 읽으면 설정 해석이 두 벌이 되어 어긋날 때 반대로 오판한다.
+          # 불일치로 치던 동안 view 만 바꾼 run 이 재보고 횟수를 헛되이 소진했다(run 723, 2026-09-29)
+          echo "--- [dev-$nn] phpstan skip(excludePaths): $f"
+        elif ! printf '%s\n' "$out" | grep -qE '\.php:[0-9]+:'; then
           # 에러 줄이 없는 실패 = 도구 자체 오류(설정·메모리). 걸러낼 기준이 없으니 그대로 불일치다
           echo "!!! [dev-$nn] 기계검사 불일치 — phpstan 실행 실패: $f"
           printf '%s\n' "$out" | sed 's/^/    /'
@@ -526,34 +578,55 @@ mutation_lines() {
 }
 
 # 스크래치 worktree 에 dev worktree 의 현재 상태를 옮긴다. 옮긴 뒤 두 쪽의 변경 파일 집합이
-# 다르면 1 — add -N 을 안 한 새 파일이 diff 에서 빠지는 함정을 여기서 잡는다
+# 다르면 1 — add -N 을 안 한 새 파일이 diff 에서 빠지는 함정을 여기서 잡는다.
+# $3 = 진단 로그. 실패하면 어느 단계인지 stdout 에 한 줄로 내고, 그 단계의 stderr(대조 실패면 양쪽
+# 경로 목록 차이)를 $3 에 남긴다 — 네 단계를 return 1 하나로 돌려주고 stderr 도 버려서, 간헐 실패
+# (run 20260929-091648 mut-01 이식 불일치, 같은 worktree 재실행에선 미재현)의 원인을 가릴 수 없었다
 mutation_scratch_prepare() {
-  local root="$1" scratch="$2" patch stale
+  local root="$1" scratch="$2" err="$3" patch stale owner a b
   # 이전 검증이 도중에 죽어(kill·low-memory reap — SIGKILL 은 trap 이 못 잡는다) 남긴 스크래치를
-  # 먼저 쓸어낸다. prune 은 디렉토리가 사라진 등록만 지우므로 살아 있는 고아는 직접 제거한다
+  # 먼저 쓸어낸다. prune 은 디렉토리가 사라진 등록만 지우므로 살아 있는 고아는 직접 제거한다.
+  # 단 소유 러너가 살아 있는 것은 건너뛴다 — 같은 레포에서 run 이 겹치면 남의 진행 중 스크래치를
+  # 지워 그쪽 이식이 깨진다(동시 run 청소 경합 가설, 2026-09-29). owner.pid 가 없는 것은 이 규칙
+  # 이전의 잔재라 고아로 본다
   git -C "$root" worktree list --porcelain | sed -n 's/^worktree //p' | grep -E '/code-loop-mut$' \
-    | while IFS= read -r stale; do mutation_scratch_remove "$root" "$stale"; done
-  git -C "$root" worktree add --detach -q "$scratch" HEAD 2>/dev/null || return 1
+    | while IFS= read -r stale; do
+        owner=$(cat "$(dirname "$stale")/owner.pid" 2>/dev/null)
+        if [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null; then continue; fi
+        mutation_scratch_remove "$root" "$stale"
+      done
+  if ! git -C "$root" worktree add --detach -q "$scratch" HEAD 2>>"$err"; then
+    echo "worktree add 실패"; return 1
+  fi
   patch=$(mktemp)
-  git -C "$root" diff HEAD --binary > "$patch"
-  if [ -s "$patch" ] && ! git -C "$scratch" apply --whitespace=nowarn "$patch" 2>/dev/null; then
-    rm -f "$patch"; return 1
+  git -C "$root" diff HEAD --binary > "$patch" 2>>"$err"
+  if [ -s "$patch" ] && ! git -C "$scratch" apply --whitespace=nowarn "$patch" 2>>"$err"; then
+    rm -f "$patch"; echo "diff apply 실패"; return 1
   fi
   rm -f "$patch"
   git -C "$root" ls-files --others --exclude-standard -z | while IFS= read -r -d '' f; do
     mkdir -p "$scratch/$(dirname "$f")"
-    cp -p "$root/$f" "$scratch/$f"
+    cp -p "$root/$f" "$scratch/$f" 2>>"$err"
   done
   if [ -f "$scratch/composer.lock" ]; then
-    bash "$HOME/.claude/bin/vendor-pool.sh" ensure "$scratch" >/dev/null 2>&1 || return 1
+    if ! bash "$HOME/.claude/bin/vendor-pool.sh" ensure "$scratch" >>"$err" 2>&1; then
+      echo "vendor-pool ensure 실패"; return 1
+    fi
   fi
-  [ "$(git -C "$root" status --porcelain | cut -c4- | sort)" = "$(git -C "$scratch" status --porcelain | cut -c4- | sort)" ]
+  a=$(git -C "$root" status --porcelain | cut -c4- | sort)
+  b=$(git -C "$scratch" status --porcelain | cut -c4- | sort)
+  if [ "$a" != "$b" ]; then
+    { echo "root 에만:";    comm -23 <(printf '%s\n' "$a") <(printf '%s\n' "$b") | sed 's/^/  /'
+      echo "scratch 에만:"; comm -13 <(printf '%s\n' "$a") <(printf '%s\n' "$b") | sed 's/^/  /'; } >> "$err"
+    echo "변경 파일 집합 불일치"; return 1
+  fi
 }
 
 mutation_scratch_remove() {
   local root="$1" scratch="$2"
   git -C "$root" worktree remove --force "$scratch" 2>/dev/null
   git -C "$root" worktree prune 2>/dev/null
+  rm -f "$(dirname "$scratch")/owner.pid"
   rmdir "$(dirname "$scratch")" 2>/dev/null
 }
 
@@ -575,12 +648,19 @@ verify_mutations() {
     return "$fail"
   fi
   scratch="$(mktemp -d)/code-loop-mut"
+  # 소유 표시 — 다른 run 의 고아 청소가 이 러너가 살아 있는 동안은 이 스크래치를 건너뛴다
+  echo "$$" > "$(dirname "$scratch")/owner.pid"
   { echo "# 셸 변이 검증 (dev-$nn)"; echo; } > "$report"
-  if ! mutation_scratch_prepare "$root" "$scratch"; then
-    echo "--- [mut-$nn] 스크래치 준비 실패(이식 불일치) — 판정 무효" | tee -a "$report"
+  local why errlog
+  errlog=$(mktemp)
+  if ! why=$(mutation_scratch_prepare "$root" "$scratch" "$errlog"); then
+    echo "--- [mut-$nn] 스크래치 준비 실패(${why:-원인 미상}) — 판정 무효" | tee -a "$report"
+    { echo; echo '진단 (stderr · 경로 목록 차이):'; echo '```'; cat "$errlog"; echo '```'; } >> "$report"
+    rm -f "$errlog"
     mutation_scratch_remove "$root" "$scratch"
     return "$fail"
   fi
+  rm -f "$errlog"
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     file=$(printf '%s' "$line" | sed -E 's/[[:space:]]*\|.*$//')

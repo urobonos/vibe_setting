@@ -73,6 +73,10 @@ prompt=$(cat)
 out=$(printf '%s' "$prompt" | grep -E '쓴다|쓰고' | grep -oE '/[^ ]*\.md' | tail -1)
 [ -n "$out" ] || { echo "stub: 산출 경로 못 찾음" >&2; exit 0; }
 base=$(basename "$out")
+# 멈춘 스텝 흉내 — 자식까지 띄워 두고 기다린다. 시간 상한이 트리째 끊는지 본다
+if [ -n "${T_HANG:-}" ] && [ "$base" = "$T_HANG" ]; then
+  sleep 611 & echo "$!" > "${T_HANG_PID:?}"; wait; exit 0
+fi
 if [ -n "${T_NOWRITE:-}" ] && printf '%s' "$base" | grep -q "$T_NOWRITE"; then
   echo "stub: $base 안 씀 (실패 경로)"; exit 0
 fi
@@ -385,6 +389,28 @@ reset; rc=$(runit T_BASELINE='green 23 tests, 57 assertions' T_REV=CLEAN T_ADV=U
 check "실행 증거 있으면 미검증 없음" 0 "$(grep -c '^> \[미검증\]' "$(d)/RESULT.md")"
 reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- (삭제) tests/gone.php' T_REV=CLEAN T_ADV=UPHELD)
 check "(삭제) 항목 — 파일 없음 아님" 0 "$(grep -c '파일 없음' "$TMP/out.txt")"
+
+echo "== AF. 스텝 시간 상한 — TIMEOUT 기록 · 재시도 없음 · 자식 종료 (2026-09-29) =="
+# 자식 트리 종료 자체는 실 claude.exe 로 확인했다(3/3 잔존 0). stub 은 msys fork 라 트리가 끊겨 자식이
+# 남는다 — 그래서 여기서는 "남은 자식이 있어도 러너가 막히지 않는가" 를 본다(출력은 파이프가 아니라 파일)
+t0=$(date +%s)
+reset; rc=$(runit T_REV=CLEAN T_ADV=UPHELD T_HANG=adv-01.md T_HANG_PID="$TMP/hang.pid" CODE_LOOP_STEP_TIMEOUT_MIN=0.05)
+el=$(( $(date +%s) - t0 ))
+check "TIMEOUT.md 기록" 1 "$(grep -c '^TIMEOUT: \[adv-01\]' "$(d)/TIMEOUT.md" 2>/dev/null)"
+check "재시도 없음" 1 "$(grep -c '\[adv-01\] model=' "$TMP/out.txt")"
+check "중단 표기" 1 "$([ "$(grep -c '!!! \[adv-01\] TIMEOUT' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+check "남은 자식에 막히지 않음(120초 이내)" 1 "$([ "$el" -lt 120 ] && echo 1 || echo 0)"
+kill "$(cat "$TMP/hang.pid" 2>/dev/null)" 2>/dev/null
+
+echo "== AG. phpstan 'No files found to analyse'(excludePaths) 는 불일치가 아니라 skip (run 723, 2026-09-29) =="
+printf '#!/usr/bin/env bash\necho " [ERROR] No files found to analyse."\nexit 1\n' > "$WT_STAN/vendor/bin/phpstan"
+reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
+check "excludePaths — 불일치 아님" 0 "$(grep -c '기계검사 불일치 — phpstan' "$TMP/out.txt")"
+check "excludePaths — skip 기록" 1 "$([ "$(grep -c 'phpstan skip(excludePaths): a.php' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+# 대조군 — 같은 문구가 있어도 에러 줄이 함께 있으면 skip 이 아니다
+printf '#!/usr/bin/env bash\necho " [ERROR] No files found to analyse."\necho "C:\\wt\\a.php:3:Undefined variable."\nexit 1\n' > "$WT_STAN/vendor/bin/phpstan"
+reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
+check "에러 줄 동반 — skip 아님" 0 "$(grep -c 'phpstan skip(excludePaths)' "$TMP/out.txt")"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
