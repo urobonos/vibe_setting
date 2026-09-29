@@ -412,6 +412,26 @@ printf '#!/usr/bin/env bash\necho " [ERROR] No files found to analyse."\necho "C
 reset; rc=$(runit T_WT="$WT_STAN" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
 check "에러 줄 동반 — skip 아님" 0 "$(grep -c 'phpstan skip(excludePaths)' "$TMP/out.txt")"
 
+echo "== AH. 요청에 WORKTREE 가 있으면 vendor ensure 를 spec 과 겹쳐 돌린다 (2026-09-29) =="
+VA="$TMP/wt-va"; VB="$TMP/wt-vb"; mkdir -p "$VA" "$VB"; echo '{}' > "$VA/composer.lock"; echo '{}' > "$VB/composer.lock"
+export T_PROMPTDIR="$TMP/prompts-ah"; rm -rf "$T_PROMPTDIR"; mkdir -p "$T_PROMPTDIR"
+runreq() { env "$@" timeout "$RUN_TIMEOUT" bash "$SUT" "$REQ" > "$TMP/out.txt" 2>&1; cat "$TMP/out.txt" >> "$TMP/all-out.txt"; }
+REQ=$(printf '드라이런 요청\nWORKTREE: %s' "$VA")
+reset; : > "$HOME/vendor-pool.calls"; runreq T_WT="$VA" T_REV=CLEAN T_ADV=UPHELD
+check "겹침 — bg 시작 기록" 1 "$(grep -c '\[vendor\] ensure (bg): ' "$TMP/out.txt")"
+check "겹침 — bg 시작이 spec 보다 먼저" 1 "$(awk '/\[vendor\] ensure \(bg\): /{v=NR} /\[spec\] model=/{s=NR} END{print (v && s && v<s)?1:0}' "$TMP/out.txt")"
+check "겹침 — ensure 1회" "ensure $VA" "$(cat "$HOME/vendor-pool.calls")"
+check "겹침 — 직렬 ensure 생략" 1 "$(grep -c '이미 채웠다' "$TMP/out.txt")"
+check "겹침 — spec 에 vendor 명령 금지 공지" 1 "$(grep -c '러너 공지' "$T_PROMPTDIR/00-spec.md.prompt")"
+reset; : > "$HOME/vendor-pool.calls"; runreq T_WT="$VB" T_REV=CLEAN T_ADV=UPHELD
+check "폴백 — 다른 worktree 면 직렬 ensure 추가" "$(printf 'ensure %s\nensure %s' "$VA" "$VB")" "$(cat "$HOME/vendor-pool.calls")"
+check "폴백 — 폴백 표기" 1 "$(grep -c '직렬 ensure 로 폴백' "$TMP/out.txt")"
+REQ='드라이런 요청'
+reset; : > "$HOME/vendor-pool.calls"; runreq T_WT="$VB" T_REV=CLEAN T_ADV=UPHELD
+check "명시 없음 — bg 없음" 0 "$(grep -c 'ensure (bg)' "$TMP/out.txt")"
+check "명시 없음 — 기존 직렬 1회" "ensure $VB" "$(cat "$HOME/vendor-pool.calls")"
+unset T_PROMPTDIR
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="

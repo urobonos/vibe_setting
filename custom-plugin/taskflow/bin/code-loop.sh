@@ -211,6 +211,25 @@ worktree_of() {
   grep -h '^WORKTREE:' "$1" 2>/dev/null | tail -1 | sed 's/^WORKTREE:[[:space:]]*//'
 }
 
+# 경로 비교용 정규화 — 요청은 C:/…, spec 은 /c/… 로 적을 수 있다
+norm_path() {
+  local p="${1%/}"
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$p" 2>/dev/null || printf '%s' "$p"; else printf '%s' "$p"; fi
+}
+
+# spec 동안 백그라운드로 돈 vendor ensure 를 기다리고 그 출력을 run.log 에 붙인다.
+# ensure 실패 문구는 직렬 경로와 같다
+vendor_bg_join() {
+  [ -n "${VENDOR_BG_PID:-}" ] || return 0
+  local rc=0
+  wait "$VENDOR_BG_PID" || rc=$?
+  sed 's/^/    /' "$VENDOR_BG_LOG" 2>/dev/null; rm -f "$VENDOR_BG_LOG"
+  echo "--- $(date '+%T') [vendor] ensure (bg) 종료 (exit=$rc): $VENDOR_BG_WT"
+  [ "$rc" = 0 ] || echo "!!! [vendor] ensure 실패 — vendor 없이 진행한다 (기계검사는 도구가 없으면 skip)"
+  VENDOR_BG_PID=""
+  return 0
+}
+
 # dev-NN.md 의 FILES: 섹션에서 "- {path} — ..." 줄의 경로만 뽑는다
 files_of() {
   awk '
@@ -884,6 +903,7 @@ run_loop() {
 필요한 문서는 직접 Read 한다. 머지·push 하지 않는다."
 
   # ── 1단계: 범위 확정 + worktree ───────────────────────────────────────
+  VENDOR_BG_PID="" VENDOR_BG_WT="" VENDOR_BG_LOG=""
   if [ ! -s "$dir/00-spec.md" ]; then
     local spec_body="$common
 
@@ -911,10 +931,28 @@ vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·s
 
 구현 요청:
 $request"
+    # 요청이 기존 worktree 를 WORKTREE: 줄로 이미 정해 왔으면 vendor 하드링크(4.6만 파일 · ~72초)를
+    # spec 과 겹쳐 돌린다 — 예전엔 spec 이 끝난 뒤 직렬이라 매 run spec 구간에 그대로 더해졌다
+    # (2026-09-29 run 11건). 그동안 spec 이 반쯤 링크된 vendor 를 보지 않게 vendor 명령을 막는다
+    VENDOR_BG_PID="" VENDOR_BG_WT="" VENDOR_BG_LOG=""
+    local req_wt
+    req_wt=$(printf '%s\n' "$request" | grep -E '^[[:space:]]*WORKTREE:' | tail -1 | sed -E 's/^[[:space:]]*WORKTREE:[[:space:]]*//; s/[[:space:]]+$//')
+    if [ -n "$req_wt" ] && [ -f "$req_wt/composer.lock" ] && [ -f "$CLAUDE_HOME/bin/vendor-pool.sh" ]; then
+      VENDOR_BG_WT="$req_wt"; VENDOR_BG_LOG=$(mktemp)
+      bash "$CLAUDE_HOME/bin/vendor-pool.sh" ensure "$req_wt" > "$VENDOR_BG_LOG" 2>&1 &
+      VENDOR_BG_PID=$!
+      echo "--- $(date '+%T') [vendor] ensure (bg): $req_wt"
+      spec_body="$spec_body
+
+(러너 공지) 이 worktree 의 vendor 는 지금 러너가 채우는 중이다. 이 단계에서는 vendor 를 쓰는
+명령(phpunit · spark · phpstan · composer)을 실행하지 않는다 — 범위 확정에는 필요 없다."
+    fi
     if ! run_step spec "$M_SPEC" "" "$dir/00-spec.md" "$spec_body"; then
+      vendor_bg_join
       echo "!!! 1단계 실패 — 중단"
       return 1
     fi
+    vendor_bg_join
   fi
 
   # 세 갈래다. 판정 줄이 없으면 진행하지 않는다 (fail-closed, code-loop.md §VERDICT 계약) —
@@ -941,7 +979,11 @@ $request"
   # vendor 로 junction 을 걸면 `git worktree remove --force` 가 그걸 따라가 원본을 지운다
   local spec_worktree
   spec_worktree=$(worktree_of "$dir/00-spec.md")
-  if [ -n "$spec_worktree" ] && [ -f "$spec_worktree/composer.lock" ]; then
+  if [ -n "$VENDOR_BG_WT" ] && [ -n "$spec_worktree" ] \
+     && [ "$(norm_path "$VENDOR_BG_WT")" = "$(norm_path "$spec_worktree")" ]; then
+    echo "--- [vendor] spec 과 겹쳐 이미 채웠다: $spec_worktree"
+  elif [ -n "$spec_worktree" ] && [ -f "$spec_worktree/composer.lock" ]; then
+    [ -n "$VENDOR_BG_WT" ] && echo "--- [vendor] spec 이 요청과 다른 worktree 를 골랐다 — 직렬 ensure 로 폴백"
     if [ -f "$CLAUDE_HOME/bin/vendor-pool.sh" ]; then
       echo "--- [vendor] ensure: $spec_worktree"
       bash "$CLAUDE_HOME/bin/vendor-pool.sh" ensure "$spec_worktree" \
