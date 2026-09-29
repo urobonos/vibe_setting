@@ -18,8 +18,11 @@
 # SSOT: 본 lib + ~/.claude/bin/aggregate-hook-stats.sh (집계 스크립트)
 
 # 로그 루트 보장
+# fork 0 (2026-09-29): Windows Git Bash 는 외부 명령 1회 fork 가 ~40ms 라, 이 lib 를 쓰는 hook 마다
+#   mkdir·date 2회 fork 가 붙었다 (실측 log_event 1회 156ms). 디렉토리는 있을 때 건너뛰고,
+#   시각은 bash 내장 printf %()T 로 뽑는다 (date -u 와 출력 동일 확인).
 LOG_HELPER_ROOT="${HOME}/.claude/logs"
-mkdir -p "$LOG_HELPER_ROOT" 2>/dev/null
+[ -d "$LOG_HELPER_ROOT" ] || mkdir -p "$LOG_HELPER_ROOT" 2>/dev/null
 
 # ─────────────────────────────────────────────────────────
 # log_event <hook-name> <event-type> [detail...]
@@ -44,7 +47,7 @@ log_event() {
   detail="${detail//\\/\\\\}"
   detail="${detail//\"/\\\"}"
   local ts
-  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  TZ=UTC printf -v ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1
   local log_file="$LOG_HELPER_ROOT/${hook_name}.log"
   # ndjson 1 line append (atomic 보장 안 됨 — 단일 process per hook 가정)
   printf '{"ts":"%s","hook":"%s","event":"%s","detail":"%s"}\n' \
@@ -65,7 +68,7 @@ log_session_event() {
   detail="${detail//\\/\\\\}"
   detail="${detail//\"/\\\"}"
   local ts
-  ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  TZ=UTC printf -v ts '%(%Y-%m-%dT%H:%M:%SZ)T' -1
   local log_file="$LOG_HELPER_ROOT/${hook_name}.log"
   printf '{"ts":"%s","hook":"%s","event":"%s","sid":"%s","detail":"%s"}\n' \
     "$ts" "$hook_name" "$event_type" "$sid" "$detail" >> "$log_file" 2>/dev/null || true
