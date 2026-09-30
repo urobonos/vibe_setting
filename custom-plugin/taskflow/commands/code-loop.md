@@ -53,7 +53,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        │    └ 아니면 claude -p [merge] sonnet → rev-NN.md
        │    └ 셸이 VERDICT 만 읽고 분기
        │
-       ├ adv-loop  (캡 2)
+       ├ adv-loop  (캡 5 — CODE_LOOP_ADV_CAP, 0 = 무제한)
        │    claude -p [adversary]      opus    → adv-MM.md (+ VERDICT 줄)
        │    BROKEN → dev 재진입(정규 캡 계상) → 리뷰 1라운드
        │
@@ -148,17 +148,20 @@ NN = 1 .. 5
 ## adv-loop
 
 ```
-MM = 1 .. 2
+MM = 1 .. 5   (CODE_LOOP_ADV_CAP, 0 = 무제한)
 1. adversary  fresh(opus)  입력 = 00-spec.md + rev-*.md 전문 + dev-*.md + diff
                            → adv-MM.md + VERDICT
 2. UPHELD           → 종료
-   BROKEN           → dev 재진입(정규 캡 계상) → 리뷰 1라운드
+   BROKEN           → MM = 캡이면 dev 재진입 없이 종료 (exit 4, "adv 캡 도달")
+                      아니면 dev 재진입(정규 캡 계상) → 리뷰 1라운드
                       └ CLEAN    → MM+1
                       └ FINDINGS → 게이트를 닫고 잔여로 넘긴다 (정규 루프로 안 되돌린다)
    BROKEN-UNDECIDED → 입력 조립 오류. 회차·캡에 넣지 않고 재스폰 (별도 3회 상한)
 ```
 
 **`BROKEN` 뒤 리뷰 1라운드는 뺄 수 없다.** adversary 는 깨는 역할이지 판정 역할이 아니라서, 그 수정분을 아무도 안 보면 무검증 변경이 클린을 달고 남는다. 이 라운드는 **정규 캡(5)에 계상한다** — 게이트 캡 2회가 정규 캡을 늘리는 통로가 되면 클린 직전에 라운드가 무한히 열린다.
+
+**adv 캡(기본 5)은 이 러너의 값이다.** 캡 회차에서 `BROKEN` 이면 고치러 들어가지 않고 멈춘다 — 재진입하면 그 수정을 반증할 adv 회차가 없다. worktree 는 커밋 없이 그대로 두고, run.log 에 `=== adv 캡 도달 (5/5) — dev 재진입 없이 종료`, RESULT.md 첫 줄에 `> [미수렴] dev=… adv=BROKEN (adv 캡 도달 5/5)`, `code-loop.sh status` 에 `adv 캡 도달` 로 남고 종료 코드는 4 다.
 
 그 리뷰가 `FINDINGS` 를 내면 **게이트를 닫고 잔여로 넘긴다. 정규 루프로 되돌리지 않는다** — 되돌리면 방금 말한 그 통로가 그대로 생긴다. dev-loop 와 이 재진입은 `review_round()` 하나를 공유하므로 두 경로의 판정 기준이 갈라지지 않는다.
 
@@ -171,6 +174,8 @@ MM = 1 .. 2
 **CLEAN+UPHELD 로 끝나면 러너가 정착 전 점검을 `> [정착 전 점검]` 배너로 RESULT.md 맨 위에 올린다 — 표시만 하고 막지 않는다.** worktree `.env` 의 `database.default.hostname` 이 loopback 인지(값은 출력하지 않는다, `.env` 가 없으면 그렇다고 적는다) · `DocblockCitationTest`/`EnvParityTest` 가 레포에 있으면 `phpunit --filter` 결과 · worktree 변경에 `docs/wbs/issue/**` 가 있고 `docs/wbs/tools/iss-list.py` 가 있으면 `--check` 의 `[ERR]` 수.
 
 **CLEAN+UPHELD 가 아니면 RESULT.md 첫 줄은 `> [미수렴] dev=… adv=…` 다** (정체 정지면 그 사유가 붙는다). 중단(return·한도·TERM)은 run.log 끝에 `code-loop 종료 (abort=rc)` 로 남는다.
+
+종료 코드: `0` 완주(RESULT 있음 — `[미수렴]` 여부는 첫 줄로 본다) · `1` 실패·중단 · `2` 크기 게이트(TOO-LARGE) · `3` 반환(착수 불가) · `4` adv 캡 도달 · `75` 사용량 한도 · `143` TERM.
 
 `RESULT.md` 가 없으면 루프가 완주하지 못한 것이고, 러너가 그 사실과 `--resume` 안내를 낸다. **조용히 성공으로 보이게 하지 않는다** — 메인이 잘못된 판단을 하는 것이 미완주보다 나쁘다.
 

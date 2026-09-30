@@ -644,6 +644,24 @@ check "UNDECIDED — 소진 로그" 1 "$(grep -c 'BROKEN-UNDECIDED 재스폰 3�
 check "UNDECIDED — 마지막 판정 보존" 1 "$(cnt 'adv-*.md')"
 check "UNDECIDED — RESULT 첫 줄 [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=CLEAN adv=BROKEN-UNDECIDED')"
 
+echo "== AP. adv 캡 기본 5 — 캡 회차에서 BROKEN 이면 dev 재진입 없이 종료(4) · 0 은 무제한 =="
+# 빈 값 = 미지정 — 이 테스트 전역의 CODE_LOOP_ADV_CAP=2 를 걷어 기본값을 본다
+reset; rc=$(runit CODE_LOOP_ADV_CAP= CODE_LOOP_DEV_CAP=0 T_REV=CLEAN T_ADV='BROKEN,BROKEN,BROKEN,BROKEN,BROKEN')
+check "기본 캡 — 종료 4" 4 "$rc"
+check "기본 캡 — adv 5회" 5 "$(cnt 'adv-*.md')"
+check "기본 캡 — 5회째 BROKEN 뒤 dev 재진입 없음" 5 "$(cnt 'dev-*.md')"
+check "기본 캡 — 캡 도달 로그" 1 "$(grep -c '=== adv 캡 도달 (5/5) — dev 재진입 없이 종료' "$TMP/out.txt")"
+check "기본 캡 — RESULT 첫 줄" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=CLEAN adv=BROKEN (adv 캡 도달 5/5)$')"
+check "기본 캡 — status 표기" 1 "$(bash "$SUT" status 2>/dev/null | grep -c 'adv 캡 도달')"
+reset; rc=$(runit CODE_LOOP_ADV_CAP=2 T_REV=CLEAN T_ADV='BROKEN,BROKEN')
+check "캡 2 — 종료 4" 4 "$rc"
+check "캡 2 — adv-02 에서 멈춤" 2 "$(cnt 'adv-*.md')"
+check "캡 2 — dev 재진입 1회만" 2 "$(cnt 'dev-*.md')"
+reset; rc=$(runit CODE_LOOP_ADV_CAP=0 CODE_LOOP_DEV_CAP=0 T_REV=CLEAN T_ADV='BROKEN,BROKEN,BROKEN,BROKEN,BROKEN,BROKEN,UPHELD')
+check "캡 0 — 무제한 완주" 0 "$rc"
+check "캡 0 — adv 7회" 7 "$(cnt 'adv-*.md')"
+check "캡 0 — 캡 도달 없음" 0 "$(grep -c 'adv 캡 도달' "$TMP/out.txt")"
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="

@@ -82,6 +82,10 @@ def scan_runs():
                 and re.search(r"^[ \t#]*판정:[ \t]*미착수", (d / "RESULT.md").read_text(encoding="utf-8", errors="replace"), re.M):
             # spec 이 착수 불가로 반환한 run — 완료와 섞이면 "무엇이 끝났나" 가 부풀려진다
             state = "반환"
+        elif (d / "RESULT.md").is_file() \
+                and re.search(r"^> \[미수렴\].*adv 캡 도달", (d / "RESULT.md").read_text(encoding="utf-8", errors="replace"), re.M):
+            # adv 캡에서 깨진 채 멈춘 run — RESULT 는 있어도 수렴하지 않았다. 완료와 섞이지 않게 가른다
+            state = "adv 캡 도달"
         elif (d / "RESULT.md").is_file():
             state = "완료"
         elif aborted:

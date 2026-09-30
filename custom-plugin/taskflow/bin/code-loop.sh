@@ -139,11 +139,13 @@ tier_escalate() {
   [ "$before" = "$M_DEV/$M_REV/$M_ADV" ] || tier_note "승격 dev=$M_DEV rev=$M_REV adv=$M_ADV — $why"
 }
 
-# 기본 무제한(0). 캡을 걸려면 환경변수로:
+# dev 캡은 기본 무제한(0), adv 캡은 기본 5. 바꾸려면 환경변수로 (0 = 무제한):
 #   CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2 code-loop.sh "요청"
 # 루프의 정상 종료는 캡이 아니라 판정이다 — dev 는 리뷰 CLEAN, adv 는 UPHELD.
+# adv 는 캡이 있다 — 깰 때마다 dev 재진입·리뷰가 한 벌씩 붙어 무제한이면 비용이 끝없이 쌓인다.
 DEV_CAP="${CODE_LOOP_DEV_CAP:-0}"   # 정규 라운드 캡 · 0 = 무제한
-ADV_CAP="${CODE_LOOP_ADV_CAP:-0}"   # 적대적 게이트 캡 · 0 = 무제한
+ADV_CAP="${CODE_LOOP_ADV_CAP:-5}"   # 적대적 게이트 캡 · 0 = 무제한
+ADV_CAP_EXIT=4                      # adv 캡에서 BROKEN 으로 멈춘 run 의 종료 코드 — RESULT 는 있지만 수렴 못 했다
 ADV_UNDECIDED_CAP=3                 # BROKEN-UNDECIDED 재스폰 상한 — 회차·캡과 별도로 센다
 cap_label() { if [ "${1:-0}" -gt 0 ]; then printf '%s' "$1"; else printf '무제한'; fi; }
 
@@ -180,6 +182,7 @@ cmd_status() {
     found=1; run=$(basename "$d")
     rounds=$(find "$d" -maxdepth 1 -name 'rev-*.md' 2>/dev/null | wc -l | tr -d ' ')
     if [ ! -f "$d/00-spec.md" ] && spec_declined "$d"; then state="반환"
+    elif grep -q '^> \[미수렴\].*adv 캡 도달' "$d/RESULT.md" 2>/dev/null; then state="adv 캡 도달"
     elif [ -f "$d/RESULT.md" ]; then state="완료"; else state="미완"; fi
     printf '%-46s %s  리뷰라운드 %s\n' "$run" "$state" "$rounds"
   done
@@ -1336,7 +1339,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
   done
 
   # ── adv-loop ──────────────────────────────────────────────────────────
-  local adv_verdict="(skipped)"
+  local adv_verdict="(skipped)" adv_capped=""
   case "$verdict" in
     CLEAN*)
       local m mm nn2 undecided=0
@@ -1388,6 +1391,13 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
             m=$((m - 1))
             continue ;;
           BROKEN*)
+            # 캡 회차에서 깨면 고칠 기회를 더 주지 않는다 — 재진입하면 수정분을 확인할 adv 회차가 없어
+            # 아무도 반증하지 않은 수정이 남는다. worktree 는 손대지 않고 그대로 둔다
+            if [ "$ADV_CAP" -gt 0 ] && [ "$m" -ge "$ADV_CAP" ]; then
+              adv_capped="$m/$ADV_CAP"
+              echo "=== adv 캡 도달 ($adv_capped) — dev 재진입 없이 종료"
+              break
+            fi
             # code.md: BROKEN 수정분은 반드시 리뷰 1라운드를 거친다. 그 라운드는 정규 캡에
             # 계상한다 — 게이트 캡이 정규 캡을 늘리는 통로가 되면 클린 직전에 라운드가 무한히 열린다
             n=$((n + 1))
@@ -1497,10 +1507,10 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
     CLEAN*/UPHELD*) ;;
     *)
       if [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미수렴\]' "$dir/RESULT.md"; then
-        { echo "> [미수렴] dev=$verdict adv=$adv_verdict${stall:+ — 정체 정지: $stall. 더 돌려도 수렴하지 않는다, 남은 지적·반박은 사람이 판정한다}"
+        { echo "> [미수렴] dev=$verdict adv=$adv_verdict${adv_capped:+ (adv 캡 도달 $adv_capped)}${stall:+ — 정체 정지: $stall. 더 돌려도 수렴하지 않는다, 남은 지적·반박은 사람이 판정한다}"
           echo
           cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
-        echo "=== [미수렴] dev=$verdict adv=$adv_verdict — RESULT.md 맨 위에 올림"
+        echo "=== [미수렴] dev=$verdict adv=$adv_verdict${adv_capped:+ (adv 캡 도달 $adv_capped)} — RESULT.md 맨 위에 올림"
       fi ;;
   esac
 
@@ -1510,6 +1520,7 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
     echo
     echo "───────── RESULT.md ─────────"
     cat "$dir/RESULT.md"
+    [ -z "$adv_capped" ] || return "$ADV_CAP_EXIT"
     return 0
   fi
   echo
