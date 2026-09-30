@@ -524,6 +524,38 @@ phpstan_new_errors() {
   done
 }
 
+# phpstan.neon(.dist) 의 parameters.paths 목록 (worktree 루트 상대). 파일을 인자로 넘기면 phpstan 은 paths 밖
+# 파일도 분석해 부트스트랩이 닿지 않는 클래스까지 에러로 낸다 — paths 밖은 이 레포가 phpstan 을 적용하는 범위가 아니다.
+# excludePaths 는 여기서 읽지 않는다(phpstan 의 'No files found' 로 판정 — verify_mechanical).
+phpstan_paths() {
+  local neon=""
+  [ -f "$1/phpstan.neon" ] && neon="$1/phpstan.neon"
+  [ -z "$neon" ] && [ -f "$1/phpstan.neon.dist" ] && neon="$1/phpstan.neon.dist"
+  [ -n "$neon" ] || return 0
+  awk '
+    /^[[:space:]]*paths:[[:space:]]*$/ { match($0, /^[[:space:]]*/); indent = RLENGTH; on = 1; next }
+    on && /^[[:space:]]*(#.*)?$/ { next }
+    on {
+      match($0, /^[[:space:]]*/)
+      if (RLENGTH <= indent || $0 !~ /^[[:space:]]*- /) exit
+      p = $0; sub(/^[[:space:]]*-[[:space:]]*/, "", p); sub(/[[:space:]]+#.*$/, "", p); gsub(/["\047]/, "", p)
+      sub(/^%currentWorkingDirectory%\//, "", p); sub(/^\.\//, "", p); sub(/\/+$/, "", p)
+      print p
+    }' "$neon"
+}
+
+# paths 를 못 읽으면(neon 없음·목록 없음) 제한하지 않는다 — 제한은 설정이 있을 때만
+in_phpstan_paths() {
+  local p paths
+  paths=$(phpstan_paths "$1")
+  [ -n "$paths" ] || return 0
+  while IFS= read -r p; do
+    case "$2" in "$p"|"$p"/*) return 0 ;; esac
+    [ "$p" = . ] && return 0
+  done <<< "$paths"
+  return 1
+}
+
 # dev-$nn.md 의 FILES: 목록에 php -l/php-cs-fixer/phpstan 을 셸이 직접 재실행한다.
 # step-developer.md §"반환 전 기계 검사"와 같은 3종 — 자기신고가 아니라 셸이 판정한다.
 # WORKTREE: 줄이 없거나(구버전 spec) 도구가 레포에 없으면 조용히 건너뛴다.
@@ -574,6 +606,10 @@ verify_mechanical() {
     # class.notFound 가 쏟아질 수 있다. 도구 적용 범위 문제지 코드 결함이 아니다.
     # php -l·php-cs-fixer 는 그대로 돈다.
     case "$f" in tests/*|*/tests/*) phpstan_bin="" ;; esac
+    if [ -n "$phpstan_bin" ] && ! in_phpstan_paths "$root" "${abspath#"$root"/}"; then
+      echo "--- [dev-$nn] phpstan skip(phpstan.neon paths 밖): $f"
+      phpstan_bin=""
+    fi
     if [ -n "$phpstan_bin" ]; then
       # worktree 밖(러너 cwd)에서 돌리면 그 자리의 config(또는 config 없음)를 주워 무관한
       # 클래스까지 "unknown class" 로 뜬다 — 반드시 worktree 루트에서, 그 worktree 자신의
@@ -607,9 +643,20 @@ verify_mechanical() {
 # 재실행 대상은 phpunit 실행 명령뿐이다. 리뷰어가 백틱에 경로만 적거나(`tests/unit/Filters/` →
 # OK (387 tests…)) 옵션 조각을 적으면 그 토큰을 eval 해 "매치 없음" 불일치가 날 수 있다.
 # 임의 토큰 eval 의 부작용면도 여기서 닫는다.
+# 생략 표기(`…`·`...`)가 든 명령도 거른다 — 리뷰어가 줄여 쓴 `--filter '...'` 를 그대로 돌리면 필터가 전 테스트에
+# 매치해 스위트 전체(17분)가 돈다.
 is_phpunit_cmd() {
-  case "$1" in *[\;\&\|\>\<\`]*|*'$('*) return 1 ;; esac
+  case "$1" in *[\;\&\|\>\<\`]*|*'$('*|*'…'*|*'...'*) return 1 ;; esac
   printf '%s' "$1" | grep -qE '^([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |$)'
+}
+
+# phpunit 요약에서 테스트·assertion 수를 뽑아 "N tests, M assertions" 한 형식으로 낸다. OK 요약은
+# `OK (N tests, M assertions)`, 실패·skip 요약은 `Tests: N, Assertions: M, …` 라 둘 다 읽어야 한다 —
+# 뒤쪽을 못 읽으면 기존 fail 이 있는 테스트를 BASELINE 으로 쓴 run 이 "매치 없음" 불일치로 재보고를 소진한다.
+phpunit_counts() {
+  printf '%s' "$1" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?|Tests: *[0-9]+, *Assertions: *[0-9]+' | head -1 \
+    | sed -E 's/^([0-9]+) tests?, *([0-9]+) assertions?$/\1 tests, \2 assertions/;
+              s/^Tests: *([0-9]+), *Assertions: *([0-9]+)$/\1 tests, \2 assertions/'
 }
 
 # BASELINE 의 "$ {명령}" 을 재실행해 "N tests, M assertions" 주장과 대조한다.
@@ -627,10 +674,10 @@ verify_baseline_counts() {
       found && /후[[:space:]]*[(:]/ { print; exit }
     ' "$dir/dev-$nn.md")
     case "$claim" in
-      *tests*assertions*) ;;
+      *tests*assertions*|*Tests:*Assertions:*) ;;
       *) continue ;;
     esac
-    claim_n=$(printf '%s' "$claim" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
+    claim_n=$(phpunit_counts "$claim")
     [ -n "$claim_n" ] || continue
     is_phpunit_cmd "$cmd" || continue
     if [ -n "$root" ]; then
@@ -638,7 +685,7 @@ verify_baseline_counts() {
     else
       actual=$(eval "$cmd" 2>&1)
     fi
-    actual_n=$(printf '%s' "$actual" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
+    actual_n=$(phpunit_counts "$actual")
     if [ "$claim_n" != "$actual_n" ]; then
       echo "!!! [dev-$nn] 기계검사 불일치 — BASELINE 주장 vs 재실행 다름"
       echo "    명령: $cmd"
@@ -925,7 +972,7 @@ CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행
   return 0
 }
 
-# rev-$nn-{correctness,design}.md 안의 "`cmd` → OK (N tests, M assertions)" idiom 을
+# rev-$nn-{correctness,design}.md 안의 "`cmd` → OK (N tests, M assertions)" idiom(또는 `Tests: N, Assertions: M`)을
 # 셸이 직접 재실행해 대조한다. dev측(BASELINE:/FILES:)과 달리 리뷰어 반환 양식엔
 # 구조화 필드가 없어 이 1종 idiom만 취급한다 — 그 외 "무변경"·"바이트 일치" 서술은
 # 자유서술에 흩어져 있고 명령의 실제 측정 범위와 주장의 범위가 어긋날 수 있어 자동
@@ -937,7 +984,7 @@ verify_rev_baseline_counts_file() {
   while IFS= read -r line; do
     cmd=$(printf '%s' "$line" | sed -n 's/^[^`]*`\([^`]*\)`.*/\1/p')
     [ -n "$cmd" ] || continue
-    claim_n=$(printf '%s' "$line" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
+    claim_n=$(phpunit_counts "$line")
     [ -n "$claim_n" ] || continue
     is_phpunit_cmd "$cmd" || continue
     if [ -n "$root" ]; then
@@ -945,15 +992,20 @@ verify_rev_baseline_counts_file() {
     else
       actual=$(eval "$cmd" 2>&1)
     fi
-    actual_n=$(printf '%s' "$actual" | grep -oE '[0-9]+ tests?, *[0-9]+ assertions?' | head -1)
-    if [ "$claim_n" != "$actual_n" ]; then
+    actual_n=$(phpunit_counts "$actual")
+    if [ -z "$actual_n" ]; then
+      # 재실행 요약을 못 읽은 것은 리뷰어의 오류 증거가 아니다(환경·명령 조각 문제) — 재검토를 태우면 같은
+      # 명령으로 같은 결과가 나와 재시도만 소진한다. 판정은 보류로 남기고 RESULT.md 배너로만 드러낸다
+      echo "--- [$(basename "$f")] 판정 보류 — 재실행 요약을 못 읽었다(재검토 요청 안 함): $cmd"
+      echo "- [$(basename "$f")] \`$cmd\` — 주장 $claim_n · 재실행 요약 없음" >> "$(dirname "$f")/HOLD.md"
+    elif [ "$claim_n" != "$actual_n" ]; then
       echo "!!! [$(basename "$f")] 리뷰 주장 재검증 불일치"
       echo "    명령: $cmd"
       echo "    주장: $claim_n"
-      echo "    실측: ${actual_n:-매치 없음}"
+      echo "    실측: $actual_n"
       fail=1
     fi
-  done < <(grep -E '`[^`]+`.*(→|->).*OK.*\([0-9]+ tests?,? *[0-9]+ assertions?\)' "$f")
+  done < <(grep -E '`[^`]+`.*(→|->).*(OK.*\([0-9]+ tests?,? *[0-9]+ assertions?\)|Tests: *[0-9]+, *Assertions: *[0-9]+)' "$f")
   return "$fail"
 }
 
@@ -1357,6 +1409,14 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
       echo
       cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
     echo "=== [미검증] BASELINE assertion 0 — RESULT.md 맨 위에 올림"
+  fi
+
+  # 리뷰 인용 수치를 재실행으로 확인 못 한 건은 재검토를 태우지 않았다 — 정착 전에 보이게만 한다
+  if [ -s "$dir/HOLD.md" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[판정 보류\]' "$dir/RESULT.md"; then
+    { echo "> [판정 보류] 리뷰가 인용한 테스트 수치를 셸 재실행으로 확인하지 못했다 $(sort -u "$dir/HOLD.md" | grep -c .)건 — $dir/HOLD.md"
+      echo
+      cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
+    echo "=== [판정 보류] 리뷰 인용 수치 재실행 요약 없음 — RESULT.md 맨 위에 올림"
   fi
 
   if [ -n "$stall" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미수렴\]' "$dir/RESULT.md"; then

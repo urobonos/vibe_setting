@@ -48,6 +48,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        │    claude -p [rev-design]      opus   ┘
        │    └ 셸 독립 재검증 (verify_rev_gate) — 인용 테스트 수치 재실행,
        │         불일치 역할만 개별 재검토 2회까지, 재검토 후 매번 재확인
+       │         (재실행 요약을 못 읽으면 재검토 없이 판정 보류 → HOLD.md · RESULT 배너)
        │    셸 합본 (반박·양식 이탈 없음)         → rev-NN.md (+ VERDICT 줄)
        │    └ 아니면 claude -p [merge] sonnet → rev-NN.md
        │    └ 셸이 VERDICT 만 읽고 분기

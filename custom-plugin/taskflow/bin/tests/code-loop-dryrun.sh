@@ -538,6 +538,49 @@ reset; rc=$(runit T_LIMIT=dev-01.md T_LIMITMSG='The runner greps for hit your se
 check "문구 인용(줄 머리 아님) — 한도 아님" 0 "$rc"
 check "문구 인용 — LIMIT 로그 없음" 0 "$(grep -c '!!! LIMIT' "$TMP/out.txt")"
 
+echo "== AM. 수치 재검증 — 매치 없음은 판정 보류 · Tests:/Assertions: 형식 · 생략 명령 skip · phpstan paths (backlog 2026-09-24) =="
+WT_PU="$TMP/wt-pu"; mkdir -p "$WT_PU/vendor/bin"
+cat > "$WT_PU/vendor/bin/phpunit" <<'PU'
+#!/usr/bin/env bash
+echo "$*" >> "$(dirname "$0")/../../pu.calls"
+printf '%b\n' "${PU_OUT:-}"
+PU
+chmod +x "$WT_PU/vendor/bin/phpunit"
+RC_CLAIM='VERDICT: CLEAN\n- `vendor/bin/phpunit tests/x` → OK (7 tests, 10 assertions)\n'
+reset; rc=$(runit T_WT="$WT_PU" PU_OUT='Error: no config' T_RC="$RC_CLAIM" T_RD='VERDICT: CLEAN\n' T_ADV=UPHELD)
+check "매치 없음 — 재검토 요청 안 함" 0 "$(grep -c '리뷰어 재검토 요청' "$TMP/out.txt")"
+check "매치 없음 — 리뷰어 1회" 1 "$(grep -c '\[rev-01-correctness\] model=' "$TMP/out.txt")"
+check "매치 없음 — 판정 보류 로그" 1 "$(grep -c '판정 보류 — 재실행 요약을 못 읽었다' "$TMP/out.txt")"
+check "매치 없음 — RESULT 첫 줄 [판정 보류]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[판정 보류\]')"
+reset; rc=$(runit T_WT="$WT_PU" PU_OUT='FAILURES!\nTests: 7, Assertions: 10, Failures: 1.' T_RC="$RC_CLAIM" T_RD='VERDICT: CLEAN\n' T_ADV=UPHELD)
+check "Tests: 형식 실측 — 일치로 읽음" 0 "$(grep -c '리뷰 주장 재검증 불일치' "$TMP/out.txt")"
+check "Tests: 형식 실측 — 판정 보류 아님" 0 "$(grep -c '판정 보류' "$TMP/out.txt")"
+reset; rc=$(runit T_WT="$WT_PU" PU_OUT='OK (8 tests, 12 assertions)' T_RC="$RC_CLAIM" T_RD='VERDICT: CLEAN\n' T_ADV=UPHELD)
+check "대조군 수치 다름 — 재검토 요청" 1 "$([ "$(grep -c '리뷰어 재검토 요청' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+rm -f "$WT_PU/pu.calls"
+reset; rc=$(runit T_WT="$WT_PU" PU_OUT='OK (8 tests, 12 assertions)' T_RC='VERDICT: CLEAN\n- `vendor/bin/phpunit --filter '\''a…'\''` → OK (7 tests, 10 assertions)\n- `vendor/bin/phpunit --filter '\''b...'\''` → OK (7 tests, 10 assertions)\n' T_RD='VERDICT: CLEAN\n' T_ADV=UPHELD)
+check "생략 명령 — 실행 안 함" 0 "$([ -s "$WT_PU/pu.calls" ] && echo 1 || echo 0)"
+BL_TESTS='\n$ vendor/bin/phpunit tests/x\n후: Tests: 7, Assertions: 10, Failures: 1'
+reset; rc=$(runit T_WT="$WT_PU" PU_OUT='OK (8 tests, 12 assertions)' T_BASELINE="$BL_TESTS" T_REV=CLEAN T_ADV=UPHELD)
+check "dev BASELINE Tests: 형식 주장 — 대조함(불일치 검출)" 1 "$([ "$(grep -c 'BASELINE 주장 vs 재실행 다름' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+reset; rc=$(runit T_WT="$WT_PU" PU_OUT='FAILURES!\nTests: 7, Assertions: 10, Failures: 1.' T_BASELINE="$BL_TESTS" T_REV=CLEAN T_ADV=UPHELD)
+check "dev BASELINE Tests: 형식 — 일치" 0 "$(grep -c 'BASELINE 주장 vs 재실행 다름' "$TMP/out.txt")"
+WT_NEON="$TMP/wt-neon"; mkdir -p "$WT_NEON/vendor/bin"
+printf '<?php\n$a = 1;\n$b = 2;\n' > "$WT_NEON/a.php"
+git -C "$WT_NEON" init -q; git -C "$WT_NEON" add a.php
+git -C "$WT_NEON" -c user.email=t@t -c user.name=t commit -qm init
+printf '<?php\n$a = 1;\n$b = 3;\n' > "$WT_NEON/a.php"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$WT_NEON/vendor/bin/php-cs-fixer"
+printf '#!/usr/bin/env bash\necho "C:\\\\wt\\\\a.php:3:Variable might not be defined."\nexit 1\n' > "$WT_NEON/vendor/bin/phpstan"
+chmod +x "$WT_NEON/vendor/bin/php-cs-fixer" "$WT_NEON/vendor/bin/phpstan"
+printf 'parameters:\n\tlevel: 3\n\tpaths:\n\t\t- app\n\texcludePaths:\n\t\tanalyse:\n\t\t\t- a.php\n' > "$WT_NEON/phpstan.neon"
+reset; rc=$(runit T_WT="$WT_NEON" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
+check "paths 밖 — phpstan skip" 1 "$([ "$(grep -c 'phpstan skip(phpstan.neon paths 밖): a.php' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+check "paths 밖 — 불일치 아님" 0 "$(grep -c '기계검사 불일치 — phpstan' "$TMP/out.txt")"
+printf 'parameters:\n\tpaths:\n\t\t- a.php # 단일 파일\n' > "$WT_NEON/phpstan.neon"
+reset; rc=$(runit T_WT="$WT_NEON" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
+check "paths 안 — phpstan 돌아 불일치 검출" 1 "$([ "$(grep -c '기계검사 불일치 — phpstan (변경 줄)' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="
