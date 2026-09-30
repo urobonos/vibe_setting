@@ -175,6 +175,8 @@ MM = 1 .. 2
 
 스텝 산출 파일이 이미 있으면 그 스텝을 건너뛴다. 중단된 run 은 `code-loop.sh --resume {run}` 으로 마지막 스텝 다음부터 이어진다 (`code-loop.sh status` 로 목록). **요청 원문은 `00-spec.md` 가 SSOT 다** — 재개할 때 요청을 다시 받지 않는다.
 
+**사용량 한도(`hit your session|weekly|usage limit`)에 걸린 스텝은 재시도하지 않는다.** 러너는 `!!! LIMIT resets={해제 시각}` 을 남기고 그 스텝의 산출 파일을 지운 뒤 종료 코드 75 로 멈춘다 — 자동 대기는 없다. 해제 뒤 `--resume {run}` 으로 그 스텝부터 이어진다.
+
 ## 측정 — 이 커맨드를 계속 쓸 근거
 
 `RESULT.md` 라운드 로그에 **dev 라운드 수 · adv 회차 · 각 VERDICT** 를 기록한다.

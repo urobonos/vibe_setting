@@ -222,6 +222,9 @@ claude_with_timeout() {
     wait "$c"' _ "$outf" "$@"
 }
 
+# 사용량 한도로 멈춘 run 의 종료 코드 (EX_TEMPFAIL) — 백그라운드 스텝의 exit 는 review_round 가 이 값으로 전파한다
+LIMIT_EXIT=75
+
 # 스텝 1개 = claude -p 1회. 출력 파일이 생겼는지로 성공을 판정한다 — exit 0 은
 # 모델이 "못 하겠다"고 말하고 끝난 경우에도 나오므로 성공 신호가 못 된다
 # $1 라벨 / $2 모델 / $3 허용 도구(비면 제한 없음) / $4 산출 파일 / $5 프롬프트
@@ -253,6 +256,16 @@ run_step() {
         --permission-mode "$PERM"
     fi
     rc=${PIPESTATUS[1]}
+    # 사용량 한도는 재시도해도 같은 답이고 해제까지 몇 시간이다 — 기다리지 않고 run 을 멈춰 --resume 에 맡긴다.
+    # 줄 머리에서만 본다: 모델 답변이 이 문구를 인용한 것(이 러너를 리뷰하는 run)까지 한도로 읽지 않게.
+    # 산출 파일은 지운다 — 한도로 끊긴 스텝의 파일은 완결을 보장 못 하는데, 남기면 resume 이 완료로 읽고 건너뛴다
+    if grep -qiE "^[^[:alnum:]]*(you'?ve )?hit your (session|weekly|usage) limit" "$log"; then
+      local resets
+      resets=$(grep -iE 'hit your (session|weekly|usage) limit' "$log" | tail -1 | sed -nE 's/.*[Rr]esets?[[:space:]]+//p')
+      sed 's/^/    /' "$log"; rm -f "$log" "$out"
+      echo "!!! LIMIT resets=${resets:-미상} — [$label] 재시도하지 않고 멈춘다. 해제 뒤: code-loop.sh --resume $(basename "$(dirname "$out")")"
+      exit "$LIMIT_EXIT"
+    fi
     sed 's/^/    /' "$log"; rm -f "$log"
     # 124 = 상한 도달(137 = TERM 뒤 60초 안에도 안 끝나 KILL). 결과문서에 TIMEOUT 으로 남긴다.
     # 멈춘 스텝은 다시 돌려도 같은 자리에서 멈출 공산이 커서 재시도하지 않는다
@@ -453,6 +466,7 @@ $hist"
   local p2=$!
   wait $p1; local r1=$?
   wait $p2; local r2=$?
+  if [ $r1 -eq "$LIMIT_EXIT" ] || [ $r2 -eq "$LIMIT_EXIT" ]; then exit "$LIMIT_EXIT"; fi
   if [ $r1 -ne 0 ] || [ $r2 -ne 0 ]; then
     echo "!!! 리뷰어 실패 (correctness=$r1 design=$r2) — 중단"
     return 1

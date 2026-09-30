@@ -82,6 +82,12 @@ fi
 if [ -n "${T_NOWRITE:-}" ] && printf '%s' "$base" | grep -q "$T_NOWRITE"; then
   echo "stub: $base 안 씀 (실패 경로)"; exit 0
 fi
+# 사용량 한도 흉내 — 실제 CLI 문구(run 20260917-132300)로 끝난다. T_LIMITMSG 가 있으면 그 문구만 내고 정상 진행(대조군)
+if [ -n "${T_LIMIT:-}" ] && [ "$base" = "$T_LIMIT" ]; then
+  limit_msg="You've hit your session limit · resets 1:40pm (Asia/Seoul)"
+  echo "${T_LIMITMSG:-$limit_msg}"
+  [ -n "${T_LIMITMSG:-}" ] || exit 1
+fi
 pick() { printf '%s' "$1" | cut -d, -f"$2"; }
 last() { printf '%s' "$1" | rev | cut -d, -f1 | rev; }
 case "$base" in
@@ -514,6 +520,23 @@ check "대조군 코드 변경 있음 — 캡까지 감" 5 "$(cnt 'dev-*.md')"
 check "대조군 — 정체 정지 없음" 0 "$(grep -c '정체 정지' "$TMP/out.txt")"
 check "대조군 — [미수렴] 배너 없음" 0 "$(grep -c '^> \[미수렴\]' "$(d)/RESULT.md")"
 rm -f "$WT_STALL/touch.txt"
+
+echo "== AL. 사용량 한도 — 재시도·대기 없이 멈추고 --resume 으로 이어진다 (run 20260917-132300) =="
+reset; rc=$(runit T_LIMIT=dev-01.md T_REV=CLEAN T_ADV=UPHELD)
+check "한도 — 종료 75" 75 "$rc"
+check "한도 — 재시도 없음" 1 "$(grep -c '\[dev-01\] model=' "$TMP/out.txt")"
+check "한도 — reset 시각 기록" 1 "$(grep -c '^!!! LIMIT resets=1:40pm (Asia/Seoul)' "$(d)/run.log")"
+check "한도 — 산출 없음" 0 "$(cnt 'dev-*.md')"
+check "한도 — RESULT 없음" 0 "$([ -e "$(d)/RESULT.md" ] && echo 1 || echo 0)"
+RUN=$(basename "$(d)")
+env T_REV=CLEAN T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+check "한도 — resume 으로 완주" 1 "$([ -s "$ST/$RUN/RESULT.md" ] && echo 1 || echo 0)"
+reset; rc=$(runit T_LIMIT=rev-01-design.md T_REV=CLEAN T_ADV=UPHELD)
+check "병렬 리뷰어 한도 — 종료 75 전파" 75 "$rc"
+check "병렬 리뷰어 한도 — 리뷰어 실패로 안 읽음" 0 "$(grep -c '리뷰어 실패' "$TMP/out.txt")"
+reset; rc=$(runit T_LIMIT=dev-01.md T_LIMITMSG='The runner greps for hit your session limit in step output' T_REV=CLEAN T_ADV=UPHELD)
+check "문구 인용(줄 머리 아님) — 한도 아님" 0 "$rc"
+check "문구 인용 — LIMIT 로그 없음" 0 "$(grep -c '!!! LIMIT' "$TMP/out.txt")"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
