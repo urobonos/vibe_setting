@@ -24,6 +24,8 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
 
 `{run}` 은 `code-loop.sh status` 가 알려준다. 로그에는 라운드 전이(`=== dev-loop 라운드 2/5`), 스텝 시작(`--- [rev-02-design] model=sonnet try=1`), 판정(`=== 라운드 2 판정: CLEAN`)이 시간과 함께 남는다.
 
+**세션이 Monitor 로 지켜볼 때는 `tail -F` 를 직접 짜지 말고 `bash ~/.claude/custom-plugin/taskflow/bin/code-loop-watch.sh {run}... [-- 패턴]` 만 건다.** 맨 `tail -F` 는 Monitor 가 끝나도 고아로 남는다 — 이 스크립트는 run 마다 `--pid=<러너>` 를 붙여 러너와 함께 끝난다.
+
 **루프는 로그 파일에만 쓰고 stdout 은 미러링이다.** 그래서 터미널을 닫거나 출력을 `head` 로 잘라도 루프는 끝까지 간다 — 수십 분짜리 작업이 파이프가 끊겼다고 조용히 죽으면 안 된다.
 
 ---
