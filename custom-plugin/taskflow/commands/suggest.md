@@ -1,5 +1,5 @@
 ---
-description: 결정 권고 — 사용자 결정이 필요한 항목에 [선택지 + 트레이드오프 + 추천(근거) + §3 매칭]을 단일 Claude 권고로 즉시 구조화 제시. Agent spawn 0(가벼움). /taskflow:debate(16 Agent)과 직접답변 사이의 경량 결정 진입점. 2026-06-04 신설
+description: 결정 권고 — 사용자 결정이 필요한 항목에 [선택지 + 트레이드오프 + 추천(근거) + §3 매칭]을 단일 Claude 권고로 즉시 구조화 제시. Agent spawn 0(가벼움). /taskflow:debate(16 Agent)과 직접답변 사이의 경량 결정 진입점.
 allowed-tools: Read, Glob, Grep
 argument-hint: "[결정주제|backlog-slug]  # 생략 시 직전 응답·대화 맥락에서 결정 항목 자동 추출"
 ---

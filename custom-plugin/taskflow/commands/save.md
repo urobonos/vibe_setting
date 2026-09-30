@@ -1,5 +1,5 @@
 ---
-description: 작업 저장 — worktree 정착 + working/ 문서 마무리 + 잔여 판정 후 working/ 기록(Partial) 또는 tasks/ 이동(Done) + DISPATCH 태그 정리 + **즉시 이동 모드(구 done 흡수, 2026-07-16)**. 짝 슬래시 = `/taskflow:load`
+description: 작업 저장 — worktree 정착 + working/ 문서 마무리 + 잔여 판정 후 working/ 기록(Partial) 또는 tasks/ 이동(Done) + DISPATCH 태그 정리 + **즉시 이동 모드**. 짝 슬래시 = `/taskflow:load`
 allowed-tools: Bash, Edit, Read, Glob, Grep, PowerShell
 argument-hint: "[작업명|now]  # 생략=전체 저장(판정 동반) / now=즉시 이동(판정 생략, 구 done 흡수)"
 ---

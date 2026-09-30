@@ -1,5 +1,5 @@
 ---
-description: 작업 로드 — working/ 잔여 작업 + DISPATCH 분배 풀 스캔 후 본문·재진입 안내 + **`#tag` 배타 claim·로드(구 claim/consume 흡수, 2026-07-16)**. 짝 슬래시 = `/taskflow:save`. **기본 전체 잔존 노출 (cwd 필터 기본 해제) + 분배 풀 통합 + #tag 배타 claim**. **로드 전용 — `#tag`·`{작업명}` 미지정 시 목록 출력 후 정지, 잔여 작업 자동 실행 금지**
+description: 작업 로드 — working/ 잔여 작업 + DISPATCH 분배 풀 스캔 후 본문·재진입 안내 + **`#tag` 배타 claim·로드**. 짝 슬래시 = `/taskflow:save`. **기본 전체 잔존 노출 (cwd 필터 기본 해제) + 분배 풀 통합 + #tag 배타 claim**. **로드 전용 — `#tag`·`{작업명}` 미지정 시 목록 출력 후 정지, 잔여 작업 자동 실행 금지**
 allowed-tools: Bash, Read, Glob, Grep, PowerShell, Edit
 argument-hint: "[작업명|latest|all|{product}|#tag|#tag done]  # 인자 없음=전체 잔존 / #tag=분배 배타 claim+로드 / #tag done=완료"
 ---
