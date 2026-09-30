@@ -551,7 +551,7 @@ reset; rc=$(runit T_WT="$WT_PU" PU_OUT='Error: no config' T_RC="$RC_CLAIM" T_RD=
 check "매치 없음 — 재검토 요청 안 함" 0 "$(grep -c '리뷰어 재검토 요청' "$TMP/out.txt")"
 check "매치 없음 — 리뷰어 1회" 1 "$(grep -c '\[rev-01-correctness\] model=' "$TMP/out.txt")"
 check "매치 없음 — 판정 보류 로그" 1 "$(grep -c '판정 보류 — 재실행 요약을 못 읽었다' "$TMP/out.txt")"
-check "매치 없음 — RESULT 첫 줄 [판정 보류]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[판정 보류\]')"
+check "매치 없음 — RESULT 맨 위 [판정 보류] 배너" 1 "$(grep -c '^> \[판정 보류\]' "$(d)/RESULT.md")"
 reset; rc=$(runit T_WT="$WT_PU" PU_OUT='FAILURES!\nTests: 7, Assertions: 10, Failures: 1.' T_RC="$RC_CLAIM" T_RD='VERDICT: CLEAN\n' T_ADV=UPHELD)
 check "Tests: 형식 실측 — 일치로 읽음" 0 "$(grep -c '리뷰 주장 재검증 불일치' "$TMP/out.txt")"
 check "Tests: 형식 실측 — 판정 보류 아님" 0 "$(grep -c '판정 보류' "$TMP/out.txt")"
@@ -580,6 +580,41 @@ check "paths 밖 — 불일치 아님" 0 "$(grep -c '기계검사 불일치 — 
 printf 'parameters:\n\tpaths:\n\t\t- a.php # 단일 파일\n' > "$WT_NEON/phpstan.neon"
 reset; rc=$(runit T_WT="$WT_NEON" T_DEVFILES='- a.php' T_REV=CLEAN T_ADV=UPHELD)
 check "paths 안 — phpstan 돌아 불일치 검출" 1 "$([ "$(grep -c '기계검사 불일치 — phpstan (변경 줄)' "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+
+echo "== AN. 정착 전 점검 — CLEAN+UPHELD 뒤 .env loopback · Docblock/EnvParity phpunit · iss-list [ERR] 를 배너로만 =="
+WT_PRE="$TMP/wt-pre"; mkdir -p "$WT_PRE/vendor/bin" "$WT_PRE/tests/unit" "$WT_PRE/docs/wbs/tools" "$WT_PRE/docs/wbs/issue/progress"
+echo base > "$WT_PRE/README.md"
+git -C "$WT_PRE" init -q; git -C "$WT_PRE" add README.md
+git -C "$WT_PRE" -c user.email=t@t -c user.name=t commit -qm init
+cat > "$WT_PRE/vendor/bin/phpunit" <<'PU'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$(dirname "$0")/../../pu.calls"
+echo 'OK (3 tests, 4 assertions)'
+PU
+chmod +x "$WT_PRE/vendor/bin/phpunit"
+printf 'import sys\nopen("iss.calls", "a").write(" ".join(sys.argv[1:]) + "\\n")\nprint("[ERR] a", file=sys.stderr)\nprint("[ERR] b", file=sys.stderr)\nsys.exit(1)\n' > "$WT_PRE/docs/wbs/tools/iss-list.py"
+echo '<?php' > "$WT_PRE/tests/unit/DocblockCitationTest.php"
+echo 'x' > "$WT_PRE/docs/wbs/issue/progress/ISS-1.md"
+printf 'CI_ENVIRONMENT = development\r\ndatabase.default.hostname = localhost\r\n' > "$WT_PRE/.env"
+reset; rc=$(runit T_WT="$WT_PRE" T_REV=CLEAN T_ADV=UPHELD)
+check "점검 — RESULT 첫 줄" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[정착 전 점검\]')"
+check "점검 — .env loopback" 1 "$(grep -c '^>   - .env DB 호스트: loopback$' "$(d)/RESULT.md")"
+check "점검 — phpunit 결과" 1 "$(grep -c 'DocblockCitation·EnvParity: OK (3 tests, 4 assertions)' "$(d)/RESULT.md")"
+check "점검 — phpunit 필터" "--no-coverage --filter DocblockCitationTest|EnvParityTest" "$(tail -1 "$WT_PRE/pu.calls")"
+check "점검 — iss-list [ERR] 수" 1 "$(grep -c 'iss-list.py --check: \[ERR\] 2건 (이슈 파일 변경 1건)' "$(d)/RESULT.md")"
+check "점검 — iss-list 는 --check 로만" "--check" "$(tail -1 "$WT_PRE/iss.calls")"
+rm -f "$WT_PRE/iss.calls"
+printf 'database.default.hostname = "10.9.8.7" # 원격\n' > "$WT_PRE/.env"
+reset; rc=$(runit T_WT="$WT_PRE" T_REV=CLEAN T_ADV=UPHELD)
+check "원격 호스트 — loopback 아님 표기" 1 "$(grep -c 'loopback 아님(값 비표시)' "$(d)/RESULT.md")"
+check "원격 호스트 — 값 비출력" 0 "$(cat "$(d)/RESULT.md" "$(d)/run.log" | grep -c '10\.9\.8\.7')"
+rm -f "$WT_PRE/.env" "$WT_PRE/tests/unit/DocblockCitationTest.php" "$WT_PRE/docs/wbs/issue/progress/ISS-1.md" "$WT_PRE/iss.calls"
+reset; rc=$(runit T_WT="$WT_PRE" T_REV=CLEAN T_ADV=UPHELD)
+check "해당 없음 — .env 없음만" 1 "$(grep -c '^>   - ' "$(d)/RESULT.md")"
+check "해당 없음 — .env 없음 표기" 1 "$(grep -c '.env DB 호스트: .env 없음' "$(d)/RESULT.md")"
+check "해당 없음 — iss-list 안 돎" 0 "$([ -e "$WT_PRE/iss.calls" ] && echo 1 || echo 0)"
+reset; rc=$(runit T_WT="$WT_PRE" CODE_LOOP_DEV_CAP=1 T_REV='FINDINGS C=0 H=1 M=0')
+check "미수렴 run — 점검 배너 없음" 0 "$(grep -c '정착 전 점검' "$(d)/RESULT.md")"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"

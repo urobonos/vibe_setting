@@ -168,6 +168,8 @@ MM = 1 .. 2
 
 러너는 `RESULT.md` 를 stdout 으로 내보낸다. **메인은 그것만 흡수한다 — 여기 없는 것은 메인에 존재하지 않는다.**
 
+**CLEAN+UPHELD 로 끝나면 러너가 정착 전 점검을 `> [정착 전 점검]` 배너로 RESULT.md 맨 위에 올린다 — 표시만 하고 막지 않는다.** worktree `.env` 의 `database.default.hostname` 이 loopback 인지(값은 출력하지 않는다, `.env` 가 없으면 그렇다고 적는다) · `DocblockCitationTest`/`EnvParityTest` 가 레포에 있으면 `phpunit --filter` 결과 · worktree 변경에 `docs/wbs/issue/**` 가 있고 `docs/wbs/tools/iss-list.py` 가 있으면 `--check` 의 `[ERR]` 수.
+
 `RESULT.md` 가 없으면 루프가 완주하지 못한 것이고, 러너가 그 사실과 `--resume` 안내를 낸다. **조용히 성공으로 보이게 하지 않는다** — 메인이 잘못된 판단을 하는 것이 미완주보다 나쁘다.
 
 **머지·push 하지 않는다 (§3).** worktree 와 커밋만 남기고 정착은 사용자가 한다.

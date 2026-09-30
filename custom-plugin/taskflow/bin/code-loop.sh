@@ -1097,6 +1097,50 @@ stall_reason() {
   return 1
 }
 
+# CLEAN+UPHELD 뒤 정착 전에 보던 것 3종을 셸이 보고 한 줄씩 낸다. 표시만 한다 — 셋 다 spec 성공 기준 밖이라
+# 막으면 run 이 교착된다. 해당 없는 항목(테스트·도구·이슈 변경 없음)은 줄을 내지 않는다. WORKTREE 가 없으면 빈 값.
+presettle_checks() {
+  local root host tests out rc counts issues py
+  root=$(worktree_of "$1/00-spec.md")
+  [ -n "$root" ] && [ -d "$root" ] || return 0
+
+  # 접속 정보라 값은 출력하지 않는다 — loopback 여부만
+  if [ ! -f "$root/.env" ]; then
+    echo ".env DB 호스트: .env 없음"
+  else
+    host=$(sed -nE 's/\r$//; s/^[[:space:]]*database\.default\.hostname[[:space:]]*=[[:space:]]*//p' "$root/.env" | tail -1 \
+           | sed -E "s/[[:space:]]+#.*$//; s/[[:space:]]+$//; s/^[\"']//; s/[\"']$//")
+    case "$host" in
+      "") echo ".env DB 호스트: database.default.hostname 없음" ;;
+      localhost|127.*|::1|'[::1]') echo ".env DB 호스트: loopback" ;;
+      *) echo ".env DB 호스트: loopback 아님(값 비표시) — 정착 전 확인" ;;
+    esac
+  fi
+
+  tests=$(git -C "$root" ls-files -co --exclude-standard -- '*DocblockCitationTest.php' '*EnvParityTest.php' 2>/dev/null)
+  if [ -n "$tests" ] && [ -f "$root/vendor/bin/phpunit" ]; then
+    out=$(cd "$root" && timeout 600 vendor/bin/phpunit --no-coverage --filter 'DocblockCitationTest|EnvParityTest' 2>&1); rc=$?
+    counts=$(phpunit_counts "$out")
+    if [ "$rc" -eq 0 ]; then echo "phpunit DocblockCitation·EnvParity: OK (${counts:-수치 없음})"
+    else echo "phpunit DocblockCitation·EnvParity: 실패 exit=$rc (${counts:-수치 없음})"; fi
+  elif [ -n "$tests" ]; then
+    echo "phpunit DocblockCitation·EnvParity: vendor/bin/phpunit 없음 — 못 돌림"
+  fi
+
+  # --check 는 읽기 전용이다 — 인자 없이 돌리면 ISS-LIST.md 를 재생성해 worktree 를 바꾼다
+  issues=$(git -C "$root" -c core.quotepath=off status --porcelain --untracked-files=all 2>/dev/null | cut -c4- \
+           | sed 's/^.* -> //; s/^"//; s/"$//' | grep -c '^docs/wbs/issue/')
+  if [ "$issues" -gt 0 ] && [ -f "$root/docs/wbs/tools/iss-list.py" ]; then
+    py=$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)
+    if [ -z "$py" ]; then
+      echo "iss-list.py --check: python 없음 — 못 돌림 (이슈 파일 변경 ${issues}건)"
+    else
+      out=$(cd "$root" && timeout 300 "$py" docs/wbs/tools/iss-list.py --check 2>&1)
+      echo "iss-list.py --check: [ERR] $(printf '%s\n' "$out" | grep -c '\[ERR\]')건 (이슈 파일 변경 ${issues}건)"
+    fi
+  fi
+}
+
 run_loop() {
   local request="$1" run="$2" resume="${3:-}" dir="$STATE_DIR/$2"
   mkdir -p "$dir"
@@ -1418,6 +1462,21 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
       cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
     echo "=== [판정 보류] 리뷰 인용 수치 재실행 요약 없음 — RESULT.md 맨 위에 올림"
   fi
+
+  case "$verdict/$adv_verdict" in
+    CLEAN*/UPHELD*)
+      if [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[정착 전 점검\]' "$dir/RESULT.md"; then
+        local checks
+        checks=$(presettle_checks "$dir")
+        if [ -n "$checks" ]; then
+          { echo "> [정착 전 점검] 표시만 한다 — 판정·정착을 막지 않는다"
+            printf '%s\n' "$checks" | sed 's/^/>   - /'
+            echo
+            cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
+          echo "=== [정착 전 점검] $(printf '%s\n' "$checks" | grep -c .)항목 — RESULT.md 맨 위에 올림"
+        fi
+      fi ;;
+  esac
 
   if [ -n "$stall" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미수렴\]' "$dir/RESULT.md"; then
     { echo "> [미수렴] 정체 정지 — $stall (dev=$verdict). 더 돌려도 수렴하지 않는다 — 남은 지적·반박은 사람이 판정한다."
