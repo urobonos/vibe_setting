@@ -61,9 +61,9 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
 
 **dev·rev·adv 등급(모델·effort)은 러너가 run 마다 정한다** (`CODE_LOOP_TIER=auto`, 기본).
 
-- 시작 = max(기계 최소치, spec 의 `TIER:`/`EFFORT:` 줄). spec 제목·`SCOPE_FILES` 에 위험 영역(migration·sql·auth·결제·coin·PII·보안·세션·쿠키·권한)이 보이면 최소치 opus:high, 아니면 sonnet:medium. 판정 줄이 없으면 opus:high. adv 는 opus:high 바닥.
+- effort 는 medium 이 하한이자 시작값이다(전 역할). 위로는 승격으로만 오른다(sonnet ≤ high · opus ≤ xhigh, low·max 미사용).
+- 시작 모델 = max(기계 최소치, spec 의 `TIER:` 줄). spec 제목·`SCOPE_FILES` 에 위험 영역(migration·sql·auth·결제·coin·PII·보안·세션·쿠키·권한)이 보이면 opus, 아니면 sonnet. 판정 줄이 없으면 opus. adv 는 opus. 모두 medium 으로 시작.
 - 승격(올라가기만) = 리뷰 3라운드째 또는 adv 1회 깸 → dev·rev opus:high / adv 2회 이상 깸 → dev·rev·adv opus:xhigh.
-- effort 범위 = medium~high(sonnet) · medium~xhigh(opus). low·max 는 쓰지 않는다.
 - 이력 = `{run}/TIER.md` → RESULT.md 라운드 로그.
 - 사람 지정이 이긴다 — `CODE_LOOP_MODEL_{DEV,REV,ADV}` · `CODE_LOOP_EFFORT_{DEV,REV,ADV}` 로 지정한 역할은 자동 결정·승격 모두 건너뛴다. `CODE_LOOP_TIER=off` 면 에이전트 정의 frontmatter `model:` 고정(effort 미지정).
 

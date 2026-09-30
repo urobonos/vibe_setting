@@ -453,38 +453,36 @@ check "산출·RESULT 없음 — 기존대로 재시도" 2 "$(grep -c '\[spec\] 
 reset; rc=$(runit T_SPEC_DECLINE=1 T_SPEC_DECLINE_RC=1)
 check "미착수라도 exit≠0 — 실패(1)" 1 "$rc"
 
-echo "== AJ. 등급 자동 결정 — 시작 = max(위험영역 최소치, spec 판정) · 라운드·adv 깸으로 승격 =="
+echo "== AJ. 등급 자동 결정 — 시작 = 모델 max(위험영역 최소치, spec TIER) · effort 전원 medium · 라운드·adv 깸으로 승격 =="
 ML="$TMP/models.log"
 tier_of() { grep "^$1|" "$ML" | tail -1 | cut -d'|' -f2,3; }
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: medium' T_REV=CLEAN T_ADV=UPHELD)
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet' T_REV=CLEAN T_ADV=UPHELD)
 check "spec 판정 sonnet — dev" "sonnet|medium" "$(tier_of dev-01.md)"
 check "spec 판정 sonnet — 리뷰어" "sonnet|medium" "$(tier_of rev-01-correctness.md)"
-check "adv 는 opus:high 바닥" "opus|high" "$(tier_of adv-01.md)"
+check "adv 는 opus:medium 시작" "opus|medium" "$(tier_of adv-01.md)"
 check "spec 스텝은 effort 미지정" "sonnet|-" "$(tier_of 00-spec.md)"
 check "등급 이력 TIER.md" 1 "$(grep -c '^- 시작 dev=sonnet:medium' "$(d)/TIER.md")"
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: medium\nSCOPE_FILES: app/Database/Migrations/*' T_REV=CLEAN T_ADV=UPHELD)
-check "위험영역 — spec 이 sonnet 이어도 opus:high" "opus|high" "$(tier_of dev-01.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: opus\nEFFORT: xhigh' T_REV=CLEAN T_ADV=UPHELD)
+check "spec 판정 opus — medium 에서 시작(EFFORT 줄 무시)" "opus|medium" "$(tier_of dev-01.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nSCOPE_FILES: app/Database/Migrations/*' T_REV=CLEAN T_ADV=UPHELD)
+check "위험영역 — spec 이 sonnet 이어도 opus:medium" "opus|medium" "$(tier_of dev-01.md)"
 reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_REV=CLEAN T_ADV=UPHELD)
-check "판정 줄 없음 — opus:high" "opus|high" "$(tier_of dev-01.md)"
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: low' T_REV=CLEAN T_ADV=UPHELD)
-check "effort low — medium 으로 올림" "sonnet|medium" "$(tier_of dev-01.md)"
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: xhigh' T_REV=CLEAN T_ADV=UPHELD)
-check "sonnet xhigh — high 로 내림" "sonnet|high" "$(tier_of dev-01.md)"
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: medium' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
+check "판정 줄 없음 — opus:medium" "opus|medium" "$(tier_of dev-01.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
 check "리뷰 2라운드까지 유지" "sonnet|medium" "$(tier_of dev-02.md)"
 check "3라운드째 승격 — dev" "opus|high" "$(tier_of dev-03.md)"
 check "3라운드째 승격 — 리뷰어" "opus|high" "$(tier_of rev-03-design.md)"
 check "승격 이력" 1 "$(grep -c '승격 .*리뷰 3라운드째' "$(d)/TIER.md")"
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_ADV_CAP=3 T_SPECNOTE='TIER: sonnet\nEFFORT: medium' T_REV=CLEAN T_ADV='BROKEN,BROKEN,UPHELD')
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_ADV_CAP=3 T_SPECNOTE='TIER: sonnet' T_REV=CLEAN T_ADV='BROKEN,BROKEN,UPHELD')
 check "adv 1회 깸 — 수정 dev opus:high" "opus|high" "$(tier_of dev-02.md)"
 check "adv 1회 깸 — 수정분 리뷰어 opus:high" "opus|high" "$(tier_of rev-02-correctness.md)"
-check "adv 1회 깸 — adv 는 그대로" "opus|high" "$(tier_of adv-02.md)"
+check "adv 1회 깸 — adv 는 그대로" "opus|medium" "$(tier_of adv-02.md)"
 check "adv 2회 깸 — 수정 dev opus:xhigh" "opus|xhigh" "$(tier_of dev-03.md)"
 check "adv 2회 깸 — adv opus:xhigh" "opus|xhigh" "$(tier_of adv-03.md)"
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_MODEL_DEV=sonnet T_SPECNOTE='TIER: opus\nEFFORT: high' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_MODEL_DEV=sonnet T_SPECNOTE='TIER: opus' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
 check "환경변수 지정 dev — 자동 결정·승격 안 함" "sonnet|-" "$(tier_of dev-03.md)"
-check "지정 안 한 리뷰어는 자동" "opus|high" "$(tier_of rev-01-correctness.md)"
-reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_TIER=off T_SPECNOTE='TIER: opus\nEFFORT: xhigh' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
+check "지정 안 한 리뷰어는 자동" "opus|medium" "$(tier_of rev-01-correctness.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_TIER=off T_SPECNOTE='TIER: opus' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
 check "TIER=off — frontmatter 그대로" "sonnet|-" "$(tier_of dev-03.md)"
 check "TIER=off — TIER.md 없음" 0 "$([ -e "$(d)/TIER.md" ] && echo 1 || echo 0)"
 check "spec 프롬프트에 TIER 지시" 1 "$(T_PROMPTDIR="$TMP/p2"; mkdir -p "$T_PROMPTDIR"; reset; runit T_PROMPTDIR="$T_PROMPTDIR" T_REV=CLEAN T_ADV=UPHELD >/dev/null; grep -c 'TIER: sonnet | opus' "$T_PROMPTDIR/00-spec.md.prompt")"

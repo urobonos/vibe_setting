@@ -64,8 +64,8 @@ F_ADV="${CODE_LOOP_MODEL_ADV:+1}${CODE_LOOP_EFFORT_ADV:+1}"
 model_rank()  { case "$1" in opus) echo 2 ;; *) echo 1 ;; esac; }
 effort_rank() { case "$1" in xhigh) echo 3 ;; high) echo 2 ;; *) echo 1 ;; esac; }
 
-# effort 는 medium 이 바닥이다 — dev 가 테스트·호출부 확인을 건너뛰면 리뷰 1라운드가 더 돌고,
-# 그 비용이 low 로 아낀 것보다 크다. 상한은 sonnet=high · opus=xhigh, max 는 쓰지 않는다.
+# effort 는 medium 이 바닥이자 시작값이다 — dev 가 테스트·호출부 확인을 건너뛰면 리뷰 1라운드가 더 돌고,
+# 그 비용이 low 로 아낀 것보다 크다. 위로는 승격으로만 오르고 sonnet=high · opus=xhigh 까지, max 는 쓰지 않는다.
 tier_clamp() {
   local m="${1%%:*}" e="${1#*:}"
   [ "$e" = "$1" ] && e=medium
@@ -83,13 +83,13 @@ tier_max() {
   tier_clamp "$m:$e"
 }
 
-# 기계 최소치 — spec 제목·SCOPE_FILES 에 위험 영역이 보이면 LLM 이 낮게 봐도 opus:high.
+# 기계 최소치 — spec 제목·SCOPE_FILES 에 위험 영역이 보이면 LLM 이 낮게 봐도 opus.
 # 성공 기준 개수는 게이트가 이미 3개 이하로 걸러 난이도를 가르지 못한다.
 TIER_RISK_RE='migrat|\.sql|/database/|auth|login|password|payment|coin|pii|security|crypt|token|session|cookie|permission'
 tier_floor() {
   local spec="$1"
   if { head -1 "$spec"; grep -m1 '^SCOPE_FILES:' "$spec"; } | grep -qiE "$TIER_RISK_RE"; then
-    echo "opus:high 위험영역"
+    echo "opus:medium 위험영역"
   else
     echo "sonnet:medium 기본"
   fi
@@ -98,21 +98,19 @@ tier_floor() {
 TIER_LOG=""
 tier_note() { echo "=== 등급: $1"; [ -n "$TIER_LOG" ] && echo "- $1" >> "$TIER_LOG"; }
 
-# spec 직후 시작 등급 = max(기계 최소치, spec 의 TIER/EFFORT). 판정 줄이 없거나 이상하면 opus:high.
+# spec 직후 시작 등급 = 모델은 max(기계 최소치, spec 의 TIER), effort 는 전원 medium. 판정 줄이 없거나 이상하면 opus.
 tier_init() {
-  local spec="$1" floor why llm m e start
+  local spec="$1" floor why llm m start
   TIER_LOG="$(dirname "$spec")/TIER.md"
   read -r floor why <<<"$(tier_floor "$spec")"
   m=$(sed -n 's/^TIER:[[:space:]]*\([a-z]*\).*/\1/p' "$spec" | head -1)
-  e=$(sed -n 's/^EFFORT:[[:space:]]*\([a-z]*\).*/\1/p' "$spec" | head -1)
-  case "$m" in sonnet|opus) ;; *) m=opus; e=high ;; esac
-  case "$e" in medium|high|xhigh) ;; low) e=medium ;; *) e=high ;; esac
-  llm="$m:$e"
+  case "$m" in sonnet|opus) ;; *) m=opus ;; esac
+  llm="$m:medium"
   start=$(tier_max "$floor" "$llm")
   [ -s "$TIER_LOG" ] || echo "# 등급 이력" > "$TIER_LOG"
   [ -z "$F_DEV" ] && M_DEV="$start"
   [ -z "$F_REV" ] && M_REV="$start"
-  [ -z "$F_ADV" ] && M_ADV=$(tier_max "$M_ADV" "opus:high")
+  [ -z "$F_ADV" ] && M_ADV=$(tier_max "$M_ADV" "opus:medium")
   tier_note "시작 dev=$M_DEV rev=$M_REV adv=$M_ADV — 최소치=$floor($why) · spec=$llm"
 }
 
@@ -126,8 +124,8 @@ adv_broken_count() {
   echo "$c"
 }
 
-# 승격 — 올라가기만 한다. 리뷰 3라운드째·adv 가 1번 깨면 dev·rev 를 opus:high 로,
-# adv 가 2번 이상 깨면 리뷰어가 클린을 거듭 잘못 낸 것이라 dev·rev·adv 모두 opus:xhigh 로.
+# 승격 — 올라가기만 한다. 리뷰 3라운드째·adv 가 1번 깨면 dev·rev 를 opus 로, adv 가 2번 이상 깨면
+# 리뷰어가 클린을 거듭 잘못 낸 것이라 adv 까지 — 앞은 opus:high, 뒤는 opus:xhigh.
 tier_escalate() {
   local round="$1" broken="$2" target="" why="" before="$M_DEV/$M_REV/$M_ADV"
   [ "$TIER_MODE" = auto ] || return 0
@@ -1032,10 +1030,9 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
 테스트 파일 경로도 넣는다). 셸이 이 밖의 변경을 리뷰어와 결과문서에 드러낸다:
   SCOPE_FILES: {glob}, {glob}
 vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·symlink 로 링크하지 않는다.
-개발자·리뷰어의 등급을 기계 판독용 두 줄로 쓴다 (러너가 모델·effort 를 고른다. 위험 영역은 러너가 따로 올린다):
-  TIER: sonnet | opus          — sonnet 은 로직 변경이 없거나 이미 검증된 처방을 그대로 반복하는 국소 수정만
-  EFFORT: medium | high | xhigh — xhigh 는 opus 에만, 설계 판단·다파일 정합이 걸린 경우
-판단이 서지 않으면 TIER: opus / EFFORT: high 를 쓴다.
+개발자·리뷰어의 모델을 기계 판독용 한 줄로 쓴다 (위험 영역은 러너가 따로 올린다):
+  TIER: sonnet | opus   — sonnet 은 로직 변경이 없거나 이미 검증된 처방을 그대로 반복하는 국소 수정만
+판단이 서지 않으면 TIER: opus 를 쓴다.
 구현할 것이 없으면(코드 작업이 남지 않았거나 사용자 결정·§3 판단이 미결) worktree·00-spec.md 를 만들지 않고
 $dir/RESULT.md 에만 남긴다. 판정 줄은 정확히 한 줄 \`## 판정: 미착수\` 이고 그 아래에 이유와 재진입 조건을 적는다 —
 러너는 이것을 실패가 아니라 반환으로 기록한다.
