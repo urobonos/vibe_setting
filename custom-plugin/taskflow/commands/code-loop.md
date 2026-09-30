@@ -116,7 +116,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
 | `rev-NN.md` | `VERDICT: CLEAN` · `VERDICT: FINDINGS C=n H=n M=n` |
 | `adv-MM.md` | `VERDICT: UPHELD` · `VERDICT: BROKEN` · `VERDICT: BROKEN-UNDECIDED` |
 
-**줄이 없으면 루프를 중단한다 (fail-closed).** 셸은 "지적이 없다" 와 "판정을 못 받았다" 를 구분할 수 없고, 후자를 클린으로 읽으면 무검증 변경이 통과한다. `BROKEN-UNDECIDED` 만 예외로 캡에 넣지 않고 재스폰한다 — 코드 문제가 아니라 입력 조립 문제이기 때문이다 (code.md 의 `BROKEN: 판정 불가` 와 같은 처리).
+**줄이 없으면 루프를 중단한다 (fail-closed).** 셸은 "지적이 없다" 와 "판정을 못 받았다" 를 구분할 수 없고, 후자를 클린으로 읽으면 무검증 변경이 통과한다. `BROKEN-UNDECIDED` 만 예외로 회차·캡에 넣지 않고 같은 회차로 재스폰한다 — 코드 문제가 아니라 입력 조립 문제이기 때문이다 (code.md 의 `BROKEN: 판정 불가` 와 같은 처리). 재스폰은 별도 카운터로 3회까지, 넘으면 게이트를 닫는다.
 
 **GATE 줄은 표기 변형을 인정한다.** spec 스텝이 `## GATE: OK` · `**GATE: OK**` 처럼 마크다운으로 쓰는 일이 실재한다(2026-09-17 실측 spec 25건 중 2건). 줄 전체가 판정 줄이면 앞의 `#`·`>`·`*`·공백과 값 뒤의 `*`·공백은 허용하고, 본문 중간의 언급(`- 이전엔 GATE: OK 였다`)은 판정으로 읽지 않는다. 러너(크기 게이트 분기)와 `gate-enforce.sh`(plan-before 게이트)가 **같은 함수**로 읽는다 — SSOT = `custom-plugin/taskflow/hooks/lib/code-loop-gate.sh`. 둘이 따로 패턴을 들고 있다가 hook 은 헤더형 OK 를 못 읽어 개발자가 5라운드 내내 코드를 못 썼고, 러너는 헤더형 TOO-LARGE 와 판정 줄 없음을 진행으로 읽었다.
 
@@ -155,7 +155,7 @@ MM = 1 .. 2
    BROKEN           → dev 재진입(정규 캡 계상) → 리뷰 1라운드
                       └ CLEAN    → MM+1
                       └ FINDINGS → 게이트를 닫고 잔여로 넘긴다 (정규 루프로 안 되돌린다)
-   BROKEN-UNDECIDED → 입력 조립 오류. 캡에 넣지 않고 재스폰
+   BROKEN-UNDECIDED → 입력 조립 오류. 회차·캡에 넣지 않고 재스폰 (별도 3회 상한)
 ```
 
 **`BROKEN` 뒤 리뷰 1라운드는 뺄 수 없다.** adversary 는 깨는 역할이지 판정 역할이 아니라서, 그 수정분을 아무도 안 보면 무검증 변경이 클린을 달고 남는다. 이 라운드는 **정규 캡(5)에 계상한다** — 게이트 캡 2회가 정규 캡을 늘리는 통로가 되면 클린 직전에 라운드가 무한히 열린다.
@@ -169,6 +169,8 @@ MM = 1 .. 2
 러너는 `RESULT.md` 를 stdout 으로 내보낸다. **메인은 그것만 흡수한다 — 여기 없는 것은 메인에 존재하지 않는다.**
 
 **CLEAN+UPHELD 로 끝나면 러너가 정착 전 점검을 `> [정착 전 점검]` 배너로 RESULT.md 맨 위에 올린다 — 표시만 하고 막지 않는다.** worktree `.env` 의 `database.default.hostname` 이 loopback 인지(값은 출력하지 않는다, `.env` 가 없으면 그렇다고 적는다) · `DocblockCitationTest`/`EnvParityTest` 가 레포에 있으면 `phpunit --filter` 결과 · worktree 변경에 `docs/wbs/issue/**` 가 있고 `docs/wbs/tools/iss-list.py` 가 있으면 `--check` 의 `[ERR]` 수.
+
+**CLEAN+UPHELD 가 아니면 RESULT.md 첫 줄은 `> [미수렴] dev=… adv=…` 다** (정체 정지면 그 사유가 붙는다). 중단(return·한도·TERM)은 run.log 끝에 `code-loop 종료 (abort=rc)` 로 남는다.
 
 `RESULT.md` 가 없으면 루프가 완주하지 못한 것이고, 러너가 그 사실과 `--resume` 안내를 낸다. **조용히 성공으로 보이게 하지 않는다** — 메인이 잘못된 판단을 하는 것이 미완주보다 나쁘다.
 

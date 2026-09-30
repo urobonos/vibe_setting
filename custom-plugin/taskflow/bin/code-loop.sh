@@ -144,6 +144,7 @@ tier_escalate() {
 # 루프의 정상 종료는 캡이 아니라 판정이다 — dev 는 리뷰 CLEAN, adv 는 UPHELD.
 DEV_CAP="${CODE_LOOP_DEV_CAP:-0}"   # 정규 라운드 캡 · 0 = 무제한
 ADV_CAP="${CODE_LOOP_ADV_CAP:-0}"   # 적대적 게이트 캡 · 0 = 무제한
+ADV_UNDECIDED_CAP=3                 # BROKEN-UNDECIDED 재스폰 상한 — 회차·캡과 별도로 센다
 cap_label() { if [ "${1:-0}" -gt 0 ]; then printf '%s' "$1"; else printf '무제한'; fi; }
 
 mkdir -p "$STATE_DIR"
@@ -1144,6 +1145,11 @@ presettle_checks() {
 run_loop() {
   local request="$1" run="$2" resume="${3:-}" dir="$STATE_DIR/$2"
   mkdir -p "$dir"
+  # 중단(return·한도 exit·TERM)도 run.log 에 끝을 남긴다 — 없으면 tail -f 로 보는 쪽이 멈춤과 진행을 못 가른다.
+  # run_loop 는 tee_run 이 띄운 백그라운드 서브셸에서 돌아 trap 이 러너 본체로 새지 않는다
+  loop_finished=""
+  trap 'rc=$?; [ -n "$loop_finished" ] || echo "=== $(date "+%F %T") code-loop 종료 (abort=$rc)"' EXIT
+  trap 'exit 143' TERM
   echo "=== $(date '+%F %T') code-loop 시작 (run=$run perm=$PERM)"
   echo "=== 결과문서: $dir"
   # 판정 lib 가 없으면 크기 게이트를 읽을 수 없다 — spec 스텝을 태우기 전에 멈춘다
@@ -1333,7 +1339,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
   local adv_verdict="(skipped)"
   case "$verdict" in
     CLEAN*)
-      local m mm nn2
+      local m mm nn2 undecided=0
       m=0
       while :; do
         m=$((m + 1))
@@ -1370,9 +1376,16 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
           UPHELD*)
             break ;;
           BROKEN-UNDECIDED*)
-            # 입력 조립이 틀린 것이지 코드 문제가 아니다 — 캡에 넣지 않고 재스폰
+            # 입력 조립이 틀린 것이지 코드 문제가 아니다 — 회차(m)·캡에 넣지 않고 같은 회차로 재스폰한다.
+            # 조립이 계속 틀리면 무한 재스폰이 되므로 별도 카운터로 ADV_UNDECIDED_CAP 번까지만
+            undecided=$((undecided + 1))
+            if [ "$undecided" -gt "$ADV_UNDECIDED_CAP" ]; then
+              echo "=== BROKEN-UNDECIDED 재스폰 ${ADV_UNDECIDED_CAP}회 소진 — 게이트를 닫는다 (adv-$mm.md 보존)"
+              break
+            fi
             rm -f "$dir/adv-$mm.md"
-            echo "=== 입력 조립 오류 — 캡에 넣지 않고 재스폰"
+            echo "=== 입력 조립 오류 — 회차·캡에 넣지 않고 재스폰 ($undecided/$ADV_UNDECIDED_CAP)"
+            m=$((m - 1))
             continue ;;
           BROKEN*)
             # code.md: BROKEN 수정분은 반드시 리뷰 1라운드를 거친다. 그 라운드는 정규 캡에
@@ -1478,14 +1491,21 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
       fi ;;
   esac
 
-  if [ -n "$stall" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미수렴\]' "$dir/RESULT.md"; then
-    { echo "> [미수렴] 정체 정지 — $stall (dev=$verdict). 더 돌려도 수렴하지 않는다 — 남은 지적·반박은 사람이 판정한다."
-      echo
-      cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
-    echo "=== [미수렴] 정체 정지 — RESULT.md 맨 위에 올림"
-  fi
+  # CLEAN+UPHELD 가 아니면 첫 줄에서 드러낸다 — 본문만 읽고 정착하면 남은 지적이 클린처럼 넘어간다.
+  # 다른 배너보다 뒤에 올려 항상 첫 줄이 되게 한다
+  case "$verdict/$adv_verdict" in
+    CLEAN*/UPHELD*) ;;
+    *)
+      if [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미수렴\]' "$dir/RESULT.md"; then
+        { echo "> [미수렴] dev=$verdict adv=$adv_verdict${stall:+ — 정체 정지: $stall. 더 돌려도 수렴하지 않는다, 남은 지적·반박은 사람이 판정한다}"
+          echo
+          cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
+        echo "=== [미수렴] dev=$verdict adv=$adv_verdict — RESULT.md 맨 위에 올림"
+      fi ;;
+  esac
 
   echo "=== $(date '+%F %T') code-loop 종료 (dev=$verdict adv=$adv_verdict)"
+  loop_finished=1
   if [ -s "$dir/RESULT.md" ]; then
     echo
     echo "───────── RESULT.md ─────────"

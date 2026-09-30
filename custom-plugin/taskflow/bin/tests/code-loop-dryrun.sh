@@ -518,7 +518,7 @@ check "diff 0 — RESULT 첫 줄 [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | gr
 reset; rc=$(runit T_WT="$WT_STALL" T_DEVTOUCH="$WT_STALL/touch.txt" T_REV="$REV_VARY" T_ADV=UPHELD)
 check "대조군 코드 변경 있음 — 캡까지 감" 5 "$(cnt 'dev-*.md')"
 check "대조군 — 정체 정지 없음" 0 "$(grep -c '정체 정지' "$TMP/out.txt")"
-check "대조군 — [미수렴] 배너 없음" 0 "$(grep -c '^> \[미수렴\]' "$(d)/RESULT.md")"
+check "대조군 — 배너에 정체 정지 없음" 0 "$(grep -c '정체 정지' "$(d)/RESULT.md")"
 rm -f "$WT_STALL/touch.txt"
 
 echo "== AL. 사용량 한도 — 재시도·대기 없이 멈추고 --resume 으로 이어진다 (run 20260917-132300) =="
@@ -615,6 +615,34 @@ check "해당 없음 — .env 없음 표기" 1 "$(grep -c '.env DB 호스트: .e
 check "해당 없음 — iss-list 안 돎" 0 "$([ -e "$WT_PRE/iss.calls" ] && echo 1 || echo 0)"
 reset; rc=$(runit T_WT="$WT_PRE" CODE_LOOP_DEV_CAP=1 T_REV='FINDINGS C=0 H=1 M=0')
 check "미수렴 run — 점검 배너 없음" 0 "$(grep -c '정착 전 점검' "$(d)/RESULT.md")"
+
+echo "== AO. 종료 — 미수렴 첫 줄 · 중단도 run.log 에 종료 기록 · BROKEN-UNDECIDED 는 회차 밖 3회까지 =="
+reset; rc=$(runit CODE_LOOP_DEV_CAP=1 T_REV='FINDINGS C=0 H=1 M=0')
+check "캡 소진 — RESULT 첫 줄 [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=FINDINGS C=0 H=1 M=0 adv=(skipped)$')"
+reset; rc=$(runit T_REV='CLEAN,FINDINGS C=0 H=1 M=0' T_ADV='BROKEN,UPHELD')
+check "adv 수정분 지적 잔존 — [미수렴] adv=BROKEN" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=FINDINGS C=0 H=1 M=0 adv=BROKEN')"
+reset; rc=$(runit T_REV=CLEAN T_ADV=UPHELD)
+check "CLEAN+UPHELD — [미수렴] 없음" 0 "$(grep -c '미수렴' "$(d)/RESULT.md")"
+check "정상 종료 — abort 기록 없음" 0 "$(grep -c 'abort=' "$(d)/run.log")"
+reset; rc=$(runit T_NOVERDICT=1 T_REV=CLEAN T_ADV=UPHELD)
+check "return 중단 — abort=1 기록" 1 "$(grep -c 'code-loop 종료 (abort=1)' "$(d)/run.log")"
+reset; rc=$(runit T_LIMIT=dev-01.md T_REV=CLEAN T_ADV=UPHELD)
+check "한도 exit — abort=75 기록" 1 "$(grep -c 'code-loop 종료 (abort=75)' "$(d)/run.log")"
+reset
+( env T_REV=CLEAN T_ADV=UPHELD T_HANG=dev-01.md T_HANG_PID="$TMP/hang-term.pid" CODE_LOOP_STEP_TIMEOUT_MIN=0.1 \
+    timeout "$RUN_TIMEOUT" bash "$SUT" "드라이런 요청" > "$TMP/out.txt" 2>&1 ) &
+bgp=$!
+for i in $(seq 1 60); do [ -s "$TMP/hang-term.pid" ] && [ -s "$(d)/.lock/pid" ] && break; sleep 1; done
+kill -TERM "$(cat "$(d)/.lock/pid" 2>/dev/null)" 2>/dev/null
+wait "$bgp"
+check "TERM — abort=143 기록" 1 "$(grep -c 'code-loop 종료 (abort=143)' "$(d)/run.log")"
+kill "$(cat "$TMP/hang-term.pid" 2>/dev/null)" 2>/dev/null
+reset; rc=$(runit CODE_LOOP_ADV_CAP=1 T_REV=CLEAN T_ADV=BROKEN-UNDECIDED)
+check "UNDECIDED — 최초 1 + 재스폰 3" 4 "$(grep -c '\[adv-01\] model=' "$TMP/out.txt")"
+check "UNDECIDED — 회차 증가 없음" 0 "$(grep -c 'adv-loop 2/' "$TMP/out.txt")"
+check "UNDECIDED — 소진 로그" 1 "$(grep -c 'BROKEN-UNDECIDED 재스폰 3회 소진' "$TMP/out.txt")"
+check "UNDECIDED — 마지막 판정 보존" 1 "$(cnt 'adv-*.md')"
+check "UNDECIDED — RESULT 첫 줄 [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=CLEAN adv=BROKEN-UNDECIDED')"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
