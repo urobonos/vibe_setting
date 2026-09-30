@@ -990,6 +990,47 @@ verify_rev_gate() {
   return 0
 }
 
+# worktree 상태 지문 — HEAD 대비 diff + untracked 파일 내용. 라운드 사이 코드가 안 바뀌었는지 가를 때 쓴다.
+# git worktree 가 아니면 빈 값이라 diff 조건은 판정하지 않는다
+wt_fingerprint() {
+  local root
+  root=$(worktree_of "$1/00-spec.md")
+  [ -n "$root" ] && git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || return 0
+  { git -C "$root" diff HEAD --binary
+    git -C "$root" ls-files --others --exclude-standard -z | (cd "$root" && xargs -0 -r sha256sum)
+  } 2>/dev/null | sha256sum | cut -d' ' -f1
+}
+
+# 이 프로세스에서 dev 스텝을 실제로 돌린 라운드만 남긴다 — resume 때 지난 라운드 지문을 지금 상태로 채우면
+# 전 라운드가 같은 값이 되어 거짓 정체가 난다
+wt_mark() { [ -s "$1/wt-$2.sha" ] || wt_fingerprint "$1" > "$1/wt-$2.sha"; }
+
+# 정체 판정 — 캡이 무제한이어도 같은 자리를 도는 run 을 끊는다. 파일에서 세므로 resume 해도 같은 라운드에서 멈춘다.
+#   dev 코드 diff 0 이 STALL_ZERO_DIFF 라운드 연속 (지적은 남았는데 코드를 안 바꾼다 — 반박·사용자 결정 대기 교착)
+#   같은 FINDINGS 문자열이 STALL_SAME_FINDINGS 라운드 연속 (고쳐도 같은 지적이 다시 선다)
+STALL_ZERO_DIFF=2
+STALL_SAME_FINDINGS=4
+stall_reason() {
+  local dir="$1" n="$2" i last same=0 zero=0 cur prev
+  last=$(verdict_of "$dir/rev-$(printf '%02d' "$n").md")
+  for ((i = n; i >= 1; i--)); do
+    [ "$(verdict_of "$dir/rev-$(printf '%02d' "$i").md")" = "$last" ] || break
+    same=$((same + 1))
+  done
+  if [ "$same" -ge "$STALL_SAME_FINDINGS" ]; then
+    echo "같은 판정 '$last' ${same}라운드 연속"; return 0
+  fi
+  for ((i = n; i >= 1; i--)); do
+    cur="$dir/wt-$(printf '%02d' "$i").sha"; prev="$dir/wt-$(printf '%02d' $((i - 1))).sha"
+    [ -s "$cur" ] && [ -s "$prev" ] && [ "$(cat "$cur")" = "$(cat "$prev")" ] || break
+    zero=$((zero + 1))
+  done
+  if [ "$zero" -ge "$STALL_ZERO_DIFF" ]; then
+    echo "dev 코드 diff 0줄 ${zero}라운드 연속"; return 0
+  fi
+  return 1
+}
+
 run_loop() {
   local request="$1" run="$2" resume="${3:-}" dir="$STATE_DIR/$2"
   mkdir -p "$dir"
@@ -1115,8 +1156,9 @@ $request"
   fi
 
   # ── dev-loop ──────────────────────────────────────────────────────────
-  local n nn verdict=""
+  local n nn verdict="" stall=""
   n=0
+  [ -s "$dir/dev-01.md" ] || wt_mark "$dir" 00
   while :; do
     n=$((n + 1))
     if [ "$DEV_CAP" -gt 0 ] && [ "$n" -gt "$DEV_CAP" ]; then break; fi
@@ -1153,6 +1195,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
       # 셸 독립 재검증 — 이번에 새로 반환된 dev-$nn.md 만 검증한다. resume 으로
       # 기존 파일을 다시 만난 경우는 이전 프로세스에서 이미 통과했다고 간주한다
       verify_gate "$dir" "$nn" "$common" || return 1
+      wt_mark "$dir" "$nn"
     fi
 
     # 리뷰어 2인 병렬 + 합본 — adv-loop 의 BROKEN 재진입도 같은 함수를 쓴다
@@ -1166,6 +1209,9 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
       FINDINGS*)
         if [ "$DEV_CAP" -gt 0 ] && [ "$n" -eq "$DEV_CAP" ]; then
           echo "=== 캡 $DEV_CAP 소진 — 적대적 게이트를 돌리지 않는다 (깰 것이 없다)"
+        elif stall=$(stall_reason "$dir" "$n"); then
+          echo "=== 정체 정지 — $stall. 라운드를 더 열지 않는다"
+          break
         fi ;;
       *)
         echo "!!! VERDICT 줄이 없다 — 계약 위반. 중단"
@@ -1297,6 +1343,13 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
       echo
       cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
     echo "=== [미검증] BASELINE assertion 0 — RESULT.md 맨 위에 올림"
+  fi
+
+  if [ -n "$stall" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미수렴\]' "$dir/RESULT.md"; then
+    { echo "> [미수렴] 정체 정지 — $stall (dev=$verdict). 더 돌려도 수렴하지 않는다 — 남은 지적·반박은 사람이 판정한다."
+      echo
+      cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
+    echo "=== [미수렴] 정체 정지 — RESULT.md 맨 위에 올림"
   fi
 
   echo "=== $(date '+%F %T') code-loop 종료 (dev=$verdict adv=$adv_verdict)"

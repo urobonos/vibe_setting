@@ -114,6 +114,8 @@ case "$base" in
     v=$(pick "${T_ADV:-UPHELD}" "$m"); [ -n "$v" ] || v=$(last "${T_ADV:-UPHELD}")
     printf "adversary (stub)\n%b\n${T_VFMT:-VERDICT: %s}\n" "${T_ADVNOTE:-}" "$v" > "$out" ;;
   dev-*.md)
+    # 코드를 바꾼 dev 흉내 — worktree 의 파일 내용을 매번 바꿔 라운드 diff 가 0 이 아니게 한다
+    [ -n "${T_DEVTOUCH:-}" ] && echo "$base" >> "$T_DEVTOUCH"
     printf 'FILES:\n%b\nTESTS: y\nBASELINE: %b\nWHY: stub\n%b\n' "${T_DEVFILES:-- x}" "${T_BASELINE:-z}" "${T_DEVNOTE:-}" > "$out" ;;
   *)
     printf 'stub\n' > "$out" ;;
@@ -173,7 +175,8 @@ check "dev 라운드수" 3 "$(cnt 'dev-*.md')"
 check "합본 라운드수" 3 "$(merged)"
 
 echo "== C. 캡 5 소진 — adv 안 돈다 =="
-reset; rc=$(runit T_REV='FINDINGS C=1 H=0 M=0' T_ADV=UPHELD)
+# 판정 문자열을 번갈아 준다 — 같은 FINDINGS 가 4라운드 연속이면 캡 전에 정체 정지로 끝난다(AK)
+reset; rc=$(runit T_REV='FINDINGS C=1 H=0 M=0,FINDINGS C=0 H=1 M=0,FINDINGS C=1 H=0 M=0,FINDINGS C=0 H=1 M=0,FINDINGS C=1 H=0 M=0' T_ADV=UPHELD)
 check "dev 라운드수(캡)" 5 "$(cnt 'dev-*.md')"
 check "adv 미실행" 0 "$(cnt 'adv-*.md')"
 check "캡 메시지" 1 "$(grep -c '캡 5 소진' "$TMP/out.txt")"
@@ -486,6 +489,31 @@ reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_TIER=off T_SPECNOTE='TIE
 check "TIER=off — frontmatter 그대로" "sonnet|-" "$(tier_of dev-03.md)"
 check "TIER=off — TIER.md 없음" 0 "$([ -e "$(d)/TIER.md" ] && echo 1 || echo 0)"
 check "spec 프롬프트에 TIER 지시" 1 "$(T_PROMPTDIR="$TMP/p2"; mkdir -p "$T_PROMPTDIR"; reset; runit T_PROMPTDIR="$T_PROMPTDIR" T_REV=CLEAN T_ADV=UPHELD >/dev/null; grep -c 'TIER: sonnet | opus' "$T_PROMPTDIR/00-spec.md.prompt")"
+
+echo "== AK. 정체 정지 — 캡 무제한이어도 같은 FINDINGS 4연속 · dev diff 0 2연속이면 [미수렴] 으로 끝낸다 (run 20260924-044841 ISS-915) =="
+reset; rc=$(runit CODE_LOOP_DEV_CAP=0 T_REV='FINDINGS C=1 H=0 M=0' T_ADV=UPHELD)
+check "같은 FINDINGS — 완주" 0 "$rc"
+check "같은 FINDINGS — 4라운드에서 정지" 4 "$(cnt 'dev-*.md')"
+check "같은 FINDINGS — 정지 로그" 1 "$(grep -c '=== 정체 정지 — 같은 판정' "$TMP/out.txt")"
+check "같은 FINDINGS — adv 미실행" 0 "$(cnt 'adv-*.md')"
+check "같은 FINDINGS — RESULT 첫 줄 [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\]')"
+RUN=$(basename "$(d)")
+env CODE_LOOP_DEV_CAP=0 T_REV='FINDINGS C=1 H=0 M=0' timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+check "resume — 같은 라운드에서 다시 정지(dev 추가 없음)" 4 "$(find "$ST/$RUN" -name 'dev-*.md' | wc -l | tr -d ' ')"
+check "resume — [미수렴] 중복 없음" 1 "$(grep -c '^> \[미수렴\]' "$ST/$RUN/RESULT.md")"
+WT_STALL="$TMP/wt-stall"; mkdir -p "$WT_STALL"; echo base > "$WT_STALL/a.txt"
+git -C "$WT_STALL" init -q; git -C "$WT_STALL" add a.txt
+git -C "$WT_STALL" -c user.email=t@t -c user.name=t commit -qm init
+REV_VARY='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=2 M=0,FINDINGS C=0 H=3 M=0,FINDINGS C=0 H=4 M=0,FINDINGS C=0 H=5 M=0'
+reset; rc=$(runit CODE_LOOP_DEV_CAP=0 T_WT="$WT_STALL" T_REV="$REV_VARY" T_ADV=UPHELD)
+check "diff 0 — 2라운드에서 정지" 2 "$(cnt 'dev-*.md')"
+check "diff 0 — 정지 사유" 1 "$(grep -c '=== 정체 정지 — dev 코드 diff 0줄 2라운드 연속' "$TMP/out.txt")"
+check "diff 0 — RESULT 첫 줄 [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\]')"
+reset; rc=$(runit T_WT="$WT_STALL" T_DEVTOUCH="$WT_STALL/touch.txt" T_REV="$REV_VARY" T_ADV=UPHELD)
+check "대조군 코드 변경 있음 — 캡까지 감" 5 "$(cnt 'dev-*.md')"
+check "대조군 — 정체 정지 없음" 0 "$(grep -c '정체 정지' "$TMP/out.txt")"
+check "대조군 — [미수렴] 배너 없음" 0 "$(grep -c '^> \[미수렴\]' "$(d)/RESULT.md")"
+rm -f "$WT_STALL/touch.txt"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
