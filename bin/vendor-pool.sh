@@ -31,7 +31,7 @@
 #     vendor" 를 전제해 신규 worktree(git worktree add 직후, vendor 는 gitignore 대상이라
 #     처음부터 없음)에는 못 쓴다. pool 있으면 하드링크 클론(수 초) · 없으면 최초 1회
 #     `composer install` 후 pool 화(다음부턴 재사용). vendor 가 이미 있으면 convert 로 위임.
-#     원본 레포의 .env.sandbox(없으면 .env)를 .env 로 복사한다(gitignore 라 worktree 에 안 따라온다, 2026-09-29).
+#     원본 레포의 .env.sandbox 를 .env 로 복사한다(gitignore 라 worktree 에 안 따라온다). 로컬 DB 호스트가 아니면 거부.
 
 HARNESS_ROOT="${HOME}/.claude"
 POOL_ROOT="${HARNESS_ROOT}/vendor-pool"
@@ -132,32 +132,51 @@ cmd_convert() {
     echo "전환 완료: $vdir ($(find "$vdir" -type f | wc -l)개 파일, 구 vendor 제거)"
 }
 
-# .env 도 gitignore 대상이라 `git worktree add` 로는 따라오지 않는다. 없으면 DB 테스트가 전건 skip 되고
-# (SkipUnlessLocalSandboxTrait) 에이전트는 .env 생성을 §3 로 보고 멈춘다 — run 20260929-073124(ISS-971)
-# 에서 assertion 0건인 채 CLEAN 이 났다. 원본 레포(공통 .git 의 부모)에서 복사하되 .env.sandbox 를 먼저 쓴다 —
-# 원본 .env 는 원격 DB(Aurora)를 가리켜 복사해도 전건 skip 이고, 레포 관례가 worktree = .env.sandbox 다
-# (hongcafe_local_athena docs/wbs/2026-08-11-local-admin-migration-wbs.md, ISS-791).
-# 이미 있으면 건드리지 않는다(worktree 에서 일부러 바꾼 값을 덮지 않는다).
-ensure_env() {
-    local wt="$1" common main
-    [ -e "$wt/.env" ] && return 0
-    common=$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
-    main=$(dirname "$common")
-    [ "$main" != "$wt" ] || return 0
-    local src
-    for src in "$main/.env.sandbox" "$main/.env"; do
-        [ -f "$src" ] || continue
-        cp -p "$src" "$wt/.env" && echo ".env 복사: $src -> $wt/.env"
-        return 0
-    done
+# .env 는 gitignore 라 worktree 에 안 따라온다. 없으면 DB 테스트가 전건 skip(SkipUnlessLocalSandboxTrait)
+# 인 채 CLEAN 이 난다. 원본 레포의 .env.sandbox 만 복사한다(없으면 경고만) — 원본 .env 는 운영 Aurora 를 가리킨다.
+# 이미 있는 .env 는 덮지 않되, 복사본·기존본 모두 DB 호스트가 로컬인지 검사한다.
+env_host_is_local() {
+    local host
+    host=$(sed -n 's/^[[:space:]]*database\.default\.hostname[[:space:]]*=[[:space:]]*//p' "$1" \
+        | tail -1 | sed 's/[[:space:]]*#.*//' | tr -d "\"' \r")
+    case "$host" in 127.0.0.1|localhost|::1) return 0 ;; esac
+    return 1
 }
 
+ensure_env() {
+    local wt="$1" common main copied=""
+    common=$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+    [ "$(git -C "$wt" rev-parse --path-format=absolute --git-dir)" != "$common" ] || return 0
+    main=$(dirname "$common")
+    if [ ! -e "$wt/.env" ]; then
+        if [ ! -f "$main/.env.sandbox" ]; then
+            echo "경고: $main/.env.sandbox 없음 — .env 미생성(DB 테스트 skip). 원본 .env(운영 DB)로 대체하지 않는다" >&2
+            return 0
+        fi
+        cp -p "$main/.env.sandbox" "$wt/.env" || return 1
+        copied=1
+    fi
+    if ! env_host_is_local "$wt/.env"; then
+        echo ".env 거부: database.default.hostname 이 로컬(127.0.0.1·localhost·::1)이 아니거나 없음 — $wt/.env" >&2
+        [ -n "$copied" ] && rm -f "$wt/.env"
+        return 1
+    fi
+    [ -n "$copied" ] && echo ".env 복사: $main/.env.sandbox -> $wt/.env"
+    return 0
+}
+
+# .env 검사는 vendor 준비 뒤에 한다 — .env 문제로 vendor 까지 막지 않는다.
 cmd_ensure() {
+    local wt="$1"
+    [ -f "$wt/composer.lock" ] || { echo "composer.lock 없음(PHP 레포 아님) — skip: $wt"; return 0; }
+    ensure_vendor "$wt" || return 1
+    ensure_env "$wt"
+}
+
+ensure_vendor() {
     local wt="$1"
     local vdir="$wt/vendor"
     local lock="$wt/composer.lock"
-    ensure_env "$wt"
-    [ -f "$lock" ] || { echo "composer.lock 없음(PHP 레포 아님) — skip: $wt"; return 0; }
 
     if [ -e "$vdir" ]; then
         echo "vendor 이미 존재 — convert 로 위임: $vdir"
