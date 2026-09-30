@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dev-stack.sh — 검증용 dev docker 스택 보장 (2026-07-28)
+# dev-stack.sh — 검증용 dev docker 스택 보장
 #
 # 왜 필요한가:
 #   e2e 5점의 4번이 "실제 엔드포인트 curl 200 확인" 이다 (php8 §e2e 검증).

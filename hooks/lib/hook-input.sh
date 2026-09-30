@@ -30,18 +30,18 @@ hook_init() {
 }
 
 # ---------------------------------------------------------------------------
-# resolve_python  (2026-08-03 — hook_python 의 실행검증 판)
+# resolve_python
 # ---------------------------------------------------------------------------
 # **실제로 한 번 실행해서 성공하는** 인터프리터만 채택. HOOK_PY 변수 캐시 (프로세스당 1회).
 #
 # Why `command -v` 로는 부족한가:
 #   Windows Store 별칭(`.../WindowsApps/python3.exe`)이 PATH 앞에 놓이면 `command -v python3` 는
-#   통과하고 실행은 exit 9 로 죽는다 — 2026-07-16 실발생(메모리 reference_gitbash-python3-store-alias.md).
-#   그 결과 `[ -n "$HOOK_PY" ]` 로만 게이트한 가드들(branch-enforce §1.5/§1.6 · git-quality-gate ·
-#   author-field-check)이 **조용히 fail-open** 했다: 검출은 성공, 판정은 공백.
-#   → 후보를 `-c pass` 로 1회 실행해 exit 0 인 것만 HOOK_PY 로 승격한다.
-#   실측 비용 = 37~39ms/프로세스 (PreToolUse 체인 2,877ms 대비 약 1.4%), 프로세스 내 1회 캐시.
-#   `py` 는 Windows 런처 — python3/python 이 둘 다 Store 별칭에 가려졌을 때의 실 탈출구.
+#   통과하고 실행은 exit 9 로 죽는다. 그 결과 `[ -n "$HOOK_PY" ]` 로만 게이트한 가드들(branch-enforce
+#   §1.5/§1.6 · git-quality-gate · author-field-check)이 **조용히 fail-open** 한다: 검출은 성공,
+#   판정은 공백.
+#   → 후보를 `-c pass` 로 1회 실행해 exit 0 인 것만 HOOK_PY 로 승격한다. 프로세스 내 1회 캐시로
+#   반복 호출 비용은 0이다. `py` 는 Windows 런처 — python3/python 이 둘 다 Store 별칭에 가려졌을
+#   때의 실 탈출구.
 #
 # 외부 주입(HOOK_PY=... 환경변수)은 존중한다 — 장애 재현 테스트의 진입점이다.
 #   **주의: 주입된 인터프리터가 깨져 있으면 각 hook 은 grep/awk 백스톱으로 내려가는데, 백스톱은
@@ -63,8 +63,8 @@ resolve_python() {
   local _cand
   for _cand in python3 python py; do
     command -v "$_cand" >/dev/null 2>&1 || continue
-    # 프로브는 HOOK_PY_TIMEOUT 으로 감싸지 않는다: 파이프도 stdin reader 도 없어 2026-07-30 에
-    #   실측된 "고아 손자" 조건이 성립하지 않는다. 래핑하면 spawn 이 2개가 돼 56ms(vs 39ms).
+    # 프로브는 HOOK_PY_TIMEOUT 으로 감싸지 않는다: 파이프도 stdin reader 도 없어 "고아 손자" 조건이
+    #   성립하지 않는다. 래핑하면 spawn 이 2개로 늘어 불필요하게 느려진다.
     if "$_cand" -c "pass" >/dev/null 2>&1; then
       HOOK_PY="$_cand"
       return 0
@@ -76,16 +76,14 @@ resolve_python() {
 # ---------------------------------------------------------------------------
 # hook_python  [DEPRECATED — resolve_python 을 직접 부르세요]
 # ---------------------------------------------------------------------------
-# 2026-08-03 이전 이름. hooks/ 안 호출부는 전건 resolve_python 으로 이관했고, 본 별칭은
-# 하니스 밖(플러그인·개인 스크립트) 미확인 호출부를 위해서만 남긴다. 신규 코드에 쓰지 말 것.
+# hooks/ 안 호출부는 전건 resolve_python 으로 이관했고, 본 별칭은 하니스 밖(플러그인·개인 스크립트)
+# 미확인 호출부를 위해서만 남긴다. 신규 코드에 쓰지 말 것.
 #
-# HOOK_PY_TIMEOUT (2026-07-30): python 호출을 감싸는 `timeout N` prefix.
+# HOOK_PY_TIMEOUT: python 호출을 감싸는 `timeout N` prefix.
 #   Why: hook 이 자체 timeout(3~5초)으로 kill 되면 Windows 에는 프로세스 그룹 kill 도
-#   SIGPIPE 도 없어 파이프 안의 python 손자가 남고, stdout reader 가 사라진 write 에서
-#   영구 블록한다 (2026-07-29 실측 — 14시간에 9건 잔존, `python3 git-guard.py all` 6건 +
-#   인라인 `json.load(sys.stdin)` 3건). `timeout` 을 끼우면 부모가 죽어도 손자가 N초 뒤
-#   스스로 회수된다 (부모 강제 kill 재현 후 검증 — 래핑 없음 = 잔존 / 래핑 = 3초 후 소멸).
-#   값 2초 = git-guard.py 실측 308~1215ms 위 마진 + branch-enforce hook timeout(5초) 안.
+#   SIGPIPE 도 없어 파이프 안의 python 손자가 남고, stdout reader 가 사라진 write 에서 영구
+#   블록한다. `timeout` 을 끼우면 부모가 죽어도 손자가 N초 뒤 스스로 회수된다.
+#   값 2초 = git-guard.py 실측 처리시간 위 마진 + branch-enforce hook timeout(5초) 안.
 #   사용 시 **unquoted** 로 전개해야 두 토큰으로 분리된다: `$HOOK_PY_TIMEOUT "$HOOK_PY" …`
 #   timeout 부재 환경은 빈 문자열 → 기존 동작 그대로 (fallback 패턴 = HOOK_PY 와 동일).
 hook_python() {
@@ -146,7 +144,7 @@ except Exception:
 }
 
 # ---------------------------------------------------------------------------
-# hook_json_string "<field_name>" ["all"]   (2026-08-03)
+# hook_json_string "<field_name>" ["all"]
 # ---------------------------------------------------------------------------
 # STDIN_DATA 의 `"key": "값"` 을 **escape 해석해서** stdout 출력. python 없이 동작.
 #   2번째 인자 "all" = 같은 키의 모든 문자열 값을 개행으로 이어 출력 (MultiEdit edits[*] 용).
@@ -158,22 +156,19 @@ except Exception:
 #   소비자는 그걸 "값 없음/짧은 값" 으로 오인해 검사를 건너뛴다 (= fail-open). python 이 죽어 있을 때
 #   이 함수가 정확도를 유지하는 마지막 단이다.
 #
-# `\uXXXX` (2026-08-03 정정): "하니스 JSON 에 \u 이스케이프 0건" 은 **오측이었다** — 실측 재조사
-#   결과 transcript 40개에서 `\u` 이스케이프가 실재한다(제어문자·서로게이트). 그래서 원형 보존이
-#   아니라 BMP 범위를 UTF-8 로 직접 디코드한다(python chr() 와 바이트 동일 확인: U+D55C·U+00E9·U+0001).
+# `\uXXXX`: 하니스 JSON 에도 `\u` 이스케이프(제어문자·서로게이트)가 실재하므로, 원형 보존이 아니라
+#   BMP 범위를 UTF-8 로 직접 디코드한다(python chr() 와 바이트 동일 확인: U+D55C·U+00E9·U+0001).
 #   서로게이트 페어(U+D800~DFFF)만 미해결로 남기고 **exit 3** 으로 신고한다.
-#   (구 주석의 "500개 초과분" 은 폐기된 구현의 잔재 — 현 코드에 그런 상한은 없다.)
 #
 # python 판 ↔ awk 판 바이트 동치: 12 대조 케이스 전건 동일. `\r`·`\b`·`\f` 도 그대로 살린다 —
-#   초안은 이 3개를 조용히 버려 python 판과 1바이트씩 어긋났다(현 소비자엔 무영향이었지만
-#   "두 경로가 같은 값을 준다" 는 계약이 깨져 있었다).
+#   "두 경로가 같은 값을 준다" 는 계약을 유지하기 위함이다.
 #
-# 구현 주의 (실측 기반):
-#   - 순수 bash 문자열 루프 판은 escape 1개당 payload 전체를 복사해 75KB 에서 **14.8초** → 폐기.
-#   - awk 판도 초안은 `s = s $0 "\n"` 슬럽이 2차식이라 82KB=243ms / 342KB=2.8s / 684KB=10.5s /
-#     1.37MB=43.7s 였다 (hook timeout 5초 → 450KB 이상 kill = 도로 fail-open). JSON 문자열 값은
-#     raw 개행을 담을 수 없으므로 **레코드(줄) 단위로 처리**해 슬럽을 없앴다. 봉인 해제도
-#     split+concat(O(n·k)) → gsub 1회(O(n))로 바꿨다 (gawk5 실측: 치환문자열 = backslash 1자 그대로).
+# 구현 주의 (성능):
+#   - 순수 bash 문자열 루프는 escape 1개당 payload 전체를 복사해 대용량 입력에서 초 단위로 느려진다
+#     — 채택하지 않는다.
+#   - awk 도 `s = s $0 "\n"` 형태의 문자열 슬럽은 2차식이라 수백 KB 이상에서 hook timeout(5초)을
+#     넘긴다(= fail-open). JSON 문자열 값은 raw 개행을 담을 수 없으므로 **레코드(줄) 단위로 처리**해
+#     슬럽을 없앤다. 봉인 해제도 split+concat(O(n·k)) 대신 gsub 1회(O(n))를 쓴다.
 hook_json_string() {
   local key="$1" mode="${2:-first}"
   if [ -z "$STDIN_DATA" ] || [ -z "$key" ]; then
@@ -187,9 +182,8 @@ hook_json_string() {
       return sprintf("%c%c%c", 224 + int(n/4096), 128 + int(n/64)%64, 128 + n%64)
     }
     # escape 해석 결과를 **문자열로 쌓지 않고 즉시 출력**한다 (O(n)).
-    #   gawk 의 gsub 은 1MB 값에서 4회 호출에 32.8초가 걸린다(실측) — 매 치환마다 문자열을
-    #   재구성해 사실상 2차식이다. backslash 로 split 한 뒤 조각을 흘려보내면 같은 값이 ~0.1초다.
-    #   부수 효과로 sentinel 봉인이 사라져 `` 이 봉인문자와 충돌하던 버그도 없어진다.
+    #   gawk 의 gsub 은 매 치환마다 문자열을 재구성해 대형 값에서 사실상 2차식이 된다. backslash
+    #   로 split 한 뒤 조각을 흘려보내면 선형 시간에 끝난다.
     function emit(val,   n, parts, i, p, c, rest, lit, hex, cp) {
       n = split(val, parts, BS)
       printf "%s", parts[1]
@@ -242,22 +236,21 @@ hook_json_string() {
 }
 
 # ---------------------------------------------------------------------------
-# hook_parse_content   (2026-08-03)
+# hook_parse_content
 # ---------------------------------------------------------------------------
 # Write 의 tool_input.content / Edit 의 new_string / MultiEdit 의 edits[*].new_string 을
 # 개행으로 이어 CONTENT 전역 변수에 채운다 (본문을 검사하는 Edit|Write hook 공용 진입점).
 # python → hook_json_string(awk) 2단. **degraded(python 부재) 에서도 MultiEdit 의 edits[*] 를
-# 전건 수집한다** — 첫 new_string 만 보면 edits[1..] 안의 위반이 조용히 통과한다 (2026-08-03 F8).
+# 전건 수집한다** — 첫 new_string 만 보면 edits[1..] 안의 위반이 조용히 통과한다.
 #
 # CONTENT_UNDECODED=1 (전역): 디코드 불가 이스케이프가 남아 판정을 신뢰할 수 없다는 신호.
 #   소비자는 이 값이 1이면 "통과" 시키지 말고 fail-closed 로 처리해야 한다.
-# 순서가 **awk 우선 · python 예비**인 이유 (2026-08-03 실측):
+# 순서가 **awk 우선 · python 예비**인 이유:
 #   두 경로는 바이트 동치가 검증돼 있고(위 헤더), 본문 payload 는 MB 급이 될 수 있다.
-#   python 을 먼저 두면 1MB payload 를 파이프로 밀어넣는 동안 `HOOK_PY_TIMEOUT`(2초)에 걸려
-#   **kill → CONTENT 공백 → awk 로 같은 일을 다시** 하는 경로가 열린다 (부하 상황 실측:
-#   share-guard 775KB = 4.3~5.0초로 hook timeout 5초에 근접). awk 를 먼저 돌리면 그 2초가 사라진다.
-#   python 은 awk 가 디코드하지 못한 것(서로게이트 페어)이 남았을 때만 부른다 — 그 경우만
-#   python 이 더 정확하다.
+#   python 을 먼저 두면 대형 payload 를 파이프로 밀어넣는 동안 `HOOK_PY_TIMEOUT`(2초)에 걸려
+#   **kill → CONTENT 공백 → awk 로 같은 일을 다시** 하는 경로가 열려 hook timeout 에 근접한다.
+#   awk 를 먼저 돌리면 그 2초가 사라진다. python 은 awk 가 디코드하지 못한 것(서로게이트 페어)이
+#   남았을 때만 부른다 — 그 경우만 python 이 더 정확하다.
 hook_parse_content() {
   CONTENT=""
   CONTENT_UNDECODED=0
@@ -293,7 +286,7 @@ try:
         if isinstance(e, dict) and isinstance(e.get('new_string'), str):
             out.append(e['new_string'])
     # buffer.write = **바이너리 출력**. text 모드로 쓰면 Windows 에서 \n 이 \r\n 으로 번역되고,
-    # 그 CR 을 bash \${VAR//\$'\r'/} 로 지우는 데 760KB 기준 9.1초가 든다 (실측 — hook timeout 초과).
+    # 그 CR 을 bash 치환으로 지우는 비용이 대형 payload 에서 hook timeout 을 넘긴다.
     sys.stdout.buffer.write('\n'.join(out).encode('utf-8', 'replace'))
 except Exception:
     pass
@@ -341,11 +334,9 @@ hook_parse_command() {
   #   이 정규식이 돌려주는 건 JSON 원문 조각이라 escape 가 해석돼 있지 않다. backslash 가 하나라도
   #   있으면 버리고 정확 디코드(2단 python → 3단 awk)로 내려간다.
   #
-  #   구 조건은 `[[ "$STDIN_DATA" == *'\"'* ]]` — **따옴표 escape 가 있을 때만** 재파싱이라
-  #   `\n`·`\\` 만 있는 명령은 원문 그대로 통과했다. 그 결과 여러 줄 명령이 git-guard.py 에
-  #   **한 줄로** 전달돼 절 분리가 무너지고 push/merge 가 검출되지 않았다 (2026-08-03 실측:
-  #   `cat <<EOF … EOF` + 개행 + `git push origin feature/x` → normal rc=0 = 주 경로 fail-open.
-  #   따옴표가 우연히 섞인 같은 명령은 rc=2 라 재현이 들쭉날쭉했다).
+  #   `\n`·`\\` 만 있고 따옴표 escape 는 없는 명령까지 원문 그대로 통과시키면, 여러 줄 명령이
+  #   git-guard.py 에 **한 줄로** 전달돼 절 분리가 무너지고 push/merge 가 검출되지 않는다
+  #   (예: `cat <<EOF … EOF` + 개행 + `git push origin feature/x` 가 fail-open 한다).
   if [[ "$STDIN_DATA" =~ \"command\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]]; then
     COMMAND="${BASH_REMATCH[1]}"
     [[ "$COMMAND" == *\\* ]] && COMMAND=""
@@ -365,7 +356,7 @@ except Exception:
 " 2>/dev/null | tr -d '\r')
       [ -n "$_pycmd" ] && COMMAND="$_pycmd"
     fi
-    # 3단: python 부재·실패 시 bash JSON 디코더 (2026-08-03 — 구 grep+sed 대체)
+    # 3단: python 부재·실패 시 bash JSON 디코더
     #   escape 된 따옴표를 품은 명령(`git commit -m \"…\"`)에서 1단 bash 정규식과 grep+sed 는
     #   똑같이 truncate 된다 → 소비자(git-quality-gate)가 메시지를 못 읽고 게이트를 건너뛴다.
     #   hook_json_string 은 escape 를 해석하므로 python 장애에서도 원문이 보존된다.

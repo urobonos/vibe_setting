@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# code-loop 00-spec.md 의 크기 게이트 판정 줄을 읽는다 — 판정 SSOT (2026-09-17)
+# code-loop 00-spec.md 의 크기 게이트 판정 줄을 읽는다 — 판정 SSOT
 #
 # 쓰는 곳 두 군데가 같은 답을 내야 한다:
 #   custom-plugin/taskflow/hooks/gate-enforce.sh  plan-before 게이트 — OK 일 때만 code-loop 개발자 편집 허용
 #   custom-plugin/taskflow/bin/code-loop.sh       크기 게이트 분기 — OK 진행 / TOO-LARGE 정지 / 없음 중단
-# 둘이 각자 패턴을 들고 있다가 갈라졌다. hook 은 줄 맨 앞 `GATE:` 만 읽어서 spec 이
-# `## GATE: OK` 로 쓰면 개발자가 5라운드 내내 코드를 못 썼고(iss-910 후속 run),
-# 러너는 `GATE: TOO-LARGE` 로 시작하는 줄만 봐서 헤더형 TOO-LARGE 와 GATE 줄 없음을
-# 전부 "진행" 으로 읽었다. hook 만 넓히면 과대 요청이 게이트를 통과한다 — 그래서 한 곳에서 읽는다.
+# 각자 패턴을 따로 들고 있으면 갈라질 수 있다. hook 이 줄 맨 앞 `GATE:` 만 읽으면 spec 이
+# `## GATE: OK` 로 쓸 때 개발자가 코드를 못 쓰고, 러너가 `GATE: TOO-LARGE` 로 시작하는 줄만
+# 보면 헤더형 TOO-LARGE 와 GATE 줄 없음을 전부 "진행" 으로 읽는다.
+# hook 만 넓히면 과대 요청이 게이트를 통과한다 — 그래서 한 곳에서 읽는다.
 #
 # 인정하는 표기: 줄 전체가 GATE 줄일 때만. 앞의 공백·`#`·`>`·`*`, 값 뒤의 공백·`*` 는 허용.
 #   GATE: OK · ## GATE: OK · **GATE: OK** · > GATE: TOO-LARGE

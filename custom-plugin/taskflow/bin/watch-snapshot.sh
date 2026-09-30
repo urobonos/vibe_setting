@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# watch-snapshot.sh — working/ 태스크 문서 변경 감지 SSOT (2026-07-27)
+# watch-snapshot.sh — working/ 태스크 문서 변경 감지 SSOT
 #
 # 용도: /taskflow:watch 가 "지난번 이후 무엇이 바뀌었나"를 상수 비용으로 판정한다.
 #       전체를 매번 재검증하면 77건×매 5분 = 낭비 → 변경분만 검증한다.
 #
 # 스냅샷 위치: ~/.claude/state/watch/{scope}.tsv  (scratchpad 아님 — 세션이 죽어도 남아야
-#   다음 세션의 loop 가 이어서 diff 할 수 있다. 2026-07-27 실측: 기존 세션은 scratchpad 에
-#   두고 있어 세션 교체 시 전건이 '신규'로 잡히는 상태였다.)
+#   다음 세션의 loop 가 이어서 diff 할 수 있다. scratchpad 에 두면 세션 교체 시 전건이
+#   '신규'로 잡힌다.)
 #
 # 형식(TSV 4열): path \t mtime \t size \t status
 #
@@ -29,9 +29,9 @@
 WATCH_STATE_DIR="${WATCH_STATE_DIR:-$HOME/.claude/state/watch}"
 WATCH_MIN_AGE_SEC="${WATCH_MIN_AGE_SEC:-300}"
 _WATCH_LIB_DIR="$HOME/.claude/hooks/lib"   # 하니스 공유 lib (working-scan.sh)
-# 로드 여부는 **함수 존재**로 판정한다. 전엔 `[ -z "$WORKING_ROOT" ]` 였는데, 그건 변수가
-#   설정됐는지를 물을 뿐이라 소비자가 WORKING_ROOT 를 먼저 지정하고 이 파일을 source 하면
-#   working-scan.sh 가 아예 안 읽혀 `working_scan: command not found` 로 죽었다.
+# 로드 여부는 **함수 존재**로 판정한다. `[ -z "$WORKING_ROOT" ]` 로 판정하면 변수가
+#   설정됐는지만 물어서, 소비자가 WORKING_ROOT 를 먼저 지정하고 이 파일을 source 할 때
+#   working-scan.sh 가 아예 안 읽혀 `working_scan: command not found` 로 죽는다.
 # shellcheck source=/dev/null
 declare -F working_scan >/dev/null 2>&1 || . "$_WATCH_LIB_DIR/working-scan.sh"
 
@@ -88,7 +88,7 @@ watch_doc_locked() { [ -d "$(_watch_lock_path "$1")" ]; }
 
 # 감시 repo 목록 — 자동 탐색이 아니라 **편집 가능한 목록 파일**.
 # 최초 1회만 '최근 REPO_SEED_DAYS 일 내 커밋' repo 로 시딩하고, 이후엔 사용자가 소유한다.
-# (전 repo 자동 감시는 노이즈다 — 2026-07-27 실측: 잠든 레거시 hongcafe3_upgrade 가 dirty 35972건.)
+# (전 repo 자동 감시는 노이즈다 — 잠든 레거시 repo 하나가 dirty 수만 건을 만들 수 있다.)
 WATCH_REPO_SEED_DAYS="${WATCH_REPO_SEED_DAYS:-14}"
 WATCH_REPO_SEED_GLOBS="${WATCH_REPO_SEED_GLOBS:-/c/Works/* /c/works/* $HOME/.claude}"
 
@@ -118,7 +118,7 @@ watch_repo_scan() {
   grep -vE '^\s*(#|$)' "$f" | while IFS= read -r d; do
     [ -d "$d/.git" ] || continue
     # porcelain=v2 --branch 한 번으로 HEAD·브랜치·미커밋 수를 모두 얻는다
-    # (rev-parse + status + branch 3회 호출 = repo 13개에 6.7초였다. 2026-07-27 실측)
+    # (rev-parse + status + branch 3회 호출보다 빠르다)
     git -C "$d" status --porcelain=v2 --branch 2>/dev/null | awk -v d="$d" '
       /^# branch\.oid/  { oid = substr($3, 1, 8) }
       /^# branch\.head/ { br = $3 }

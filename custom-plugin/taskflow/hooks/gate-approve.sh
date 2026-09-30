@@ -14,9 +14,9 @@ HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/nul
 source "$HARNESS_LIB/hook-input.sh"
 hook_read_stdin
 
-# --- 디버그 로그 설정 (2026-05-13 telemetry lib 마이그레이션) ---
-# 신규 = lib/log-helper.sh 의 log_event 사용 (~/.claude/logs/gate-approve.log ndjson)
-# fallback = lib 로드 실패 시 기존 free-text 포맷 보존
+# --- 디버그 로그 설정 ---
+# lib/log-helper.sh 의 log_event 사용 (~/.claude/logs/gate-approve.log ndjson)
+# fallback = lib 로드 실패 시 free-text 포맷
 # shellcheck disable=SC1091
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null || {
   LOG_FILE="$HOME/.claude/gate-approve.log"
@@ -25,7 +25,7 @@ source "$HARNESS_LIB/log-helper.sh" 2>/dev/null || {
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] [$event] $*" >> "$LOG_FILE" 2>/dev/null
   }
 }
-# 기존 log() 함수 wrapper — 점진 마이그레이션 호환 (event="info" 기본)
+# log() 함수 — log_event 래퍼 (event="info" 기본)
 log() {
   local event="info"
   if [[ "${1:-}" =~ ^(enter|approve|block|skip|error|info)$ ]]; then
@@ -34,8 +34,8 @@ log() {
   log_event "gate-approve" "$event" "$*"
 }
 
-# session_id / prompt 추출 — lib/hook-input.sh SSOT (M5 2026-08-03: python -c 블록 + grep fallback
-#   재구현 제거). eval 없는 값 전달(2026-05-13 H-1 픽스)은 그대로 유지 — 값은 전부 command
+# session_id / prompt 추출 — lib/hook-input.sh SSOT (python -c 블록 + grep fallback 재구현 제거).
+#   eval 없는 값 전달을 유지한다 — 값은 전부 command
 #   substitution 텍스트라 `$()` / backtick expansion 이 발생하지 않는다.
 #   prompt 를 hook_json_string(awk) 우선으로 읽는 이유: 프롬프트에는 따옴표가 흔한데
 #   `"prompt"…"([^"]*)"` 정규식은 첫 `\"` 에서 잘려 승인 키워드를 놓칠 수 있다.
@@ -58,7 +58,7 @@ if [ -z "$PROMPT" ]; then
   exit 0
 fi
 
-# --- trivial 핫픽스 override 마커 (2026-07-08, plan-before 게이트 우회) ---
+# --- trivial 핫픽스 override 마커 (plan-before 게이트 우회) ---
 # '핫픽스'/'hotfix'/'trivial' 키워드 감지 → /tmp/claude_trivial_${SID} touch (mtime 갱신).
 # gate-enforce.sh plan-before 게이트가 이 마커를 30분 시간창 내에서만 통과 신호로 사용(self-expiry).
 # 길이 게이트 이전 배치 — "…핫픽스로 1줄만 고쳐줘"(50자 초과) 도 감지되도록.
@@ -79,7 +79,7 @@ if [ "$PROMPT_LEN" -gt 50 ]; then
   if echo "$LOWER_CHECK" | grep -qE '(^|\s)(ok|okay|yes|y|go|proceed|approve|lgtm|sure)(\s|$)'; then
     HAS_APPROVAL=true
   fi
-  # 자동 진행 정책 (2026-05-12): 긴 메시지 + 승인 키워드 없음 = gate reset 폐기
+  # 자동 진행 정책: 긴 메시지 + 승인 키워드 없음 = gate reset 폐기
   # 새 작업 진입 시에도 gate 보존 (§3 Checkpoint 5조건은 별 hook 보호)
   if [ "$HAS_APPROVAL" = false ]; then
     exit 0
@@ -193,8 +193,7 @@ if [ "$APPROVED" = true ]; then
   # gate → 2 진입 시(1→2 단일승인 또는 0→2 묶음승인): 단계 문서 1종 이상 필수
   if [ "$CURRENT" -lt 2 ] && [ "$NEW_LEVEL" -eq 2 ]; then
     TODAY=$(date +%Y%m%d)
-    # cwd 추출 = lib SSOT (2026-08-03 잔여 이관). 상단 파싱만 lib 로 옮기고 이 블록의
-    #   `python3 -c` + grep/sed fallback 재구현이 남아 있어 "재구현 제거" 주석과 어긋나 있었다.
+    # cwd 추출 = lib SSOT.
     hook_parse_cwd
     # --- 글로벌 경로 해석 ---
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -208,7 +207,7 @@ if [ "$APPROVED" = true ]; then
     if [ -d "$TASK_DIR" ]; then
       # A. 최근 60분 이내 수정된 서브디렉토리만 검사 대상
       # → 이전 작업 잔재(analyze만 있고 plan 없는 폴더)로 인한 오탐 차단
-      # 30분 → 60분 확장 (분석 후 질의응답 길어지는 흐름에서 silent skip 방지)
+      # 60분 창 — 분석 후 질의응답 길어지는 흐름에서 silent skip 방지
       RECENT_SUBDIR=$(find "$TASK_DIR" -mindepth 1 -maxdepth 1 -type d -mmin -60 2>/dev/null | head -1)
       if [ -n "$RECENT_SUBDIR" ]; then
         # CLAUDE.md §4 산출물 유연성: analyze / plan / result 중 1종 이상 있으면 통과.

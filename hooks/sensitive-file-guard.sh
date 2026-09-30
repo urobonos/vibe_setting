@@ -2,7 +2,7 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "sensitive-file-guard" "enter" "pid=$$"
 
-# block telemetry wrapper (Phase 2b Stage 2) — 정의 실패와 독립: log_event 미정의여도 echo+exit 2 보장 (C1/H1)
+# block telemetry wrapper — 정의 실패와 독립: log_event 미정의여도 echo+exit 2 보장
 block_exit() {
   command -v log_event >/dev/null 2>&1 && log_event "sensitive-file-guard" "block" "reason=$1"
   echo "$2" >&2
@@ -41,7 +41,7 @@ fi
 
 # --- 이하 Edit/Write 차단 ---
 
-# trailing/leading 공백 strip (Windows 가 쓰기 시 후행 공백 strip → ".env " 우회 차단, M 2026-06-16)
+# trailing/leading 공백 strip (Windows 가 쓰기 시 후행 공백 strip → ".env " 우회 차단)
 FILE="${FILE#"${FILE%%[![:space:]]*}"}"; FILE="${FILE%"${FILE##*[![:space:]]}"}"
 BASENAME="${FILE##*/}"
 LOWER_BASENAME="${BASENAME,,}"

@@ -10,14 +10,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   4. MEMORY.md 인덱스에 pointer 자동 등록 (1회)
 #
 # 실패 시 graceful degrade — 세션 종료 차단하지 않음.
-# 참고: claude -p --model haiku 요약 호출은 활성 세션과 충돌·timeout 빈발로 제거됨(하단 C 부분 주석 참조).
+# 참고: claude -p --model haiku 요약 호출은 활성 세션과 충돌·timeout 빈발로 쓰지 않는다(하단 C 부분 참조).
 
 STDIN_DATA=$(cat)
 
 # 기본 필드 추출
 # 값은 반드시 shlex.quote 로 감싼다 — 큰따옴표로 감싸 eval 하면 값 안의 백틱·$( ) 가
-# 이 훅 프로세스에서 실행된다. 형제 phpunit-prd-guard.sh 가 같은 형태로 샌드박스 DB 124행을
-# 지운 사고(2026-09-17)의 재발 방지 — 여기는 명령 텍스트가 아니라 경로 값만 들어오지만 형태가 같다.
+# 이 훅 프로세스에서 실행된다. 형제 phpunit-prd-guard.sh 가 같은 형태로 샌드박스 DB 를
+# 지운 사고의 재발 방지 — 여기는 명령 텍스트가 아니라 경로 값만 들어오지만 형태가 같다.
 eval "$(echo "$STDIN_DATA" | python -c "
 import json, shlex, sys
 try:
@@ -110,8 +110,8 @@ PYEOF
 )
 
 # === C 부분: 객관적 상태 스냅샷 (git + 최근 수정 파일) ===
-# 기존 claude -p --model haiku 호출은 활성 세션과 충돌하여 timeout 빈발 → 제거.
-# 대신 Raw 턴(B) + 정확한 구조화 메타데이터로 대체.
+# claude -p --model haiku 요약 호출은 활성 세션과 충돌하여 timeout 이 잦다 — Raw 턴(B) + 정확한
+# 구조화 메타데이터로 대체한다.
 
 GIT_STATUS=""
 GIT_BRANCH=""

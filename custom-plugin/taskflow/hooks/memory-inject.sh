@@ -10,8 +10,8 @@ source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "memory-inject" "en
 # ─────────────────────────────────────────────────────────
 # Why: 네이티브 autoMemoryEnabled 가 자동 주입하는 것은 MEMORY.md 한 개뿐이고,
 #   개별 memory/*.md 는 recall 이 MEMORY.md 의 hook 한 줄만 보고 열지 말지 정한다.
-#   MEMORY.md 가 200줄에서 잘리면(2026-09-07 실측: 210줄·10줄 조용한 절단) 잘린 줄에
-#   걸린 파일은 단서를 잃는다. INJECT.md 는 그 운에 맡기지 않는 확정 주입 경로다.
+#   MEMORY.md 가 200줄에서 조용히 잘리면 잘린 줄에 걸린 파일은 단서를 잃는다.
+#   INJECT.md 는 그 운에 맡기지 않는 확정 주입 경로다.
 #
 # 입력: ~/.claude/projects/{slug}/memory/INJECT.md  (생성 = /taskflow:dream Phase 4)
 # 규약: 파일 부재·슬러그 해석 실패 = 조용히 통과 (fail-open — 세션 시작을 막지 않는다)

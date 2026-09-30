@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# tick-loop.sh — /taskflow:tick 을 매번 새 프로세스로 반복 실행 (2026-07-28)
+# tick-loop.sh — /taskflow:tick 을 매번 새 프로세스로 반복 실행
 #
 # 왜 새 프로세스인가:
-#   harness `/loop` 은 한 세션에 iteration 을 누적해 컨텍스트가 선형 증가한다.
-#   2026-07-28 실측 — 세션 746244a3 이 step 7개를 530턴에 담으면서 턴당 컨텍스트가
-#   116K → 595K (5.1배) 로 늘었고, 그날 전체 토큰의 97% 가 cache_read 였다.
-#   프로세스를 끊으면 매 iteration 이 시작값으로 리셋된다 (headless 실측 첫 턴 76.8K).
+#   harness `/loop` 은 한 세션에 iteration 을 누적해 컨텍스트가 선형 증가한다 — step 이
+#   늘수록 턴당 컨텍스트가 커져 대부분 cache_read 토큰으로 소진된다.
+#   프로세스를 끊으면 매 iteration 이 시작값으로 리셋된다.
 #   tick 은 설계상 stateless (상태 = working/ 문서 + REGISTRY) 라 잃는 컨텍스트가 없다.
 #
 # 왜 병렬이 안전한가:
@@ -28,7 +27,7 @@ STATE_DIR="$HOME/.claude/state"
 SLOT_DIR="$STATE_DIR/tick-loop"
 MODEL="${TICK_LOOP_MODEL:-sonnet}"
 # auto — 실측으로 고른 값이다. acceptEdits 는 sensitive file 승인 요청에서 멈추고,
-# dontAsk 는 "묻지 않고 거부" 라 Write 도구 자체가 차단된다(2026-07-28 A/B 확인).
+# dontAsk 는 "묻지 않고 거부" 라 Write 도구 자체가 차단된다.
 PERM="${TICK_LOOP_PERM:-auto}"
 # graceful stop 대기 상한(초). tick 1회가 20분 걸리는 경우가 실재하므로 넉넉히 잡는다
 STOP_WAIT="${TICK_LOOP_STOP_WAIT:-1800}"
@@ -106,7 +105,7 @@ case "${1:-}" in
       rc=$?
       # 자식 claude 가 시그널로 죽었다(128+N) = 사용자가 개입했다는 뜻이다.
       # 이때 루프까지 멈추지 않으면 "다 껐다"고 믿는 사이 다음 iteration 이 뜬다
-      # (2026-07-28 실측 사고 — claude 만 kill 했는데 부모 루프가 살아남았다).
+      # (claude 만 죽으면 부모 루프가 살아남을 수 있다).
       if [ "$rc" -ge 128 ]; then
         echo "=== claude 가 시그널로 종료 (exit=$rc) — 루프를 멈춘다"
         break

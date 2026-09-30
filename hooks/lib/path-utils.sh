@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
-# path-utils.sh — 경로 정규화 공용 함수 (2026-05-13 도입)
+# path-utils.sh — 경로 정규화 공용 함수
 #
 # 사용:
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib/path-utils.sh"
 #   FILE_PATH=$(normalize_path "$FILE_PATH")
 #
-# SSOT: hook 들이 source 후 호출. CLAUDE.md §4.3 / Full Harness Audit (2026-05-13) 우선순위 1 결과물.
+# SSOT: hook 들이 source 후 호출.
 #
-# Why:
-# - 기존 = 11+ hook 가 `tr '\\\\' '/'` + `${FILE_PATH%/}` 2단계 변환을 본문에 박아두고 있음.
-# - 신규 = 단일 함수 SSOT 로 통일, Windows(\\) ↔ POSIX(/) 경로 + trailing slash 일관 처리.
-# - 마이그레이션 = 기존 hook 본문의 인라인 정규화 코드를 본 함수 호출로 점진 전환 (별 작업).
+# 단일 함수 SSOT 로 Windows(\\) ↔ POSIX(/) 경로 + trailing slash 를 일관 처리한다 — 인라인
+# 변환을 hook 마다 반복하면 규칙이 갈라진다.
 
 # ─────────────────────────────────────────────────────────
 # normalize_path [path] — 경로 정규화 (백슬래시→슬래시 + trailing slash 제거)
@@ -27,8 +25,9 @@ normalize_path() {
   fi
   # 백슬래시 → 슬래시
   input="${input//\\//}"
-  # 중복 슬래시 붕괴 — JSON-escaped 백슬래시(\\)가 bash 정규식 추출 경로에서 //(더블슬래시)로 남는 문제 정합
-  # (working-lifecycle 는 python json.load 로 회피, 본 SSOT 는 fork-free bash 붕괴로 전 hook 정합, 2026-07-09).
+  # 중복 슬래시 붕괴 — JSON-escaped 백슬래시(\\)가 bash 정규식 추출 경로에서 //(더블슬래시)로 남는
+  # 문제를 정합한다. working-lifecycle 는 python json.load 로 회피하고, 본 SSOT 는 fork-free bash
+  # 붕괴로 전 hook 을 정합한다.
   while [[ "$input" == *//* ]]; do input="${input//\/\//\/}"; done
   # trailing slash 제거 (단 단일 '/' 루트는 보존)
   if [ "${#input}" -gt 1 ]; then
@@ -38,7 +37,7 @@ normalize_path() {
 }
 
 # ─────────────────────────────────────────────────────────
-# is_hard_code_file [path] — hard-code 파일 판정 (2026-07-08, plan-before 게이트용)
+# is_hard_code_file [path] — hard-code 파일 판정 (plan-before 게이트용)
 # ─────────────────────────────────────────────────────────
 # 반환: 0 = hard-code (계획 게이트 대상) / 1 = 아님(면제)
 # 대상 확장자: .php .js .ts .py .sql (대소문자 무시)

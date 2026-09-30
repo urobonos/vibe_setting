@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# log-helper.sh — telemetry 인프라 공용 로거 (2026-05-13 도입)
+# log-helper.sh — telemetry 인프라 공용 로거
 #
 # 사용:
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh"
@@ -10,17 +10,14 @@
 # 표준 출력 포맷: ndjson (1 line 1 event, jq 호환)
 #   {"ts": "2026-05-13T15:00:00Z", "hook": "gate-approve", "event": "approve", "detail": "sid=..."}
 #
-# Why:
-# - 기존 = 각 hook 가 ~/.claude/{name}.log 산재 작성, 포맷 제각각 (timestamp + free text)
-# - 신규 = ~/.claude/logs/{name}.log 표준 위치 + ndjson 포맷 → 집계 스크립트 (jq) 일관 처리
-# - 마이그레이션 = 기존 hook 의 log() 함수를 본 lib 의 log_event 로 점진 전환 (별 작업)
+# 표준 위치 + ndjson 포맷으로 통일해 집계 스크립트(jq)가 모든 hook 로그를 일관 처리한다.
 #
 # SSOT: 본 lib + ~/.claude/bin/aggregate-hook-stats.sh (집계 스크립트)
 
 # 로그 루트 보장
-# fork 0 (2026-09-29): Windows Git Bash 는 외부 명령 1회 fork 가 ~40ms 라, 이 lib 를 쓰는 hook 마다
-#   mkdir·date 2회 fork 가 붙었다 (실측 log_event 1회 156ms). 디렉토리는 있을 때 건너뛰고,
-#   시각은 bash 내장 printf %()T 로 뽑는다 (date -u 와 출력 동일 확인).
+# fork 0 — Windows Git Bash 는 외부 명령 1회 fork 가 ~40ms 라, 이 lib 를 쓰는 hook 마다 mkdir·date
+#   fork 비용이 누적된다. 디렉토리는 있을 때 건너뛰고, 시각은 bash 내장 printf %()T 로 뽑는다
+#   (date -u 와 출력 동일).
 LOG_HELPER_ROOT="${HOME}/.claude/logs"
 [ -d "$LOG_HELPER_ROOT" ] || mkdir -p "$LOG_HELPER_ROOT" 2>/dev/null
 
@@ -28,7 +25,7 @@ LOG_HELPER_ROOT="${HOME}/.claude/logs"
 # log_event <hook-name> <event-type> [detail...]
 # ─────────────────────────────────────────────────────────
 # hook-name: 'gate-approve' / 'working-lifecycle' 등 — 파일 분리 키
-# event-type: 6 분류 표준 (2026-05-19 debate 결정, 2026-05-26 정렬)
+# event-type: 6 분류 표준
 #   enter   — hook 진입 시작점
 #   approve — 승인/통과 (성공 분기)
 #   block   — 차단/exit 2 (강제 차단 분기)

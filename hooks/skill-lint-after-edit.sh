@@ -30,9 +30,7 @@ if echo "$FILE" | grep -qiE '\.claude/skills/[^/]+/SKILL\.md$'; then
   HAS_WARNING=0
   AGGREGATE_OUTPUT=""
 
-  # 2026-05-20 F3-P2: 3 도구 직렬 → background 병렬 spawn + wait
-  #   기존 = lint + audit + why 직렬 (worst-case 누적)
-  #   변경 = max(lint, audit, why) wall-clock (≈ 3배 절감)
+  # 3 도구를 background 병렬 spawn + wait 로 처리한다 — wall-clock = max(lint, audit, why) (≈ 3배 절감)
   TMP_DIR=$(mktemp -d "/tmp/claude_skill_lint_XXXXXX" 2>/dev/null) || TMP_DIR="/tmp/claude_skill_lint_$$"
   mkdir -p "$TMP_DIR"
 

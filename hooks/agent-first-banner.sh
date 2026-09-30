@@ -14,6 +14,6 @@ cat <<'BANNER'
   • 상세: CLAUDE.md §4 "에이전트 우선 위임", skills/orchestration §0 "Agent-First Default"
 BANNER
 
-# 작업 재개 추천 블록은 taskflow 플러그인 소관 → custom-plugin/taskflow/hooks/resume-banner.sh (2026-09-28 이동)
+# 작업 재개 추천 블록은 taskflow 플러그인 소관 → custom-plugin/taskflow/hooks/resume-banner.sh
 
 exit 0

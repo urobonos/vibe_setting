@@ -12,10 +12,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   3. SELFCHECK_DONE 플래그 있음 (세션당 1회 제한) → 통과
 #   4. 위 모두 미해당 → 플래그 세팅 + stderr에 자가점검 체크리스트 주입 + exit 2
 
-# --- JSON 파싱 — lib/hook-input.sh SSOT (M5 2026-08-03) ---
-#   구 코드는 python3 -c 블록 + `eval "$PARSED"` + grep fallback 재구현이었다. 특히 fallback 은
-#   lib 의 hook_parse_stop_active 를 그대로 복제한 것이라 두 벌이 갈릴 위험만 남았다.
-#   lib 은 bash 정규식 primary(fork 0) 이라 python·eval 둘 다 필요 없다.
+# --- JSON 파싱 — lib/hook-input.sh SSOT ---
+#   lib 은 bash 정규식 primary(fork 0) 이라 python·eval 없이 처리한다. 자체 파싱을 재구현하면
+#   lib 의 hook_parse_stop_active 와 갈릴 위험이 생긴다.
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/hook-input.sh"
 hook_read_stdin
@@ -59,7 +58,7 @@ echo "모두 충족 → \"자가점검 완료: 모두 충족\" 한 줄로 종료
 echo "미충족 → 즉시 보완 작업 수행." >&2
 echo "━━━━━━━━━━━━━━━━━━━━━━━" >&2
 
-# 정책 (2026-05-06): exit 0 (정보성 stderr 알림만, 차단 없음)
+# 정책: exit 0 (정보성 stderr 알림만, 차단 없음)
 # Why: Stop hook 매 응답 종료마다 호출 + exit 2 차단 시 reroll 강제로 토큰·응답 시간 폭증.
 # SELFCHECK_DONE 가드(세션당 1회) 가 발동 빈도 제어 + stderr 알림으로 자가복구 신뢰.
 # 진짜 산출물 차단 필요는 session-completeness-check.sh 분담.

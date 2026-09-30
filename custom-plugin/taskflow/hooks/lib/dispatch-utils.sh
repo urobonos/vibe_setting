@@ -4,7 +4,7 @@
 HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../hooks/lib" 2>/dev/null && pwd)"
 [ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 # dispatch-utils.sh — 작업 분배 풀(DISPATCH) CRUD + 배타적 claim lib
-# SSOT: plan.md §"병렬 그룹 다세션 분배"(dispatch_add) + load.md §"#tag claim"(dispatch_claim/done) — 2026-07-16 워커풀 흡수
+# SSOT: plan.md §"병렬 그룹 다세션 분배"(dispatch_add) + load.md §"#tag claim"(dispatch_claim/done)
 #
 # 사용:
 #   source "$(dirname "$0")/lib/dispatch-utils.sh"
@@ -30,7 +30,7 @@ DISPATCH_LOCK_RETRIES="${DISPATCH_LOCK_RETRIES:-50}"
 DISPATCH_LOCK_SLEEP="${DISPATCH_LOCK_SLEEP:-0.1}"
 DISPATCH_STALE_HOURS="${DISPATCH_STALE_HOURS:-24}"
 # stale lock 회수 임계 (분): 정상 lock 은 ms~초 단위 보유 → TTL 초과 = 소유 프로세스 즉사 후 미해제 orphan.
-# registry-utils REGISTRY_LOCK_TTL_MIN 과 정합 (backlog dispatch-lock-stale-leak, 2026-06-16 16세션 11분 동결 재발 차단).
+# registry-utils REGISTRY_LOCK_TTL_MIN 과 정합 (backlog dispatch-lock-stale-leak 재발 차단).
 DISPATCH_LOCK_TTL_MIN="${DISPATCH_LOCK_TTL_MIN:-2}"
 
 # 마크다운 표 FS — registry-utils.sh REGISTRY_FS 와 동일 (미로드 fallback 포함)
@@ -59,8 +59,8 @@ dispatch_is_stale() {
 dispatch_lock_acquire() {
   local i=0
   while ! mkdir "$DISPATCH_LOCK" 2>/dev/null; do
-    # stale steal (backlog dispatch-lock-stale-leak, 2026-06-16): acquire 후 rmdir 전 프로세스 즉사 시
-    #   lock 영구 잔존 → 전 세션 DISPATCH CRUD 동결하던 문제 차단. mtime TTL 회수 (registry-utils 와 동일 패턴,
+    # stale steal (backlog dispatch-lock-stale-leak): acquire 후 rmdir 전 프로세스 즉사 시
+    #   lock 이 영구 잔존해 전 세션 DISPATCH CRUD 를 동결시킬 수 있다. mtime TTL 로 회수한다 (registry-utils 와 동일 패턴,
     #   Git Bash kill -0 PID liveness 불확실 → mtime 방식). mkdir atomic 으로 회수 race 안전.
     if [ -d "$DISPATCH_LOCK" ] && find "$DISPATCH_LOCK" -maxdepth 0 -mmin "+$DISPATCH_LOCK_TTL_MIN" 2>/dev/null | grep -q .; then
       rmdir "$DISPATCH_LOCK" 2>/dev/null

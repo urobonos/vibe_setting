@@ -5,8 +5,8 @@ HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/nul
 [ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "gate-enforce" "enter" "pid=$$"
-source "$HARNESS_LIB/path-utils.sh" 2>/dev/null  # is_hard_code_file (plan-before 게이트, 2026-07-08)
-source "$(dirname "${BASH_SOURCE[0]}")/lib/code-loop-gate.sh" 2>/dev/null  # code_loop_gate (code-loop spec 판정, 2026-09-17)
+source "$HARNESS_LIB/path-utils.sh" 2>/dev/null  # is_hard_code_file (plan-before 게이트)
+source "$(dirname "${BASH_SOURCE[0]}")/lib/code-loop-gate.sh" 2>/dev/null  # code_loop_gate (code-loop spec 판정)
 # PreToolUse Hook: Gate 미통과 시 Edit/Write/MultiEdit 차단 + Agent 검증
 # Phase 3 Harness — v2 (비코드 경로 완화)
 #
@@ -28,7 +28,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/code-loop-gate.sh" 2>/dev/null  # cod
 
 STDIN_DATA=$(cat)
 
-# 기본 필드 일괄 추출 (eval 제거 — tool_input 값이 셸로 재해석되는 코드 인젝션 차단, C1 2026-06-16)
+# 기본 필드 일괄 추출 (eval 제거 — tool_input 값이 셸로 재해석되는 코드 인젝션 차단)
 #   python 이 5개 값을 개행 구분 1줄씩 출력 → mapfile 로 배열에 데이터로만 적재 (eval 경유 X).
 #   값 내 개행/CR 은 python 단에서 공백 치환 (배열 인덱스 어긋남 방지). python 부재 시 빈 배열 → 기본값.
 _GATE_PY=""
@@ -36,10 +36,9 @@ command -v python3 >/dev/null 2>&1 && _GATE_PY=python3
 [ -z "$_GATE_PY" ] && command -v python >/dev/null 2>&1 && _GATE_PY=python
 _GF=()
 if [ -n "$_GATE_PY" ]; then
-  # 배칭: 필요한 8개 값을 python 1회로 일괄 추출.
-  #   기존엔 cwd(.claude CWD 면제 분기)·file_path(면제 분기 / Edit·Write·MultiEdit Gate)·prompt(Team 3 worktree 검사)를
-  #   지점마다 python 재기동(최대 4회) → 콜드 스타트 시 수 초 손실.
-  #   file_path 는 여기서 역슬래시→슬래시 정규화 (기존 각 지점 replace(chr(92),'/') 와 동일 동작 보존).
+  # 배칭: 필요한 8개 값을 python 1회로 일괄 추출한다 — 지점마다(cwd/file_path/prompt 등) python 을
+  #   따로 기동하면 콜드 스타트가 여러 번 겹쳐 수 초가 든다.
+  #   file_path 는 여기서 역슬래시→슬래시 정규화까지 끝낸다.
   mapfile -t _GF < <(printf '%s' "$STDIN_DATA" | "$_GATE_PY" -c "
 import json, sys
 try:
@@ -82,12 +81,12 @@ fi
 CURRENT=$(cat "$GATE_FILE" 2>/dev/null || echo "0")
 
 # --- .claude 레포 CWD 면제 (하니스 자기수정 부트스트랩) ---
-# 면제 좁히기: 무조건 면제 → 화이트리스트 면제로 전환 (P1-4).
+# 무조건 면제가 아니라 화이트리스트 면제다.
 # 면제 대상 (하니스 운영 영역):
 #   CLAUDE.md, MEMORY.md, settings*.json, keybindings.json,
 #   skills/**, hooks/**, commands/**, docs/**, agents/**, agent-memory/**, lib/**
 # 외 파일(예: scripts/*.py, plugins/*.py)은 일반 gate 검증 적용 (공격면 축소).
-# Edit/Write 외 도구(Read, Bash 등)는 종전과 동일하게 즉시 면제.
+# Edit/Write 외 도구(Read, Bash 등)는 즉시 면제.
 # (CWD 는 상단 배치 추출에서 이미 확보 — python 재기동 제거)
 if echo "$CWD" | grep -qE '[\\/]\.claude$'; then
   # 파일 변경 도구(Edit/Write/MultiEdit)만 아래 화이트리스트 검사를 받는다.
@@ -169,7 +168,7 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Mult
     exit 0
   fi
 
-  # docs/working/ — 진행 중 단일 통합 작업 문서 (게이트 면제, Gate-0 직행, 2026-05-12 시행)
+  # docs/working/ — 진행 중 단일 통합 작업 문서 (게이트 면제, Gate-0 직행)
   # CLAUDE.md §File Paths "working/ 단일 통합 문서" 룰 정합.
   # 진행 중 작업은 working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md 단일 파일로 작성하며,
   # 완료 시 working-lifecycle.sh hook 이 tasks/ 폴더로 자동 이동. 작성 시점 Gate 없음.
@@ -177,7 +176,7 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Mult
     exit 0
   fi
 
-  # --- plan-before 게이트 (2026-07-08, 독립 검사 / 숫자 게이트 무관) ---
+  # --- plan-before 게이트 (독립 검사 / 숫자 게이트 무관) ---
   # hard-code 파일(php/js/ts/py/sql)은 세션 §계획 문서 존재 시에만 수정 허용.
   # 신호 = REGISTRY(SID8) → working_file → `^Status: (Plan Complete|In Progress|Done|Partial)` (execute 단계 In Progress 포함).
   # override 마커(/tmp/claude_trivial_${SESSION_ID}, 핫픽스) 존재 시 통과.
@@ -200,10 +199,9 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Mult
           fi
         done < <(awk -F'|' -v s="$_plan_sid8" '{gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$9); if ($4==s) print $9}' "$_plan_registry" 2>/dev/null)
 
-        # code-loop 경로 (2026-09-16) — 스텝마다 새 프로세스라 SID8 이 매번 바뀌어
-        # REGISTRY 에 원천적으로 닿지 못한다. REGISTRY 등록은 UserPromptSubmit 경유로만
-        # 가능한데 서브프로세스에는 그 경로가 없다 (실측: ISS-570 이전 run 이 5라운드 전부
-        # 이 게이트에 막혀 코드 0줄로 끝났고, 재시도로는 풀리지 않음을 개발자가 소스로 확정).
+        # code-loop 경로 — 스텝마다 새 프로세스라 SID8 이 매번 바뀌어 REGISTRY 에 원천적으로
+        # 닿지 못한다. REGISTRY 등록은 UserPromptSubmit 경유로만 가능한데 서브프로세스에는
+        # 그 경로가 없다.
         #
         # 그 대신 1단계가 만든 00-spec.md 를 §계획으로 인정한다 — 요청·성공 기준(검증 가능)
         # ·테스트 범위·비목표가 들어 있어 이 게이트가 요구하는 것을 다른 이름으로 이미
@@ -214,9 +212,9 @@ if [[ "$TOOL_NAME" == "Edit" || "$TOOL_NAME" == "Write" || "$TOOL_NAME" == "Mult
         # 열리는 구조면 그 자체가 우회 통로가 된다. TOO-LARGE 는 인정하지 않는다
         # (그건 "이 커맨드로 받지 않는다" 는 판정이라 계획이 선 상태가 아니다).
         #
-        # 판정 줄 읽기는 러너와 같은 함수다 (SSOT = lib/code-loop-gate.sh). 여기서 따로
-        # `^GATE:` 를 grep 하다가 spec 의 `## GATE: OK` 를 못 읽어 개발자가 5라운드 내내
-        # 코드를 못 쓴 run 이 나왔다. lib 가 안 읽히면 함수가 없어 빈 값 → 통과시키지 않는다.
+        # 판정 줄 읽기는 러너와 같은 함수다 (SSOT = lib/code-loop-gate.sh) — 여기서 따로
+        # `^GATE:` 를 grep 하면 spec 의 `## GATE: OK` 형식(헤더 포함)을 못 읽는다. lib 가 안
+        # 읽히면 함수가 없어 빈 값 → 통과시키지 않는다.
         if [ "$_plan_ok" -ne 1 ] && [ -n "${CODE_LOOP_SPEC:-}" ] \
            && [ -f "$CODE_LOOP_SPEC" ] \
            && [ "$(code_loop_gate "$CODE_LOOP_SPEC" 2>/dev/null)" = "OK" ]; then
@@ -305,7 +303,7 @@ fi
 
 # --- Subagent Spawn Validation ---
 # 시스템 tool name: Task / SubagentSpawn 매칭 (Claude Code 도구명 표준)
-# (Agent 는 무효 도구명이라 매처/분기에서 제거 — 2026-05-08)
+# (Agent 는 무효 도구명이라 매처/분기에서 제거)
 if [[ "$TOOL_NAME" == "Task" || "$TOOL_NAME" == "SubagentSpawn" ]]; then
   # Explore, Plan, claude-code-guide, statusline-setup, general-purpose → model 검증 제외
   if [[ "$SUBAGENT_TYPE" != "Explore" && "$SUBAGENT_TYPE" != "Plan" && "$SUBAGENT_TYPE" != "claude-code-guide" && "$SUBAGENT_TYPE" != "statusline-setup" && "$SUBAGENT_TYPE" != "general-purpose" ]]; then

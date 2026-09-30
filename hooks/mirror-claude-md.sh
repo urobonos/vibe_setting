@@ -6,7 +6,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 # 대상:
 #   C:/Works/hongcafe_global_backend/CLAUDE.md  ⇄  ~/.claude/mirrors/hongcafe_global_backend/CLAUDE.md
 #
-# 정책 (사용자 결정 2026-05-07):
+# 정책 (사용자 결정):
 #   - 양방향: 한쪽 Edit/Write 시 반대편 자동 cp
 #   - cp 3회 재시도 + 2초 timeout (mirror-docs.sh 패턴)
 #   - 미러 루트 미존재 시 SKIP (be 미클론 환경 호환)

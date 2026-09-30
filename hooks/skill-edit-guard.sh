@@ -7,7 +7,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   - .claude/skills/{skill}/* 하위 파일은 skill-creator 스킬을 통해서만 수정·생성
 #   - 락 파일 /tmp/claude_skill_creator_active.lock 존재 시 통과 (skill-creator 진입 시 모델이 생성)
 #   - 차단 시 exit 2 + stderr 메시지로 skill-creator 호출 유도
-#   - 사용자 결정 (2026-04-30): 스킬 생성·수정·최적화는 전부 skill-creator 경유 강제
+#   - 사용자 결정: 스킬 생성·수정·최적화는 전부 skill-creator 경유 강제
 
 source "$(dirname "$0")/lib/hook-input.sh"
 source "$(dirname "$0")/lib/path-utils.sh"

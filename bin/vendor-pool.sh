@@ -4,13 +4,12 @@
 # 하드링크 클론으로 전환한다. 짝 도구 = vendor-lock-stamp.sh (전환 후 정합 검증).
 #
 # 배경: worktree 들이 같은 composer.lock 을 쓰면서도 vendor 를 각자 실디렉토리로
-#   들고 있어 313M 씩 중복된다 (2026-08-24 실측 7.8GB). junction 으로 묶는 방식은
-#   시도했다가 폐기했다 — `git worktree remove --force` 가 junction 을 따라가
-#   원본까지 지운다(실측 재현, 과거 vendor 소실 사고의 실제 메커니즘). 하드링크는
-#   그 경로에서 원본이 살아남는다(실측 확인) — 그래서 클론 방식을 쓴다.
+#   들고 있어 수백 MB씩 중복된다. junction 으로 묶는 방식은 폐기했다 — `git worktree
+#   remove --force` 가 junction 을 따라가 원본까지 지운다 (과거 vendor 소실 사고의
+#   실제 메커니즘). 하드링크는 그 경로에서 원본이 살아남는다 — 그래서 클론 방식을 쓴다.
 #
-# pool 위치: ~/.claude/vendor-pool/{pool_key 16자}/ — lock 해시 + composer.json autoload 섹션 해시
-#   (2026-09-23~, 그 전엔 lock 해시만). lock 정합 판정은 여전히 vendor/.lock-sha 의 전체 sha256 이 한다.
+# pool 위치: ~/.claude/vendor-pool/{pool_key 16자}/ — lock 해시 + composer.json autoload 섹션 해시.
+#   lock 정합 판정은 vendor/.lock-sha 의 전체 sha256 이 한다.
 #
 # 사용법:
 #   bash ~/.claude/bin/vendor-pool.sh build <vendor 원본 디렉토리>
@@ -41,8 +40,8 @@ MODE="$1"
 
 lock_sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
 # pool 디렉토리 키 = lock 해시 + composer.json autoload·autoload-dev 섹션.
-# lock 만 키로 쓰면 lock 불변 + autoload 매핑 변경(2026-09-23 develop 54695f7c)을
-# 같은 pool 로 보고 옛 autoload 를 계속 클론한다. .lock-sha stamp 는 lock 해시 그대로 둔다
+# lock 만 키로 쓰면 lock 은 불변인데 autoload 매핑만 바뀐 경우를 같은 pool 로 보고 옛
+# autoload 를 계속 클론한다. .lock-sha stamp 는 lock 해시 그대로 둔다
 # (vendor-lock-stamp.sh 계약 유지) — 이 키는 디렉토리 선택에만 쓴다.
 pool_key() {
     local root="$1" autoload

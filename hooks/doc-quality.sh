@@ -3,7 +3,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "doc-quality" "enter" "pid=$$"
 # PostToolUse Hook: Service 수정 시 테스트 동반 확인 (No Test, No Merge)
 # 원 통합(doc-checklist/test-coexistence/notion-sync) 중 체크리스트=doc-unified-check.sh V4 이관,
-# Notion INFO=요청기반 정책으로 폐기 (2026-07-15). 잔여 = 테스트 동반 확인 단일 책임 (warning, exit 0).
+# Notion INFO=요청기반 정책으로 폐기. 잔여 = 테스트 동반 확인 단일 책임 (warning, exit 0).
 
 STDIN_DATA=$(cat)
 
@@ -18,8 +18,6 @@ CWD="."; [[ "$STDIN_DATA" =~ \"cwd\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && 
 
 # ===== 1. 문서 체크리스트 검증 — doc-unified-check.sh V4 (v_checklist_count) 가 수행 =====
 # 체크리스트 개수 검증(전 단계 하한 5 — 존재 강제, 상한 없음)은 doc-unified-check.sh SSOT.
-# (2026-09-04 완화: 구 analyze/unified≥30·plan/result≥20 → 하한 5. 사유는 V4 주석)
-# (구 checklist-count-check.sh 는 doc-unified 로 통합되어 2026-07-14 삭제됨)
 
 # ===== 2. 테스트 동반 확인 (warning) =====
 if [[ "$FILE_PATH" == *.php ]] && echo "$FILE_PATH" | grep -qE 'app/Modules/[A-Za-z]+/Services/[A-Za-z]+\.php'; then

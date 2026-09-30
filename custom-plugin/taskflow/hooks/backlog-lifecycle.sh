@@ -5,49 +5,43 @@ HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/nul
 [ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "backlog-lifecycle" "enter" "pid=$$"
-# backlog-lifecycle.sh — working backlog 완료 시 tasks/ 자동 이동 (2026-05-13 시행, 2026-08-06 경로 배선,
-#   2026-08-07 실 데이터 298건 이관 실행 — 콜드리뷰 L1: 배선일과 실행일을 혼용하지 않는다)
+# backlog-lifecycle.sh — working backlog 완료 시 tasks/ 자동 이동
 #
 # SSOT: CLAUDE.md §4 "backlog 메모리 정책" + skills/task-docs/SKILL.md §"backlog 메모리 워크플로우"
 #
 # 관련 정책 (judgment 룰 — 본 hook 강제 대상 아님, 기록만):
-#   "비필수 사이드이펙트 백로그 격리" (CLAUDE.md §4.5, 2026-06-09~) — 코드 작업 중 발견한 항목이
+#   "비필수 사이드이펙트 백로그 격리" (CLAUDE.md §4.5) — 코드 작업 중 발견한 항목이
 #   ① 현재 작업 필수요소 아님 + ② 실제 문제·버그 아님 + ③ 사이드이펙트급 3조건을 모두 충족하면
 #   working/·산출물·코드 TODO 로 끌어올리지 말고 backlog 메모리에만 기록한다 (실제 버그는 경미해도
 #   미루지 않음 = ②가 안전장치). 격리 판단은 Claude 본체 (judgment 룰 → 기계 강제 불가).
 #   본 hook 은 그렇게 기록된 backlog 의 status:done → tasks/ 자동 이동만 담당한다.
 #
-# product 결정 = frontmatter → **인덱스 역조회** → 기본값 (2026-09-04 신설, `resolve_product_from_index`):
-#   이전엔 frontmatter `product:` 만 봐서, 그 필드가 없는 파일이 전부 `claude-harness` 로 갔다. 실측
-#   (2026-09-04): backlog 356건 중 `product:` 보유는 25건뿐이라 athena·infra·docs 항목이 harness 트리에
-#   한 덩어리로 쌓였다(그날 실사고 5건). **hook 은 이동 후 entry 제거를 위해 이미 전 project 인덱스를
-#   전수 스캔한다** — 이미 아는 정보를 결정에 안 쓴 것이 원인이라, 그 조회를 product 결정 앞으로 당겼다.
-#   대안이던 356건 frontmatter 백필은 채택하지 않았다: 인덱스 등재분이 123건(35%)뿐이고 나머지는 slug
-#   prefix 로 추정할 수밖에 없는데 prefix 충돌이 10종 이상이었다(`athena` 조차 harness/local-athena 로
-#   갈린다). 인덱스가 정답지이므로 사본을 356곳에 박제하는 대신 조회 시점에 읽는다.
+# product 결정 = frontmatter → **인덱스 역조회** → 기본값 (`resolve_product_from_index`):
+#   frontmatter `product:` 필드가 없는 backlog 가 다수라, 그 경우 전 project 인덱스를 역조회해
+#   실제 소유 project 를 찾는다. **hook 은 이동 후 entry 제거를 위해 이미 전 project 인덱스를
+#   전수 스캔한다** — 그 조회를 product 결정 앞으로 당겨 재사용한다. frontmatter 일괄 백필은
+#   채택하지 않는다 — slug prefix 만으로는 product 를 안정적으로 추정할 수 없어(`athena` 조차
+#   여러 project 에 걸친다) 인덱스가 정답지다.
 #
-# 경로 이관 (2026-08-06 배선 / 2026-08-07 실 데이터 이관 완료): 본문 저장처가 `memory/backlog_{slug}.md` → `docs/working/backlog/{yyyy-mm-dd}-{slug}.md`
-#   로 바뀌었다 (사용자 직접 열람 경로 통일). 신 경로만 지원(진입 게이트 기준) — 구 경로는 처리 대상 아님.
-#   frontmatter 구조(`metadata:` 하위 `status: pending|done`)는 불변.
-#   **MEMORY.md/BACKLOG.md 인덱스 entry 제거 판정 (콜드리뷰 R5 M2, 3라운드 만에 정정 — always-on 헤더가
-#   구현과 반대로 적혀 다음 라운드를 또 뒤집게 만들었었다):** href 토큰 합집합(구 `backlog_{slug}.md`
+# 경로: 본문 저장처는 `docs/working/backlog/{yyyy-mm-dd}-{slug}.md`. 신 경로만 지원(진입 게이트
+#   기준) — 구 경로(`memory/backlog_{slug}.md`)는 처리 대상 아님. frontmatter 구조(`metadata:` 하위
+#   `status: pending|done`)는 불변.
+#   **MEMORY.md/BACKLOG.md 인덱스 entry 제거 판정:** href 토큰 합집합(구 `backlog_{slug}.md`
 #   ∪ 신 `backlog/{yyyy-mm-dd}-{slug}.md`)을 **1차 매칭 키**로 쓴다. **`{yyyy-mm-dd}` 는 와일드카드가
-#   아니라 이동 대상 파일명의 날짜로 정확히 고정된다(2026-08-07 S1, 콜드리뷰 M10)** — 같은 slug 가
-#   날짜만 다르게 중복 존재할 때(실측 4쌍) 형제 entry 를 오삭제하는 걸 막기 위해서다. 단 삭제 판정과
-#   별개로, "이 라인이 형제인지" 식별에는 여전히 날짜 무관(옛 와일드카드와 동형) 매칭을 쓴다 —
-#   매칭되면 `noref`(정정 필요) 가 아니라 `sibling`(정상 보존, ✓) 로 보고한다. 링크 텍스트(`[{slug}]`)
-#   단독 매칭은 실 MEMORY.md 링크 37건 중 9건(24%)이 표시 목적으로 34자 절단돼 있어(예:
-#   `[api-keys-unset-all-envs-pbx-blocke]` vs slug `...-blocked`) 못 쓴다 — href 는 축약되지 않고
-#   항상 slug 전문을 담는다. 링크 텍스트는 href 가 전혀 없을 때만 "noref"(보류 신호)로 격하한다.
-#   상세 근거·판별식은 `move_backlog_to_tasks()` 본문 주석 SSOT.
+#   아니라 이동 대상 파일명의 날짜로 정확히 고정된다** — 같은 slug 가 날짜만 다르게 중복 존재할 때
+#   형제 entry 를 오삭제하는 걸 막기 위해서다. 단 삭제 판정과 별개로, "이 라인이 형제인지" 식별에는
+#   여전히 날짜 무관 매칭을 쓴다 — 매칭되면 `noref`(정정 필요) 가 아니라 `sibling`(정상 보존, ✓) 로
+#   보고한다. 링크 텍스트(`[{slug}]`) 단독 매칭은 MEMORY.md 링크가 표시 목적으로 절단되는 경우가
+#   있어 못 쓴다 — href 는 축약되지 않고 항상 slug 전문을 담는다. 링크 텍스트는 href 가 전혀 없을
+#   때만 "noref"(보류 신호)로 격하한다. 상세 근거·판별식은 `move_backlog_to_tasks()` 본문 주석 SSOT.
 #   `verify_index_sync()` 는 이것과 **비대칭이다** — "인덱스에 있는데 본문 없음"(죽은 링크) 축만 본다.
 #   "본문 있는데 인덱스 없음" 축은 없다: MEMORY.md 는 큐레이션 인덱스(자기 헤더가 "완전종결·비차단
-#   backlog는 인덱스 제거" 라고 명시)라 미등재가 정상 상태이지 drift 가 아니다(콜드리뷰 R5 High).
+#   backlog는 인덱스 제거" 라고 명시)라 미등재가 정상 상태이지 drift 가 아니다.
 #
 # 진입점 (PostToolUse + UserPromptSubmit 양쪽 등록):
-#   1. PostToolUse:Edit|Write — $BACKLOG_SRC_DIR(홈 경로 앵커, 콜드리뷰 Medium-5) 하위 *.md 저장 직후
-#      status: done 마커 자동 감지. 날짜 형식 검증은 게이트에서 하지 않는다(콜드리뷰 Medium-4 — 게이트에서
-#      날짜를 요구하면 이관 중인 구 경로 잔존분이 이 경로를 완전 침묵 스킵한다). 날짜 검증·스킵 사유 stderr 는
+#   1. PostToolUse:Edit|Write — $BACKLOG_SRC_DIR(홈 경로 앵커) 하위 *.md 저장 직후 status: done 마커
+#      자동 감지. 날짜 형식 검증은 게이트에서 하지 않는다 — 게이트에서 날짜를 요구하면 이관 중인
+#      구 경로 잔존분이 이 경로를 완전 침묵 스킵한다. 날짜 검증·스킵 사유 stderr 는
 #      move_backlog_to_tasks() 의 case 문이 담당.
 #      - 마커: frontmatter `status:[[:space:]]*done` (한 줄, frontmatter 안 위치)
 #   2. UserPromptSubmit — 사용자 명시 키워드 매칭 시 docs/working/backlog/ 디렉토리 전체 스캔
@@ -55,21 +49,21 @@ source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "backlog-lifecycle"
 #
 # 이동 절차:
 #   1. 파일명 파싱 — {yyyy-mm-dd}-{slug}.md → slug 추출 (파일명 자체는 생성일 prefix 유지한 채 그대로 이동)
-#   2. frontmatter `product:` 필드 추출 (없으면 "claude-harness" 기본). **`product:` 실재 전제
-#      (2026-08-07 S2, 콜드리뷰 M9)**: 값이 유효 문자(영숫자/_/-)라도 `~/.claude/docs/{product}/` 가
-#      실재하지 않으면 이동을 스킵한다(`claude-harness` 는 예외 — 항상 실재로 취급). `working`/
-#      `indexing`/`references`/`hooks`/`scripts`/`share`/`source_tree`/`참조문서` 는 공용 SSOT
-#      예약 이름이라 product 값으로 거부한다. 스킵 시 원본은 `working/backlog/` 에 남고 stderr 로
-#      원인을 안내한다 — 조용한 오귀속(유령 트리) 방지가 목적. SSOT = 본 함수 아래 실재 검증 블록.
+#   2. frontmatter `product:` 필드 추출 (없으면 "claude-harness" 기본). 값이 유효 문자(영숫자/_/-)라도
+#      `~/.claude/docs/{product}/` 가 실재하지 않으면 이동을 스킵한다(`claude-harness` 는 예외 — 항상
+#      실재로 취급). `working`/`indexing`/`references`/`hooks`/`scripts`/`share`/`source_tree`/
+#      `참조문서` 는 공용 SSOT 예약 이름이라 product 값으로 거부한다. 스킵 시 원본은
+#      `working/backlog/` 에 남고 stderr 로 원인을 안내한다 — 조용한 오귀속(유령 트리) 방지가
+#      목적. SSOT = 본 함수 아래 실재 검증 블록.
 #   3. frontmatter `completed:` 필드 = 오늘(완료일) 자동 채움 (없을 시)
 #   4. 대상 경로 = ~/.claude/docs/{product}/tasks/{YYYYMMDD(완료일=오늘)}/backlog/{yyyy-mm-dd}-{slug}.md.
-#      **폴더는 완료일**(콜드리뷰 High-3) — backlog 는 생성~완료 간극이 수개월인 사례가 실측돼(2026-05·07
-#      생성분), working-lifecycle.sh 처럼 파일명 날짜를 폴더로 쓰면 history.md/오늘 summary.md 가 엉뚱한
-#      과거 날짜 폴더를 갱신하게 된다. 파일명만 생성일 prefix 를 유지한다(사용자 확정 규약).
+#      **폴더는 완료일** — backlog 는 생성~완료 간극이 수개월인 사례가 있어, working-lifecycle.sh
+#      처럼 파일명 날짜를 폴더로 쓰면 history.md/오늘 summary.md 가 엉뚱한 과거 날짜 폴더를
+#      갱신하게 된다. 파일명만 생성일 prefix 를 유지한다(사용자 확정 규약).
 #   5. mkdir -p + mv (docs/working/backlog → tasks)
-#   6. MEMORY.md·BACKLOG.md 에서 slug 기준 entry 제거 — 제거 0건이면 stderr 안내(콜드리뷰 Medium-6)
+#   6. MEMORY.md·BACKLOG.md 에서 slug 기준 entry 제거 — 제거 0건이면 stderr 안내
 #   7. tasks/history.md + tasks/{완료일}/summary.md 자동 갱신
-#   8. stderr 로 이동 결과 1줄 보고 (+ 구 경로에 동일 slug 잔존 시 고아 경고, 콜드리뷰 Medium-7)
+#   8. stderr 로 이동 결과 1줄 보고 (+ 구 경로에 동일 slug 잔존 시 고아 경고)
 
 # shellcheck disable=SC1091
 source "$HARNESS_LIB/path-utils.sh" 2>/dev/null || true
@@ -78,31 +72,28 @@ source "$HARNESS_LIB/product-resolver.sh" 2>/dev/null || true
 
 STDIN_DATA=$(cat)
 
-# fail-closed (2026-08-10 M1) — R3 M9 가 실패할 수 없던 인라인 `case` 를 실패 가능한 lib 의존으로
-# 바꿨다. `source … || true` 상태에서 lib 이 없거나 못 읽히면 `is_reserved_docs_name` 호출이 127 로
-# 죽고 false 로 평가돼 예약이름 가드가 통째로 사라진다(실측: lib 만 rename 하면 `product: references`
-# 인 done backlog 가 경고 한 줄 없이 `docs/references/tasks/20260808/backlog/…` 에 써지고 `△ 이동` 으로
-# 성공 보고된다). 아래 화이트리스트는 ASCII 예약 7개를 전부 통과시키므로 2차 방어가 없다.
-# 가드를 못 세우면 아무것도 하지 않는다 — 잘못된 경로에 쓰는 것보다 이동이 안 되는 쪽이 낫다.
-# stdin 소비 이후에 검사한다(writer SIGPIPE 회피).
+# fail-closed — `source … || true` 상태에서 lib 이 없거나 못 읽히면 `is_reserved_docs_name` 호출이
+# 127 로 죽고 false 로 평가돼 예약이름 가드가 통째로 사라진다(예: `product: references` 인 done
+# backlog 가 경고 없이 `docs/references/tasks/…` 에 써질 수 있다). 아래 화이트리스트는 ASCII 예약
+# 7개를 전부 통과시키므로 2차 방어가 없다. 가드를 못 세우면 아무것도 하지 않는다 — 잘못된 경로에
+# 쓰는 것보다 이동이 안 되는 쪽이 낫다. stdin 소비 이후에 검사한다(writer SIGPIPE 회피).
 if ! declare -F is_reserved_docs_name >/dev/null 2>&1; then
   echo "[backlog-lifecycle] lib/product-resolver.sh 로드 실패 — 예약이름 가드 부재로 이동 중단 (fail-closed)" >&2
   exit 0
 fi
 
 DOCS_ROOT="$HOME/.claude/docs"
-# normalize_path 필수(콜드리뷰 R3 Medium-2) — $HOME 이 백슬래시(C:\Users\PV) 나 trailing slash
-# (/c/Users/PV/) 로 오면 앵커 문자열이 정규화된 file_path_win 과 영원히 불일치해 전체 이동이
-# 조용히 실패한다. path-utils.sh 는 위에서 이미 source 됨.
+# normalize_path 필수 — $HOME 이 백슬래시(C:\Users\PV) 나 trailing slash(/c/Users/PV/) 로 오면
+# 앵커 문자열이 정규화된 file_path_win 과 영원히 불일치해 전체 이동이 조용히 실패한다.
+# path-utils.sh 는 위에서 이미 source 됨.
 BACKLOG_SRC_DIR=$(normalize_path "$DOCS_ROOT/working/backlog")
 
-# MEMORY.md/BACKLOG.md read-modify-write lock (콜드리뷰 M4) — mkdir 원자적 lock + TTL stale 회수.
-# dispatch-utils.sh::dispatch_lock_acquire/release(custom-plugin/taskflow/hooks/lib/dispatch-utils.sh)와 동일 패턴 재사용
-# (새 lock 메커니즘 작성 금지). DISPATCH_LOCK 과 별도 경로 — backlog index 갱신이 DISPATCH.md CRUD 를
-# 불필요하게 막지 않도록 전용 lock 파일을 쓴다.
-# 동일 mkdir+TTL 패턴 3곳 복제(dispatch-utils.sh:55 / registry-utils.sh:24 / 여기) — 공용 lib 승격은
-# 지적대로 타당하나, 지금 여러 세션이 실사용 중인 REGISTRY·DISPATCH 동시성 코드를 건드리는 별건이라
-# 이번 backlog 경로 이관 범위 밖으로 남긴다(콜드리뷰 R4, 승격 시 회귀 피해가 이 작업보다 크다).
+# MEMORY.md/BACKLOG.md read-modify-write lock — mkdir 원자적 lock + TTL stale 회수.
+# dispatch-utils.sh::dispatch_lock_acquire/release(custom-plugin/taskflow/hooks/lib/dispatch-utils.sh)와
+# 동일 패턴 재사용(새 lock 메커니즘 작성 금지). DISPATCH_LOCK 과 별도 경로 — backlog index 갱신이
+# DISPATCH.md CRUD 를 불필요하게 막지 않도록 전용 lock 파일을 쓴다.
+# 동일 mkdir+TTL 패턴이 dispatch-utils.sh·registry-utils.sh 에도 있다 — 공용 lib 승격은 여러 세션이
+# 실사용 중인 REGISTRY·DISPATCH 동시성 코드를 건드리는 별건이라 범위 밖으로 남긴다.
 BACKLOG_INDEX_LOCK="${BACKLOG_INDEX_LOCK:-/tmp/claude-backlog-index.lock.d}"
 BACKLOG_INDEX_LOCK_RETRIES="${BACKLOG_INDEX_LOCK_RETRIES:-50}"
 BACKLOG_INDEX_LOCK_SLEEP="${BACKLOG_INDEX_LOCK_SLEEP:-0.1}"
@@ -112,9 +103,9 @@ backlog_index_lock_acquire() {
   local i=0
   while ! mkdir "$BACKLOG_INDEX_LOCK" 2>/dev/null; do
     if [ -d "$BACKLOG_INDEX_LOCK" ] && find "$BACKLOG_INDEX_LOCK" -maxdepth 0 -mmin "+$BACKLOG_INDEX_LOCK_TTL_MIN" 2>/dev/null | grep -q .; then
-      # 카운터를 여기서도 올린다(2026-08-10 M1-③) — 이전엔 이 `continue` 가 카운터를 우회해서
-      # `rmdir` 이 계속 실패하면(권한·핸들 점유·비어있지 않은 lock 디렉토리) 같은 판정을 무한 반복했다.
-      # 종료가 hook timeout 에만 의존했고, timeout 은 이 함수가 아니라 hook 전체를 죽인다.
+      # 카운터를 여기서도 올린다 — 안 그러면 `rmdir` 이 계속 실패할 때(권한·핸들 점유·비어있지
+      # 않은 lock 디렉토리) 같은 판정을 무한 반복해 종료가 hook timeout 에만 의존하게 된다
+      # (timeout 은 이 함수가 아니라 hook 전체를 죽인다).
       i=$((i + 1))
       rmdir "$BACKLOG_INDEX_LOCK" 2>/dev/null
       echo "[backlog-lifecycle] stale index lock 회수 (>${BACKLOG_INDEX_LOCK_TTL_MIN}min orphan): $BACKLOG_INDEX_LOCK" >&2
@@ -136,8 +127,8 @@ backlog_index_lock_release() {
 }
 
 # Git Bash path (/c/Users/...) ↔ Windows path (C:/Users/...) 변환 — Python (Windows native) 가 인식 가능하도록.
-# 소문자 드라이브 표기(c:/Users/...)도 대문자로 통일한다(콜드리뷰 R2 Medium-4) — 안 하면 페이로드가
-# 소문자 드라이브로 오는 케이스에서 $BACKLOG_SRC_DIR 앵커 비교가 대소문자 불일치로 침묵 실패한다.
+# 소문자 드라이브 표기(c:/Users/...)도 대문자로 통일한다 — 안 하면 페이로드가 소문자 드라이브로
+# 오는 케이스에서 $BACKLOG_SRC_DIR 앵커 비교가 대소문자 불일치로 침묵 실패한다.
 to_win_path() {
   local p="$1"
   case "$p" in
@@ -151,9 +142,7 @@ to_win_path() {
 # hook_event_name — bash 내장 (python 起動 제거)
 HOOK_EVENT=""
 [[ "$STDIN_DATA" =~ \"hook_event_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && HOOK_EVENT="${BASH_REMATCH[1]}"
-# fallback (2026-07-08): hook_event_name 필드 부재/형태불일치 시 payload 필드로 이벤트 판별.
-#   근본원인 = perf 커밋(20d9c84) python→bash 전환 후 이 필드 의존 hook 만 PostToolUse 스킵.
-#   post-action-tracker(hook_event_name 미사용)는 정상 → 대조로 확정.
+# fallback — hook_event_name 필드 부재/형태불일치 시 payload 필드로 이벤트를 판별한다.
 if [ -z "$HOOK_EVENT" ]; then
   if [[ "$STDIN_DATA" =~ \"tool_name\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*: ]]; then
     HOOK_EVENT="PostToolUse"
@@ -162,21 +151,16 @@ if [ -z "$HOOK_EVENT" ]; then
   fi
 fi
 
-# ============= 헬퍼: 전 프로젝트 memory 디렉토리 목록 (콜드리뷰 H1, R4 에서 all_index_files 분리) =============
+# ============= 헬퍼: 전 프로젝트 memory 디렉토리 목록 =============
 # backlog 본문 저장처는 product 무분리(docs/working/backlog/, 단일 경로)로 통합됐지만, MEMORY.md/
 # BACKLOG.md 인덱스 entry·구 경로 backlog_*.md 본문은 그 backlog 를 만든 세션의 project 별 memory 에
-# 흩어져 있다 — 이전엔 소스도 인덱스도 harness home(projects/C--Users-PV--claude/memory) 하나였지만
-# 지금은 소스만 단일화됐다. 실측(2026-08-06): harness home 외 다른 project 별 memory 에도 상당수가
-# 별도로 존재한다(구체적 건수는 여기 적지 않는다 — 매 실측마다 값이 바뀌어 stale 되므로, 콜드리뷰
-# R6 L2). product 값에서 project 디렉토리명을 역산하는
-# 규칙은 harness 에 없다(product-resolver.sh 는 cwd→product 단방향뿐) — 게다가 실제 project
-# 디렉토리명은 세션이 그 cwd 를 최초로 어떻게 표기했는지에 따라 대소문자·구분자가 갈린다
-# (`C--Works-hongcafe-global-backend` vs `c--Works-hongcafe3` 등 실측 혼재). 그래서 product→디렉토리
-# 역산을 시도하는 대신 전 project memory 를 훑어 안전하게 처리한다. warn_old_location()·
-# move_backlog_to_tasks() 의 구/신 동시 존재 고아 감지 블록·verify_index_sync() 가 모두 이 목록을
-# 공유해야 "전 project 훑기"가 실제로 전부에 적용된다(콜드리뷰 R4 H3/M1/M2 — all_index_files() 만
-# 고치고 이 세 곳을 안 고쳐 재발했었다). 라인번호가 아니라 함수명으로 참조한다(콜드리뷰 R5 L1 —
-# 라인번호 참조는 편집마다 stale 된다, 실측: has_done_marker(:111)→167 등 3곳 모두 어긋나 있었다).
+# 흩어져 있다. product 값에서 project 디렉토리명을 역산하는 규칙은 harness 에 없다
+# (product-resolver.sh 는 cwd→product 단방향뿐) — 실제 project 디렉토리명은 세션이 그 cwd 를
+# 최초로 어떻게 표기했는지에 따라 대소문자·구분자가 갈린다(`C--Works-hongcafe-global-backend` vs
+# `c--Works-hongcafe3` 등). 그래서 product→디렉토리 역산을 시도하는 대신 전 project memory 를
+# 훑어 안전하게 처리한다. warn_old_location()·move_backlog_to_tasks() 의 구/신 동시 존재 고아 감지
+# 블록·verify_index_sync() 가 모두 이 목록을 공유해야 "전 project 훑기"가 실제로 전부에 적용된다.
+# 라인번호가 아니라 함수명으로 참조한다 — 라인번호 참조는 편집마다 stale 된다.
 all_memory_dirs() {
   local d
   for d in "$HOME/.claude/projects"/*/memory; do
@@ -185,8 +169,7 @@ all_memory_dirs() {
 }
 
 # ============= 헬퍼: 전 프로젝트 index 파일(MEMORY.md/BACKLOG.md/backlog-index.md) 목록 =============
-# backlog-index.md = athena 가 MEMORY.md 200줄 한도로 분리한 인덱스(2026-09-07). 빠지면 이동 후 죽은
-# 링크가 남는다(2026-09-28 실측 13건).
+# backlog-index.md = MEMORY.md 200줄 한도로 분리하는 보조 인덱스. 빠지면 이동 후 죽은 링크가 남는다.
 all_index_files() {
   local d
   while IFS= read -r d; do
@@ -196,7 +179,7 @@ all_index_files() {
   done < <(all_memory_dirs)
 }
 
-# ============= 헬퍼: project 디렉토리명 → product 이름 (2026-09-04) =============
+# ============= 헬퍼: project 디렉토리명 → product 이름 =============
 # `~/.claude/projects/{인코딩된 cwd}/` 의 디렉토리명은 원본 경로에서 `:`·`\`·`_` 가 **전부 `-` 로**
 # 치환된 뒤라 역변환이 1:1 이 아니다(`hongcafe_local_athena` → `hongcafe-local-athena`). 그래서
 # 문자열을 되돌리는 대신 **실재하는 product 디렉토리 목록과 접미사 대조**한다 — `docs/{product}` 가
@@ -224,11 +207,10 @@ project_dir_to_product() {
   echo "$best"
 }
 
-# ============= 헬퍼: slug → product (전 project 인덱스 역조회, 2026-09-04) =============
-# **hook 은 이미 이 인덱스를 전수 스캔한다** — 이동 후 entry 제거(`:810` 부근)가 그것이다. 그런데
-# product 결정은 그보다 앞이라 frontmatter 만 보고, 없으면 전부 `claude-harness` 로 갔다. 실측
-# (2026-09-04): backlog 356건 중 `product:` 보유는 25건뿐이라 athena·infra·docs 항목이 한 덩어리로
-# harness 트리에 쌓였다. 이미 아는 정보를 결정에 쓰지 않은 것이 원인이다.
+# ============= 헬퍼: slug → product (전 project 인덱스 역조회) =============
+# hook 은 이동 후 entry 제거를 위해 이 인덱스를 이미 전수 스캔한다. product 결정은 그보다 앞이라
+# frontmatter 만 보면, 필드가 없는 backlog 는 전부 `claude-harness` 로 몰린다 — 이미 아는 정보를
+# 결정에 쓰지 않는 셈이라, 그 조회를 product 결정 앞으로 당긴다.
 #
 # **유일하게 매칭될 때만 채택한다.** 같은 slug 가 두 project 인덱스에 있으면 어느 쪽 소유인지
 # 판정 근거가 없으므로 실패로 반환해 기본값(`claude-harness`)에 맡긴다 — 틀린 곳으로 옮기는 것보다
@@ -252,10 +234,7 @@ resolve_product_from_index() {
 # ============= 헬퍼: 구 경로(memory/backlog_*.md) 잔존 안내 =============
 # 신 경로만 지원(설계 결정) — 구 경로 파일은 처리 대상이 아니다. 잔존분이 별도 step 으로
 # 이관될 때까지 공백이 생기므로, 잔존 건수만 stderr 1줄로 안내한다 (개별 파일 나열은 노이즈라 금지).
-# 전 project 합산(콜드리뷰 R4 M1) — 이전엔 harness home 프로젝트 디렉토리 하나만 세어 실제보다
-# 훨씬 적게 보고했다(구체적 건수는 여기 적지 않는다 — 실측할 때마다 값이 바뀌어 매번 stale 됐다,
-# 콜드리뷰 R6 L2). all_memory_dirs() 로 전 project 를 순회해야 S2 "구 경로 잔존분 안내" 가 실제로
-# 충족된다.
+# all_memory_dirs() 로 전 project 를 순회한다 — harness home 하나만 세면 과소 보고된다.
 warn_old_location() {
   local old_count=0 f d
   while IFS= read -r d; do
@@ -303,7 +282,7 @@ move_backlog_to_tasks() {
   local filename
   filename=$(basename "$backlog_file")
 
-  # {yyyy-mm-dd}-{slug}.md 파일명 패턴 (2026-08-06 경로 이관 — 구 backlog_{slug}.md 지원 안 함)
+  # {yyyy-mm-dd}-{slug}.md 파일명 패턴 (구 backlog_{slug}.md 지원 안 함)
   case "$filename" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*.md) ;;
     *) echo "[backlog-lifecycle] $filename — 파일명 패턴 불일치 ({yyyy-mm-dd}-{slug}.md 필요), 스킵" >&2; return 1 ;;
@@ -314,12 +293,12 @@ move_backlog_to_tasks() {
   slug="${slug%.md}"
 
   # file_date — 파일명 자체의 생성일 prefix(선두 10자, YYYY-MM-DD). 인덱스 href 매칭을 이 값으로
-  # 고정한다(2026-08-07 S1 수정) — 아래 href_b_re/target_link_re 참조.
+  # 고정한다 — 아래 href_b_re/target_link_re 참조.
   local file_date="${filename:0:10}"
 
   # 경계값: {yyyy-mm-dd}-.md (slug 없이 날짜+대시만) 도 위 case 가드를 통과한다 — `*.md` 가 빈 문자열도
   # 매칭하기 때문. slug 가 비면 MEMORY.md/BACKLOG.md 인덱스 제거 매칭 키가 `[]`(빈 대괄호)가 되어
-  # 무관한 라인과 우연히 충돌할 위험이 생긴다. 여기서 명시 차단한다 (실측: 2026-08-06 e2e 검증).
+  # 무관한 라인과 우연히 충돌할 위험이 생긴다. 여기서 명시 차단한다.
   if [ -z "$slug" ]; then
     echo "[backlog-lifecycle] $filename — slug 없음 ({yyyy-mm-dd}-{slug}.md 의 slug 부분이 비어있음), 스킵" >&2
     return 1
@@ -349,8 +328,8 @@ except Exception:
     print("claude-harness")
 PYEOF
 )
-  # frontmatter 에 `product:` 가 없으면(= 위 python 이 기본값을 반환) 전 project 인덱스를 역조회한다
-  # (2026-09-04). python 은 미기재 시에도 `claude-harness` 를 출력하므로 그 값도 미확정으로 취급한다 —
+  # frontmatter 에 `product:` 가 없으면(= 위 python 이 기본값을 반환) 전 project 인덱스를 역조회한다.
+  # python 은 미기재 시에도 `claude-harness` 를 출력하므로 그 값도 미확정으로 취급한다 —
   # 진짜 harness 항목이면 인덱스도 harness project 를 가리켜 결과가 같다.
   if [ -z "$product" ] || [ "$product" = "claude-harness" ]; then
     local idx_product
@@ -360,30 +339,26 @@ PYEOF
   fi
   [ -z "$product" ] && product="claude-harness"
 
-  # 비-product 예약 이름 차단(2026-08-07 콜드리뷰 M7, R2 M3 재정정 — 화이트리스트보다 먼저 검사) —
-  # docs/ 하위엔 product 트리 말고도 공용 SSOT 디렉토리가 실재한다(working/indexing/references/hooks/
-  # scripts/share/source_tree/참조문서, 2026-08-07 실측 `ls docs/*/`). 이 이름들은 "디렉토리 존재"만
-  # 보는 실재 검사를 그냥 통과해버려 `product: references` 같은 오값이 공용 SSOT 디렉토리에
-  # tasks/history.md 를 써넣을 수 있다(현재 라이브 0건, 잠재 위험) — product 값으로는 거부한다.
-  # **아래 화이트리스트보다 먼저 검사한다(R2 M3)** — 순서가 반대였을 때 `참조문서`(비-ASCII) 는
-  # 화이트리스트가 먼저 `claude-harness` 로 치환해버려 이 case 의 `참조문서` arm 이 도달 불가였다
-  # (실측: `product: 참조문서` 가 스킵되지 않고 `claude-harness/tasks/…` 로 이동됨 — SKILL.md/헤더가
-  # 적어놓은 "값으로 쓸 수 없다/이동 스킵" 과 반대로 동작). 여기서 먼저 걸러 8개 예약 이름을 동일하게
-  # (문자셋 무관) 스킵시킨다 — 이제 문서와 동작이 일치한다.
-  # **대소문자 무관 비교(2026-08-07 콜드리뷰 R3 H2)** — 아래 실재 검증(`find -iname`, R2 M4)이
-  # 대소문자 무관으로 실제 디스크 표기에 정규화한다. 이 예약이름 검사가 소문자 정확 일치만 보면
-  # `product: Working`/`References`/... 가 이 검사를 그냥 통과한 뒤 `find -iname` 이 실물 소문자
-  # 디렉토리(`docs/working/`)로 정규화해 공용 SSOT 안에 tasks/history.md 를 써넣는다 — M4 가 대소문자
-  # 무관 매칭을 들여오면서 M7 이 막던 구멍이 다시 열렸다. `is_reserved_docs_name()`(product-resolver.sh,
-  # 콜드리뷰 R3 M9 공용 상수) 이 이미 `${1,,}` 로 소문자화해 비교한다.
-  # `2>/dev/null` 없음(2026-08-10 M1) — 억제하면 lib 부재 시 127 이 침묵으로 false 가 된다.
-  # 함수 존재는 위 fail-closed 가드가 이미 보장하므로 여기서 감출 에러가 없다.
+  # 비-product 예약 이름 차단 (화이트리스트보다 먼저 검사) — docs/ 하위엔 product 트리 말고도
+  # 공용 SSOT 디렉토리가 실재한다(working/indexing/references/hooks/scripts/share/source_tree/
+  # 참조문서). 이 이름들은 "디렉토리 존재"만 보는 실재 검사를 그냥 통과해버려 `product: references`
+  # 같은 오값이 공용 SSOT 디렉토리에 tasks/history.md 를 써넣을 수 있다 — product 값으로는 거부한다.
+  # **아래 화이트리스트보다 먼저 검사한다** — 순서가 반대면 `참조문서`(비-ASCII) 는 화이트리스트가
+  # 먼저 `claude-harness` 로 치환해버려 이 case 의 `참조문서` arm 이 도달 불가가 된다. 여기서 먼저
+  # 걸러 8개 예약 이름을 동일하게(문자셋 무관) 스킵시킨다.
+  # **대소문자 무관 비교** — 아래 실재 검증(`find -iname`)이 대소문자 무관으로 실제 디스크 표기에
+  # 정규화한다. 이 예약이름 검사가 소문자 정확 일치만 보면 `product: Working`/`References`/... 가
+  # 이 검사를 그냥 통과한 뒤 `find -iname` 이 실물 소문자 디렉토리(`docs/working/`)로 정규화해 공용
+  # SSOT 안에 tasks/history.md 를 써넣는다. `is_reserved_docs_name()`(product-resolver.sh 공용 상수)
+  # 이 이미 `${1,,}` 로 소문자화해 비교한다.
+  # `2>/dev/null` 없음 — 억제하면 lib 부재 시 127 이 침묵으로 false 가 된다. 함수 존재는 위
+  # fail-closed 가드가 이미 보장하므로 여기서 감출 에러가 없다.
   if is_reserved_docs_name "$product"; then
     echo "[backlog-lifecycle] $filename — product '$product' 은 공용 SSOT 예약 디렉토리(product 아님), frontmatter product: 값 정정 필요 — 이동 스킵" >&2
     return 1
   fi
 
-  # 보안: frontmatter `product:` 화이트리스트 검증(콜드리뷰 M2) — 이 값은 검증 없이 mkdir -p/mv 의
+  # 보안: frontmatter `product:` 화이트리스트 검증 — 이 값은 검증 없이 mkdir -p/mv 의
   # 대상 경로(target_dir/history/summary)에 그대로 들어간다. `product: ../../../pwned` 처럼 경로
   # 구분자·traversal 세그먼트가 섞이면 $DOCS_ROOT 바깥으로 파일이 반출된다. PostToolUse 게이트는
   # 소스 파일 경로의 traversal 만 막고(위 anchor 검사) frontmatter 값 경유는 막지 않는다 — 소스가
@@ -396,50 +371,46 @@ PYEOF
       ;;
   esac
 
-  # product 실재 검증(2026-08-07 S2) — 위 화이트리스트는 유효 문자 집합만 본다(영숫자/_/-). 실재하지
-  # 않는 product 값(오탈자·구 표기)도 문자만 유효하면 통과해 docs/{product}/ 를 새로 만들 **뻔했다**
-  # (2026-08-07 콜드리뷰 M13 정정 — 실측 5건은 전부 pending/in_progress 라 실제 생성된 유령 트리는
-  # 0개다. "완료 시 생성됐을 상태" 였을 뿐 이미 생성된 게 아니다. 다음 라운드가 존재하지 않는 트리를
-  # 청소하러 헤매지 않도록 여기서 명확히 한다). 사례: `hongcafe-global-docs`/`hongcafe-global-backend`
-  # 하이픈 오표기 — 정본은 각각 `hongcafe_global_docs`/`hongcafe_global_backend` 언더스코어,
-  # `hongcafe3` — 정본 미확정. 완료됐다면 각자 자기 tasks/history.md 를 가져 이력이 갈렸을 것이다.
-  # fallback 으로 claude-harness 에 조용히 합류시키지 않는다 — 그것도 원 product 정보를 잃는 또 다른
-  # 형태의 오귀속이다(어느 실제 product 문서였는지 추적 불가해진다). 대신 이동을 보류하고 경고만
-  # 남긴다 — source 는 docs/working/backlog/ 에 그대로 남아 frontmatter 정정 후 재시도를 기다린다.
-  # **`claude-harness` 는 검증 면제(2026-08-07 콜드리뷰 M5)** — `product:` 필드 자체가 없어 기본값이
-  # 채워진 케이스(위 분기, 40건 실측) + 화이트리스트 위반으로 대체된 케이스가 전부 이 값으로 수렴한다.
-  # `~/.claude/docs/` 는 git 추적 밖(gitignore)이라 새 설치·복구 환경엔 `docs/claude-harness/` 가 아직
-  # 없을 수 있다 — 무가드로 존재를 요구하면 그 40+건이 영구 스킵된다. claude-harness 는 하니스 자기소유
-  # 경로라 항상 유효하므로 검사에서 면제하고, 아래 `mkdir -p "$target_dir"`(기존 로직)가 자기부트스트랩한다.
+  # product 실재 검증 — 위 화이트리스트는 유효 문자 집합만 본다(영숫자/_/-). 실재하지 않는 product
+  # 값(오탈자·구 표기)도 문자만 유효하면 통과해 docs/{product}/ 를 새로 만들 수 있다. 사례:
+  # `hongcafe-global-docs`/`hongcafe-global-backend` 하이픈 오표기 — 정본은 각각
+  # `hongcafe_global_docs`/`hongcafe_global_backend` 언더스코어. fallback 으로 claude-harness 에
+  # 조용히 합류시키지 않는다 — 그것도 원 product 정보를 잃는 또 다른 형태의 오귀속이다(어느 실제
+  # product 문서였는지 추적 불가해진다). 대신 이동을 보류하고 경고만 남긴다 — source 는
+  # docs/working/backlog/ 에 그대로 남아 frontmatter 정정 후 재시도를 기다린다.
+  # **`claude-harness` 는 검증 면제** — `product:` 필드 자체가 없어 기본값이 채워진 케이스(위 분기)
+  # + 화이트리스트 위반으로 대체된 케이스가 전부 이 값으로 수렴한다. `~/.claude/docs/` 는 git 추적
+  # 밖(gitignore)이라 새 설치·복구 환경엔 `docs/claude-harness/` 가 아직 없을 수 있다 — 무가드로
+  # 존재를 요구하면 그 케이스들이 영구 스킵된다. claude-harness 는 하니스 자기소유 경로라 항상
+  # 유효하므로 검사에서 면제하고, 아래 `mkdir -p "$target_dir"`(기존 로직)가 자기부트스트랩한다.
   if [ "$product" != "claude-harness" ]; then
-    # 대소문자 정규화(2026-08-07 콜드리뷰 R2 M4) — `[ -d ]` 는 Windows(NTFS) 에서 대소문자를 무시한다.
-    # `product: TestProd` + `docs/testprod/` 만 존재해도 단순 `-d` 검사는 통과하는데, 그 뒤
-    # target_dir/history.md/stderr 는 원본 표기(`TestProd`) 를 그대로 써 실제 물리 디렉토리(`testprod`)
-    # 표기와 어긋난다. 같은 입력이 POSIX(대소문자 구분 파일시스템) 에서는 애초에 스킵돼 **S2 판정이
-    # 플랫폼별로 갈렸다**. 대소문자 무관 조회 후 실제 디스크 표기로 `product` 를 맞춘다 — 두 플랫폼
-    # 모두 같은 규칙을 쓰게 되어 판정이 일치한다(대소문자가 이미 일치하는 값은 no-op).
-    # **`[ -d ]` 우선 분기를 쓰지 않는다(2026-08-07 콜드리뷰 R3 자체발견)** — Windows 에서는 `[ -d ]`
-    # 자체가 이미 대소문자 무관이라(OS 레벨) "정확 일치를 먼저 시도" 하는 의도로 넣은 `[ -d
-    # "$DOCS_ROOT/$product" ]` 분기가 `docs/testprod`·`docs/TestProd` 가 공존해도 **항상 참**이 되어
-    # 아래 타이브레이크 경고(M10)를 완전히 우회했다(실측: `product: TESTPROD` 가 경고 없이
-    # `TESTPROD/tasks/...` 로 그대로 이동 — 정규화도 타이브레이크도 작동 안 함). `find -iname` 조회
-    # 결과 안에서 **문자열 완전일치**를 우선하는 방식으로 바꾼다 — OS stat 의미론에 의존하지 않아
-    # 플랫폼 무관하게 결정적이다.
-    # **`-mindepth 1` 필수(콜드리뷰 R3 H1)** — 없으면 depth 0(=`$DOCS_ROOT` 자기 자신, basename
-    # "docs")도 후보에 들어간다. `product: docs`(대소문자 무관이라 `Docs`/`DOCS` 도)면 `$DOCS_ROOT`
-    # 자신이 매칭돼 "실재 확인"을 통과하고, 실재하지 않던 `$DOCS_ROOT/docs/tasks/...` 를 만들며
-    # `✓ 이동` 으로 오보고한다. **`-L` 필수(M11)** — 없으면 `-type d` 가 lstat 기준이라 dir 심링크를
-    # 거짓으로 판정해, 심링크로 둔 정상 product 를 영구 스킵시킨다(헤더 `:139` 가 project 디렉토리명
-    # 대소문자·구분자 실측 혼재를 스스로 기록해뒀다 — 불가능한 상황이 아니다).
+    # 대소문자 정규화 — `[ -d ]` 는 Windows(NTFS) 에서 대소문자를 무시한다. `product: TestProd` +
+    # `docs/testprod/` 만 존재해도 단순 `-d` 검사는 통과하는데, 그 뒤 target_dir/history.md/stderr 는
+    # 원본 표기(`TestProd`) 를 그대로 써 실제 물리 디렉토리(`testprod`) 표기와 어긋난다. 같은 입력이
+    # POSIX(대소문자 구분 파일시스템) 에서는 애초에 스킵돼 판정이 플랫폼별로 갈린다. 대소문자 무관
+    # 조회 후 실제 디스크 표기로 `product` 를 맞춘다 — 두 플랫폼 모두 같은 규칙을 쓰게 되어 판정이
+    # 일치한다(대소문자가 이미 일치하는 값은 no-op).
+    # **`[ -d ]` 우선 분기를 쓰지 않는다** — Windows 에서는 `[ -d ]` 자체가 이미 대소문자 무관이라
+    # "정확 일치를 먼저 시도" 하는 의도로 넣은 `[ -d "$DOCS_ROOT/$product" ]` 분기는 `docs/testprod`·
+    # `docs/TestProd` 가 공존해도 **항상 참**이 되어 아래 타이브레이크 경고를 완전히 우회한다.
+    # `find -iname` 조회 결과 안에서 **문자열 완전일치**를 우선하는 방식으로 바꾼다 — OS stat
+    # 의미론에 의존하지 않아 플랫폼 무관하게 결정적이다.
+    # **`-mindepth 1` 필수** — 없으면 depth 0(=`$DOCS_ROOT` 자기 자신, basename "docs")도 후보에
+    # 들어간다. `product: docs`(대소문자 무관이라 `Docs`/`DOCS` 도)면 `$DOCS_ROOT` 자신이 매칭돼
+    # "실재 확인"을 통과하고, 실재하지 않던 `$DOCS_ROOT/docs/tasks/...` 를 만들며 `✓ 이동` 으로
+    # 오보고한다. **`-L` 필수** — 없으면 `-type d` 가 lstat 기준이라 dir 심링크를 거짓으로 판정해,
+    # 심링크로 둔 정상 product 를 영구 스킵시킨다(project 디렉토리명은 대소문자·구분자가 실측 혼재해
+    # 불가능한 상황이 아니다).
     local actual_product_dir=""
     local ci_matches match_count
     ci_matches=$(find -L "$DOCS_ROOT" -mindepth 1 -maxdepth 1 -iname "$product" -type d 2>/dev/null)
     # `grep -c` 는 0건이어도 "0" 을 정상 출력한다(exit 1 은 매칭 0건 신호일 뿐 출력 실패가 아니다) —
     # `|| echo 0` fallback 을 붙이면 grep 이 이미 찍은 "0" 뒤에 fallback 의 "0" 이 또 붙어
-    # `match_count`="0\n0" 이 되고 `-gt` 비교가 "integer expression expected" 로 죽는다(실측, 제거).
+    # `match_count`="0\n0" 이 되고 `-gt` 비교가 "integer expression expected" 로 죽는다. fallback 을
+    # 붙이지 않는다.
     match_count=$(printf '%s\n' "$ci_matches" | grep -c .)
     if [ "$match_count" -gt 1 ]; then
-      # **문자열 완전일치 우선(2026-08-07 콜드리뷰 R3 M10)** — 대소문자 무관 매칭이 여러 개라도, 그중
+      # **문자열 완전일치 우선** — 대소문자 무관 매칭이 여러 개라도, 그중
       # basename 이 `$product` 와 정확히 같은 게 있으면 모호하지 않다(진짜 정확 매칭). 없을 때만
       # readdir 순서 의존 임의선택 위험이 실재하므로 경고 후 스킵한다(보수적).
       local cand exact_match=""
@@ -449,7 +420,7 @@ PYEOF
       if [ -n "$exact_match" ]; then
         actual_product_dir="$exact_match"
       else
-        # `"$ci_matches"` 인용 + `tr`(2026-08-10 M7) — 비인용 `printf '%s ' $ci_matches` 는 단어분할
+        # `"$ci_matches"` 인용 + `tr` — 비인용 `printf '%s ' $ci_matches` 는 단어분할
         # + 경로명 확장을 탄다. `~/.claude/docs/` 에 이미 공백 포함 디렉토리(`NAVER WORKS`)가 있어
         # 경로가 조각나고, 이름에 glob 문자가 있으면 없는 경로로 치환된다. 하필 이 줄이 이 분기의
         # 유일한 진단 출력이다.
@@ -461,7 +432,7 @@ PYEOF
     if [ -n "$actual_product_dir" ]; then
       product=$(basename "$actual_product_dir")
     else
-      # M6(2026-08-07 콜드리뷰) — "정정 필요" 는 오탈자를 전제한다. 하지만 docs/{product}/ 는 지연
+      # "정정 필요" 는 오탈자를 전제한다. 하지만 docs/{product}/ 는 지연
       # 생성(코드 편집이 있었던 세션에서만 만들어짐, `session-completeness-check.sh` 참조)이라, 코드
       # 편집 없이 backlog 부터 만든 신규 repo 는 값이 **맞아도** 트리가 아직 없을 수 있다. 두 원인을
       # 메시지에 함께 남긴다 — 오탈자로 오판해 정정을 강요하지 않는다.
@@ -471,8 +442,8 @@ PYEOF
   fi
 
   # yyyymmdd = 완료일(오늘, 폴더 결정용) — 파일명 자체는 생성일 prefix 를 그대로 유지한다.
-  # (콜드리뷰 High-3: backlog 생성~완료 간극이 수개월인 사례가 실측돼, 파일명 날짜를 폴더로 쓰면
-  #  history.md/오늘 summary.md 가 엉뚱한 과거 날짜 폴더를 갱신하게 된다.)
+  # (backlog 생성~완료 간극이 수개월인 사례가 있어, 파일명 날짜를 폴더로 쓰면 history.md/오늘
+  #  summary.md 가 엉뚱한 과거 날짜 폴더를 갱신하게 된다.)
   local yyyymmdd today_dot today_date
   yyyymmdd=$(date +%Y%m%d)
   today_dot=$(date +%Y.%m.%d)
@@ -496,7 +467,7 @@ PYEOF
 
   # completed 필드 자동 채움 (없을 시, 실제 완료일 = today_date)
   # metadata: 하위 status: 라인과 같은 들여쓰기로 그 바로 뒤에 삽입한다 — 최상위(컬럼 0)에 붙이면
-  # frontmatter 계약(`metadata:` 하위에 status/product/created/completed 통일)이 깨진다(콜드리뷰 R2 Medium-5).
+  # frontmatter 계약(`metadata:` 하위에 status/product/created/completed 통일)이 깨진다.
   python3 - "$win_backlog" "$today_date" <<'PYEOF' 2>/dev/null
 import sys, re, os
 file_path = sys.argv[1]
@@ -541,56 +512,49 @@ except Exception:
         pass
 PYEOF
 
-  # 이동 — lock 밖(콜드리뷰 R2 M7 잔여 위험 주석) — 아래 sibling 파일존재 검증(index lock 안, python)
-  # 은 이 시점 이후의 backlog_src_dir 스냅샷을 본다. 두 세션이 같은 중복 slug 쌍을 동시에 done
-  # 처리하면, A 의 sibling 검증 시점에 B 가 이미 자기 형제 파일을 mv 해가 A 입장에선 "형제 없음" 으로
-  # 뒤바뀔 수 있다(→ noref 오안내 + △, index lock 은 인덱스 쓰기 자체는 지키므로 데이터 손실은 아니고
-  # 오분류·오안내 뿐). best-effort 판정이라는 사실을 여기 명시한다 — 두 세션이 동시에 같은 slug 쌍을
-  # 완료 처리하는 빈도가 낮아 별도 스냅샷/사전검증 구조 변경은 이번 범위 밖으로 둔다.
+  # 이동 — lock 밖. 아래 sibling 파일존재 검증(index lock 안, python)은 이 시점 이후의
+  # backlog_src_dir 스냅샷을 본다. 두 세션이 같은 중복 slug 쌍을 동시에 done 처리하면, A 의 sibling
+  # 검증 시점에 B 가 이미 자기 형제 파일을 mv 해가 A 입장에선 "형제 없음" 으로 뒤바뀔 수 있다
+  # (→ noref 오안내 + △, index lock 은 인덱스 쓰기 자체는 지키므로 데이터 손실은 아니고 오분류·오안내
+  # 뿐). best-effort 판정이라는 사실을 여기 명시한다 — 두 세션이 동시에 같은 slug 쌍을 완료 처리하는
+  # 빈도가 낮아 별도 스냅샷/사전검증 구조 변경은 범위 밖으로 둔다.
   mv "$backlog_file" "$target_file" 2>/dev/null || {
     echo "[backlog-lifecycle] $filename — 이동 실패: $backlog_file → $target_file" >&2
     return 1
   }
 
-  # MEMORY.md 인덱스 + BACKLOG.md 상세 양쪽에서 entry 제거 (2026-07-31 분리 이후 2파일)
-  # **매칭 키 = href 토큰 합집합(콜드리뷰 R4 High-1 — 링크 텍스트 단독 매칭에서 되돌림)** — 이전
-  # 라운드가 링크 텍스트(`[{slug}]`) 를 매칭 키로 바꿨는데, 실 MEMORY.md 링크 37건 중 9건(24%)이
-  # 표시 목적으로 34자 절단돼 있어(`[api-keys-unset-all-envs-pbx-blocke]` vs slug
-  # `api-keys-unset-all-envs-pbx-blocked`) 링크 텍스트만으로는 매칭이 안 되고, 링크 없이 본문에
-  # bare 로 언급된 13건도 동일하게 놓쳤다(실측). 반대로 href(`backlog_{slug}.md` 구 포맷 /
-  # `backlog/{yyyy-mm-dd}-{slug}.md` 신 포맷) 는 축약되지 않고 항상 slug 전문을 담는다 — 그래서
-  # href 합집합을 1차 매칭 키로 쓰고, 링크 텍스트(`[{slug}]`) 는 href 가 전혀 없을 때만 "noref"
-  # (보류 신호)로 격하한다. 이렇게 하면 href 회귀(24% 누락)와 링크텍스트 단독 매칭의 오삭제
-  # 위험(무관 Project entry, 콜드리뷰 R2 High-1) 둘 다 닫힌다 — **다시 뒤집지 말 것.**
-  # **판별식 = 라인 안 서로 다른 backlog href 개수(콜드리뷰 R4 High-2, R3 Medium-6 재정정)** —
-  # "- [" 시작 개수는 실제 MEMORY.md 병합 표기 `- [a](…)·[b](…)` 에서 1로 세어(두 번째 항목엔 `-`
-  # 가 없다) 형제 entry 를 경고 없이 통째로 지웠다(실측 `img-server-const-undefined-fatal` done
-  # 처리 시 같은 줄의 `naver-api-const-undefined-fatal` 소실). href 토큰을 직접 세면 병합 라인은
-  # 정확히 2 로 잡혀 manual 보류된다. **대가**: 한 entry 안에 다른 backlog 로의 단순 참조 링크가
-  # 섞인 경우(구 R2 Medium-2 가 막으려던 case)도 이제는 manual 로 보류된다 — 오탐(과소삭제)이
+  # MEMORY.md 인덱스 + BACKLOG.md 상세 양쪽에서 entry 제거
+  # **매칭 키 = href 토큰 합집합** — 링크 텍스트(`[{slug}]`) 는 MEMORY.md 표시 목적으로 절단되는
+  # 경우가 있고 링크 없이 본문에 bare 로 언급되는 경우도 있어 단독 매칭 키로 못 쓴다. 반대로
+  # href(`backlog_{slug}.md` 구 포맷 / `backlog/{yyyy-mm-dd}-{slug}.md` 신 포맷) 는 축약되지 않고
+  # 항상 slug 전문을 담는다 — 그래서 href 합집합을 1차 매칭 키로 쓰고, 링크 텍스트(`[{slug}]`) 는
+  # href 가 전혀 없을 때만 "noref"(보류 신호)로 격하한다. **다시 뒤집지 말 것.**
+  # **판별식 = 라인 안 서로 다른 backlog href 개수** — "- [" 시작 개수는 실제 MEMORY.md 병합 표기
+  # `- [a](…)·[b](…)` 에서 1로 세어(두 번째 항목엔 `-` 가 없다) 형제 entry 를 경고 없이 통째로
+  # 지운다. href 토큰을 직접 세면 병합 라인은 정확히 2 로 잡혀 manual 보류된다. **대가**: 한 entry
+  # 안에 다른 backlog 로의 단순 참조 링크가 섞인 경우도 manual 로 보류된다 — 오탐(과소삭제)이
   # 오삭제(형제 entry 소실)보다 훨씬 싸므로 보수적인 쪽을 택한다.
-  # **파일 1개당 python 1회가 아니라 slug 1개당 python 1회(콜드리뷰 R4 M6)** — 이전엔 index 파일마다
-  # 별도 python3 프로세스를 띄워 파일 1건 이동에 프로세스 ≈15개(실측 python3 11회, 0.59초)가 들었다.
-  # 소스가 harness 26건 전용에서 전 product 공용으로 커지며 index 파일 수(project 별 MEMORY.md/
-  # BACKLOG.md)가 늘어 UserPromptSubmit 일괄 처리 시 수십 초 블로킹 위험이 생겼다 — index 파일
-  # 목록을 argv 로 한 번에 넘겨 파이썬 내부에서 순회한다.
+  # **파일 1개당 python 1회가 아니라 slug 1개당 python 1회** — index 파일마다 별도 python3 프로세스를
+  # 띄우면 파일 1건 이동에 프로세스가 여러 개 들고, index 파일 수(project 별 MEMORY.md/BACKLOG.md)가
+  # 늘면 UserPromptSubmit 일괄 처리 시 블로킹 위험이 커진다 — index 파일 목록을 argv 로 한 번에
+  # 넘겨 파이썬 내부에서 순회한다.
   local index_files_arr=()
   local index_file
   while IFS= read -r index_file; do
     [ -n "$index_file" ] && index_files_arr+=("$index_file")
   done < <(all_index_files)
 
-  # **동시성 lock(콜드리뷰 M4)** — backlog 소스가 세션·product 공용이 되며 두 세션이 서로 다른
-  # backlog 를 동시에 done 처리할 가능성이 현실화됐다. lock 없이 read-modify-write 가 겹치면 뒤
-  # 쓰기가 앞 제거를 덮어 entry 가 조용히 되살아난다. lock 획득 실패는 비차단(최선 노력) — 이 시점엔
-  # 이미 파일이 물리 이동됐으므로 인덱스 정리를 포기해도 롤백할 게 없다, 경고만 남기고 계속한다.
+  # **동시성 lock** — backlog 소스가 세션·product 공용이라 두 세션이 서로 다른 backlog 를 동시에
+  # done 처리할 수 있다. lock 없이 read-modify-write 가 겹치면 뒤 쓰기가 앞 제거를 덮어 entry 가
+  # 조용히 되살아난다. lock 획득 실패는 비차단(최선 노력) — 이 시점엔 이미 파일이 물리 이동됐으므로
+  # 인덱스 정리를 포기해도 롤백할 게 없다, 경고만 남기고 계속한다.
   local any_found=0 index_incomplete=0
   local index_locked=0
   backlog_index_lock_acquire && index_locked=1
   if [ "$index_locked" -ne 1 ]; then
-    # index_incomplete 도 세운다(콜드리뷰 R6 M4) — 이전엔 lock 실패로 read-modify-write 를 무보호로
-    # 강행했는데(주석이 스스로 지목한 "뒤 쓰기가 앞 제거를 덮어 entry 가 되살아난다" 실패 모드) 최종
-    # 마커는 `✓ 이동` 이었다. △/✓ 를 가르는 목적("훑어만 봐도 인덱스 정리 여부가 보인다")과 어긋난다.
+    # lock 실패로 read-modify-write 를 무보호로 강행하면 뒤 쓰기가 앞 제거를 덮어 entry 가
+    # 되살아날 수 있다 — index_incomplete 를 세워 최종 마커를 `△` 로 갈라, 훑어만 봐도 인덱스
+    # 정리가 안 됐음이 구분되게 한다.
     echo "[backlog-lifecycle] index lock 획득 실패 — 동시 편집 위험 감수하고 계속 진행" >&2
     index_incomplete=1
   fi
@@ -601,10 +565,10 @@ PYEOF
     for wf in "${index_files_arr[@]}"; do
       win_index_files+=("$(to_win_path "$wf")")
     done
-    # backlog 소스 디렉토리도 넘긴다(2026-08-07 콜드리뷰 High 재정정) — sibling 판정을 텍스트
-    # 패턴만으로 하면 "다른 날짜 href 문자열이 있다" 와 "그 날짜에 실제 파일이 있다" 를 구분 못 해,
-    # 진짜 형제(파일 존재)와 단순 오탈자·이관 오차(파일 없음, J-14 케이스)를 같은 걸로 취급한다.
-    # 실제 파일 존재를 근거로 검증해야 두 경우가 갈린다.
+    # backlog 소스 디렉토리도 넘긴다 — sibling 판정을 텍스트 패턴만으로 하면 "다른 날짜 href
+    # 문자열이 있다" 와 "그 날짜에 실제 파일이 있다" 를 구분 못 해, 진짜 형제(파일 존재)와 단순
+    # 오탈자·이관 오차(파일 없음)를 같은 걸로 취급한다. 실제 파일 존재를 근거로 검증해야 두 경우가
+    # 갈린다.
     local win_backlog_src_dir
     win_backlog_src_dir=$(to_win_path "$BACKLOG_SRC_DIR")
     local idx_out
@@ -813,24 +777,20 @@ for index_path in index_paths:
 print("\n".join(results))
 PYEOF
 )
-    # 제거 0건 침묵 실패 방지(콜드리뷰 R1 Medium-6) — 이동은 "✓" 로 성공 보고되는데 인덱스만 남으면
-    # 사용자에겐 성공으로만 보인다. error 및 미인식 값(python 미기동·빈 문자열 포함) 은 `*)` catch-all
-    # 이 받는다(콜드리뷰 R3 Medium-3). notfound 는 다수 project 중 하나만 매칭되는 게 정상이라
-    # per-project 침묵 — 전체 스캔 후 any_found 로만 집계한다.
-    # **`✓ 이동` vs `△ 이동`(콜드리뷰 R4 M7)** — mv 는 이미 성공했는데 인덱스 정리가 실패/보류되면
-    # index_incomplete 를 세워 맨 아래 최종 보고 줄의 마커를 갈라 훑어보기만 해도 구분되게 한다.
+    # 제거 0건 침묵 실패 방지 — 이동은 "✓" 로 성공 보고되는데 인덱스만 남으면 사용자에겐 성공으로만
+    # 보인다. error 및 미인식 값(python 미기동·빈 문자열 포함) 은 `*)` catch-all 이 받는다. notfound
+    # 는 다수 project 중 하나만 매칭되는 게 정상이라 per-project 침묵 — 전체 스캔 후 any_found 로만
+    # 집계한다.
+    # **`✓ 이동` vs `△ 이동`** — mv 는 이미 성공했는데 인덱스 정리가 실패/보류되면 index_incomplete
+    # 를 세워 맨 아래 최종 보고 줄의 마커를 갈라 훑어보기만 해도 구분되게 한다.
     local out_index_file idx_result idx_sibling_dates
     while IFS=$'\t' read -r out_index_file idx_result idx_sibling_dates; do
       [ -n "$out_index_file" ] || continue
-      # 실측 발견(2026-08-06, 다중 index 파일 통합 python 호출 검증 중, 콜드리뷰 R6 L2 설명 정정) —
       # Windows 네이티브 python3 의 print() 는 매 줄에 \r\n 을 쓴다(text-mode 개행 변환) — 이 \r\n 은
-      # 각 줄 경계에 실제로 남아 있는 원본 바이트다. 여러 줄 출력을 `$(...)` 로 캡처할 때 bash 가 벗기는
-      # 건 **텍스트 전체의 맨 끝에 있는 딱 한 번의 트레일링 \r\n 뿐**이고, 그 앞의 각 줄 경계에 있는
-      # \r\n 은 캡처 전 과정에서 손대지 않는다(실측: `printf 'a\r\nb\r\nc\r\n' | od -c` 를 `$(...)` 로
-      # 캡처하면 `a\r\nb\r\nc` 로 마지막 \r\n 만 사라짐, 재현 확인). 그 결과 idx_out 의 마지막 줄이
-      # 아닌 idx_result 값마다 보이지 않는 trailing \r 이 남아 `case` 리터럴 매칭이 전부 `*)`
-      # catch-all(에러)로 떨어졌다 — index 파일이 2개 이상이면 항상 재현된다(단일 파일 테스트로는
-      # 절대 안 잡힌다, M6 통합 이전엔 파일당 단일 호출이라 은폐돼 있었다).
+      # 각 줄 경계에 실제로 남아 있는 원본 바이트다. 여러 줄 출력을 `$(...)` 로 캡처할 때 bash 가
+      # 벗기는 건 텍스트 전체 맨 끝의 트레일링 \r\n 뿐이고, 그 앞의 각 줄 경계에 있는 \r\n 은
+      # 손대지 않는다. 그대로 두면 idx_result 값마다 보이지 않는 trailing \r 이 남아 `case` 리터럴
+      # 매칭이 전부 `*)` catch-all(에러)로 떨어진다 — index 파일이 2개 이상이면 항상 재현된다.
       idx_result="${idx_result%$'\r'}"
       idx_sibling_dates="${idx_sibling_dates%$'\r'}"
       case "$idx_result" in
@@ -839,59 +799,53 @@ PYEOF
         manual) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인에 다른 backlog entry 공존, 자동 삭제 안 함 — 수동 분리 필요" >&2 ;;
         manual_grouplabel) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인이 그룹라벨 대표항목이거나 href 가 markdown 링크 형식이 아님(href 뒤 개별 요약 확인 안 됨), 자동 삭제 안 함 — 라벨/요약/href 형식 직접 확인 필요" >&2 ;;
         noref) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인은 있으나 backlog 참조(backlog_ 또는 backlog/)가 없어 미삭제 — href 를 신 경로로 정정 필요" >&2 ;;
-        # sibling(2026-08-07 콜드리뷰 High) — index_incomplete 를 **이 arm 에서는** 세우지 않는다: 이
-        # 라인은 같은 slug 를 다른 날짜로 참조하는 **정상 보존된 형제 entry** 다(noref 와 반대로
-        # "정정 필요" 안내를 하지 않는다 — 정정하면 형제가 방금 이동된 파일을 가리키게 되어 S1 이
-        # 막은 데이터 손실이 재현된다).
+        # sibling — index_incomplete 를 **이 arm 에서는** 세우지 않는다: 이 라인은 같은 slug 를
+        # 다른 날짜로 참조하는 **정상 보존된 형제 entry** 다(noref 와 반대로 "정정 필요" 안내를
+        # 하지 않는다 — 정정하면 형제가 방금 이동된 파일을 가리키게 되어 데이터 손실이 재현된다).
         #
-        # **다만 최종 마커가 ✓ 가 되는 것은 아니다(2026-08-10 M3 주석 정정).** 아래 R2 M2 대로
-        # `any_found` 를 안 세우므로, sibling **단독**(같은 파일에 removed/manual 이 함께 없는 경우)
-        # 이면 `:757` 의 `any_found -eq 0` 분기가 `index_incomplete=1` 을 세워 결국 `△` 가 된다.
-        # 이것이 의도한 동작이다 — 형제가 있다는 것과 "이 backlog 자신의 entry 를 정리했다" 는 서로
-        # 다른 사실이고, 자기 entry 가 어디에도 없으면 미발견 경고가 맞다. 실측(294 slug 재시뮬):
-        # 라이브 sibling 6셀은 100% `△`, `✓` 는 실 데이터에 한 번도 나오지 않는다.
-        # 이전 주석은 "최종 마커도 ✓ 여야 한다" 고 단언해 코드와 정반대였다 — 이 파일 헤더 :19 가
-        # 기록한 "헤더가 구현과 반대로 적혀 다음 라운드를 또 뒤집게 만든" 실패의 재발이었다.
-        # **`any_found` 는 세우지 않는다(2026-08-07 콜드리뷰 R2 M2)** — sibling 은 "이 slug 문자열의
-        # 어떤 entry" 를 찾은 것이지 "이 backlog(오늘 done 처리한 그 파일) 자신의 entry" 를 찾은 게
-        # 아니다. any_found 로 같이 세면, 이 backlog 자신의 entry 가 인덱스 어디에도 없는데 형제만
-        # 있어도 "미발견" 경고(아래 any_found==0 분기)가 조용히 삼켜진다 — 서로 다른 두 backlog 를
-        # 하나로 세는 것과 같다. index_incomplete 를 안 세우는 효과만 남기고(sibling 자체는 정상이므로)
-        # any_found 갱신에서는 분리한다. 메시지 자체는 아래 공통 블록(M8)에서 status 무관하게 낸다.
+        # **다만 최종 마커가 ✓ 가 되는 것은 아니다.** `any_found` 를 안 세우므로, sibling **단독**
+        # (같은 파일에 removed/manual 이 함께 없는 경우)이면 아래 `any_found -eq 0` 분기가
+        # `index_incomplete=1` 을 세워 결국 `△` 가 된다. 이것이 의도한 동작이다 — 형제가 있다는 것과
+        # "이 backlog 자신의 entry 를 정리했다" 는 서로 다른 사실이고, 자기 entry 가 어디에도 없으면
+        # 미발견 경고가 맞다.
+        # **`any_found` 는 세우지 않는다** — sibling 은 "이 slug 문자열의 어떤 entry" 를 찾은 것이지
+        # "이 backlog(오늘 done 처리한 그 파일) 자신의 entry" 를 찾은 게 아니다. any_found 로 같이
+        # 세면, 이 backlog 자신의 entry 가 인덱스 어디에도 없는데 형제만 있어도 "미발견" 경고(아래
+        # any_found==0 분기)가 조용히 삼켜진다 — 서로 다른 두 backlog 를 하나로 세는 것과 같다.
+        # index_incomplete 를 안 세우는 효과만 남기고(sibling 자체는 정상이므로) any_found 갱신에서는
+        # 분리한다. 메시지 자체는 아래 공통 블록에서 status 무관하게 낸다.
         sibling) ;;
         notfound) ;;
-        # `any_found=1` 을 세운다(2026-08-10 M1-④) — 이 arm 은 "entry 를 못 찾은 것" 이 아니라
-        # "찾으러 갔다가 읽기·인코딩 오류로 실패한 것" 이다. 안 세우면 아래 `any_found -eq 0` 이
-        # 추가로 발동해 "전 project index 에서 entry 미발견, 수동 정리 필요" 라는 **원인이 다른**
-        # 경고가 겹쳐 나온다 — 조사자를 인덱스 등재 여부로 보내지만 실제로 볼 것은 파일 인코딩이다.
-        # sibling arm 이 any_found 를 일부러 안 세우는 것(R2 M2)과 다른 사안이다: sibling 은 "다른
-        # backlog 의 entry 를 본 것" 이라 이 slug 에 대해서는 정말 미발견이 맞지만, error 는 이
-        # slug 를 대상으로 실제 조회가 일어났고 그 조회가 깨진 것이다.
+        # `any_found=1` 을 세운다 — 이 arm 은 "entry 를 못 찾은 것" 이 아니라 "찾으러 갔다가
+        # 읽기·인코딩 오류로 실패한 것" 이다. 안 세우면 아래 `any_found -eq 0` 이 추가로 발동해
+        # "전 project index 에서 entry 미발견, 수동 정리 필요" 라는 **원인이 다른** 경고가 겹쳐
+        # 나온다 — 조사자를 인덱스 등재 여부로 보내지만 실제로 볼 것은 파일 인코딩이다. sibling arm
+        # 이 any_found 를 일부러 안 세우는 것과 다른 사안이다: sibling 은 "다른 backlog 의 entry 를
+        # 본 것" 이라 이 slug 에 대해서는 정말 미발견이 맞지만, error 는 이 slug 를 대상으로 실제
+        # 조회가 일어났고 그 조회가 깨진 것이다.
         *) any_found=1; index_incomplete=1; echo "[backlog-lifecycle] $out_index_file — slug '$slug' 인덱스 처리 실패(읽기·인코딩 오류 또는 쓰기 권한/점유 실패 가능) — 수동 확인 필요" >&2 ;;
       esac
-      # sibling 보고는 status 와 무관하게 항상 낸다(2026-08-07 콜드리뷰 R3 M8) — 이전엔 python 쪽
-      # status 결정에서 `elif sibling` 이 최하단이라, 같은 파일의 다른 라인이 changed/manual 을
+      # sibling 보고는 status 와 무관하게 항상 낸다 — 같은 파일의 다른 라인이 changed/manual 을
       # 만들면(자기 entry 는 지워지고 형제는 같은 파일의 다른 줄에 남는, 가장 흔한 경로) sibling_dates
-      # 가 있어도 최종 status 는 "removed"/"manual" 등으로만 찍혀 보고가 빠졌다. python 이 status 와
+      # 가 있어도 최종 status 는 "removed"/"manual" 등으로만 찍힐 수 있다. python 이 status 와
       # 무관하게 sibling_dates 를 3번째 필드로 항상 보내므로, 여기서도 status 분기와 별개로 확인한다.
       if [ -n "$idx_sibling_dates" ]; then
         echo "[backlog-lifecycle] $out_index_file — slug '$slug' 라인은 형제 backlog entry(${idx_sibling_dates} 날짜) 라 보존함" >&2
       fi
     done <<< "$idx_out"
   fi
-  # lock release 는 함수 끝(history·summary 갱신 뒤)으로 옮겼다(2026-08-10 M1-②) — 여기서 풀면
-  # 이후 history.md·summary.md 갱신이 무보호로 남아 두 세션이 동시에 done 처리할 때 한쪽 entry 가
-  # 사라진다(둘 다 read-modify-write). 점유가 길어지는 대가는 측정했다: 사이에 낀 고아 스캔이
-  # 17 project 에 0.275s, history/summary 는 각 1회 쓰기 — hook timeout 10s 대비 무시할 수준이다.
+  # lock release 는 함수 끝(history·summary 갱신 뒤)에서 한다 — 여기서 풀면 이후 history.md·
+  # summary.md 갱신이 무보호로 남아 두 세션이 동시에 done 처리할 때 한쪽 entry 가 사라진다(둘 다
+  # read-modify-write). 점유가 길어지는 대가는 hook timeout 대비 무시할 수준이다(고아 스캔 + history/
+  # summary 각 1회 쓰기).
   if [ "$any_found" -eq 0 ]; then
     index_incomplete=1
     echo "[backlog-lifecycle] slug '$slug' — 전 project index(MEMORY.md/BACKLOG.md/backlog-index.md 전수)에서 entry 미발견, 수동 정리 필요" >&2
   fi
 
-  # 구/신 동시 존재 고아 감지 — 전 project 순회(콜드리뷰 R4 M2) — 이전엔 harness home 프로젝트
-  # 디렉토리 하나만 봐서 비-harness 고아를 전부 놓쳤다. all_memory_dirs() 로 전 project 순회.
-  # 이관 중 복사만 하고 원본을 안 지우면, 신 파일이 이동되며 인덱스 entry 는 지워지는데 구 본문만
-  # 인덱스 없는 고아로 남는다. 삭제는 하지 않는다(§3) — 지목만.
+  # 구/신 동시 존재 고아 감지 — all_memory_dirs() 로 전 project 순회한다(harness home 하나만
+  # 보면 비-harness 고아를 놓친다). 이관 중 복사만 하고 원본을 안 지우면, 신 파일이 이동되며 인덱스
+  # entry 는 지워지는데 구 본문만 인덱스 없는 고아로 남는다. 삭제는 하지 않는다(§3) — 지목만.
   local orphan_dir
   while IFS= read -r orphan_dir; do
     if [ -f "$orphan_dir/backlog_${slug}.md" ]; then
@@ -899,9 +853,9 @@ PYEOF
     fi
   done < <(all_memory_dirs)
 
-  # history.md 갱신 (product 기준) — reverse chronological insert (최신 위)
-  # 버그 정정 (2026-05-14): 기존 코드는 today 헤더 매칭만 검사 후 entry 를 파일 끝 append →
-  # 다른 날짜 섹션 안에 entry 가 들어가는 버그 (working-lifecycle.sh 와 동일 패턴).
+  # history.md 갱신 (product 기준) — reverse chronological insert (최신 위). 오늘 날짜 헤더가 없으면
+  # 최상단에 새로 만든다 — 파일 끝에 append 하면 다른 날짜 섹션 안에 entry 가 섞여 들어간다
+  # (working-lifecycle.sh 와 동일 패턴).
   local history="$DOCS_ROOT/$product/tasks/history.md"
   if [ ! -f "$history" ]; then
     printf "# %s tasks 이력\n\n" "$product" > "$history"
@@ -974,9 +928,8 @@ except Exception as e:
     sys.exit(3)
 PYEOF
   HIST_RC=$?
-  # 갱신 실패를 마커에 반영(2026-08-10 콜드리뷰 Medium) — 이전엔 실패해도 index_incomplete 가 안 서서
-  # 인덱스 정리만 성공하면 최종 보고가 `✓ 이동` 이었다. history 가 안 써졌는데 성공 신호가 나가면
-  # "돈다" 는 신호가 실제 상태와 어긋난다.
+  # 갱신 실패를 마커에 반영 — history 가 안 써졌는데 인덱스 정리만 성공해 최종 보고가 `✓ 이동` 이면
+  # "됐다" 는 신호가 실제 상태와 어긋난다.
   [ "$HIST_RC" -ne 0 ] && index_incomplete=1
 
   # summary.md 갱신
@@ -990,8 +943,8 @@ PYEOF
       "$slug" "$filename" >> "$summary"
   fi
 
-  # index lock 해제 — 인덱스·history·summary 3파일의 read-modify-write 를 모두 덮은 뒤 푼다(M1-②).
-  # 이 함수는 acquire 이후 여기까지 중간 return 이 없다(확인 완료) — 경로가 하나라 trap 없이 안전하다.
+  # index lock 해제 — 인덱스·history·summary 3파일의 read-modify-write 를 모두 덮은 뒤 푼다.
+  # 이 함수는 acquire 이후 여기까지 중간 return 이 없다 — 경로가 하나라 trap 없이 안전하다.
   [ "$index_locked" -eq 1 ] && backlog_index_lock_release
 
   if [ "$index_incomplete" -eq 0 ]; then
@@ -1003,24 +956,17 @@ PYEOF
 }
 
 # 인덱스 동기화 검증 — 죽은 링크(인덱스엔 있는데 본문 파일이 없는 slug) 만 본다.
-#   **콜드리뷰 R5 High(방향 재정정) — "본문 있는데 인덱스 미등재" 축을 완전히 제거했다.** 직전
-#   라운드(R4)가 "제거·검증 두 함수가 같은 합집합을 공유해야 한다"고 지시해 이 축을 전 project 로
-#   확대했는데, 전 project index·구 경로 본문 실측 대조 결과 `MEMORY.md 미등재` + `BACKLOG.md 미등재`
-#   가 수백 건 단위(정확한 값은 여기 적지 않는다 — 실측할 때마다 바뀌어 stale 됐다, 콜드리뷰 R6 L2)로
-#   pending 저장 1회마다 나왔다(확대 전 harness 단독은 거의 0건이었다) — 두 가지 구조적 이유가
-#   있었다: ① BACKLOG.md 는 11 project 중 harness home 1곳에만 존재해 `files - blog` 가 항상 대량,
-#   ② **MEMORY.md 는 큐레이션 인덱스다** — 자기 헤더가 "✅완전종결·비차단 backlog는 인덱스 제거(파일
-#   보존) — 게이트·§3·P0/P1·harness만 등재" 라고 명시한다. 본문이 있는데 인덱스에 없는 것은 **정상
-#   상태**이지 drift 가 아니다 — "미등재 = drift" 전제 자체가 틀렸으므로 범위를 좁히는 게 아니라
-#   축 자체를 없앤다(그래야 다음 라운드에 또 안 뒤집힌다).
+#   "본문 있는데 인덱스 미등재" 축은 보지 않는다 — **MEMORY.md 는 큐레이션 인덱스다**. 자기 헤더가
+#   "완전종결·비차단 backlog는 인덱스 제거(파일 보존) — 게이트·§3·P0/P1·harness만 등재" 라고
+#   명시한다. 본문이 있는데 인덱스에 없는 것은 **정상 상태**이지 drift 가 아니다.
 #   **남기는 축 = "인덱스에 있는데 본문 파일이 없음"(죽은 링크)** — 이건 이 hook 자신이 만들 수 있는
 #   사고(mv 는 됐는데 인덱스 entry 가 안 지워짐)와 정확히 같은 형태라 실제 drift 다. all_index_files()
 #   합집합을 그대로 쓰되, 코드블록 안 `` `backlog_*.md` `` 같은 glob 예시 문자열이 slug="*" 로 오추출
 #   되는 허수를 걸러낸다(실 slug 화이트리스트 [A-Za-z0-9_-]+ 만 허용, product 검증과 동일 문자셋).
-#   **신 경로(날짜 포함)는 (date, slug) 쌍으로 비교한다(2026-08-07 S1 이후, 콜드리뷰 M12)** — slug
-#   단독 비교는 같은 slug 의 파일이 어느 날짜로든 하나만 있어도 "파일 있음" 으로 오판해, href 날짜
-#   자체가 잘못된 경우(수동 편집·이관 오차)를 죽은 링크로 못 잡았다. 구 경로(날짜 없음)는 여전히
-#   slug 단독 비교(M11 잔여 위험과 동일 경계 — 애초 날짜 개념이 없다).
+#   **신 경로(날짜 포함)는 (date, slug) 쌍으로 비교한다** — slug 단독 비교는 같은 slug 의 파일이
+#   어느 날짜로든 하나만 있어도 "파일 있음" 으로 오판해, href 날짜 자체가 잘못된 경우(수동 편집·
+#   이관 오차)를 죽은 링크로 못 잡는다. 구 경로(날짜 없음)는 애초 날짜 개념이 없어 여전히 slug
+#   단독 비교다.
 #   비차단: 경고만 내고 exit 0 (PostToolUse).
 verify_index_sync() {
   local index_files_arr=()
@@ -1028,14 +974,11 @@ verify_index_sync() {
   while IFS= read -r index_file; do
     [ -n "$index_file" ] && index_files_arr+=("$(to_win_path "$index_file")")
   done < <(all_index_files)
-  # 본문 스캔 디렉토리는 all_memory_dirs() 를 별도 argv 그룹으로 직접 받는다(콜드리뷰 R6 M1) — 이전엔
-  # index 파일 경로에서 os.path.dirname() 으로 역산했는데, 파일 헤더가 스스로 선언한 "세 함수(
-  # warn_old_location·고아감지·verify_index_sync) 가 all_memory_dirs() 를 공유해야 전 project 훑기가
-  # 전부에 적용된다" 원칙을 이 함수만 어기고 있었다. 실측: C--Works-hongcafe-global-athena/memory 는
-  # 본문 2건을 갖고 있지만 MEMORY.md/BACKLOG.md 가 없어 index_paths 에서 dirname 역산이 안 되므로
-  # `files` 집합에서 통째로 빠진다 — 지금은 그 slug 를 참조하는 인덱스가 없어 오탐 0이지만, athena 에
-  # 나중에 MEMORY.md 가 생기면 그 순간부터 죽은 링크 오탐이 된다. 두 목록(index 파일 · memory 디렉토리)
-  # 은 정의상 다른 집합(전자 ⊆ 후자)이라 하나에서 다른 하나를 역산하면 안 되고 각각 독립 조회해야 한다.
+  # 본문 스캔 디렉토리는 all_memory_dirs() 를 별도 argv 그룹으로 직접 받는다 — index 파일 경로에서
+  # os.path.dirname() 으로 역산하면, MEMORY.md/BACKLOG.md 가 아직 없는 memory 디렉토리(본문은
+  # 있는데 인덱스 파일 자체가 없는 경우)가 `files` 집합에서 통째로 빠진다. 두 목록(index 파일 ·
+  # memory 디렉토리)은 정의상 다른 집합(전자 ⊆ 후자)이라 하나에서 다른 하나를 역산하면 안 되고
+  # 각각 독립 조회해야 한다.
   local memory_dirs_arr=()
   local mdir
   while IFS= read -r mdir; do
@@ -1113,28 +1056,27 @@ if [ "$HOOK_EVENT" = "PostToolUse" ]; then
 
   [ -z "$FILE_PATH" ] && exit 0
 
-  # Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT — 더블슬래시 붕괴 포함, 2026-07-09)
+  # Windows backslash → forward slash 정규화 (path-utils.sh::normalize_path SSOT — 더블슬래시 붕괴 포함)
   FILE_PATH_NORM=$(normalize_path "$FILE_PATH")
 
   # $BACKLOG_SRC_DIR(홈 경로) 실제 prefix 로 앵커 — 상대경로 문자열 매칭(`/docs/working/backlog/`)은
-  # 임의 레포에 동일 상대경로가 있으면 그 레포 파일을 홈으로 반출(mv)하는 사고를 낸다(콜드리뷰 R1 Medium-5).
-  # 날짜 형식은 여기서 요구하지 않는다 — 요구하면 날짜 prefix 없는(구 경로 잔존분 이관 시나리오 포함) 파일명이
-  # PostToolUse 경로에서 완전 침묵 스킵된다(콜드리뷰 R1 Medium-4). 날짜 검증 + 스킵 stderr 는
+  # 임의 레포에 동일 상대경로가 있으면 그 레포 파일을 홈으로 반출(mv)하는 사고를 낸다.
+  # 날짜 형식은 여기서 요구하지 않는다 — 요구하면 날짜 prefix 없는(구 경로 잔존분 이관 시나리오 포함)
+  # 파일명이 PostToolUse 경로에서 완전 침묵 스킵된다. 날짜 검증 + 스킵 stderr 는
   # move_backlog_to_tasks() 의 case 문이 이미 담당한다.
   #
-  # 앵커는 파라미터 확장 prefix-strip 으로 판정한다(콜드리뷰 R2 Medium-3) — bash case 글롭의 `*` 는
-  # `/` 를 넘어 매칭돼 `"$dir"/*.md` 가 앵커가 아니었다(traversal·하위폴더 파일이 모두 통과).
-  # prefix 제거 후 남은 rest 에 `/`(하위폴더) 나 `..`(traversal) 가 있으면 거부 — $BACKLOG_SRC_DIR
-  # 바로 아래 평면 파일만 허용한다.
-  # 비교 전 FILE_PATH_NORM 도 to_win_path 를 태운다(콜드리뷰 R2 Medium-4) — 안 그러면 페이로드가
-  # POSIX(/c/Users/...) 나 소문자 드라이브(c:/Users/...)로 오는 경우 앵커 문자열 형식이 안 맞아
-  # 완전 침묵 스킵된다(구 정규식은 두 형태 모두 매칭했으므로 회귀).
+  # 앵커는 파라미터 확장 prefix-strip 으로 판정한다 — bash case 글롭의 `*` 는 `/` 를 넘어 매칭돼
+  # `"$dir"/*.md` 는 앵커가 되지 못한다(traversal·하위폴더 파일이 모두 통과한다). prefix 제거 후
+  # 남은 rest 에 `/`(하위폴더) 나 `..`(traversal) 가 있으면 거부 — $BACKLOG_SRC_DIR 바로 아래
+  # 평면 파일만 허용한다.
+  # 비교 전 FILE_PATH_NORM 도 to_win_path 를 태운다 — 안 그러면 페이로드가 POSIX(/c/Users/...) 나
+  # 소문자 드라이브(c:/Users/...)로 오는 경우 앵커 문자열 형식이 안 맞아 완전 침묵 스킵된다.
   win_backlog_src=$(to_win_path "$BACKLOG_SRC_DIR")
   file_path_win=$(to_win_path "$FILE_PATH_NORM")
-  # 비교만 소문자로 정규화한다(콜드리뷰 R6 M5) — to_win_path() 는 드라이브 문자(c:/→C:/)만 통일하고
-  # 나머지 세그먼트는 원본 그대로다. Windows 경로는 전체가 대소문자 무관이라 `C:/users/pv/.claude/…`
-  # 같은(드라이브 문자는 맞는데 그 뒤 세그먼트가 다른 대소문자인) 유효 페이로드가 문자열 완전일치
-  # 비교 때문에 앵커 불일치로 전체 스킵됐다. 비교는 소문자 사본으로, 실제 파일 조회·이동에 쓰는
+  # 비교만 소문자로 정규화한다 — to_win_path() 는 드라이브 문자(c:/→C:/)만 통일하고 나머지 세그먼트는
+  # 원본 그대로다. Windows 경로는 전체가 대소문자 무관이라 `C:/users/pv/.claude/…` 같은(드라이브
+  # 문자는 맞는데 그 뒤 세그먼트가 다른 대소문자인) 유효 페이로드가 문자열 완전일치 비교 때문에
+  # 앵커 불일치로 전체 스킵될 수 있다. 비교는 소문자 사본으로, 실제 파일 조회·이동에 쓰는
   # rest/file_path_win 은 원본 대소문자를 그대로 보존한다(파일시스템 표기 훼손 방지).
   win_backlog_src_lc="${win_backlog_src,,}"
   file_path_win_lc="${file_path_win,,}"
@@ -1144,22 +1086,20 @@ if [ "$HOOK_EVENT" = "PostToolUse" ]; then
     rest="$file_path_win"
   fi
   if [ "$rest" = "$file_path_win" ]; then
-    # 구 경로(memory/backlog_*.md) 는 완전 침묵이었다(콜드리뷰 R3 High-1) — 앵커 불일치로 그냥 exit 0
-    # 되어 warn_old_location() 도 호출 전에 빠져나갔다. 잔존분이 전부 이 경로에 있는 지금 성공기준
-    # 5(구 경로 안내)가 문자 그대로 미충족이었다. 여기서 명시적으로 안내한다.
+    # 구 경로(memory/backlog_*.md) 는 앵커 불일치로 그냥 exit 0 되면 warn_old_location() 도 호출
+    # 전에 빠져나간다. 여기서 명시적으로 안내한다.
     case "$FILE_PATH_NORM" in
       */memory/backlog_*.md) echo "[backlog-lifecycle] $(basename "$FILE_PATH_NORM") — 구 경로(memory/backlog_*.md) 미지원. docs/working/backlog/{yyyy-mm-dd}-{slug}.md 로 이동 필요" >&2 ;;
-      # 메시지에 실제 비교 기준인 $win_backlog_src(Windows 표기, 콜드리뷰 R4 L1) 를 보여준다 — 이전엔
-      # $BACKLOG_SRC_DIR(POSIX 표기) 를 보여줘서, 대소문자/구분자 불일치(예: 소문자 드라이브 c:/)
-      # 로 인한 실패인데 마치 경로 자체가 틀린 것처럼 오독됐다.
+      # 메시지에 실제 비교 기준인 $win_backlog_src(Windows 표기) 를 보여준다 — $BACKLOG_SRC_DIR
+      # (POSIX 표기) 를 보여주면, 대소문자/구분자 불일치(예: 소문자 드라이브 c:/) 로 인한 실패인데
+      # 마치 경로 자체가 틀린 것처럼 오독된다.
       */working/backlog/*) echo "[backlog-lifecycle] $FILE_PATH_NORM — backlog 경로처럼 보이나 홈 앵커($win_backlog_src) 불일치로 스킵 (경로 표기 확인 필요)" >&2 ;;
     esac
     exit 0
   fi
-  # `*..*` 제거(콜드리뷰 R3 Medium-5) — traversal 은 반드시 `/` 를 포함해 앞의 `*/*` 가 이미 잡는다.
-  # `*..*` 가 추가로 하는 일은 `2026-08-06-a..b.md` 같은 평면 정상 파일명을 stderr 0줄로 침묵 차단하는
-  # 것뿐이었다(실측). `*/*` arm 에는 스킵 사유 stderr 를 낸다 — move_backlog_to_tasks() 의 파일명
-  # case 가드(패턴 불일치 시 스킵 사유 stderr)와 일관되게.
+  # `*..*` 제거 — traversal 은 반드시 `/` 를 포함해 앞의 `*/*` 가 이미 잡는다. `*..*` 를 추가하면
+  # `a..b.md` 같은 평면 정상 파일명까지 스킵 사유 stderr 없이 침묵 차단된다. `*/*` arm 에는 스킵
+  # 사유 stderr 를 낸다 — move_backlog_to_tasks() 의 파일명 case 가드와 일관되게.
   case "$rest" in
     */*) echo "[backlog-lifecycle] $(basename "$FILE_PATH_NORM") — $BACKLOG_SRC_DIR 하위 폴더/상위경로는 지원 안 함(평면 파일만), 스킵" >&2; exit 0 ;;
     *.md) ;;
@@ -1171,8 +1111,8 @@ if [ "$HOOK_EVENT" = "PostToolUse" ]; then
   [ -f "$unix_path" ] || exit 0
 
   if has_done_marker "$unix_path"; then
-    # 콜드리뷰 L3: 이전엔 done 판정 이전에 무조건 호출돼 신 경로에 pending 저장(편집 1회당 상시 발생)
-    # 마다도 "구 경로 잔존 N건" 고정 노이즈가 떴다. 실제 이동이 일어나는 done 분기 안으로만 좁힌다.
+    # done 분기 안으로만 좁힌다 — 아니면 pending 저장(편집마다 상시 발생)마다 "구 경로 잔존 N건"
+    # 고정 노이즈가 뜬다.
     warn_old_location
     move_backlog_to_tasks "$unix_path"
   else

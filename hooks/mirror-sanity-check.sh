@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# mirror-sanity-check.sh — be 미러링 경량 drift 감지 (2026-05-18 신설)
+# mirror-sanity-check.sh — be 미러링 경량 drift 감지
 #
 # 동작: SessionStart 시 mtime 기반 경량 검사
 #   (1) CLAUDE.md 양방향 (be ↔ global mirror)
@@ -17,7 +17,7 @@
 #     skill `verify` + `sync-from-be` / `sync-from-global`) 으로 위임.
 #
 # SSOT: 본 hook + ~/.claude/skills/mirror-be-claude/SKILL.md + CLAUDE.md §File Paths
-#       "api-docs 3-way 자동 미러링" 단락 (2026-05-18 갱신)
+#       "api-docs 3-way 자동 미러링" 단락
 
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 
@@ -49,7 +49,7 @@ fi
 
 # ─────────────────────────────────────────────────────────
 # (2) api-docs 3-way — top-dir mtime 경량 비교 (Tier 1) → drift 의심 시 sample yaml mtime (Tier 2)
-#     2026-05-20 F2: find -maxdepth 3 ×3 (≈600 stat) → stat ×3 (≈3 stat) 로 경량화
+#     find -maxdepth 3 ×3 (≈600 stat) → stat ×3 (≈3 stat) 로 경량화
 #     정확성 보강 = sample yaml mtime 비교는 그대로 유지
 #     file count 완전 일치 검증 = `/hongcafe:mirror-be-claude verify` (sha256 + count) 위임
 # ─────────────────────────────────────────────────────────

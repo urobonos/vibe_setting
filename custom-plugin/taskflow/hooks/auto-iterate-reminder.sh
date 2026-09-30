@@ -32,7 +32,6 @@ fi
 
 AUTOITER_FILE="/tmp/claude_autoiter_${SESSION_ID}"
 
-# 디버그 로그 (2026-05-13 telemetry lib 마이그레이션)
 # shellcheck disable=SC1091
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null || {
   LOG_FILE="$HOME/.claude/auto-iterate-reminder.log"

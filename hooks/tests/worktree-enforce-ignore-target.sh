@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # worktree-enforce.sh #10(gitignore 면제) 의 판정 기준이 cwd 가 아니라 target 인지 검증.
 #
-# 2026-09-17 정정 전에는 `git -C "$(pwd)" check-ignore` 였다. cwd 와 target 이 서로 다른
-# 레포면 check-ignore 가 "outside repository" 로 조회 자체를 실패해, 실제로는 ignored 인
-# 파일이 비면제로 떨어져 차단됐다 (code-loop 결과문서가 worktree cwd 에서 4회 차단).
+# cwd 기준(`git -C "$(pwd)" check-ignore`)이면 cwd 와 target 이 서로 다른 레포일 때
+# check-ignore 가 "outside repository" 로 조회 자체를 실패해, 실제로는 ignored 인 파일이
+# 비면제로 떨어져 차단된다.
 #
 # 핵심 질문 = "면제가 넓어지기만 한 건 아닌가" — 추적 파일은 여전히 차단돼야 한다.
 set -uo pipefail

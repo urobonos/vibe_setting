@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# /taskflow:load ① 잔존 작업 스캔 — load.md 본문 bash 블록을 실행물로 옮긴 것 (2026-09-28).
+# /taskflow:load ① 잔존 작업 스캔 — load.md 본문 bash 블록을 실행물로 옮긴 것.
 # 모델이 매번 본문을 옮겨 적으며 글롭·치환을 다시 조립하던 절차라 결정적 부분만 여기 둔다.
 #
 #   bash load-scan.sh [인자]     인자 = "" | all | latest | {작업명} | {product}  ($ARGUMENTS 그대로)
@@ -23,13 +23,13 @@ CURRENT_PRODUCT=$(resolve_product "$PWD")
 
 ARG="$1"
 case "$ARG" in
-  ""|"all") TARGET_PRODUCT=""; MODE=all ;;      # 인자 없음 = 전체 (2026-06-18 cwd 필터 기본 해제)
+  ""|"all") TARGET_PRODUCT=""; MODE=all ;;      # 인자 없음 = 전체
   "latest") TARGET_PRODUCT="$CURRENT_PRODUCT"; MODE=latest ;;
   *)
     # 작업명 모드 판정 — 날짜 폴더 파일 또는 backlog slug 가 인자와 **전문 일치**할 때만.
     # backlog glob 은 slug 를 날짜 바로 뒤에 앵커링한다: `*-${ARG}.md` 는 ARG 가 slug 접미사에만
-    # 걸려도 매칭돼 product 명 `infra` 가 `{date}-ses-email-infra.md` 에 먹혔다(콜드리뷰 R5 M1).
-    # `--*` 형은 이관 때 slug 충돌로 `{date}-{slug}--{product}.md` 를 받은 8건용이다(2026-08-07 H3).
+    # 걸려도 매칭돼 product 명 `infra` 가 `{date}-ses-email-infra.md` 에 먹힐 수 있다.
+    # `--*` 형은 slug 충돌로 `{date}-{slug}--{product}.md` 를 받는 경우를 위한 것이다.
     if compgen -G "$WORKING_GLOB/*-${ARG}.md" >/dev/null 2>&1 \
       || compgen -G "$BACKLOG_DIR/${DATE_RE}-${ARG}.md" >/dev/null 2>&1 \
       || compgen -G "$BACKLOG_DIR/${DATE_RE}-${ARG}--*.md" >/dev/null 2>&1; then
@@ -54,8 +54,8 @@ residual_in_section() {   # ## 잔여 작업 섹션 안 미체크 수
 }
 
 # 그룹 A = `## 잔여 작업` 섹션 보유 + 그 안에 미체크 ≥1 → 상세 대상
-# 그룹 B = 섹션 미보유 + 문서 전체 미체크 ≥1 → 잔여인지 모르는 상태라 보강 권고만 (2026-09-07 결정).
-#   B 의 step 평면 파일(`-step-`)은 대개 step 자체 체크리스트라 건수로 접는다 (실측 B 61건 중 43건)
+# 그룹 B = 섹션 미보유 + 문서 전체 미체크 ≥1 → 잔여인지 모르는 상태라 보강 권고만.
+#   B 의 step 평면 파일(`-step-`)은 대개 step 자체 체크리스트라 건수로 접는다.
 other_count=0; b_step=0; b_rows=0
 for f in $WORKING_GLOB/*.md; do
   [ -f "$f" ] || continue
@@ -92,10 +92,10 @@ done
 
 # backlog 잔존 — status: done 이 아닌 문서 (product 무분리).
 # done 판정은 frontmatter 범위로만 한다 — 본문 예시의 `status: done` 에 반응하면 hook 의
-# has_done_marker() 와 갈라져 pending 문서가 조용히 사라진다(콜드리뷰 H2). 전체를 awk 1패스로 도는 건
-# 298건 이관 뒤 파일당 6프로세스 스캔이 124초 걸렸기 때문이다. BEGINFILE/ENDFILE 은 0바이트 파일도
-# 순회에 넣는다(FNR==1 리셋은 빈 파일을 놓쳤다, R2 M4). name/description 표시만 앞 20줄에서 관대하게
-# 찾는다(R2 M5) — done 판정 규칙과는 분리돼 있다.
+# has_done_marker() 와 갈라져 pending 문서가 조용히 사라진다. 전체를 awk 1패스로 도는 건
+# 파일당 여러 프로세스로 스캔하면 느리기 때문이다. BEGINFILE/ENDFILE 은 0바이트 파일도
+# 순회에 넣는다(FNR==1 리셋은 빈 파일을 놓친다). name/description 표시만 앞 20줄에서 관대하게
+# 찾는다 — done 판정 규칙과는 분리돼 있다.
 # 정상 항목만 8건 상한, 이동불가·이동실패는 이상 신호라 전부 낸다.
 if [ -d "$BACKLOG_DIR" ] && compgen -G "$BACKLOG_DIR/*.md" >/dev/null 2>&1; then
   BACKLOG_AWK_OUT=$(awk '

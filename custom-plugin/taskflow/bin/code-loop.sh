@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# code-loop.sh — 분리 개발↔리뷰 루프를 "스텝 1개 = 프로세스 1개" 로 돌린다 (2026-09-16)
+# code-loop.sh — 분리 개발↔리뷰 루프를 "스텝 1개 = 프로세스 1개" 로 돌린다
 #
 # 왜 스텝마다 프로세스인가:
 #   메인에서 루프를 돌리면 루프가 태우는 도구 호출이 전부 메인 컨텍스트에 영구
-#   누적되고 매 턴 cache_read 로 다시 읽힌다. 2026-09-16 실측(tick/code 세션 40개)
-#   — 본체 Bash 7,449회 209만 토큰(73%) · 본체 Read 458회 49.8만(17%) · subagent
-#   반환 588회 23.7만(7.6%). subagent 반환은 이미 1,121자 안팎으로 절단돼 들어오므로
-#   줄일 여지가 없고, 남는 경로는 프로세스를 끊는 것뿐이었다.
+#   누적되고 매 턴 cache_read 로 다시 읽힌다. 누적의 대부분은 본체 Bash·Read 호출이고,
+#   subagent 반환은 이미 짧게 절단돼 들어오므로 줄일 여지가 없다 — 남는 경로는
+#   프로세스를 끊는 것뿐이다.
 #
 #   루프 전체를 headless 1개로 빼는 것으로는 부족하다 — 그 러너가 라운드를 warm 하게
 #   들고 있으면 누적이 메인에서 러너로 옮겨갈 뿐이다. 그래서 라운드가 아니라 스텝을
@@ -50,7 +49,7 @@ M_REV="${M_REV:-sonnet}"
 # 클린을 못 깨면 루프가 거기서 끝나므로 마지막 방어선의 판단력은 내리지 않는다
 M_ADV="${CODE_LOOP_MODEL_ADV:-opus}"
 
-# 2026-09-21 사용자 지시 "임시 캡제한 해제" — 기본 무제한(0). 되살리려면 환경변수로:
+# 기본 무제한(0). 캡을 걸려면 환경변수로:
 #   CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2 code-loop.sh "요청"
 # 루프의 정상 종료는 캡이 아니라 판정이다 — dev 는 리뷰 CLEAN, adv 는 UPHELD.
 DEV_CAP="${CODE_LOOP_DEV_CAP:-0}"   # 정규 라운드 캡 · 0 = 무제한
@@ -61,7 +60,7 @@ mkdir -p "$STATE_DIR"
 
 # 개행을 먼저 지운다 — `sed` 는 줄 단위라 개행이 `[^a-z0-9]` 에 걸리지 않고,
 # `cut -c1-40` 도 줄마다 따로 40자를 남긴다. 여러 줄 요청을 그대로 넘기면
-# 각 줄이 디렉토리명 조각이 되어 `File name too long` 으로 죽는다 (2026-09-17 실측).
+# 각 줄이 디렉토리명 조각이 되어 `File name too long` 으로 죽는다.
 make_slug() {
   local s
   s=$(printf '%s' "$1" | tr '[:space:]' ' ' | tr '[:upper:]' '[:lower:]' \
@@ -102,9 +101,9 @@ cmd_status() {
   fi
 }
 
-# 스텝 1회 시간 상한(분). 성공 run 222개의 스텝 소요(claude 기동 ~ 세션 마지막 기록) 최대치의
-# 약 2~2.5배다 (2026-09-29 실측): dev 88.4분 → 180 · dev(adv) 46.8 → 100 · spec 38.3 / adv 40.0 /
-# rev 37.9 → 100 · merge 16.4 / result 19.4 → 40. 전 스텝 일괄 재정의 = CODE_LOOP_STEP_TIMEOUT_MIN
+# 스텝 1회 시간 상한(분). 성공 run 들의 스텝 소요(claude 기동 ~ 세션 마지막 기록) 실측 최대치의
+# 약 2~2.5배로 잡는다: dev 180 · dev(adv) 100 · spec/adv/rev 100 · merge/result 40.
+# 전 스텝 일괄 재정의 = CODE_LOOP_STEP_TIMEOUT_MIN
 step_timeout_min() {
   if [ -n "${CODE_LOOP_STEP_TIMEOUT_MIN:-}" ]; then echo "$CODE_LOOP_STEP_TIMEOUT_MIN"; return; fi
   case "$1" in
@@ -116,12 +115,11 @@ step_timeout_min() {
 }
 
 # claude 를 시간 상한 안에서 돌린다. $1 분 / $2 출력 파일 / 나머지 = claude 인자, stdin 은 그대로 claude 로 간다.
-# 상한을 넘기면 124. timeout 만으로는 claude 가 띄운 자식(Bash 도구의 bash·python 등)이 남는다
-# (2026-09-29 재현: rc=124 뒤 python.exe 잔존). 그래서 --foreground 로 TERM 을 안쪽 bash 만 받게
-# 하고, 그 trap 이 claude 래퍼의 *그 시점* winpid 로 taskkill //T 를 건다 — 기동 직후에 읽은 winpid 는
-# 래퍼가 exec 하기 전 값이라 트리 뿌리가 아니었다(같은 날 재현, 수정 후 실 claude 3/3 잔존 0).
+# 상한을 넘기면 124. timeout 만으로는 claude 가 띄운 자식(Bash 도구의 bash·python 등)이 남는다.
+# 그래서 --foreground 로 TERM 을 안쪽 bash 만 받게 하고, 그 trap 이 claude 래퍼의 *그 시점* winpid 로
+# taskkill //T 를 건다 — 기동 직후에 읽은 winpid 는 래퍼가 exec 하기 전 값이라 트리 뿌리가 아니다.
 # 출력은 파이프가 아니라 파일로 받는다 — 트리 종료를 빠져나간 자손이 파이프를 쥐고 있으면 뒤의
-# sed 가 그 자손이 끝날 때까지 막혀 상한이 무의미해진다(같은 날 stub 재현). taskkill 이 없으면 kill
+# sed 가 그 자손이 끝날 때까지 막혀 상한이 무의미해진다. taskkill 이 없으면 kill 로 폴백한다.
 claude_with_timeout() {
   local min="$1" outf="$2"; shift 2
   /usr/bin/timeout --foreground --kill-after=60 "${min}m" bash -c '
@@ -145,19 +143,15 @@ run_step() {
     echo "--- $(date '+%T') [$label] model=$model tools=${tools:-*} try=$try"
     log=$(mktemp)
     cd "$CLAUDE_HOME" || return 1
-    # 프롬프트는 stdin 으로 준다. 인자로 주면 두 군데서 깨진다 (2026-09-16 실측):
+    # 프롬프트는 stdin 으로 준다. 인자로 주면 두 군데서 깨진다:
     #   (a) 에이전트 정의가 --- 로 시작해서 CLI 가 옵션으로 파싱한다
     #       → error: unknown option '---
     #   (b) --allowed-tools 가 variadic 이라 뒤따르는 프롬프트까지 도구로 먹는다
     #       → Error: Input must be provided ...
-    # MCP 서버는 띄우지 않는다 (--strict-mcp-config, --mcp-config 없이 = 서버 0개).
-    # 설정된 Playwright MCP 가 매 스텝 `npx @playwright/mcp@latest` 로 떴는데, 스텝은
-    # --allowed-tools 로 MCP 도구를 못 쓰고 실제 호출도 0건이었다. 그런데 기동이
-    # 세션 시작을 막았다 — 225 스텝 실측에서 프로세스 기동부터 세션 첫 기록까지
-    # 중앙 11초 · 평균 30초 · 최대 312초(5건, 타임아웃으로 보임) (2026-09-17).
-    # 스킬 목록·자동 메모리도 싣지 않는다 — 첫 호출 67.5K → 50.8K(sonnet), 54.8K →
-    # 41.3K(opus). 스텝 3,131 세션 전수에서 Skill 호출 1회·메모리 파일 읽기 3회뿐이었고,
-    # 메모리 파일은 꺼도 경로로 직접 읽힌다 (2026-09-28).
+    # MCP 서버는 띄우지 않는다 (--strict-mcp-config, --mcp-config 없이 = 서버 0개) — 스텝은
+    # --allowed-tools 로 MCP 도구를 못 쓰는데도 MCP 서버 기동 자체가 세션 시작을 지연시킨다.
+    # 스킬 목록·자동 메모리도 싣지 않는다 — 스텝은 Skill 호출·메모리 의존이 거의 없고,
+    # 메모리 파일은 꺼도 필요하면 경로로 직접 읽힌다. 싣지 않으면 첫 호출 토큰이 크게 준다.
     if [ -n "$tools" ]; then
       printf '%s' "$prompt" | CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude_with_timeout "$limit" "$log" -p --model "$model" \
         --strict-mcp-config --disable-slash-commands \
@@ -194,8 +188,8 @@ run_step() {
 }
 
 # spec 이 구현 대신 착수 불가를 반환했는가 — 00-spec.md 없이 RESULT.md 의 판정 줄이 `## 판정: 미착수`.
-# 이걸 산출 없음으로 읽으면 spec 을 한 번 더 태우고 "1단계 실패" 로 끝나 허브가 정상 반환과
-# 크래시를 가를 수 없었다 (run 20260929-141832 ISS-746, 재시도 ~3분)
+# 이걸 산출 없음으로 읽으면 spec 을 한 번 더 태우고 "1단계 실패" 로 끝나 정상 반환과 크래시를
+# 가를 수 없게 된다.
 spec_declined() {
   grep -qE '^[[:space:]#]*판정:[[:space:]]*미착수' "$1/RESULT.md" 2>/dev/null
 }
@@ -203,15 +197,13 @@ spec_declined() {
 # 결과문서 끝의 기계 판독용 한 줄. 없으면 계약 위반이므로 빈 값을 돌려 fail-closed.
 # 표기 인정 범위는 GATE 줄(custom-plugin/taskflow/hooks/lib/code-loop-gate.sh)과 같다 — 앞의 공백·`#`·`>`·`*`, 값 뒤의
 # 공백·`*` 허용(`## VERDICT: CLEAN` · `**VERDICT: UPHELD**`). 본문 언급(`- … VERDICT: …`)은 불인정.
-# 2026-09-24 ISS-966 run 에서 합본이 헤더 표기로 써 "VERDICT 줄 없음" 중단이 두 번 났다
 verdict_of() {
   grep -hE '^[[:space:]#>*]*VERDICT:' "$1" 2>/dev/null | tail -1 \
     | sed -E 's/^[[:space:]#>*]*VERDICT:[[:space:]*]*//; s/[[:space:]*]+$//'
 }
 
-# adversary UPHELD 의 "재현된 이탈:" 값이 "없음" 이 아닌가. 재현까지 한 결함을
-# 성공 기준 밖이라며 잔여 의심으로 내리는 강등을 셸이 되돌리는 fail-safe (2026-09-28,
-# UPHELD 8건 중 5건에서 남은 결함을 본체가 정착 직전에 고쳤다). 줄이 없으면(구 양식) 손대지 않는다
+# adversary UPHELD 의 "재현된 이탈:" 값이 "없음" 이 아닌가. 재현까지 한 결함을 성공 기준 밖이라며
+# 잔여 의심으로 내리는 강등을 셸이 되돌리는 fail-safe다. 줄이 없으면(구 양식) 손대지 않는다.
 has_reproduced_deviation() {
   local value
   value=$(grep -hE '^[[:space:]#>*-]*재현된 이탈:' "$1" 2>/dev/null | tail -1     | sed -E 's/^[[:space:]#>*-]*재현된 이탈:[[:space:]*]*//; s/[[:space:]*.]+$//')
@@ -248,7 +240,7 @@ files_of() {
     /^FILES:/ { f=1; next }
     f && /^[A-Z][A-Z-]*:/ { exit }
     f && /^- / { line=$0; sub(/^- /,"",line)
-                 # 삭제한 파일은 검사할 게 없다 — "(삭제) 경로" 를 경로로 읽어 "파일 없음" 이 났다(run 20260929-073124)
+                 # 삭제한 파일은 검사할 게 없다 — "(삭제) 경로" 를 경로로 읽으면 "파일 없음" 오류가 난다.
                  if (line ~ /^\((삭제|deleted)\)/) next
                  sub(/ — .*/,"",line); sub(/[[:space:]]*$/,"",line); print line }
   ' "$1"
@@ -270,7 +262,6 @@ step_prompt() {
 # 도구 목록은 Agent 도구로 spawn 할 때만 자동 적용되고, claude -p 로 띄우면
 # 아무 제한이 없다 — 리뷰어와 adversary 가 Edit/Write 를 쓸 수 있게 된다.
 # 짠 쪽과 본 쪽을 가르는 것이 이 루프의 값 전부이므로 여기가 비면 루프가 무의미해진다.
-# (2026-09-16 실측 — --allowed-tools 로 Write 를 빼면 실제로 파일을 못 쓴다)
 agent_tools() {
   awk '/^---$/{n++; next} n==1 && /^tools:/{
          sub(/^tools:[[:space:]]*/, ""); gsub(/[[:space:]]/, ""); print; exit }' "$1"
@@ -282,8 +273,7 @@ agent_body() {
 }
 
 # 개발자 반환의 한 절(REBUTTED·DEFERRED)에 주어진 등급의 항목(- [등급] …)이 있는가.
-# 필드 자체는 매 라운드 "REBUTTED: 없음" 으로 들어오므로 단어만 보면 전 라운드가 걸린다
-# (과거 537라운드 중 93%)
+# 필드 자체는 매 라운드 "REBUTTED: 없음" 으로 들어오므로 단어만 보면 전 라운드가 걸린다.
 dev_section_has() {
   awk -v section="$2" -v grades="$3" '
     $0 ~ "^[#*[:space:]]*" section "([[:space:]:*]|$)" { in_section = 1; next }
@@ -294,7 +284,7 @@ dev_section_has() {
 
 # 두 리뷰어 판정을 셸이 결정적으로 합쳐 rev-NN.md 를 쓴다. 판단이 필요한 라운드면 1 을
 # 돌려 LLM 합본으로 넘긴다 — ① 개발자가 REBUTTED 로 반박했다(수용·기각 판정 필요)
-# ①' 개발자가 Critical~Medium 을 DEFERRED 로 넘겼다(리뷰어가 CLEAN 이어도 미해결 — ISS-969 rev-03)
+# ①' 개발자가 Critical~Medium 을 DEFERRED 로 넘겼다(리뷰어가 CLEAN 이어도 미해결)
 # ② 리뷰어 문서가 반환 양식을 벗어났다(VERDICT 가 CLEAN/FINDINGS 가 아니거나, CLEAN 인데
 # Critical~Medium 지적이 있거나, FINDINGS 인데 지적 줄이 하나도 안 읽힌다).
 # 중복 지적은 합치지 않는다 — 원문 그대로 두 목록을 싣고 개발자가 한 번에 고친다.
@@ -333,9 +323,8 @@ ${lines:-지적 없음}
 #
 # **dev-loop 와 adv-loop(BROKEN 재진입) 양쪽이 이 함수를 쓴다.** adversary 는 깨는
 # 역할이지 판정 역할이 아니라서, 그것이 BROKEN 을 내고 개발자가 고친 변경도 반드시
-# 이 라운드를 거쳐야 한다. 2026-09-16 ISS-570 실전 run 에서 그 수정분이 아무도 안 본 채
-# 다음 게이트로 넘어갔다 — 결과적으로 UPHELD 라 무사했지만 무검증 변경이 클린을
-# 달 수 있는 통로였다 (code-loop.md 는 "뺄 수 없다" 고 쓰고 구현이 안 지키고 있었다).
+# 이 라운드를 거쳐야 한다 — 안 거치면 무검증 변경이 클린을 달 수 있는 통로가 열린다
+# (code-loop.md 는 "뺄 수 없다" 고 명시한다).
 #
 # $1 결과문서 디렉토리 / $2 라운드 번호(2자리) / $3 라운드 번호(정수) / $4 공통 프롬프트
 review_round() {
@@ -407,9 +396,9 @@ $hist"
 }
 
 # phpstan 에러 중 이번 diff 가 건드린 줄에 있는 것만 낸다 (raw 형식 `경로:줄:메시지`).
-# 파일 전체를 판정하면 HEAD 에 이미 있던 에러까지 dev 탓이 된다 — run 20260928-230103(ISS-970)
-# 에서 무관한 `Custom_helper.php:453` 1건이 매 라운드 불일치를 내 재보고 한도를 다 썼고, dev 는
-# 그걸 없애려 범위 밖 코드를 고쳐 리뷰어 Medium 을 받았다. 추적 안 된 새 파일은 전 줄이 변경이다.
+# 파일 전체를 판정하면 HEAD 에 이미 있던 에러까지 dev 탓이 된다 — 무관한 기존 에러 1건이
+# 매 라운드 불일치를 내 재보고 한도를 다 쓰고, dev 가 그걸 없애려 범위 밖 코드를 고치는
+# 사고로 이어질 수 있다. 추적 안 된 새 파일은 전 줄이 변경이다.
 # 변경 줄이 아닌 곳에 생긴 파급 에러는 놓친다 — 그건 리뷰어가 diff 를 돌려 잡는 몫이다.
 phpstan_new_errors() {
   local root="$1" rel="$2" out="$3" changed
@@ -477,20 +466,20 @@ verify_mechanical() {
       phpstan_bin="phpstan"
     fi
     # 테스트 파일은 phpstan 에서 뺀다 — 같은 파일에 정의한 스텁 클래스를 못 찾아
-    # class.notFound 가 쏟아진다(run 20260928-120313 ISS-694: 156 errors, 재보고 캡 소진).
-    # 도구 적용 범위 문제지 코드 결함이 아니다. php -l·php-cs-fixer 는 그대로 돈다
+    # class.notFound 가 쏟아질 수 있다. 도구 적용 범위 문제지 코드 결함이 아니다.
+    # php -l·php-cs-fixer 는 그대로 돈다.
     case "$f" in tests/*|*/tests/*) phpstan_bin="" ;; esac
     if [ -n "$phpstan_bin" ]; then
       # worktree 밖(러너 cwd)에서 돌리면 그 자리의 config(또는 config 없음)를 주워 무관한
-      # 클래스까지 "unknown class" 로 뜬다(실측 2026-09-22, run 20260922-160417) — 반드시
-      # worktree 루트에서, 그 worktree 자신의 phpstan 로 돈다.
+      # 클래스까지 "unknown class" 로 뜬다 — 반드시 worktree 루트에서, 그 worktree 자신의
+      # phpstan 로 돈다.
       if ! out=$(cd "$root" && "$phpstan_bin" analyse --no-progress --error-format=raw "$abspath" 2>&1); then
         local fresh
         if printf '%s\n' "$out" | grep -q 'No files found to analyse' \
            && ! printf '%s\n' "$out" | grep -qE '\.php:[0-9]+:'; then
           # 넘긴 파일이 phpstan.neon 의 excludePaths 안이다(app/Views 등). 제외 판정은 phpstan 자신에게
           # 맡긴다 — 러너가 neon 을 따로 읽으면 설정 해석이 두 벌이 되어 어긋날 때 반대로 오판한다.
-          # 불일치로 치던 동안 view 만 바꾼 run 이 재보고 횟수를 헛되이 소진했다(run 723, 2026-09-29)
+          # 불일치로 치면 view 만 바꾼 run 도 재보고 횟수를 헛되이 소진한다.
           echo "--- [dev-$nn] phpstan skip(excludePaths): $f"
         elif ! printf '%s\n' "$out" | grep -qE '\.php:[0-9]+:'; then
           # 에러 줄이 없는 실패 = 도구 자체 오류(설정·메모리). 걸러낼 기준이 없으니 그대로 불일치다
@@ -510,19 +499,19 @@ verify_mechanical() {
   return "$fail"
 }
 
-# 재실행 대상은 phpunit 실행 명령뿐이다. 리뷰어가 백틱에 경로만 적거나
-# (`tests/unit/Filters/` → OK (387 tests…) — ISS-694 run.log) 옵션 조각을 적으면 그 토큰을
-# eval 해 "매치 없음" 불일치가 났다. 임의 토큰 eval 의 부작용면도 여기서 닫는다
+# 재실행 대상은 phpunit 실행 명령뿐이다. 리뷰어가 백틱에 경로만 적거나(`tests/unit/Filters/` →
+# OK (387 tests…)) 옵션 조각을 적으면 그 토큰을 eval 해 "매치 없음" 불일치가 날 수 있다.
+# 임의 토큰 eval 의 부작용면도 여기서 닫는다.
 is_phpunit_cmd() {
   case "$1" in *[\;\&\|\>\<\`]*|*'$('*) return 1 ;; esac
   printf '%s' "$1" | grep -qE '^([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |$)'
 }
 
 # BASELINE 의 "$ {명령}" 을 재실행해 "N tests, M assertions" 주장과 대조한다.
-# phpunit 표준 형식일 때만 자동판정한다 — 실측(2026-09-22, dev-NN.md 전수 확인)으로
-# BASELINE 이 diff/git status 같은 산문형도 흔해, 그 형태까지 일반화하면 오탐이 는다.
-# 그 외 형태는 이 함수가 손대지 않고 재실행도 하지 않는다 (일반 명령 eval 은 phpunit
-# 형식이 잡힐 때만 — 범위를 넓히면 임의 명령 재실행의 부작용면이 같이 넓어진다).
+# phpunit 표준 형식일 때만 자동판정한다 — BASELINE 이 diff/git status 같은 산문형도 흔해,
+# 그 형태까지 일반화하면 오탐이 는다. 그 외 형태는 이 함수가 손대지 않고 재실행도 하지
+# 않는다 (일반 명령 eval 은 phpunit 형식이 잡힐 때만 — 범위를 넓히면 임의 명령 재실행의
+# 부작용면이 같이 넓어진다).
 verify_baseline_counts() {
   local dir="$1" nn="$2" root fail=0 cmd claim actual claim_n actual_n
   root=$(worktree_of "$dir/00-spec.md")
@@ -556,19 +545,18 @@ verify_baseline_counts() {
   return "$fail"
 }
 
-# 00-spec.md 성공 기준마다 dev-$nn.md CRITERIA 에 증거 줄이 있는지 본다 (2026-09-28).
-# 패치 후 70 run 의 라운드1 고유 지적 중 8~9건이 "성공 기준을 실행하지 않은 채 반환"
-# (Skipped 를 통과로 읽음 · 변이 판별력 미시도 · spec 이 지정한 대조 생략)이었고, 개발자가
-# NOTES 에 스스로 "실행하지 못했다" 고 적은 경우도 그대로 리뷰 라운드를 태웠다.
-# 증거가 참인지는 리뷰어가 재실행해 판정한다 — 여기선 기준마다 줄이 있고 안 했다고
-# 자백하지 않았는지만 본다. CRITERIA: 줄이 없는 spec(구버전)은 건너뛴다.
+# 00-spec.md 성공 기준마다 dev-$nn.md CRITERIA 에 증거 줄이 있는지 본다.
+# "성공 기준을 실행하지 않은 채 반환"(Skipped 를 통과로 읽음 · 변이 판별력 미시도 · spec 이
+# 지정한 대조 생략)은 개발자가 NOTES 에 스스로 "실행하지 못했다" 고 적어도 그대로 리뷰
+# 라운드를 태울 수 있다. 증거가 참인지는 리뷰어가 재실행해 판정한다 — 여기선 기준마다
+# 줄이 있고 안 했다고 자백하지 않았는지만 본다. CRITERIA: 줄이 없는 spec(구버전)은 건너뛴다.
 CRITERIA_UNDONE_RE='미실행|실행하지 (못|않)|실행 못|못 돌|돌리지 (못|않)|진행하지 (못|않)|미시도|시도하지 않|미확인|확인 못|못했|포기|넘어갔|빼먹|생략|TODO'
 verify_criteria() {
   local dir="$1" nn="$2" want i line fail=0 section
   want=$(sed -nE 's/^[[:space:]#>*]*CRITERIA:[[:space:]*]*([0-9]+)[[:space:]*]*$/\1/p' "$dir/00-spec.md" 2>/dev/null | tail -1)
   [ -n "$want" ] || return 0
-  # 섹션 제목은 `CRITERIA:` 와 `## CRITERIA` 가 섞여 온다 (2026-09-24~28 dev-01 37건 중
-  # `## FIELD` 22 · `FIELD:` 15) — 둘 다 받고, 다음 필드 제목(어느 형식이든)에서 끊는다
+  # 섹션 제목은 `CRITERIA:` 와 `## CRITERIA` 가 섞여 온다 — 둘 다 받고, 다음 필드 제목
+  # (어느 형식이든)에서 끊는다.
   section=$(awk '/^[[:space:]#>*]*CRITERIA[[:space:]*]*:?[[:space:]*]*$/{b=1; next}
                  b && (/^[A-Z][A-Z-]*:/ || /^#+[[:space:]]/){exit} b' "$dir/dev-$nn.md")
   for i in $(seq 1 "$want"); do
@@ -585,9 +573,8 @@ verify_criteria() {
   return "$fail"
 }
 
-# 성공 기준의 "변이 시 red" 를 셸이 실 소스 변이로 직접 확인한다 (2026-09-28).
-# ISS-694: 기준 5 "offline 을 MENU_AUTH_PATHS 에서 빼면 red" 를 dev 가 변이를 흉내 내는
-# 테스트(항상 참)로 "충족"했고 네 번 지적되고도 남았다 — red 요구는 자기신고로만 통과했다.
+# 성공 기준의 "변이 시 red" 를 셸이 실 소스 변이로 직접 확인한다 — 변이를 흉내 내는
+# 테스트(항상 참)로 red 요구를 자기신고만으로 "충족"하는 경로를 막는다.
 #
 # 변이는 dev worktree 가 아니라 일회용 스크래치 worktree 에 가한다. 원복 실패가 구조적으로
 # 없다(통째로 지운다). 스크래치 = HEAD + dev 의 diff(add -N 포함) + untracked 파일 + vendor-pool
@@ -600,7 +587,7 @@ verify_criteria() {
 #   MUTATION: {파일} | {원문 조각} ==> {변이 조각} | {phpunit 명령}   (spec 또는 dev-NN.md)
 MUTATION_RED_RE='FAILURES!|ERRORS!|Tests: [0-9]+.*(Failures|Errors): [1-9]'
 # 대조군이 exit 0 이어도 assertion 이 0 이면(전건 skip·테스트 0개) 변이도 당연히 통과한다 —
-# 그걸 GREEN(약한 테스트)으로 적으면 dev 가 고칠 수 없는 걸로 재보고만 소진한다(run 20260929-073124)
+# 그걸 GREEN(약한 테스트)으로 적으면 dev 가 고칠 수 없는 걸로 재보고만 소진한다.
 MUTATION_VACUOUS_RE='Assertions: 0([^0-9]|$)|No tests executed|OK \(0 tests'
 
 mutation_lines() {
@@ -611,15 +598,13 @@ mutation_lines() {
 # 스크래치 worktree 에 dev worktree 의 현재 상태를 옮긴다. 옮긴 뒤 두 쪽의 변경 파일 집합이
 # 다르면 1 — add -N 을 안 한 새 파일이 diff 에서 빠지는 함정을 여기서 잡는다.
 # $3 = 진단 로그. 실패하면 어느 단계인지 stdout 에 한 줄로 내고, 그 단계의 stderr(대조 실패면 양쪽
-# 경로 목록 차이)를 $3 에 남긴다 — 네 단계를 return 1 하나로 돌려주고 stderr 도 버려서, 간헐 실패
-# (run 20260929-091648 mut-01 이식 불일치, 같은 worktree 재실행에선 미재현)의 원인을 가릴 수 없었다
+# 경로 목록 차이)를 $3 에 남긴다 — 네 단계를 return 1 하나로 뭉치면 간헐 실패의 원인을 가릴 수 없다.
 mutation_scratch_prepare() {
   local root="$1" scratch="$2" err="$3" patch stale owner a b
   # 이전 검증이 도중에 죽어(kill·low-memory reap — SIGKILL 은 trap 이 못 잡는다) 남긴 스크래치를
   # 먼저 쓸어낸다. prune 은 디렉토리가 사라진 등록만 지우므로 살아 있는 고아는 직접 제거한다.
   # 단 소유 러너가 살아 있는 것은 건너뛴다 — 같은 레포에서 run 이 겹치면 남의 진행 중 스크래치를
-  # 지워 그쪽 이식이 깨진다(동시 run 청소 경합 가설, 2026-09-29). owner.pid 가 없는 것은 이 규칙
-  # 이전의 잔재라 고아로 본다
+  # 지워 그쪽 이식이 깨진다. owner.pid 가 없는 것은 고아로 본다.
   git -C "$root" worktree list --porcelain | sed -n 's/^worktree //p' | grep -E '/code-loop-mut$' \
     | while IFS= read -r stale; do
         owner=$(cat "$(dirname "$stale")/owner.pid" 2>/dev/null)
@@ -646,7 +631,7 @@ mutation_scratch_prepare() {
   fi
   # --untracked-files=all — 기본값은 새 디렉토리 속 untracked 를 디렉토리 한 줄로 접는다. dev 쪽은 add -N
   # 이라 파일 단위, 스크래치 쪽은 untracked 라 디렉토리 한 줄이 되어 새 디렉토리를 만드는 step 은
-  # 늘 불일치였다 (run 20260929-110429 mut-01, 위 진단 로그로 확정)
+  # 기본값으로는 항상 불일치가 난다.
   a=$(git -C "$root" status --porcelain --untracked-files=all | cut -c4- | sort)
   b=$(git -C "$scratch" status --porcelain --untracked-files=all | cut -c4- | sort)
   if [ "$a" != "$b" ]; then
@@ -718,8 +703,7 @@ verify_mutations() {
     cp -p "$scratch/$file" "$scratch/$file.mutation-orig"
     # 조각은 한 줄·파일 안 유일이어야 한다. 이스케이프(\n·\t)는 풀지 않는다 — PHP 소스엔 FQCN
     # (\App\Libraries\notify…)·정규식('\d')·"\n" 처럼 리터럴 백슬래시가 흔해, 풀면 지금 맞는 조각이
-    # 틀어진다. 여러 곳에 있는데 첫 위치만 바꾸면 의도와 다른 곳을 변이해 red/green 을 조용히 오판한다
-    # (run 760 여러 줄 조각 관측 · ISS-THKING 제안, 2026-09-29)
+    # 틀어진다. 여러 곳에 있는데 첫 위치만 바꾸면 의도와 다른 곳을 변이해 red/green 을 조용히 오판한다.
     local mrc=0
     python - "$scratch/$file" "$from" "$to" <<'PY' || mrc=$?
 import sys
@@ -763,10 +747,10 @@ PY
   return "$fail"
 }
 
-# spec 의 SCOPE_FILES 밖에서 바뀐 파일을 한 줄씩 낸다 (2026-09-28). 막지 않고 드러내기만 한다 —
-# 필요한 범위 확장까지 막으면 run 이 교착된다. ISS-292 step-10: dev-02 가 비목표
-# (getCallListCount() 내부 수정 금지)를 넘어 CallModel.php 를 고쳤는데 리뷰어 2축은 수정이
-# 옳은지만 보고 범위 이탈을 결함으로 세지 않았다. SCOPE_FILES 줄이 없으면(구 spec) 아무것도 안 낸다.
+# spec 의 SCOPE_FILES 밖에서 바뀐 파일을 한 줄씩 낸다. 막지 않고 드러내기만 한다 —
+# 필요한 범위 확장까지 막으면 run 이 교착된다. 리뷰어 2축은 수정 자체의 옳음만 보고 범위
+# 이탈을 결함으로 세지 않을 수 있어, 이 함수가 별도로 드러낸다. SCOPE_FILES 줄이 없으면
+# (구 spec) 아무것도 안 낸다.
 #   SCOPE_FILES: {glob}, {glob} ...   (worktree 루트 기준, * 는 / 도 넘는다)
 scope_violations() {
   local dir="$1" root scope changed glob inside
@@ -789,7 +773,7 @@ scope_violations() {
 
 # dev-$nn.md 를 리뷰어에게 넘기기 전에 셸 독립 재실행으로 자기신고를 대체한다.
 # 불일치는 코드 결함이 아니라 보고 오류이므로 정규 DEV_CAP 을 소비하지 않고,
-# 별도의 작은 재시도만 소진한다 (2026-09-22 사용자 지시: "불일치시 캡소진안함").
+# 별도의 작은 재시도만 소진한다.
 #
 # 재시도를 다 써도 불일치가 안 풀리면 런을 중단하지 않는다 — 이 게이트는 리뷰어를
 # 대신하는 판정자가 아니라 리뷰어 토큰을 아끼는 값싼 전처리다. 못 푼 불일치는 그대로
@@ -801,9 +785,9 @@ VERIFY_RETRY_CAP=2
 verify_gate() {
   local dir="$1" nn="$2" common="$3" try=0
   while :; do
-    # 변이는 앞 단계와 독립으로 돈다 — 앞이 막히면 변이를 한 번도 안 보고 재보고 한도를 다 쓴다
-    # (run 20260928-230103: phpstan 오판 3회로 변이 검증 0회). 변이는 자체 대조군(무변이 green)이
-    # 있어 코드가 깨져 있으면 판정 무효로 끝나므로 앞 결과에 기대지 않아도 된다
+    # 변이는 앞 단계와 독립으로 돈다 — 앞이 막히면 변이를 한 번도 안 보고 재보고 한도를 다 쓸 수
+    # 있다. 변이는 자체 대조군(무변이 green)이 있어 코드가 깨져 있으면 판정 무효로 끝나므로 앞
+    # 결과에 기대지 않아도 된다.
     local mutation_rc=0 pre_ok=0
     verify_criteria "$dir" "$nn" && verify_mechanical "$dir" "$nn" && verify_baseline_counts "$dir" "$nn" || pre_ok=1
     verify_mutations "$dir" "$nn"; mutation_rc=$?
@@ -838,11 +822,10 @@ CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행
 
 # rev-$nn-{correctness,design}.md 안의 "`cmd` → OK (N tests, M assertions)" idiom 을
 # 셸이 직접 재실행해 대조한다. dev측(BASELINE:/FILES:)과 달리 리뷰어 반환 양식엔
-# 구조화 필드가 없어 이 1종 idiom만 취급한다 (2026-09-22 실측: state/code-loop 상
-# rev 문서 63건이 이 정확한 형태 — 그 외 "무변경"·"바이트 일치" 서술은 자유서술에
-# 흩어져 있고 명령의 실제 측정 범위와 주장의 범위가 어긋나는 사례가 확인돼 자동
-# 대조 대상에서 제외했다. 새 필드를 리뷰어 계약에 추가하지 않는다 — 자유서술과
-# 중복 기재되거나 뉘앙스가 손실된다).
+# 구조화 필드가 없어 이 1종 idiom만 취급한다 — 그 외 "무변경"·"바이트 일치" 서술은
+# 자유서술에 흩어져 있고 명령의 실제 측정 범위와 주장의 범위가 어긋날 수 있어 자동
+# 대조 대상에서 제외한다. 새 필드를 리뷰어 계약에 추가하지 않는다 — 자유서술과
+# 중복 기재되거나 뉘앙스가 손실된다.
 verify_rev_baseline_counts_file() {
   local f="$1" root="$2" fail=0 line cmd claim_n actual actual_n
   [ -f "$f" ] || return 0
@@ -966,8 +949,8 @@ $dir/RESULT.md 에만 남긴다. 판정 줄은 정확히 한 줄 \`## 판정: �
 구현 요청:
 $request"
     # 요청이 기존 worktree 를 WORKTREE: 줄로 이미 정해 왔으면 vendor 하드링크(4.6만 파일 · ~72초)를
-    # spec 과 겹쳐 돌린다 — 예전엔 spec 이 끝난 뒤 직렬이라 매 run spec 구간에 그대로 더해졌다
-    # (2026-09-29 run 11건). 그동안 spec 이 반쯤 링크된 vendor 를 보지 않게 vendor 명령을 막는다
+    # spec 과 겹쳐 돌린다 — 직렬로 돌리면 매 run spec 구간에 그대로 더해진다. 그동안 spec 이
+    # 반쯤 링크된 vendor 를 보지 않게 vendor 명령을 막는다.
     VENDOR_BG_PID="" VENDOR_BG_WT="" VENDOR_BG_LOG=""
     local req_wt
     req_wt=$(printf '%s\n' "$request" | grep -E '^[[:space:]]*WORKTREE:' | tail -1 | sed -E 's/^[[:space:]]*WORKTREE:[[:space:]]*//; s/[[:space:]]+$//')
@@ -994,8 +977,7 @@ $request"
     fi
   fi
 
-  # 세 갈래다. 판정 줄이 없으면 진행하지 않는다 (fail-closed, code-loop.md §VERDICT 계약) —
-  # 예전엔 TOO-LARGE 줄만 찾아서 헤더형 TOO-LARGE 와 판정 줄 없음을 전부 "진행" 으로 읽었다
+  # 세 갈래다. 판정 줄이 없으면 진행하지 않는다 (fail-closed, code-loop.md §VERDICT 계약).
   case "$(code_loop_gate "$dir/00-spec.md")" in
     OK) ;;
     TOO-LARGE)
@@ -1014,8 +996,8 @@ $request"
   # (SSOT = custom-plugin/taskflow/hooks/gate-enforce.sh plan-before 절)
   export CODE_LOOP_SPEC="$dir/00-spec.md"
 
-  # vendor 는 에이전트 재량에 두지 않고 러너가 채운다 (ISS-285 후속). 에이전트가 원본
-  # vendor 로 junction 을 걸면 `git worktree remove --force` 가 그걸 따라가 원본을 지운다
+  # vendor 는 에이전트 재량에 두지 않고 러너가 채운다. 에이전트가 원본
+  # vendor 로 junction 을 걸면 `git worktree remove --force` 가 그걸 따라가 원본을 지운다.
   local spec_worktree
   spec_worktree=$(worktree_of "$dir/00-spec.md")
   if [ -n "$VENDOR_BG_WT" ] && [ -n "$spec_worktree" ] \
@@ -1149,8 +1131,8 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
 범위는 $dir/00-spec.md 그대로다. $dir/dev-$nn2.md 를 쓴다 (FILES/TESTS/NOTES/BASELINE/WHY)."
             # dev-loop 의 dev 스텝과 같은 재개 가드. 없으면 --resume 이 끝난 수정을
             # 다시 태우고, 그때 덮이는 것은 코드가 아니라 **판정**이다 — adv 수정분이
-            # "FILES: 없음"(고칠 코드가 없다)으로 끝나는 경우가 실재하고(2026-09-16
-            # ISS-570 dev-02), 그 판정이 사라지면 왜 안 고쳤는지가 함께 사라진다
+            # "FILES: 없음"(고칠 코드가 없다)으로 끝나는 경우가 있고, 그 판정이 사라지면
+            # 왜 안 고쳤는지가 함께 사라진다.
             if [ ! -s "$dir/dev-$nn2.md" ]; then
               if ! run_step "dev-$nn2(adv)" "$M_DEV" "$(agent_tools "$AGENT_DIR/step-developer.md")" "$dir/dev-$nn2.md" \
                    "$(step_prompt "$AGENT_DIR/step-developer.md" "$fix_body")"; then
@@ -1203,7 +1185,7 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
   fi
 
   # 마지막 dev 의 BASELINE 이 assertion 0 이면 이 CLEAN 은 실행 증거가 없다. 판정은 막지 않고
-  # 정착 전에 반드시 보이게 맨 위에 올린다 (run 20260929-073124: 23건 전건 skip 인 채 CLEAN·UPHELD)
+  # 정착 전에 반드시 보이게 맨 위에 올린다.
   local last_dev
   last_dev=$(ls "$dir"/dev-*.md 2>/dev/null | sort | tail -1)
   if [ -n "$last_dev" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미검증\]' "$dir/RESULT.md" \
@@ -1231,8 +1213,7 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
 #
 # 왜 tee 가 아니라 파일 우선인가:
 #   `code-loop.sh … | head` 처럼 호출자가 stdout 을 일찍 닫으면 tee 가 SIGPIPE 로
-#   죽고 그 다음 루프까지 죽는다 (2026-09-16 실측 — run.log 205 bytes 에서 중단,
-#   RESULT.md 미생성). 수십 분짜리 루프가 조용히 중단되는 것이 최악이므로
+#   죽고 그 다음 루프까지 죽는다. 수십 분짜리 루프가 조용히 중단되는 것이 최악이므로
 #   루프는 파일에만 쓰고, stdout 은 tail 이 미러링한다. tail 이 죽어도 루프는 산다.
 #
 # 백그라운드로 띄우면 stdout 은 호출한 쪽으로 가버려 터미널에 아무것도 안 뜬다 —
@@ -1258,10 +1239,10 @@ tee_run() {
   return "$rc"
 }
 
-# 한 run 에는 루프 프로세스 하나만 붙는다. 2026-09-25 run 112255 에서 진행 중인 run 에
-# --resume 이 한 번 더 들어와 dev-01 두 개가 같은 worktree 를 동시에 고쳤고, 클래스
-# 중복선언 Fatal 끝에 둘 다 리뷰 전에 죽었다. mkdir 은 원자적이라 동시 기동 경합에서도
-# 하나만 이긴다. 잠금을 쥔 PID 가 이미 죽었으면(강제 종료 잔재) 넘겨받는다.
+# 한 run 에는 루프 프로세스 하나만 붙는다 — 진행 중인 run 에 --resume 이 한 번 더 들어오면
+# dev 스텝 두 개가 같은 worktree 를 동시에 고쳐 클래스 중복선언 등으로 둘 다 죽을 수 있다.
+# mkdir 은 원자적이라 동시 기동 경합에서도 하나만 이긴다. 잠금을 쥔 PID 가 이미 죽었으면
+# (강제 종료 잔재) 넘겨받는다.
 acquire_run_lock() {
   local lock="$1/.lock" holder
   if mkdir "$lock" 2>/dev/null; then

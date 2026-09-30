@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# aggregate-hook-stats.sh — telemetry 집계 스크립트 (2026-05-13 도입)
+# aggregate-hook-stats.sh — telemetry 집계 스크립트
 #
 # 사용:
 #   bin/aggregate-hook-stats.sh                    # 오늘 전체 hook 집계

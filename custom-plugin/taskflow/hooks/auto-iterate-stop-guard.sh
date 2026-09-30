@@ -6,9 +6,8 @@ HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/nul
 # auto-iterate-stop-guard.sh
 # Stop Hook: 묶음 승인 활성 + 작업 미완료 상태에서 Stop event 발생 시 차단 → 자동 재진입
 #
-# 사용자 명시 승인: 2026-05-13 "자동 진행으로 내가 요청시 완료가 안된상태로 출력이 종료될경우
-#   자동으로 재진입하게 하고 해당 경우가 오기전에 자동으로 차단하여 재진입시킨다"
-#   + 옵션 A (Stop hook 신설) 묶음 승인 2회 채택.
+# 사용자 승인 근거: 완료가 안 된 상태로 출력이 종료되면 자동으로 재진입시키고,
+#   그 경우가 오기 전에 자동으로 차단해 재진입시킨다.
 #
 # 동작:
 #   1. 사용자 명시 중단 마커 확인 (/tmp/claude_stop_requested_${SESSION_ID}) → 있으면 통과
@@ -43,7 +42,6 @@ AUTOITER_FILE="/tmp/claude_autoiter_${SESSION_ID}"
 COUNTER_FILE="/tmp/claude_iterate_count_${SESSION_ID}"
 STOP_MARKER="/tmp/claude_stop_requested_${SESSION_ID}"
 
-# 2026-05-13 telemetry lib 마이그레이션
 # shellcheck disable=SC1091
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null || {
   LOG_FILE="$HOME/.claude/auto-iterate-stop-guard.log"
@@ -99,7 +97,7 @@ print(last_text)
     TAIL_TEXT=$(echo "$LAST_ASSISTANT_TEXT" | tail -c 500)
     if echo "$TAIL_TEXT" | grep -qE '\[AUTO-ITERATE-(DONE|USER-DECISION)\]'; then
         rm -f "$COUNTER_FILE" 2>/dev/null
-        # worktree-first 정착 안내 (2026-05-13) — sentinel 부착 통과 시 wip/* 분기 위면 정착 절차 reminder
+        # worktree-first 정착 안내 — sentinel 부착 통과 시 wip/* 분기 위면 정착 절차 reminder
         CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
         case "$CURRENT_BRANCH" in
             wip/*)

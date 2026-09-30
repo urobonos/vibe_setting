@@ -15,8 +15,8 @@ source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "session-completene
 # 정책 (v2.0): analyze.md + result.md 쌍 강제 제거.
 #   작업 성격에 따라 필요한 단계 문서 하나만 있어도 통과한다.
 
-# stdin 파싱 = lib/hook-input.sh SSOT (M5 2026-08-03 — grep+sed 재구현 제거).
-# lib 도 bash 정규식 primary 라 2026-07-16 "python3 경로 제거" 최적화 의도는 그대로 유지된다.
+# stdin 파싱 = lib/hook-input.sh SSOT (grep+sed 재구현 제거).
+# lib 도 bash 정규식 primary 라 "python3 경로 제거" 최적화 의도는 그대로 유지된다.
 # shellcheck disable=SC1091
 source "$HARNESS_LIB/hook-input.sh"
 hook_read_stdin
@@ -72,11 +72,11 @@ if [ -f "$EDIT_FLAG" ] && [ "$IS_NONCODE_ONLY" = false ]; then
 fi
 
 # --- 2. 단계 문서 존재 여부 (코드 수정 세션만) ---
-# gate>=2 는 gate-init 이 매 세션 2 로 시작해 항상 참이라 판정에 쓰지 않는다 (2026-09-23).
+# gate>=2 는 gate-init 이 매 세션 2 로 시작해 항상 참이라 판정에 쓰지 않는다.
 # CLAUDE.md §File Paths 규칙:
-#   tasks/    → 코드 작업 완료 산출물 (analyze/plan/result 3종 또는 unified 단일 통합 — 2026-05-12~)
+#   tasks/    → 코드 작업 완료 산출물 (analyze/plan/result 3종 또는 unified 단일 통합)
 #   output/   → 분석·문서 생성 프롬프트 ({제목}/*.md 산출물)
-#   working/  → 진행 중 단일 통합 작업 문서 (2026-05-12~, 완료 시 tasks/ 로 자동 이동)
+#   working/  → 진행 중 단일 통합 작업 문서 (완료 시 tasks/ 로 자동 이동)
 # 셋 중 하나라도 오늘자 산출물이 존재하면 통과 (경로 이중화 허용).
 if [ -f "$EDIT_FLAG" ] && [ "$IS_NONCODE_ONLY" = false ]; then
   TASK_DIR="$TASKS_DIR/$TODAY"
@@ -97,7 +97,7 @@ if [ -f "$EDIT_FLAG" ] && [ "$IS_NONCODE_ONLY" = false ]; then
     OUTPUT_DOC=$(find "$OUTPUT_DIR" -name '*.md' -type f -newermt "$TODAY_ISO" 2>/dev/null | head -1)
   fi
 
-  # working/ 진행 중 단일 통합 문서 확인 (2026-05-12 시행)
+  # working/ 진행 중 단일 통합 문서 확인
   # working/ 는 product 분리 없이 글로벌 통합 — 파일명 prefix 로 product 식별
   if [ -d "$WORKING_DIR" ]; then
     WORKING_DOC=$(find "$WORKING_DIR" -name "*${PRODUCT}*" -type f 2>/dev/null | head -1)
@@ -143,12 +143,12 @@ fi
 # rm -f "$EDIT_FLAG" 2>/dev/null   # ← 제거: selfcheck 미발화 결함 방지
 rm -f "$NONCODE_FLAG" 2>/dev/null
 #
-# TEST_RUN 플래그도 위 EDIT_FLAG·GATE_FILE 과 같은 이유로 정리하지 않는다 (2026-09-07).
+# TEST_RUN 플래그도 위 EDIT_FLAG·GATE_FILE 과 같은 이유로 정리하지 않는다.
 # Stop 은 "매 assistant 응답 종료" 마다 도는데 여기서 지우면, 테스트를 돌린 턴과
 # git-quality-gate.sh 가 그 플래그를 읽는 턴 사이에 삭제가 끼어들어 "테스트 이력 없음" 으로
 # 오판된다. SESSION_ID 별 파일이라 세션 간 오염 재사용도 없다.
-# 근거 = backlog `2026-07-10-git-quality-gate-testflag-race.md` (사용자 결정 2026-09-07 — 국면1만 적용,
-# 국면2 cwd 판정 수정은 Phase 2·3 회귀 케이스 신설 후 별도 판단).
+# 근거 = backlog `2026-07-10-git-quality-gate-testflag-race.md` (국면1만 적용 —
+# 국면2 cwd 판정 수정은 별도 판단).
 # rm -f "/tmp/claude_test_run_${SESSION_ID}" 2>/dev/null   # ← 제거: flag race 방지
 
 exit 0

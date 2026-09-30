@@ -5,7 +5,7 @@ HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/nul
 [ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "working-lifecycle" "enter" "pid=$$"
-# working-lifecycle.sh — working/ 단일 통합 문서 자동 이동 (2026-05-12 시행)
+# working-lifecycle.sh — working/ 단일 통합 문서 자동 이동
 #
 # SSOT: CLAUDE.md §File Paths "working/ 단일 통합 문서" + skills/task-docs/SKILL.md §"working/ 단일 통합 워크플로우"
 #
@@ -36,10 +36,7 @@ STDIN_DATA=$(cat)
 # hook_event_name — bash 내장 (python 起動 제거)
 HOOK_EVENT=""
 [[ "$STDIN_DATA" =~ \"hook_event_name\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && HOOK_EVENT="${BASH_REMATCH[1]}"
-# fallback (2026-07-08): hook_event_name 필드 부재/형태불일치 시 payload 필드로 이벤트 판별.
-#   근본원인 = perf 커밋(20d9c84) python→bash 전환 후 이 필드 의존 hook 만 PostToolUse 스킵.
-#   post-action-tracker(hook_event_name 미사용)는 정상 → 대조로 확정.
-#   동일 클래스 잔존이던 FILE_PATH/PROMPT bare python3 추출도 hook-input.sh 경유로 전환 (2026-07-14).
+# fallback — hook_event_name 필드 부재/형태불일치 시 payload 필드로 이벤트를 판별한다.
 if [ -z "$HOOK_EVENT" ]; then
   if [[ "$STDIN_DATA" =~ \"tool_name\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*: ]] || [[ "$STDIN_DATA" =~ \"filePath\"[[:space:]]*: ]]; then
     HOOK_EVENT="PostToolUse"
@@ -49,20 +46,20 @@ if [ -z "$HOOK_EVENT" ]; then
 fi
 
 # ============= 헬퍼: 완료 마커 검사 =============
-# 정규식 SSOT = lib/template-patterns.sh (2026-05-13 도입, audit S-3/H-2/H-3 묶음).
+# 정규식 SSOT = lib/template-patterns.sh.
 # 본 hook 의 has_completion_markers 는 lib 함수 wrapper 로 단순화.
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/template-patterns.sh" 2>/dev/null || {
   # lib 로드 실패 fallback — 인라인 정규식 보존 (회귀 안전성)
-  # 정규식은 lib/template-patterns.sh has_status_done 과 동일 유지 (종결 키워드 4종, 단독 라인 엄격 — 2026-07-22)
+  # 정규식은 lib/template-patterns.sh has_status_done 과 동일 유지 (종결 키워드 4종, 단독 라인 엄격)
   has_status_done() { [ -f "$1" ] && grep -qE '^(Status|상태):[[:space:]]*(Done|완료|폐기|Abandoned)[[:space:]]*$' "$1"; }
   has_self_critique_h2() { [ -f "$1" ] && grep -qE '^##[[:space:]]+.*Self-Critique' "$1"; }
   detect_self_critique_wrong_heading() { [ -f "$1" ] && grep -nE '^#{3,}[[:space:]]+.*Self-Critique|^#{1}[[:space:]]+.*Self-Critique' "$1" 2>/dev/null | head -1; }
-  # 잔여 섹션 미체크박스 가드 (2026-07-23) — lib/template-patterns.sh has_residual_unchecked 와 동일 유지
+  # 잔여 섹션 미체크박스 가드 — lib/template-patterns.sh has_residual_unchecked 와 동일 유지
   has_residual_unchecked() { [ -f "$1" ] && awk '/^##[[:space:]]+(잔여|TODO|Follow-up)/{inres=1;next} /^##[[:space:]]/{inres=0} inres && /^[[:space:]]*-[[:space:]]\[[[:space:]]\]/{found=1} END{exit(found?0:1)}' "$1"; }
 }
 
-# Active Task Registry entry/lock 정리 함수 (lib 가용 시에만, 2026-05-15)
+# Active Task Registry entry/lock 정리 함수 (lib 가용 시에만)
 # shellcheck disable=SC1091
 source "$HARNESS_LIB/registry-utils.sh" 2>/dev/null || true
 
@@ -70,8 +67,8 @@ has_completion_markers() {
   has_status_done "$1" && has_self_critique_h2 "$1"
 }
 
-# 날짜 폴더(YYYYMMDD) 판정 — fork 0 (basename+grep 대체, 2026-08-06).
-# allow-list SSOT = load.md:97 basename+^[0-9]{8}$ 형태와 동일 정규식 유지, 평가 기구만 내장으로 교체.
+# 날짜 폴더(YYYYMMDD) 판정 — basename+정규식으로 fork 없이 판정한다.
+# allow-list SSOT = load.md:97 basename+^[0-9]{8}$ 형태와 동일 정규식 유지.
 is_date_dir() {
   local base="${1%/}"
   base="${base##*/}"
@@ -81,11 +78,11 @@ is_date_dir() {
 # ============= 헬퍼: working 파일 → tasks 이동 =============
 move_working_to_tasks() {
   local working_file="$1"
-  local force="$2"   # "force" = 잔여 가드 우회 (save now = /taskflow:done 슬래시 명시 이동, 2026-07-23 결정 1-B)
+  local force="$2"   # "force" = 잔여 가드 우회 (save now = /taskflow:done 슬래시 명시 이동)
   [ -f "$working_file" ] || return 1
 
-  # [게이트] 잔여 섹션 미체크박스 차단 (2026-07-23) — Status: Done 무검증 이동 방지.
-  # ## 잔여/TODO/Follow-up 섹션에 - [ ] 잔존 시 이동 스킵. force 경로는 명시 강제라 우회(결정 1-B).
+  # [게이트] 잔여 섹션 미체크박스 차단 — Status: Done 무검증 이동 방지.
+  # ## 잔여/TODO/Follow-up 섹션에 - [ ] 잔존 시 이동 스킵. force 경로는 명시 강제라 우회.
   # SSOT: docs/working/20260723/2026-07-23-claude-harness-done-gate-residual-block.md
   if [ "$force" != "force" ] && has_residual_unchecked "$working_file"; then
     echo "[working-lifecycle] $(basename "$working_file") — ## 잔여/TODO/Follow-up 섹션에 미체크박스(- [ ]) 잔존 → 이동 차단 (완료 아님). 강제 이동은 /taskflow:save now" >&2
@@ -164,7 +161,7 @@ move_working_to_tasks() {
     return 1
   }
 
-  # step 평면 파일 → steps/ 분배 이동 (보완형 step 정책, 2026-05-29)
+  # step 평면 파일 → steps/ 분배 이동 (보완형 step 정책)
   # working/YYYYMMDD/{date}-{product}-{task}-step-NN-{slug}.md → tasks/.../{task}/steps/NN-{slug}.md
   # (mv 는 PreToolUse hook 미경유 → tasks/ prefix 강제 우회. 사용자 preview 구조 steps/NN-slug.md 정합)
   local working_dir
@@ -183,7 +180,7 @@ move_working_to_tasks() {
   done
   [ "$moved_steps" -gt 0 ] && echo "[working-lifecycle] ✓ step 분배: ${moved_steps}건 → tasks/$yyyymmdd/$task_name/steps/" >&2
 
-  # Active Task Registry — 동일 slug 모든 entry + lock 일괄 정리 (작업 완료 신호, 2026-05-15)
+  # Active Task Registry — 동일 slug 모든 entry + lock 일괄 정리 (작업 완료 신호)
   if [ -n "${REGISTRY_PATH:-}" ] && [ -f "$REGISTRY_PATH" ]; then
     awk -v slug="$task_name" -F"${REGISTRY_FS:-[[:space:]]*\\|[[:space:]]*}" '
       /^\|/ && $2 != "slug" && $2 !~ /^-+$/ && $2 == slug { next }
@@ -195,9 +192,9 @@ move_working_to_tasks() {
     rmdir "$SESSIONS_DIR/$task_name" 2>/dev/null || true
   fi
 
-  # history.md 갱신 — reverse chronological insert (최신 위)
-  # 버그 정정 (2026-05-14): 기존 코드는 today 헤더 매칭만 검사 후 entry 를 파일 끝 append →
-  # 다른 날짜 섹션 안에 entry 가 들어가는 버그. 본 정정 = today 섹션 안 정확 insert + 미존재 시 파일 상단 신규 섹션.
+  # history.md 갱신 — reverse chronological insert (최신 위). 오늘 헤더가 있으면 그 섹션 안에
+  # 정확히 insert 하고, 없으면 파일 상단에 새 섹션을 만든다 — 파일 끝에 append 하면 다른 날짜
+  # 섹션 안에 entry 가 섞여 들어간다.
   local history="$docs_root/$product/tasks/history.md"
   local today_dot
   today_dot=$(date +%Y.%m.%d)
@@ -265,17 +262,17 @@ PYEOF
       "$task_name" "$task_name" "$date_part" "$task_name" >> "$summary"
   fi
 
-  # [전파] 작업분석 인덱스 역갱신 (best-effort 비차단, 2026-06-09)
+  # [전파] 작업분석 인덱스 역갱신 (best-effort 비차단)
   #  - Phase 4 backlink 가 plan 문서에 심긴 작업만 추적 (없으면 meta_doc_raw 공백 → skip)
   #  - 작업분석 문서의 | {task_name} | 행: 상태 ⏳ Plan → ✓ Done + working 링크 → tasks 링크
   #  - 직접 파일 쓰기(도구 아님) → PostToolUse 재귀 없음. 실패해도 위 이동(기존 동작)엔 무영향.
   #  SSOT: custom-plugin/taskflow/commands/survey.md §전파
   if [ -n "$meta_docs_raw" ]; then
     local tasks_link_home="~/.claude/docs/${product}/tasks/${yyyymmdd}/${task_name}/${date_part}-${task_name}-unified.md"
-    # python 스크립트를 임시 파일로 1회 작성 (2026-06-09 수정):
-    #   heredoc-in-$()-in-`while...done <<<` 중첩은 일부 bash 파서에서 syntax error(near `fi`)를
-    #   유발해 hook 전체 파싱이 실패한다(핵심 working→tasks 이동까지 마비). heredoc 을 루프·$() 밖
-    #   파일 리다이렉트(`cat > file <<EOF`, 가장 portable 한 형태)로 분리해 회피.
+    # python 스크립트를 임시 파일로 1회 작성한다 — heredoc-in-$()-in-`while...done <<<` 중첩은
+    # 일부 bash 파서에서 syntax error(near `fi`)를 유발해 hook 전체 파싱이 실패한다(핵심
+    # working→tasks 이동까지 마비). heredoc 을 루프·$() 밖 파일 리다이렉트(`cat > file <<EOF`,
+    # 가장 portable 한 형태)로 분리해 회피한다.
     local prop_py_file
     prop_py_file=$(mktemp 2>/dev/null) || prop_py_file="${TMPDIR:-/tmp}/wl-prop-$$-${RANDOM}.py"
     cat > "$prop_py_file" <<'PYEOF'
@@ -338,7 +335,7 @@ if [ "$HOOK_EVENT" = "PostToolUse" ]; then
 
   echo "$FILE_PATH_NORM" | grep -qE '/docs/working/[0-9]{8}/[^/]+\.md$' || exit 0
 
-  # step 평면 파일은 마스터 이동 트리거 대상 아님 (보완형 step 정책, 2026-05-29)
+  # step 평면 파일은 마스터 이동 트리거 대상 아님 (보완형 step 정책)
   # {date}-{product}-{작업}-step-NN-{slug}.md — '-step-숫자-' 패턴. step frontmatter '상태: Done'
   # 이 마스터 완료 마커를 오트리거하는 것을 차단 (step 파일엔 ## Self-Critique 도 없지만 이중 가드)
   if echo "$FILE_PATH_NORM" | grep -qE -- '-step-[0-9]+-[^/]*\.md$'; then exit 0; fi
@@ -351,8 +348,8 @@ if [ "$HOOK_EVENT" = "PostToolUse" ]; then
   if has_completion_markers "$unix_path"; then
     move_working_to_tasks "$unix_path"
   else
-    # 양식 위반 침묵 실패 방지 (2026-05-13) — Status: Done 매칭 + ## Self-Critique 미매칭 시 stderr 경고
-    # 정규식 SSOT: lib/template-patterns.sh (audit S-3/H-2/H-3 묶음으로 lib 통합)
+    # 양식 위반 침묵 실패 방지 — Status: Done 매칭 + ## Self-Critique 미매칭 시 stderr 경고
+    # 정규식 SSOT: lib/template-patterns.sh
     if has_status_done "$unix_path" && ! has_self_critique_h2 "$unix_path"; then
       LOOSE_MATCH=$(detect_self_critique_wrong_heading "$unix_path")
       echo "[working-lifecycle] $(basename "$unix_path") — Status: Done 매칭 but '## Self-Critique' (h2) 미매칭 → 자동 이동 스킵" >&2
@@ -376,7 +373,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
   if echo "$PROMPT" | grep -qE '(작업[[:space:]]*완료|tasks[[:space:]]*이동|working[[:space:]]*정리|/taskflow:done|완료[[:space:]]*저장)' \
      || echo "$PROMPT" | grep -qiE '(^|[[:space:]])done([[:space:]]|$|\.|,|!)' ; then
 
-    # ===== 경로 판별: 슬래시 명시(/taskflow:done·/done) vs 자연어 키워드 (오발동 가드, 2026-07-14) =====
+    # ===== 경로 판별: 슬래시 명시(/taskflow:done·/done) vs 자연어 키워드 (오발동 가드) =====
     # 슬래시 명시 호출과 본문 마커 자동(PostToolUse)은 기존대로 확인 없이 즉시 이동. 자연어 경로에만 가드 적용.
     IS_SLASH_DONE=0
     echo "$PROMPT" | grep -qE '/(taskflow:)?done' && IS_SLASH_DONE=1
@@ -420,7 +417,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
 
     skipped_count=0
     excluded_dir_md_count=0
-    excluded_breakdown=""   # "backlog:25, 20260806x:1" 형태 — 상주(backlog) vs 신규 잠식(오타 폴더) 구분 (리뷰 반영, 2026-08-06)
+    excluded_breakdown=""   # "backlog:25, 20260806x:1" 형태 — 상주(backlog) vs 신규 잠식(오타 폴더) 구분
     for dir in "$working_root"/*/; do
       [ -d "$dir" ] || continue
       if ! is_date_dir "$dir"; then
@@ -442,8 +439,8 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
       for f in "$dir"*.md; do
         [ -f "$f" ] || continue
         if ! has_completion_markers "$f"; then
-          # 미충족 사유를 조건별로 분리 출력 (2026-07-22) — 구 통합 메시지는 어느 조건이
-          # 깨졌는지 알려주지 않아 "hook 고장" 오진을 유발했다 (실측 1회).
+          # 미충족 사유를 조건별로 분리 출력한다 — 통합 메시지는 어느 조건이 깨졌는지
+          # 알려주지 않아 "hook 고장" 오진을 유발할 수 있다.
           if ! has_status_done "$f"; then
             skip_reason="종결 마커 부재 — 'Status: Done'(또는 완료/폐기/Abandoned) **단독 라인** 필요. 요약·사유는 '> 완료 요약: ...' 인용문으로 분리"
           else
@@ -453,7 +450,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
           skipped_count=$((skipped_count + 1))
           continue
         fi
-        if move_working_to_tasks "$f" force; then   # 슬래시 /taskflow:done = save now → 잔여 가드 우회(결정 1-B)
+        if move_working_to_tasks "$f" force; then   # 슬래시 /taskflow:done = save now → 잔여 가드 우회
           moved_count=$((moved_count + 1))
         fi
       done
@@ -469,7 +466,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
       echo "$summary_line" >&2
     fi
 
-    # dispatch done 문서 정리 (2026-06-15 — /taskflow:done 통합)
+    # dispatch done 문서 정리 (/taskflow:done 통합)
     #  working/ 이동과 대칭: 완료된 분배 문서를 {product}/tasks/{today}/dispatch-archive/ 로 이동.
     #  dispatch_purge_done 이 lock 안 원자 처리 → 다중 세션 race 차단. 미가용 시 비차단 skip.
     #  SSOT: custom-plugin/taskflow/hooks/lib/dispatch-utils.sh::dispatch_purge_done
@@ -477,7 +474,7 @@ if [ "$HOOK_EVENT" = "UserPromptSubmit" ]; then
       purge_result="$(dispatch_purge_done 2>/dev/null)"
       [ -n "$purge_result" ] && echo "[working-lifecycle] $purge_result" >&2
 
-      # 본 세션 점유 release (2026-06-15 — /taskflow:done 세션 마무리 시 orphan 방지)
+      # 본 세션 점유 release (/taskflow:done 세션 마무리 시 orphan 방지)
       #  session_id 가용 시 본 sid 의 DISPATCH claim(available 복귀) + REGISTRY entry(paused) 를
       #  함께 release. Stop hook(working-release.sh) 안전망과 중복이나, 슬래시 명시 시 즉시 정리.
       WL_SID=$(echo "$STDIN_DATA" | python3 -c "

@@ -29,8 +29,8 @@ DEFAULT_PRICE = (2.0, 0.20, 10.0)
 
 STEP_RE = re.compile(r"^--- (\d\d:\d\d:\d\d) \[([^\]]+)\]")
 
-# run.log 가 이만큼 안 바뀌었으면 살아 있다고 보지 않는다. 스텝 간격 실측(2,087건):
-# p99 78분 · 정상 최대 2시간 18분 → 3시간.
+# run.log 가 이만큼 안 바뀌었으면 살아 있다고 보지 않는다. 스텝 간격 실측 기준
+# p99 78분 · 정상 최대 2시간 18분 → 3시간으로 잡는다.
 STALE_SEC = 3 * 3600
 
 
@@ -80,7 +80,7 @@ def scan_runs():
             pass
         if (d / "RESULT.md").is_file() and not (d / "00-spec.md").is_file() \
                 and re.search(r"^[ \t#]*판정:[ \t]*미착수", (d / "RESULT.md").read_text(encoding="utf-8", errors="replace"), re.M):
-            # spec 이 착수 불가로 반환한 run — 완료와 섞이면 "무엇이 끝났나" 가 부풀려진다 (ISS-746)
+            # spec 이 착수 불가로 반환한 run — 완료와 섞이면 "무엇이 끝났나" 가 부풀려진다
             state = "반환"
         elif (d / "RESULT.md").is_file():
             state = "완료"
@@ -88,7 +88,7 @@ def scan_runs():
             state = "중단"
         elif time.time() - log.stat().st_mtime > STALE_SEC:
             # "!!!" 마커는 스크립트가 스스로 멈출 때만 남는다 — 크래시·강제종료·세션
-            # 종료로 죽은 run 은 마커 없이 run.log 가 멈춘다 (2026-09-23 정체 6건 전부 사망).
+            # 종료로 죽은 run 은 마커 없이 run.log 가 멈춘다.
             idle_hours = int(time.time() - log.stat().st_mtime) // 3600
             state = "%s 정체 %dh (중단 추정)" % (last_label or "시작", idle_hours)
         else:

@@ -6,9 +6,9 @@ HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/nul
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "resume-banner" "enter" "pid=$$"
 # SessionStart Hook (taskflow 플러그인): cwd product 의 working/ 잔존 작업 재개 추천.
-# 2026-09-28 hooks/agent-first-banner.sh 에서 분리 — 하니스 공통 배너와 플러그인 기능을 가른다.
+# 하니스 공통 배너(hooks/agent-first-banner.sh)와는 분리된 플러그인 전용 기능이다.
 
-# ===== cwd 작업 재개 추천 (2026-07-23) =====
+# ===== cwd 작업 재개 추천 =====
 # 현재 cwd product 의 working/ 대기 큐를 working-scan 으로 훑어 우선순위(판단>머지 준비>진행)로 1블록 추천.
 # ReadyToMerge 는 step 단위(working 문서)라 REGISTRY 가 아닌 working_scan 이 SSOT — /taskflow:control 의 요약판.
 # 잔존 0건이면 아무것도 출력하지 않는다 (노이즈 0 — §4.4 "가역은 사후 가시화").

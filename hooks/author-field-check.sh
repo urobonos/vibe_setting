@@ -10,9 +10,9 @@
 # 정상값:    `작성자: jypark` / `author: jypark`.
 # 예외:      .md 외 파일은 검증 제외.
 
-# early-exit 최적화 (2026-07-03): .md 판정을 lib source 전 bash 내장으로 수행.
+# early-exit 최적화: .md 판정을 lib source 전 bash 내장으로 수행.
 #   대부분 편집은 .md 가 아니라 즉시 exit → lib source (log-helper + hook-input) fork 세금 회피.
-#   Windows Git Bash 는 fork 당 40~100ms → early-exit hook 도 수백 ms 소요하던 것을 제거.
+#   Windows Git Bash 는 fork 당 40~100ms → early-exit hook 도 수백 ms 소요하던 것을 제거한다.
 STDIN_DATA=$(cat 2>/dev/null)
 _fp=""
 [[ "$STDIN_DATA" =~ \"file_path\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] && _fp="${BASH_REMATCH[1]}"
@@ -30,14 +30,13 @@ source "$(dirname "$0")/lib/hook-input.sh"
 if [ -n "$_fp" ]; then FILE_PATH="$_fp"; else hook_parse_file_path; case "$FILE_PATH" in *.md|*.MD) ;; *) exit 0 ;; esac; fi
 
 # 본문(content / new_string / edits[*].new_string) 회수 = lib/hook-input.sh::hook_parse_content SSOT.
-#   L3 2026-08-03: 구 코드는 `[ -z "$HOOK_PY" ] && exit 0` — python 이 없거나 Store 별칭으로
-#   실행이 죽으면 검사 자체가 사라졌다. lib 은 python 실패 시 bash JSON 디코더로 내려간다.
+#   python 이 없거나 Store 별칭으로 실행이 죽어도 lib 은 bash JSON 디코더로 내려가 검사를 계속한다.
 hook_parse_content
 [ -z "$CONTENT" ] && exit 0
 
-# 디코드 불가분이 남으면 판정하지 않고 차단 (fail-closed, F10 계약 소비 — share-guard 와 동일 분기).
-#   초안은 이 신호를 share-guard 만 받고 여기서는 무시해, 같은 payload 가 한쪽은 차단·한쪽은
-#   통과했다 (degraded + surrogate 실측: share-guard rc=2 / author-field-check rc=0).
+# 디코드 불가분이 남으면 판정하지 않고 차단한다 (fail-closed, F10 계약 소비 — share-guard 와 동일 분기).
+#   이 신호를 share-guard 만 받고 여기서는 무시하면, 같은 payload 에 대해 한쪽은 차단·한쪽은
+#   통과하는 불일치가 생긴다.
 if [ "${CONTENT_UNDECODED:-0}" = "1" ]; then
   echo "[AUTHOR-FIELD] 본문을 완전히 해석하지 못해 작성자 필드를 검증할 수 없습니다." >&2
   echo "  파일: $FILE_PATH" >&2
@@ -47,7 +46,7 @@ if [ "${CONTENT_UNDECODED:-0}" = "1" ]; then
   exit 2
 fi
 
-# 라인 매칭은 bash 내장 정규식 (grep fork 0) — 구 python re.MULTILINE 판정과 동일 결과 확인.
+# 라인 매칭은 bash 내장 정규식 (grep fork 0).
 _re_author=$'(^|\n)(작성자|author)[ \t]*:[ \t]*[^\n]*[Cc]laude[^\n]*'
 VIOLATING=""
 if [[ "$CONTENT" =~ $_re_author ]]; then

@@ -9,7 +9,7 @@
 # 설계 (reminder 주입형, self-critique 루프와 동형):
 #   - hook 은 stateless → 결정 "내용"은 tool_response.answers 에서 직접 추출하되,
 #     실제 문서 기록은 맥락을 가진 Claude 본체가 수행 (reminder 가 지시).
-#   - "명시적 결정 지점만" 정책 (사용자 선택 2026-06-08) → AskUserQuestion 도구
+#   - "명시적 결정 지점만" 정책 (사용자 선택) → AskUserQuestion 도구
 #     호출만 1차 트리거. 단순 실행 승인("진행")은 대상 아님.
 #   - 기록 위치 = 기존 §공통 "변경 영향 기록" 표 재사용 (unified-template.md /
 #     doc-template-guard 무수정, SSOT 표면 불변 — CLAUDE.md §4.4 장기 관점 정합).

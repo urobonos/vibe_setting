@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-guard-tests.sh — hooks 가드 회귀 매트릭스 (2026-08-03 신설)
+# run-guard-tests.sh — hooks 가드 회귀 매트릭스
 #
 # 실행:  bash ~/.claude/hooks/tests/run-guard-tests.sh
 #        bash ~/.claude/hooks/tests/run-guard-tests.sh -v     # 실패 상세
@@ -11,14 +11,13 @@
 #   B. 공유문서 게이트가 Write 전문만 검사하고 Edit/MultiEdit·역소급 문서를 오차단하지 않는가.
 #   C. 커밋 게이트가 한글 제목 길이를 문자 단위로 세는가 (바이트로 세면 정상 커밋이 막힌다).
 #
-# Why 이 파일이 필요한가: 2026-08-03 리뷰에서 "32/32 통과" 라고 보고한 매트릭스가
-#   `git checkout "main"` · `VAR=1 git merge main` · `git checkout -- main` 류를 담고 있지 않아
-#   FN 6건 + FP 2건을 놓쳤다. 손으로 만든 임시 매트릭스는 다음 사람에게 남지 않는다.
+# 매트릭스로 고정하는 이유: 손으로 만든 임시 케이스 목록은 따옴표·변수·중첩 명령 같은 변형을
+#   놓치기 쉽고, 그 누락이 다음 사람에게 전달되지 않는다.
 
 set -u
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUARD_PY="$HOOKS_DIR/lib/git-guard.py"
-# taskflow 전용 hook·lib 는 플러그인 폴더로 옮겼다 (2026-09-28). 이름으로 받는 곳은 hook_path 가 가른다
+# taskflow 전용 hook·lib 는 플러그인 폴더(custom-plugin/taskflow/hooks)에 있다 — hook_path 가 이름으로 두 위치를 가른다
 PLUGIN_HOOKS_DIR="$(cd "$HOOKS_DIR/../custom-plugin/taskflow/hooks" && pwd)"
 hook_path() { if [ -f "$HOOKS_DIR/$1" ]; then printf '%s' "$HOOKS_DIR/$1"; else printf '%s' "$PLUGIN_HOOKS_DIR/$1"; fi; }
 TMP="${TMPDIR:-/tmp}/claude_guardtests_$$"
@@ -32,11 +31,10 @@ cleanup() {
   [ -n "${TMP:-}" ] || return 0
   case "$TMP" in */claude_guardtests_*) ;; *) return 0 ;; esac   # 경로 오인 삭제 방지
   find "$TMP" -type f -delete 2>/dev/null
-  # 심링크/junction 회수(2026-08-10) — J-22 가 만드는 dir junction 은 MSYS 가 `-type l` 로 분류해
+  # 심링크/junction 회수 — J-22 가 만드는 dir junction 은 MSYS 가 `-type l` 로 분류해
   # `-type f` 에도 `-type d` 에도 안 걸린다. 대상이 먼저 지워져 댕글링이 되면 부모가 "not empty" 로
-  # rmdir 을 거부해 `$TMPDIR/claude_guardtests_*` 트리 전체가 남는다(실측: 전체 실행마다 누적).
-  # `-type d` 회수보다 **먼저** 지워야 부모 rmdir 이 성공한다. junction 은 링크만 끊길 뿐 대상
-  # 디렉토리 내용을 따라가지 않는다(`-delete` 는 unlink).
+  # rmdir 을 거부해 트리가 남는다. `-type d` 회수보다 **먼저** 지워야 부모 rmdir 이 성공한다.
+  # junction 은 링크만 끊길 뿐 대상 디렉토리 내용을 따라가지 않는다(`-delete` 는 unlink).
   find "$TMP" -type l -delete 2>/dev/null
   find "$TMP" -depth -type d -exec rmdir {} + 2>/dev/null
   rm "/tmp/claude_gate_guardtests$$" "/tmp/claude_gate_guardtests0$$" 2>/dev/null  # §H gate 파일 (중단 시 잔류 방지)
@@ -45,9 +43,8 @@ trap 'cleanup' EXIT
 
 PASS=0; FAIL=0; SKIP=0
 fail_lines=()
-# skip_lines (2026-08-10 M4) — SKIP 은 라벨도 메시지도 없이 카운터 한 칸만 올려서, 환경 한계 SKIP 과
-# 데이터 부재 SKIP 이 같은 숫자에 섞였다. 실 landmark 데이터가 사라지는 순간의 신호가 `SKIP=2 → 3`
-# 뿐이라 "무엇이 검증되지 않았는가" 를 아무도 못 읽는다. fail_lines 와 같은 방식으로 수집·출력한다.
+# skip_lines — SKIP 은 라벨 없이 카운터만 올리면 환경 한계 SKIP 과 데이터 부재 SKIP 이 구분되지
+# 않아 "무엇이 검증되지 않았는가" 를 알 수 없다. fail_lines 와 같은 방식으로 수집·출력한다.
 skip_lines=()
 
 # ── python 실행 실패 shim (Windows Store 별칭 재현: command -v 통과 / 실행 exit 9) ──
@@ -71,7 +68,7 @@ init_repo() {
 init_repo "$TMP/repo_master" master
 init_repo "$TMP/repo_feature" feature/x
 
-# ── worktree 커밋 시나리오용 저장소 3개 (2026-09-15) ──
+# ── worktree 커밋 시나리오용 저장소 3개 ──
 #   repo_cwd = 세션 cwd 역할(메인 레포). staged 없음.
 #   repo_wt  = 커밋 대상 worktree 역할. 문서만 staged.
 #   repo_wt_code = 같은 역할이나 코드가 staged.
@@ -146,7 +143,7 @@ CASES=(
   "2|f|cd /tmp && git checkout main && git merge feature/x"
   "2|f|git -C /tmp/x checkout main"
   "2|f|git --git-dir=/tmp/x/.git merge main"
-  # F4 ①~⑥ (리뷰 실측 FN)
+  # F4 ①~⑥ — false negative 로 놓치기 쉬운 변형
   "2|f|git checkout \"main\""
   "2|f|git checkout 'main'"
   "2|f|git -c core.editor=true merge main"
@@ -287,11 +284,11 @@ EOF" "$TMP/repo_master"
   bash_payload "git status" "$TMP/repo_master"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 비커밋 명령" 0 $?
 
-  # ── worktree 대상 커밋 (2026-09-15) ──
+  # ── worktree 대상 커밋 ──
   #   hook 프로세스의 cwd 는 세션 cwd(메인 레포)다. `cd <wt> && git commit` / `git -C <wt> commit` 이면
-  #   staged 목록을 **그 디렉토리에서** 읽어야 docs/config-only 면제가 성립한다. 구 코드는 cwd 인덱스를
-  #   읽어 staged 가 비었고, 면제를 건너뛰어 [NO TEST, NO MERGE] 로 오차단했다 (실측 2026-09-15: 한 세션 2회).
-  #   그리고 `git -C … commit` 은 검출 정규식(`git\s+commit`)에 안 걸려 **게이트 3단 전체를 건너뛰었다**.
+  #   staged 목록을 **그 디렉토리에서** 읽어야 docs/config-only 면제가 성립한다. cwd 인덱스만 읽으면
+  #   staged 가 비어 [NO TEST, NO MERGE] 로 오차단되고, `git -C … commit` 은 검출 정규식(`git\s+commit`)
+  #   에 안 걸려 게이트 3단 전체를 건너뛴다.
   bash_payload "git -C $TMP/repo_feature ${GC#git } -m \"zzz no prefix\"" "$TMP/repo_cwd"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_cwd"; check "[$mode] git -C 커밋도 형식 검사 대상" 2 $?
 
@@ -335,7 +332,7 @@ source "$HOOKS_DIR/lib/hook-input.sh"
 # E. normal ↔ degraded 의도적 비대칭 (같은 값이 아니어야 정상인 케이스)
 #    heredoc **본문** 안 정책 서술: 주 경로(git-guard.py)는 본문도 토큰화해 차단한다(기존 FP,
 #    본 작업 범위 밖). 백스톱은 본문을 건너뛰므로 통과한다. 이 비대칭을 고정해 두지 않으면
-#    F5② 픽스를 되돌려도 매트릭스가 초록으로 남는다 (2026-08-03 리뷰 지적).
+#    이 완화를 되돌려도 매트릭스가 초록으로 남는다.
 # ═══════════════════════════════════════════════════════════════════
 printf '\n=== E. heredoc 본문 비대칭 (normal=2 / degraded=0 이 정상) ===\n'
 bash_payload "git commit -F- <<'EOF'
@@ -348,7 +345,7 @@ run_hook branch-enforce.sh degraded "$TMP/repo_feature"; check "[degraded] hered
 
 # ═══════════════════════════════════════════════════════════════════
 # F. 절 수 성능 — hook timeout(settings.json: branch-enforce=5초) 안에 끝나야 한다.
-#    절마다 fork 하던 구조는 40절 6.7초 / 300절 59초로 kill → 차단 신호 소멸(fail-open)이었다.
+#    절마다 fork 하면 절 수에 비례해 느려져 timeout kill → 차단 신호 소멸(fail-open)로 이어진다.
 # ═══════════════════════════════════════════════════════════════════
 printf '\n=== F. 절 수 대비 실행시간 (5초 timeout) ===\n'
 for n in 40 300; do
@@ -370,12 +367,12 @@ done
 # ═══════════════════════════════════════════════════════════════════
 # G. python 은 살아 있는데 git-guard.py 만 실패하는 분기 (HOOK_PY 채워짐 + GG_ALL 공백)
 #    hook 자체 timeout kill · HOOK_PY_TIMEOUT 만료 · 스크립트 크래시가 이 상태를 만든다.
-#    `[ -n "$HOOK_PY" ]` 로만 게이트하면 여기서 조용히 통과한다 (= C2 원래 결함).
+#    `[ -n "$HOOK_PY" ]` 로만 게이트하면 여기서 조용히 통과한다.
 # ═══════════════════════════════════════════════════════════════════
 printf '\n=== G. git-guard.py 단독 실패 (python 정상) ===\n'
 mkdir -p "$TMP/shim2"
 # 실제 python 의 **절대경로**를 박아 넣는다. `env python3` 로 쓰면 PATH 앞의 이 shim 자신을
-# 다시 찾아 무한 재귀한다 (2026-08-03 자체 실행 중 실측 — 테스트가 10분 넘게 멈췄다).
+# 다시 찾아 무한 재귀한다.
 REAL_PY=$(command -v "${PY:-python3}" 2>/dev/null)
 {
   printf '#!/bin/sh\n'
@@ -396,12 +393,12 @@ for row in "2|f|git merge main" "2|f|git push" "0|f|git status" "2|m|git cherry-
 done
 
 # ═══════════════════════════════════════════════════════════════════
-# H. tasks/{작업명}/steps/ 면제 (2026-08-03) — output-naming-check + gate-enforce
+# H. tasks/{작업명}/steps/ 면제 — output-naming-check + gate-enforce
 #    working-lifecycle.sh 의 `step 평면 파일 → steps/ 분배 이동` 루프가 working/ → tasks/ 이동 시
-#    step 평면 파일을 `steps/NN-{slug}.md` 로 mv 한다. mv 는 PreToolUse 를 안 타므로 이 파일들은 날짜 prefix 가 없고,
-#    두 hook 이 그 배치를 모르면 이동이 끝난 step 문서는 **어떤 편집도 영구 차단**된다 (실측 667/667).
-#    반대로 면제가 넓어지면 경로 규칙 자체가 무의미해진다 — 임의 깊이 / generic 이름 /
-#    '..' 세그먼트 / 환경변수 주입 / 도구명 교체(MultiEdit) 가 전부 우회 통로였다.
+#    step 평면 파일을 `steps/NN-{slug}.md` 로 mv 한다. mv 는 PreToolUse 를 안 타므로 이 파일들은
+#    날짜 prefix 가 없고, 두 hook 이 그 배치를 모르면 이동이 끝난 step 문서는 어떤 편집도 영구
+#    차단된다. 반대로 면제가 넓어지면 경로 규칙 자체가 무의미해진다 — 임의 깊이 / generic 이름 /
+#    '..' 세그먼트 / 환경변수 주입 / 도구명 교체(MultiEdit) 가 전부 우회 통로가 된다.
 #    그래서 "열려야 하는 것" 과 "닫혀 있어야 하는 것" 을 같이 고정한다. 한쪽만 있으면
 #    되돌림(revert)이 초록으로 통과한다.
 # ═══════════════════════════════════════════════════════════════════
@@ -502,8 +499,8 @@ for row in "${H_CASES[@]}"; do
 done
 
 # ── cwd=~/.claude 분기 (하니스 자기수정 부트스트랩 면제) ──
-#    위 케이스는 전부 레포 cwd 라 이 분기를 한 번도 실행하지 않는다. 그래서 면제 조건에서
-#    MultiEdit 을 빼는 변경이 매트릭스에 잡히지 않았다. 화이트리스트 안/밖을 같이 고정한다.
+#    위 케이스는 전부 레포 cwd 라 이 분기를 한 번도 실행하지 않는다. 화이트리스트 안/밖(MultiEdit
+#    포함)을 같이 고정해야 면제 조건 변경 회귀를 잡는다.
 #    gate=0 세션을 쓰는 이유: 화이트리스트 미매칭 시 fall-through 해서 **실제로 차단되는지**를
 #    봐야 하는데, gate=2 면 비코드 파일이 그냥 통과해 분기 도달 여부를 구분할 수 없다.
 for row in \
@@ -536,7 +533,7 @@ done
 rm "$H_GATE" "$H_GATE0" 2>/dev/null
 
 # ═══════════════════════════════════════════════════════════════════
-# I. working_scan — 날짜 폴더(YYYYMMDD) 판정 회귀 (2026-08-06, backlog/ 경로 이관 부수 검증)
+# I. working_scan — 날짜 폴더(YYYYMMDD) 판정 회귀
 #    hooks/lib/working-scan.sh 는 `pp[n-1] !~ /^[0-9]{8}$/` 로 root 직속 폴더가 8자리 숫자인지만
 #    본다(문자열 "backlog" 매칭이 아니다). 이 방식이 실제로 (a) working/backlog/ 를 배제하고
 #    (b) 정상 날짜폴더 파일명에 우연히 '-backlog-' 토큰이 섞여도 안 죽고 (c) WORKING_ROOT 자신의
@@ -582,18 +579,17 @@ CNT2=$(WORKING_ROOT="$WSCAN_ROOT2/working" WORKING_SCAN_DOCS_ROOT="$WSCAN_ROOT2"
 if [ "$CNT2" -eq 1 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[I-4] WORKING_ROOT 조상 경로 'backlog' 세그먼트로 오배제 — 매치=${CNT2}"); fi
 
 # ═══════════════════════════════════════════════════════════════════
-# J. backlog-lifecycle.sh — mv + 인덱스 삭제 회귀 (콜드리뷰 M5, 2026-08-06 · R4 라운드 H1~H3 실데이터 픽스처 보강)
-#    섹션 I 는 working_scan 판정만 고정한다. 실제 파괴적 경로(파일 mv + MEMORY.md/BACKLOG.md 라인
-#    삭제)는 지금까지 수동 실측에만 의존했다 — 최소한 앵커 우회(상대경로·하위폴더)와 인덱스 오삭제
-#    (동명 slug 의 무관 Project entry 보존)를 payload 주입으로 고정한다. H1(href 합집합 매칭 — 실
-#    MEMORY.md 34자 절단 링크 텍스트 픽스처)·H2(`·` 병합 라인 형제 entry 보존)·H3(verify_index_sync
-#    전 project 합산)·M2(product 경로 traversal 차단) 수정분도 덮는다.
-#    HOME 을 fakehome 으로 override 해 실제 projects/*/memory 를 절대 건드리지 않는다(규율).
+# J. backlog-lifecycle.sh — mv + 인덱스 삭제 회귀
+#    섹션 I 는 working_scan 판정만 고정한다. 여기서는 실제 파괴적 경로(파일 mv + MEMORY.md/
+#    BACKLOG.md 라인 삭제)를 payload 주입으로 고정한다 — 앵커 우회(상대경로·하위폴더), 인덱스
+#    오삭제(동명 slug 의 무관 Project entry 보존), href 합집합 매칭, 병합 라인 형제 entry 보존,
+#    전 project 합산 검증, product 경로 traversal 차단을 덮는다.
+#    HOME 을 fakehome 으로 override 해 실제 projects/*/memory 를 절대 건드리지 않는다.
 #    fakehome 은 $TMP(TMPDIR 경유 /c/... 루트) 하위라 python(native) 이 경로를 읽을 수 있다.
-#    BACKLOG_INDEX_LOCK 도 $TMP 하위로 override(콜드리뷰 R4 M5) — 기본값(/tmp/claude-backlog-index.lock.d)
-#    은 실세션과 공유되는 프로덕션 lock 경로라, override 안 하면 테스트가 실세션과 최대 5초
-#    상호 대기하거나 중단 시 lock 잔류로 실세션이 TTL 2분까지 stale 경고를 문다. $TMP 하위라 트랩의
-#    generic find-delete 가 자동으로 회수한다(별도 cleanup 등재 불요).
+#    BACKLOG_INDEX_LOCK 도 $TMP 하위로 override — 기본값(/tmp/claude-backlog-index.lock.d)은
+#    실세션과 공유되는 프로덕션 lock 경로라, override 안 하면 테스트가 실세션과 최대 5초
+#    상호 대기하거나 중단 시 lock 잔류로 실세션이 TTL 2분까지 stale 경고를 문다. $TMP 하위라
+#    트랩의 generic find-delete 가 자동으로 회수한다.
 # ═══════════════════════════════════════════════════════════════════
 printf '\n=== J. backlog-lifecycle.sh 회귀 (앵커 우회 · 인덱스 오삭제 · H1 · H2 · H3 · M2) ===\n'
 export BACKLOG_INDEX_LOCK="$TMP/bl.lock.d"
@@ -613,11 +609,9 @@ backlog_payload() {  # $1=posix file path → $TMP/p.json (PostToolUse Write, fi
 
 FH="$TMP/backlog_fakehome"
 mkdir -p "$FH/.claude/docs/working/backlog" "$FH/.claude/projects"
-# S2(2026-08-07) product 실재 검증 신설 이후 — 이 스위트가 쓰는 product 값(testprod/testprodj8) 과
-# 화이트리스트 fallback 대상(claude-harness) 은 실 환경에선 이미 존재하는 트리라고 가정한다. 신 가드가
-# "실재하지 않는 product = 이동 스킵" 이므로, 테스트 픽스처도 실 환경처럼 대상 디렉토리를 미리 갖고
-# 있어야 한다(안 그러면 모든 기존 J 테스트가 "이동 스킵"으로 새로 실패한다 — 가드 자체 회귀가 아니라
-# 픽스처가 신 전제를 안 갖춘 것).
+# product 실재 검증(가드)은 "실재하지 않는 product = 이동 스킵" 이므로, 이 스위트가 쓰는
+# product 값(testprod/testprodj8)과 화이트리스트 fallback 대상(claude-harness)의 대상 디렉토리를
+# 픽스처가 미리 만들어 둬야 한다 — 없으면 가드 회귀가 아니라 픽스처 미비로 "이동 스킵"이 뜬다.
 mkdir -p "$FH/.claude/docs/claude-harness" "$FH/.claude/docs/testprod" "$FH/.claude/docs/testprodj8"
 
 # J-1. 앵커 우회 — 하위폴더 파일은 이동되면 안 된다
@@ -651,11 +645,10 @@ HOME="$FH" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/n
 if [ -f "$FH/.claude/docs/working/elsewhere/2026-08-01-traversaltest.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-2] '..' traversal 경로 파일이 이동됨(앵커 우회)"); fi
 
 # J-3. 인덱스 오삭제 방지 — 실제 backlog entry 는 지우고 (a) 같은 slug 텍스트를 우연히 공유하는
-#   무관 Project entry(backlog_/backlog/ 참조 없음, AND 조건 판정, 콜드리뷰 R2 High-1) 와 (b) Backlog
-#   섹션 **밖**에서 우연히 같은 href 를 인용하는 교차참조(콜드리뷰 R6 H2, 섹션 스코핑) 는 보존해야 한다.
-#   **헤더는 실 production 표기를 그대로 사본으로 사용한다** — 손으로 "## Backlog" 단순형만 쓰면 실
-#   표기(제목 뒤 부연 `## Backlog (게이트·§3·…)`) 를 재현 못 해 스코핑 회귀를 못 잡는다(R3~R6 4라운드
-#   연속 지적 — 표기 차이를 실 파일에서 그대로 떠서 픽스처에 자동 반영시킨다).
+#   무관 Project entry(backlog_/backlog/ 참조 없음, AND 조건 판정) 와 (b) Backlog 섹션 **밖**에서
+#   우연히 같은 href 를 인용하는 교차참조(섹션 스코핑)는 보존해야 한다.
+#   **헤더는 실 production 표기를 그대로 사본으로 사용한다** — 손으로 "## Backlog" 단순형만 쓰면
+#   실 표기(제목 뒤 부연 `## Backlog (게이트·§3·…)`)를 재현 못 해 스코핑 회귀를 못 잡는다.
 mkdir -p "$FH/.claude/projects/projA/memory"
 REAL_BACKLOG_HEADER=$(grep -m1 -E '^## Backlog\b' "$HOME/.claude/projects/C--Works-hongcafe-global-backend/memory/MEMORY.md" 2>/dev/null)
 [ -z "$REAL_BACKLOG_HEADER" ] && REAL_BACKLOG_HEADER='## Backlog (게이트·§3·P0/P1·harness만 / 상세=각 파일 / 전량=`Glob backlog_*.md`)'
@@ -684,7 +677,7 @@ if ! grep -qF 'backlog/2026-08-01-samenameslug.md' "$MEM_J3"; then PASS=$((PASS+
 if grep -qF 'project_namespace_collision.md' "$MEM_J3"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3b] 동명 슬러그의 무관 Project entry 가 함께 삭제됨(오삭제)"); fi
 if grep -qF 'backlog_samenameslug.md' "$MEM_J3" && grep -qF '## Reference' "$MEM_J3"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3c] Backlog 섹션 밖 교차참조가 삭제됨(H2 섹션 스코핑 회귀) — 실 헤더 표기: $REAL_BACKLOG_HEADER"); fi
 
-# J-4. H1 — index entry 가 harness-home 이 아닌 별도 project(projB)에만 있어도 제거돼야 한다
+# J-4. index entry 가 harness-home 이 아닌 별도 project(projB)에만 있어도 제거돼야 한다
 mkdir -p "$FH/.claude/projects/projB/memory"
 cat > "$FH/.claude/projects/projB/memory/MEMORY.md" <<'EOF'
 # Memory
@@ -705,8 +698,8 @@ J4_OUT=$(HOME="$FH" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json
 if ! grep -qF 'multiprojslug' "$FH/.claude/projects/projB/memory/MEMORY.md"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4] harness-home 아닌 별도 project(projB) index entry 가 제거 안 됨"); fi
 if ! echo "$J4_OUT" | grep -qF '전 project index'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4] 정상 제거됐는데 aggregate notfound 경고가 오탐으로 뜸"); fi
 
-# J-4b. 2026-09-28 — athena 는 인덱스를 `backlog-index.md` 로 둔다(MEMORY.md 200줄 한도 분리). all_index_files 가
-#   MEMORY.md/BACKLOG.md 만 보면 이동 후 이 파일에 죽은 링크가 남는다(실측 13건).
+# J-4b. athena 는 인덱스를 `backlog-index.md` 로 둔다(MEMORY.md 200줄 한도 분리). all_index_files 가
+#   MEMORY.md/BACKLOG.md 만 보면 이동 후 이 파일에 죽은 링크가 남는다.
 mkdir -p "$FH/.claude/projects/projC/memory"
 cat > "$FH/.claude/projects/projC/memory/backlog-index.md" <<'EOF'
 # Backlog 인덱스 — testprod
@@ -727,8 +720,8 @@ J4B_OUT=$(HOME="$FH" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.jso
 if ! grep -qF 'bindexslug' "$FH/.claude/projects/projC/memory/backlog-index.md"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4b] backlog-index.md entry 가 제거 안 됨(인덱스 스캔 사각지대)"); fi
 if ! echo "$J4B_OUT" | grep -qF '전 project index'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-4b] backlog-index.md 에 있는데 notfound 경고가 뜸"); fi
 
-# J-3b. H1(R4) — 실 MEMORY.md 표기 재현: 링크 텍스트가 34자로 절단돼 slug 와 다른 항목도 href 로 제거돼야 한다
-#   (실측 사례: `[api-keys-unset-all-envs-pbx-blocke](backlog_api-keys-unset-all-envs-pbx-blocked.md)`)
+# J-3b. 실 MEMORY.md 표기 재현: 링크 텍스트가 34자로 절단돼 slug 와 다른 항목도 href 로 제거돼야 한다
+#   (예: `[api-keys-unset-all-envs-pbx-blocke](backlog_api-keys-unset-all-envs-pbx-blocked.md)`)
 mkdir -p "$FH/.claude/projects/projTrunc/memory"
 cat > "$FH/.claude/projects/projTrunc/memory/MEMORY.md" <<'EOF'
 # Memory
@@ -749,8 +742,8 @@ J3B_OUT=$(HOME="$FH" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.jso
 if ! grep -qF 'truncatedlinktextexampleslugname' "$FH/.claude/projects/projTrunc/memory/MEMORY.md"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3b] 링크 텍스트 절단된 entry 가 href 매칭으로 제거되지 않음(H1 회귀)"); fi
 if echo "$J3B_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3b] 정상 제거됐는데 ✓ 마커가 안 뜸(M7)"); fi
 
-# J-3c. H2(R4) — 실 MEMORY.md 표기 재현: `·` 로 병합된 2개 bullet 라인은 형제 entry 를 보존해야 한다
-#   (실측: img-server-const-undefined-fatal done 처리 시 같은 줄의 naver-api-const-undefined-fatal 소실)
+# J-3c. 실 MEMORY.md 표기 재현: `·` 로 병합된 2개 bullet 라인은 형제 entry 를 보존해야 한다
+#   (예: img-server-const-undefined-fatal done 처리 시 같은 줄의 naver-api-const-undefined-fatal 소실 위험)
 mkdir -p "$FH/.claude/projects/projMerge/memory"
 cat > "$FH/.claude/projects/projMerge/memory/MEMORY.md" <<'EOF'
 # Memory
@@ -773,13 +766,13 @@ if grep -qF 'naver-api-const-undefined-fatal' "$MEM_J3C"; then PASS=$((PASS+1));
 if grep -qF 'img-server-const-undefined-fatal' "$MEM_J3C"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3c] 병합 라인 자체가 사라짐(manual 보류 실패)"); fi
 if echo "$J3C_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-3c] 인덱스 미정리인데 △ 마커가 안 뜸(M7)"); fi
 
-# J-6. High(R5) — verify_index_sync 는 "인덱스에 있는데 본문 없음"(죽은 링크) 축만 봐야 한다.
-#   실 조건 3개(BACKLOG.md 는 11 project 중 1곳에만 존재 · 본문이 index 없는 project 에도 흩어짐 ·
-#   MEMORY.md 는 큐레이션 인덱스라 미등재가 정상) 를 비대칭으로 재현한다.
+# J-6. verify_index_sync 는 "인덱스에 있는데 본문 없음"(죽은 링크) 축만 봐야 한다.
+#   실 조건 3개(BACKLOG.md 는 일부 project 에만 존재 · 본문이 index 없는 project 에도 흩어짐 ·
+#   MEMORY.md 는 큐레이션 인덱스라 미등재가 정상)를 비대칭으로 재현한다.
 mkdir -p "$FH/.claude/projects/projMemOnlyA/memory" "$FH/.claude/projects/projMemOnlyB/memory" "$FH/.claude/projects/projBodyOnly/memory"
-# projMemOnlyA/B — MEMORY.md 만 있고 BACKLOG.md 없음(실측 11 project 중 10곳 형태). 본문 참조 없음
+# projMemOnlyA/B — MEMORY.md 만 있고 BACKLOG.md 없음(가장 흔한 형태). 본문 참조 없음
 # (큐레이션 정상 상태 = index 에서 완전히 빠짐, 그래서 이 두 MEMORY.md 는 Backlog 섹션이 비어 있다).
-# projMemOnlyA 는 j6athenashaped 를 참조하는 entry 도 하나 갖는다(M2 픽스처).
+# projMemOnlyA 는 j6athenashaped 를 참조하는 entry 도 하나 갖는다.
 cat > "$FH/.claude/projects/projMemOnlyA/memory/MEMORY.md" <<'EOF'
 # Memory
 ## Backlog
@@ -802,10 +795,9 @@ metadata:
 ---
 new-path body with no index reference anywhere — also normal
 EOF
-# projBodyOnly — MEMORY.md/BACKLOG.md 가 **아예 없이** 본문만 있는 memory 디렉토리(콜드리뷰 R6 M2,
-# 실측 C--Works-hongcafe-global-athena 형태). all_index_files() 로는 이 디렉토리가 절대 안 잡힌다 —
-# all_memory_dirs() 로 직접 조회해야만 이 본문이 "존재하는 파일" 로 카운트돼, projMemOnlyA 의 참조가
-# 죽은 링크로 오탐되지 않는다.
+# projBodyOnly — MEMORY.md/BACKLOG.md 가 **아예 없이** 본문만 있는 memory 디렉토리(athena 형태).
+# all_index_files() 로는 이 디렉토리가 절대 안 잡힌다 — all_memory_dirs() 로 직접 조회해야만 이
+# 본문이 "존재하는 파일" 로 카운트돼, projMemOnlyA 의 참조가 죽은 링크로 오탐되지 않는다.
 cat > "$FH/.claude/projects/projBodyOnly/memory/backlog_j6athenashaped.md" <<'EOF'
 legacy body in a memory dir with no MEMORY.md/BACKLOG.md at all (athena-shaped, M2)
 EOF
@@ -824,7 +816,7 @@ if echo "$J6_OUT" | grep -qF 'j6genuinedeadlink'; then PASS=$((PASS+1)); else FA
 if ! echo "$J6_OUT" | grep -qE '(^|[^A-Za-z0-9_-])\*([^A-Za-z0-9_-]|$)'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-6e] 코드블록 glob 예시(*)가 허수 slug 로 죽은 링크에 섞여 나옴 — 출력: $J6_OUT"); fi
 if ! echo "$J6_OUT" | grep -qF 'j6athenashaped'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-6f] index 파일이 없는 memory 디렉토리(athena 형태)의 본문이 죽은 링크로 오탐됨(M1 회귀) — 출력: $J6_OUT"); fi
 
-# J-5. M2 — frontmatter product: 값의 경로 traversal 은 차단되고 claude-harness 로 대체돼야 한다
+# J-5. frontmatter product: 값의 경로 traversal 은 차단되고 claude-harness 로 대체돼야 한다
 cat > "$FH/.claude/docs/working/backlog/2026-08-01-travproducttest.md" <<'EOF'
 ---
 name: travproducttest
@@ -840,8 +832,8 @@ if [ ! -d "$FH/pwned" ] && [ ! -d "$TMP/pwned" ]; then PASS=$((PASS+1)); else FA
 if compgen -G "$FH/.claude/docs/claude-harness/tasks/*/backlog/2026-08-01-travproducttest.md" >/dev/null 2>&1; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-5] 무효 product 대체(claude-harness) 후 정상 위치 이동 실패"); fi
 if echo "$J5_OUT" | grep -qF '허용 문자'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-5] product 대체 경고가 stderr 에 없음"); fi
 
-# J-7. M6(R5) — UserPromptSubmit 일괄 경로 무테스트였다: 키워드 트리거 → done 만 이동, pending 은
-#   스킵, moved_count 정확히 계상돼야 한다.
+# J-7. UserPromptSubmit 일괄 경로 — 키워드 트리거 시 done 만 이동, pending 은 스킵, moved_count
+#   정확히 계상돼야 한다.
 uprompt_payload() {  # $1=prompt text → $TMP/p.json
   printf '{"session_id":"blt-uprompt","hook_event_name":"UserPromptSubmit","prompt":"%s"}' \
     "$(json_escape "$1")" > "$TMP/p.json"
@@ -870,8 +862,8 @@ if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-02-j7donefile.md" ]; then PA
 if [ -f "$FH/.claude/docs/working/backlog/2026-08-02-j7pendingfile.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-7b] pending 파일이 배치 처리 중 잘못 이동됨"); fi
 if echo "$J7_OUT" | grep -qE '1건 working/backlog'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-7c] moved_count 가 1건으로 정확히 보고되지 않음 — 출력: $J7_OUT"); fi
 
-# J-8. M6(R5) — completed: 삽입이 metadata: 하위 들여쓰기를 유지하는지, history.md/summary.md 가
-#   실제로 갱신되는지(전부 무테스트였다) 고정.
+# J-8. completed: 삽입이 metadata: 하위 들여쓰기를 유지하는지, history.md/summary.md 가 실제로
+#   갱신되는지 고정한다.
 cat > "$FH/.claude/docs/working/backlog/2026-08-02-j8writeeffects.md" <<'EOF'
 ---
 name: j8writeeffects
@@ -889,8 +881,8 @@ if grep -qE '^  completed: [0-9]{4}-[0-9]{2}-[0-9]{2}$' "$J8_MOVED" 2>/dev/null;
 if grep -qF 'j8writeeffects' "$FH/.claude/docs/testprodj8/tasks/history.md" 2>/dev/null; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-8b] history.md 가 갱신되지 않음"); fi
 if grep -qF 'j8writeeffects' "$FH/.claude/docs/testprodj8/tasks/$TODAY8/summary.md" 2>/dev/null; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-8c] summary.md 가 갱신되지 않음"); fi
 
-# J-9. M4(R6) — index lock 획득 실패 시에도 index_incomplete 가 세워져 △ 마커가 떠야 한다
-# (이전엔 lock 실패로 무보호 강행했는데 최종 마커는 ✓ 였다 — △/✓ 를 가르는 목적과 어긋났다).
+# J-9. index lock 획득 실패 시에도 index_incomplete 가 세워져 △ 마커가 떠야 한다 — lock 실패인데
+#   ✓ 로 보고되면 △/✓ 구분 목적이 무너진다.
 mkdir -p "$FH/.claude/projects/projJ9/memory"
 cat > "$FH/.claude/projects/projJ9/memory/MEMORY.md" <<'EOF'
 # Memory
@@ -914,8 +906,8 @@ if echo "$J9_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((F
 if ! echo "$J9_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-9] lock 획득 실패인데 ✓ 이동으로 성공 보고됨(M4 회귀)"); fi
 rmdir "$TMP/j9held.lock.d" 2>/dev/null
 
-# J-10. M5(R6) — 앵커 비교가 드라이브 문자 뒤 세그먼트의 대소문자 불일치에도 통과해야 한다
-# (to_win_path 는 드라이브 문자만 통일, 나머지 세그먼트는 원본 그대로라 완전일치 비교면 스킵됐다).
+# J-10. 앵커 비교가 드라이브 문자 뒤 세그먼트의 대소문자 불일치에도 통과해야 한다
+# (to_win_path 는 드라이브 문자만 통일하므로 완전일치 비교면 스킵된다).
 cat > "$FH/.claude/docs/working/backlog/2026-08-02-j10casetest.md" <<'EOF'
 ---
 name: j10casetest
@@ -932,19 +924,16 @@ printf '{"session_id":"blt-j10","hook_event_name":"PostToolUse","cwd":"C:\\\\x",
 HOME="$FH" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" >/dev/null 2>&1
 if [ ! -f "$J10_SRC" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-10] 소문자 세그먼트 페이로드가 앵커 불일치로 스킵됨(M5 회귀) — 파일이 원 위치에 그대로 남음"); fi
 
-# J-11. High(2026-08-07) — "href 개수" 가 아니라 "href 의 markdown 링크 뒤에 자기 요약(`—`)이
-#   있는가" 로 판별해야 한다. 그룹라벨 대표줄(href 는 1개, 뒤에 요약 없이 `…`만) 은 manual 보류돼야
-#   하고, 상태배지 라인(href 뒤에 정상 요약 있음) 은 배지 유무와 무관하게 정상 제거돼야 한다(오탐 방지).
+# J-11. "href 개수" 가 아니라 "href 의 markdown 링크 뒤에 자기 요약(`—`)이 있는가" 로 판별해야
+#   한다. 그룹라벨 대표줄(href 는 1개, 뒤에 요약 없이 `…`만)은 manual 보류돼야 하고, 상태배지
+#   라인(href 뒤에 정상 요약 있음)은 배지 유무와 무관하게 정상 제거돼야 한다(오탐 방지).
 #   픽스처는 손으로 재현하지 않고 실 production MEMORY.md 에서 **형태를 정규식으로 동적 선택**한다
-#   (2026-08-07 콜드리뷰 R2 M2 — R1 에서 특정 slug(infra-local-copy-stale/step-developer-sonnet-measure)
-#   에 grep 을 하드 결합했더니, 그 slug 들이 인덱스에서 사라지는 것(이 hook 자신이 만드는 정상
-#   수명주기 — done 완료 시 지워진다)만으로 스위트가 영구 red 가 됐다. "실 인덱스에서 grep 으로
-#   뜬다"의 의도는 표기 추격을 끊는 것이지 특정 인스턴스에 결합하는 것이 아니다 — **형태를 잡고
-#   인스턴스는 잡지 않는다.** 11개 실 index 파일을 전수 스캔해 조건에 맞는 첫 라인을 매번 새로 찾는다.
-#   grep 패턴은 href 포맷에 의존하지 않는다(구 `backlog_slug.md` / 신 `.../backlog/date-slug.md` 공통).
+#   — 특정 slug 에 결합하면 그 slug 가 정상 수명주기(done 완료로 인덱스에서 사라짐)만으로 스위트가
+#   영구 red 가 된다. **형태를 잡고 인스턴스는 잡지 않는다** — 실 index 파일을 전수 스캔해 조건에
+#   맞는 첫 라인을 매번 새로 찾는다. grep 패턴은 href 포맷에 의존하지 않는다(구 `backlog_slug.md` /
+#   신 `.../backlog/date-slug.md` 공통).
 #   네이티브 Windows python3 는 POSIX 형(`/c/Users/...`) 경로를 이해 못 한다(`os.path.isdir` False) —
-#   `to_win_test()` 로 `C:/...` 로 변환해 넘긴다(2026-08-07 R2 자체발견 — extraction 이 항상 빈 값을
-#   반환해 J-11 이 setup-FAIL 조차 없이 조용히 아무 라인도 못 만드는 상태였다).
+#   `to_win_test()` 로 `C:/...` 로 변환해 넘긴다.
 J11_HOME_WIN=$(to_win_test "$HOME/.claude")
 J11_SCAN=$(python3 - "$J11_HOME_WIN" <<'PYEOF'
 import re, os, glob, sys
@@ -955,22 +944,17 @@ any_link_re = re.compile(r'backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s
 backlog_header_re = re.compile(r'^##\s+Backlog\b')
 section_header_re = re.compile(r'^##\s')
 own_summary_re = re.compile(r'^\s*—')
-# `[^)]*` prefix 필수(2026-08-07 R2 자체발견) — 이관 후 실 href 는 전부
-# `](../../../docs/working/backlog/{date}-{slug}.md)` 처럼 상대경로 prefix 를 달고 있다. prefix
-# 없이 `\(` 바로 뒤에 backlog_/backlog/ 를 요구하면 이 extraction 자체가 항상 0건을 반환해
-# (Critical 패치와 정확히 같은 버그를 이 테스트 스크립트가 스스로 재현하고 있었다) J-11-setup 이
-# 매번 FAIL 하거나(다행히 M1 가드 덕에 조용히 안 넘어가고 실제로 FAIL 했다) 픽스처가 안 만들어졌다.
+# `[^)]*` prefix 필수 — 실 href 는 전부 `](../../../docs/working/backlog/{date}-{slug}.md)` 처럼
+# 상대경로 prefix 를 달고 있다. prefix 없이 `\(` 바로 뒤에 backlog_/backlog/ 를 요구하면 이
+# extraction 이 항상 0건을 반환해 J-11-setup 이 픽스처를 만들지 못한다.
 link_re = re.compile(r'\[([^\]]*)\]\([^)]*(backlog_[^\s\]\)]+\.md|backlog/\d{4}-\d{2}-\d{2}-[^\s\]\)]+\.md)\)')
 badge_prefix_re = re.compile(r'^\s*-\s*`\[[^\]]+\]`\s*\[')
-# 날짜 포함 형태만 후보로 채택한다(2026-08-07 코디네이터 지적) — 구 `backlog_{slug}.md` 형태는 날짜가
-# 없어 본문 파일명(`{date}-{slug}.md`)을 만들 "정답 날짜" 가 없다. 이전엔 slug_a_re(구형)/slug_b_re(신형)
-# 를 or 로 묶어 아무 href 나 후보로 받고, 본문 파일명엔 **날짜와 무관하게 하드코딩한 `2026-08-02`** 를
-# 썼다 — 실 href 의 날짜(예: 08-06)와 픽스처 본문 파일명 날짜(08-02)가 어긋나 S1 수정(날짜 정확 매칭)
-# 이후 noref 로 떨어졌다(신 인덱스 line 자체가 애초에 틀린 날짜를 참조하는 상태를 픽스처가 만든 것 —
-# J-14 가 검증하려는 "날짜 불일치" 상태와 우연히 같아져 J-11 이 원래 검증해야 할 "날짜 일치 정상 경로"
-# 를 더 이상 검증하지 못했다). 신형(날짜 포함) href 만 후보로 삼고, 날짜 추출에 실패하면 그 라인은
-# 후보에서 제외한다(다음 라인으로 계속 탐색) — 전 11파일에서 날짜 포함 후보를 하나도 못 찾으면
-# group_ex/badge_ex 가 None 으로 남아 아래 J11_SETUP_OK 가드가 FAIL 로 떨어뜨린다(fallback 임의 날짜 금지).
+# 날짜 포함 형태만 후보로 채택한다 — 구 `backlog_{slug}.md` 형태는 날짜가 없어 본문 파일명
+# (`{date}-{slug}.md`)을 만들 "정답 날짜" 가 없다. 본문 파일명 날짜를 href 날짜와 다르게 하드코딩하면
+# 날짜 불일치 상태가 되어 J-14 가 검증하는 케이스와 겹쳐, J-11 이 검증해야 할 "날짜 일치 정상 경로"를
+# 못 보게 된다. 날짜 추출에 실패한 라인은 후보에서 제외한다 — 전 index 파일에서 날짜 포함 후보를
+# 하나도 못 찾으면 group_ex/badge_ex 가 None 으로 남아 아래 J11_SETUP_OK 가드가 FAIL 로 떨어뜨린다
+# (fallback 임의 날짜 금지).
 slug_b_re = re.compile(r'backlog/(\d{4}-\d{2}-\d{2})-([A-Za-z0-9_-]+)\.md')
 
 group_ex = None
@@ -1025,10 +1009,10 @@ BADGE_DATE=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $3}')
 BADGE_HREF=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $4}')
 REAL_BADGE_LINE=$(echo "$J11_SCAN" | awk -F'\t' '$1=="BADGE"{print $5}')
 
-# 실 인덱스에서 형태가 사라지면 합성 라인으로 대체한다 (2026-09-28). MEMORY.md 의 backlog 인덱스가
-# BACKLOG.md 포인터 1줄로 바뀌면서 배지·그룹라벨 형태가 production 에서 0건이 됐다 — 형태가 없다는
-# 이유로 스위트가 영구 red 가 되면 진짜 회귀가 묻힌다. 합성 라인도 href·slug·date 를 한 벌로 맞춰
-# 만들므로 위 "fallback 임의 날짜 금지"(href 날짜 ≠ 본문 파일명 날짜) 문제는 생기지 않는다.
+# 실 인덱스에서 형태가 사라지면 합성 라인으로 대체한다 — MEMORY.md 의 backlog 인덱스가 production 에서
+# BACKLOG.md 포인터 1줄로 바뀌면 배지·그룹라벨 형태가 0건이 될 수 있는데, 형태가 없다는 이유로
+# 스위트가 영구 red 가 되면 진짜 회귀가 묻힌다. 합성 라인도 href·slug·date 를 한 벌로 맞춰 만들므로
+# 위 "fallback 임의 날짜 금지"(href 날짜 ≠ 본문 파일명 날짜) 문제는 생기지 않는다.
 J11_SYNTH_DATE=2026-08-02
 if [ -z "$REAL_GROUP_LABEL_LINE" ]; then
   GROUP_SLUG=synthgrouplabelslug; GROUP_DATE=$J11_SYNTH_DATE
@@ -1041,12 +1025,10 @@ if [ -z "$REAL_BADGE_LINE" ]; then
   REAL_BADGE_LINE="- \`[진행]\` [${BADGE_SLUG}](${BADGE_HREF}) — 합성 픽스처 요약"
 fi
 
-# M1(2026-08-07 콜드리뷰 R2) — line 뿐 아니라 **HREF·SLUG·DATE 도 개별로 빈값 가드**한다. 이전엔
-# `grep -qF "$GROUP_HREF" "$MEM_J11"` 에서 GROUP_HREF 가 빈 문자열이면 `grep -qF ""` 는 항상 참이라
-# J-11a 가 무조건 PASS 했다 — line 이 비지 않았어도 정규식 추출이 실패해 href 만 빌 수 있어서
-# line 단독 가드로는 안 잡힌다. line·href·slug·date 4개 전부를 개별로 확인한다. DATE 가 비면(=날짜
-# 포함 href 후보를 전 11파일에서 하나도 못 찾음) fallback 임의 날짜를 쓰지 않고 FAIL 로 떨어뜨린다
-# (2026-08-07 코디네이터 지적 — 이게 이번 사고의 형태였다).
+# line 뿐 아니라 **HREF·SLUG·DATE 도 개별로 빈값 가드**한다 — `grep -qF "$GROUP_HREF" ...`는
+# GROUP_HREF 가 빈 문자열이면 `grep -qF ""` 가 항상 참이라 line 이 비지 않아도(정규식 추출 실패로
+# href 만 비어도) J-11a 가 무조건 PASS 한다. line·href·slug·date 4개 전부를 개별로 확인하고,
+# DATE 가 비면(날짜 포함 href 후보를 하나도 못 찾음) fallback 임의 날짜를 쓰지 않고 FAIL 로 떨어뜨린다.
 J11_SETUP_OK=1
 if [ -z "$REAL_GROUP_LABEL_LINE" ] || [ -z "$GROUP_HREF" ] || [ -z "$GROUP_SLUG" ] || [ -z "$GROUP_DATE" ]; then
   FAIL=$((FAIL+1)); fail_lines+=("[J-11-setup] 그룹라벨 형태(단일 href, 요약 없음, 날짜 포함) 라인을 실 인덱스 11파일 전체에서 못 찾음 — line='$REAL_GROUP_LABEL_LINE' href='$GROUP_HREF' slug='$GROUP_SLUG' date='$GROUP_DATE'")
@@ -1077,7 +1059,7 @@ if [ "$J11_SETUP_OK" -eq 1 ]; then
   J11A_OUT=$(HOME="$FH" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
   if grep -qF "$GROUP_HREF" "$MEM_J11"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] 그룹라벨 대표줄이 오삭제됨(Critical 회귀) — 실 표기: $REAL_GROUP_LABEL_LINE"); fi
   if echo "$J11A_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11a] manual 보류인데 △ 마커가 안 뜸 — 출력: $J11A_OUT"); fi
-  # J-11c(2026-08-07 콜드리뷰 R2 M3) — `manual_grouplabel` 신설 상태값·bash case arm 전용 단언.
+  # J-11c. `manual_grouplabel` 상태값·bash case arm 전용 단언.
   # `△ 이동` 은 manual·noref·removed_partial·lock 실패·any_found=0 이 전부 내는 공용 마커라
   # 이 신규 분기를 식별 못 한다. python 출력 문자열과 bash case 리터럴이 어긋나면 `*)` catch-all
   # 로 떨어져 "인덱스 처리 실패(읽기/인코딩 오류 가능)" 라는 엉뚱한 진단이 나오는데 △ 마커만 보면
@@ -1094,15 +1076,12 @@ if [ "$J11_SETUP_OK" -eq 1 ]; then
   if echo "$J11B_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-11b] 정상 제거됐는데 ✓ 마커가 안 뜸 — 출력: $J11B_OUT"); fi
 fi
 
-# J-12. High + S1(2026-08-07, 콜드리뷰 R1 M1·M2 재설계) — href_b_re/target_link_re 가 날짜를
-#   와일드카드로 받으면, 같은 slug 가 날짜만 다르게 2번 존재할 때(중복 slug 8쌍 실측 — 4쌍은 날짜만
-#   다름) 한쪽을 done 처리하면서 살아있는 형제 entry 까지 함께 지운다. **형태를 합성 픽스처로
-#   고정한다(콜드리뷰 M2)** — 세 라운드 연속 실 데이터 grep 에 픽스처 본체를 결합했다가 그 실
-#   backlog 가 done 처리(=인덱스에서 사라짐)되며 자기무효화가 났다(실측: ratelimit-… 은 `[진행]` P1
-#   이라 완료되는 순간 DUP 풀이 0 이 되어 코드 무관하게 FAIL). **형제는 별도 index 파일에 둔다
-#   (콜드리뷰 M1)** — 실 분포가 그렇고(idx_1·idx_11 vs idx_6), 한 파일에 같이 두면 그 파일 자체가
-#   changed=True(target 제거) 로 끝나 sibling 신호가 파일 단위 상태에서 가려진다(직전 라운드의 High
-#   가 이렇게 초록으로 통과했다).
+# J-12. href_b_re/target_link_re 가 날짜를 와일드카드로 받으면, 같은 slug 가 날짜만 다르게 2번
+#   존재할 때 한쪽을 done 처리하면서 살아있는 형제 entry 까지 함께 지운다. **형태를 합성 픽스처로
+#   고정한다** — 실 데이터 grep 에 픽스처 본체를 결합하면 그 실 backlog 가 done 처리(=인덱스에서
+#   사라짐)되는 순간 테스트가 코드와 무관하게 자기무효화된다. **형제는 별도 index 파일에 둔다** —
+#   한 파일에 같이 두면 그 파일 자체가 changed=True(target 제거)로 끝나 sibling 신호가 파일 단위
+#   상태에서 가려진다.
 J12_SLUG="j12syntheticdup"
 J12_DATE_TARGET="2026-07-30"
 J12_DATE_SIBLING="2026-07-29"
@@ -1119,43 +1098,35 @@ cat > "$FH/.claude/projects/projJ12Sibling/memory/MEMORY.md" <<EOF
 EOF
 MEM_J12_TARGET="$FH/.claude/projects/projJ12Target/memory/MEMORY.md"
 MEM_J12_SIBLING="$FH/.claude/projects/projJ12Sibling/memory/MEMORY.md"
-# sibling 본문 파일도 만든다(2026-08-07 콜드리뷰 M3 재정정) — sibling 판정이 "그 날짜에 실제 파일이
-# 있는가" 를 근거로 검증하도록 바뀌어서(J-14 와의 상태 충돌 해소), 파일이 없으면 이 라인도 noref 로
-# 떨어진다. pending 상태로 둬 자기 자신은 이번 실행에서 처리되지 않게 한다.
+# sibling 본문 파일도 만든다 — sibling 판정은 "그 날짜에 실제 파일이 있는가"를 근거로 하므로,
+# 파일이 없으면 이 라인도 noref 로 떨어진다. pending 상태로 둬 자기 자신은 이번 실행에서 처리되지
+# 않게 한다.
 printf -- '---\nname: %s\nmetadata:\n  status: pending\n  product: testprod\n---\nsibling body, still pending\n' "$J12_SLUG" \
   > "$FH/.claude/docs/working/backlog/${J12_DATE_SIBLING}-${J12_SLUG}.md"
 printf -- '---\nname: %s\nmetadata:\n  status: done\n  product: testprod\n---\nx\n' "$J12_SLUG" \
   > "$FH/.claude/docs/working/backlog/${J12_DATE_TARGET}-${J12_SLUG}.md"
 backlog_payload "$FH/.claude/docs/working/backlog/${J12_DATE_TARGET}-${J12_SLUG}.md"
-# BACKLOG_INDEX_LOCK 명시(2026-08-07 콜드리뷰 R3 L1) — 이미 §J 최상단(`export BACKLOG_INDEX_LOCK=
-# "$TMP/bl.lock.d"`, :485)이 자식 프로세스로 상속돼 실측상 이미 이 경로를 쓴다(락 경합 강제 재현으로
-# 확인 — 기본 공유 경로가 아니라 `$TMP/bl.lock.d` 타임아웃이 정확히 찍힘). 그래도 향후 리팩터(함수화
-# 등)로 export 스코프가 깨질 가능성에 대비해 인라인으로도 명시한다(방어적, 현재는 no-op).
+# BACKLOG_INDEX_LOCK 명시 — §J 최상단의 export 로 이미 자식 프로세스에 상속되지만, 향후 리팩터로
+# export 스코프가 깨질 가능성에 대비해 인라인으로도 명시한다(방어적, 현재는 no-op).
 J12_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
 if ! grep -qF "backlog/${J12_DATE_TARGET}-${J12_SLUG}.md" "$MEM_J12_TARGET"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12a] 처리 대상 entry 가 제거되지 않음"); fi
 if grep -qF "backlog/${J12_DATE_SIBLING}-${J12_SLUG}.md" "$MEM_J12_SIBLING"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12b] 별도 파일의 형제(다른 날짜) entry 가 함께 삭제됨(S1 회귀)"); fi
-# J-12c~f(High) — 형제가 살아남는 것만으로는 부족하다. "href 를 정정하라" 로 잘못 안내되고(정정하면
-# 형제가 방금 이동된 파일을 가리키게 되어 데이터 손실이 재현된다) △(인덱스 미정리) 로 오보고되는
-# 것까지 잡아야 High 가 실제로 닫힌다.
+# J-12c~f. 형제가 살아남는 것만으로는 부족하다. "href 를 정정하라"로 잘못 안내되면(정정하면 형제가
+#   방금 이동된 파일을 가리키게 되어 데이터 손실이 재현된다) △(인덱스 미정리)로 오보고된다 — 이것까지
+#   같이 검증한다.
 if echo "$J12_OUT" | grep -qF '형제 backlog entry'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12c] sibling 전용 메시지가 안 뜸(noref 오분류 가능성, High 회귀) — 출력: $J12_OUT"); fi
 if ! echo "$J12_OUT" | grep -qF 'href 를 신 경로로 정정 필요'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12d] 형제 라인이 noref(정정 필요) 로 오분류됨(High 회귀 — 정정 유도 시 데이터 손실 재현) — 출력: $J12_OUT"); fi
 if echo "$J12_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12e] 인덱스가 정확히 정리됐는데 ✓ 대신 다른 마커가 뜸(High 회귀) — 출력: $J12_OUT"); fi
 if ! echo "$J12_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12f] 형제 보존인데 △(인덱스 미정리) 로 오보고됨(High 회귀) — 출력: $J12_OUT"); fi
 
-# J-12-landmark(콜드리뷰 M2, R2 M6 재정정 — 술어를 인덱스가 아닌 본문 파일로 변경) — "형태를 합성
-#   픽스처로 고정하고, 실 데이터에 대해서는 그 형태가 아직 존재하는가 만 별도로 단언하라." 위 J-12
-#   본체는 실 데이터와 완전히 독립이라 실 backlog 가 resolve 돼도 절대 무효화되지 않는다.
-#   **술어를 인덱스 href 가 아니라 `docs/working/backlog/` 본문 파일명으로 바꾼다(R2 M6)** — 이전
-#   버전은 "인덱스에 같은 slug 2 날짜" 를 찾았는데, sibling 이 실제로 발화하는 라이브 3쌍(tick-claim-
-#   slug-collision·mod15-multidevice-token-track·p0-runtime-security-deploy) 은 인덱스엔 최신 날짜
-#   1개만 남아있어(구 날짜 entry 는 이미 정리됨) 이 술어로는 안 잡힌다. 게다가 유일하게 통과시키던
-#   ratelimit-… 항목도 BE 측 링크 텍스트가 34자 절단(`[ratelimit-double-count-explicit-ro]`)돼 있어
-#   marker 불일치로 sibling 분기를 아예 안 탄다 — 랜드마크가 "형태가 존재한다" 고 보고해도 정작 그
-#   형태가 sibling 분기를 발화시키는지는 별개였다. **진짜 필요한 관찰 대상은 sibling 판정의 전제
-#   그 자체 — `docs/working/backlog/` 에 같은 slug 가 날짜만 다르게 2개 이상 실재하는가**(현재 4건:
-#   위 3쌍 + ratelimit) 이다. 이걸로 바꾸면 인덱스 표기(절단·최신화 여부)와 무관하게 관찰된다.
-#   **이 항목이 미래에 FAIL 하는 건 실 dup 쌍이 전부 해소됐다는 뜻이라 오히려 좋은 신호이지 코드
-#   회귀가 아니다**(위 핵심 회귀 검증 J-12a~f 와 분리돼 있어 그 실패가 스위트 전체를 무효화하지 않는다).
+# J-12-landmark. "형태를 합성 픽스처로 고정하고, 실 데이터에 대해서는 그 형태가 아직 존재하는가만
+#   별도로 단언하라." 위 J-12 본체는 실 데이터와 완전히 독립이라 실 backlog 가 resolve 돼도 무효화
+#   되지 않는다. **술어는 인덱스 href 가 아니라 `docs/working/backlog/` 본문 파일명으로 판정한다** —
+#   sibling 분기가 실제로 발화하려면 인덱스가 아니라 본문 파일이 같은 slug·다른 날짜로 2개 이상
+#   실재해야 하고, 인덱스 href 는 절단·최신화로 stale 할 수 있어 그 자체로는 발화 여부를 보장하지
+#   못한다. 이걸로 판정하면 인덱스 표기와 무관하게 관찰된다.
+#   이 항목이 미래에 FAIL 하는 건 실 dup 쌍이 전부 해소됐다는 뜻이라 코드 회귀가 아니다(핵심 회귀
+#   검증 J-12a~f 와 분리돼 있어 이 실패가 스위트 전체를 무효화하지 않는다).
 J12_LANDMARK_HOME_WIN=$(to_win_test "$HOME/.claude")
 J12_LANDMARK=$(python3 - "$J12_LANDMARK_HOME_WIN" <<'PYEOF'
 import re, os, sys
@@ -1171,18 +1142,15 @@ found = any(len(dates) >= 2 for dates in by_slug.values())
 print("FOUND" if found else "NONE")
 PYEOF
 )
-# FAIL 이 아니라 SKIP(2026-08-07 콜드리뷰 R3 M6) — 이 술어가 잡는 4쌍은 ① 중복 slug rename 으로
-# 해소되거나 ② 그냥 그 중 하나가 done 처리되는 **정상 수명주기**만으로도 카운트가 0 이 될 수 있다.
-# 둘 다 코드 회귀가 아닌데 FAIL 로 세면 "건강한 상태에서 스위트가 red 가 된다" — 바로 그 자기무효화가
-# 형태만 바뀌어 재발한 것이다(이전엔 FAIL 로 세면서 주석에 "이건 좋은 신호" 라고 자인했다 — 좋은
-# 신호인데 스위트를 red 로 만드는 건 모순). PASS/SKIP 두 값만 쓴다(핵심 회귀 테스트 J-12a~f 는 이와
-# 무관하게 항상 유효하므로 SKIP 이 스위트 신뢰도를 낮추지 않는다).
+# FAIL 이 아니라 SKIP — 이 술어가 잡는 dup 쌍은 중복 slug rename 이나 done 처리 같은 정상
+# 수명주기만으로도 카운트가 0 이 될 수 있다. 코드 회귀가 아닌데 FAIL 로 세면 건강한 상태에서
+# 스위트가 red 가 된다. PASS/SKIP 두 값만 쓴다(핵심 회귀 테스트 J-12a~f 는 이와 무관하게 항상
+# 유효하므로 SKIP 이 스위트 신뢰도를 낮추지 않는다).
 if [ "$J12_LANDMARK" = "FOUND" ]; then PASS=$((PASS+1)); else SKIP=$((SKIP+1)); skip_lines+=("[J-12 landmark] 실 dup slug 쌍이 라이브 데이터에 없어 미검증(데이터 부재 — 코드 회귀 아님)"); fi
 
-# J-12g. M1(2026-08-07 콜드리뷰 R3) — `sibling_re.search()` 는 첫 매치만 본다. 한 라인에 같은 slug 의
-#   다른 날짜 href 가 2개 있고 첫 번째 파일이 없고 두 번째가 있으면 noref 로 잘못 떨어진다(R1 High 가
-#   지목한 오안내 재발). **되돌리면(search 로 되돌리면) 이 테스트가 FAIL 해야 한다** — 합성 픽스처라
-#   실 데이터 변화와 무관하게 항상 유효하다.
+# J-12g. `sibling_re.search()` 는 첫 매치만 본다. 한 라인에 같은 slug 의 다른 날짜 href 가 2개 있고
+#   첫 번째 파일이 없고 두 번째가 있으면 noref 로 잘못 떨어진다. **되돌리면(search 로 되돌리면)
+#   이 테스트가 FAIL 해야 한다** — 합성 픽스처라 실 데이터 변화와 무관하게 항상 유효하다.
 J12G_SLUG="j12gfinditer"
 J12G_TARGET_DATE="2026-07-30"
 J12G_NOFILE_DATE="2026-01-01"
@@ -1205,11 +1173,9 @@ if grep -qF "$J12G_HASFILE_DATE" "$MEM_J12G"; then PASS=$((PASS+1)); else FAIL=$
 if echo "$J12G_OUT" | grep -qF '형제 backlog entry'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12g-b] 두번째 매치(파일 실재)를 못 찾고 noref 로 떨어짐(M1 회귀 — search 의 첫 매치만 보는 버그 재발) — 출력: $J12G_OUT"); fi
 if ! echo "$J12G_OUT" | grep -qF 'href 를 신 경로로 정정 필요'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12g-c] noref(정정 필요) 오안내가 뜸(M1 회귀) — 출력: $J12G_OUT"); fi
 
-# J-12h. M2(2026-08-07 콜드리뷰 R3) — sibling 이 `any_found` 를 세우면, "자기 entry 는 인덱스 어디에도
-#   없고 형제만 있는" 실제 시나리오(실측: mod15-multidevice-token-track 07-22 / tick-claim-slug-
-#   collision 07-27, 둘 다 인덱스엔 최신 날짜 entry 만 남아있음)에서 미발견 경고가 조용히 삼켜지고
-#   ✓ 로 오보고된다. 이 실 시나리오를 그대로 합성 픽스처로 고정한다 — **되돌리면(sibling 도 any_found
-#   를 세우게 하면) 이 테스트가 FAIL 해야 한다.**
+# J-12h. sibling 이 `any_found` 를 세우면, "자기 entry 는 인덱스 어디에도 없고 형제만 있는" 시나리오
+#   에서 미발견 경고가 조용히 삼켜지고 ✓ 로 오보고된다. **되돌리면(sibling 도 any_found 를 세우게
+#   하면) 이 테스트가 FAIL 해야 한다.**
 J12H_SLUG="j12hselfmissing"
 J12H_TARGET_DATE="2026-07-22"
 J12H_SIBLING_DATE="2026-07-27"
@@ -1231,10 +1197,10 @@ if echo "$J12H_OUT" | grep -qF '△ 이동'; then PASS=$((PASS+1)); else FAIL=$(
 if ! echo "$J12H_OUT" | grep -qF '✓ 이동'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12h-d] 자기 entry 미발견인데 조용히 ✓ 로 보고됨(M2 회귀, High 가 막으려던 바로 그 오보고) — 출력: $J12H_OUT"); fi
 if echo "$J12H_OUT" | grep -qF '형제 backlog entry'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12h-e] 형제 entry 발견 메시지가 안 뜸 — 출력: $J12H_OUT"); fi
 
-# J-12i. M8(2026-08-07 콜드리뷰 R3) — 자기 entry 와 형제 entry 가 **같은 index 파일의 다른 줄**에
-#   있으면(가장 흔한 실제 경로 — 자기 entry 는 지워지고 형제는 같은 파일에 남는다) 그 파일의 최종
-#   status 가 "removed" 로만 찍혀 sibling 보고가 사라졌었다(elif 배타값). **되돌리면(sibling 을 다시
-#   배타 status 로 만들면) 이 테스트가 FAIL 해야 한다.**
+# J-12i. 자기 entry 와 형제 entry 가 **같은 index 파일의 다른 줄**에 있으면(가장 흔한 실제 경로 —
+#   자기 entry 는 지워지고 형제는 같은 파일에 남는다) 그 파일의 최종 status 가 "removed" 로만
+#   찍혀 sibling 보고가 사라질 수 있다(elif 배타값). **되돌리면(sibling 을 다시 배타 status 로
+#   만들면) 이 테스트가 FAIL 해야 한다.**
 J12I_SLUG="j12isamefile"
 J12I_TARGET_DATE="2026-07-30"
 J12I_SIBLING_DATE="2026-07-29"
@@ -1256,11 +1222,10 @@ if ! grep -qF "$J12I_TARGET_DATE-$J12I_SLUG" "$MEM_J12I"; then PASS=$((PASS+1));
 if grep -qF "$J12I_SIBLING_DATE-$J12I_SLUG" "$MEM_J12I"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12i-b] 같은 파일 안 sibling entry 가 함께 삭제됨"); fi
 if echo "$J12I_OUT" | grep -qF '형제 backlog entry'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-12i-c] 같은 파일의 다른 줄에 형제가 남았는데 보고가 안 됨(M8 회귀 — sibling 이 배타 status 라 removed 에 가려짐) — 출력: $J12I_OUT"); fi
 
-# J-13. 통제군(2026-08-07 콜드리뷰 M4) — `--{product}` suffix 쌍은 slug 문자열 자체가 완전히 다르므로
-#   **S1(날짜 와일드카드→정확 매칭) 을 되돌려도 이 테스트는 계속 PASS 한다(실측, S1 회귀 검출력 0)**.
-#   이 테스트가 실제로 확인하는 건 "같은 날짜라도 slug(suffix 포함) 가 다르면 정확히 분리 매칭되는가"
-#   (기존 slug 유일성 매칭의 정상 동작)뿐이다 — S1 회귀 가드로 오인하지 말 것. 형태도 합성으로
-#   고정한다(콜드리뷰 M2, J-12 와 동일 사유).
+# J-13. 통제군 — `--{product}` suffix 쌍은 slug 문자열 자체가 완전히 다르므로 날짜 매칭 방식과
+#   무관하게 항상 PASS 한다. 이 테스트가 실제로 확인하는 건 "같은 날짜라도 slug(suffix 포함)가
+#   다르면 정확히 분리 매칭되는가"(slug 유일성 매칭의 정상 동작)뿐이다 — 날짜 매칭 회귀 가드로
+#   오인하지 말 것. 형태도 합성으로 고정한다(J-12 와 동일 사유).
 J13_BASE="j13syntheticbase"
 J13_DATE="2026-07-30"
 J13_SLUG_A="${J13_BASE}--producta"
@@ -1285,9 +1250,9 @@ J13_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$PLUGIN_HOOKS_DIR
 if ! grep -qF "backlog/${J13_DATE}-${J13_SLUG_A}.md" "$MEM_J13_TARGET"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-13a] 처리 대상 entry 가 제거되지 않음"); fi
 if grep -qF "backlog/${J13_DATE}-${J13_SLUG_B}.md" "$MEM_J13_SIBLING"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-13b] 같은 날짜·다른 suffix 형제 entry 가 함께 삭제됨"); fi
 
-# J-13-landmark(콜드리뷰 M2, R2 M6 과 동일 사유로 본문 파일 술어로 통일) — SFX 형태 실존 여부만
-#   별도 관찰. J-12-landmark 와 같은 이유(인덱스 href 는 절단·최신화로 stale 할 수 있다)로 인덱스가
-#   아니라 `docs/working/backlog/` 본문 파일명을 술어로 쓴다.
+# J-13-landmark. suffix 형태 실존 여부만 별도 관찰. J-12-landmark 와 같은 이유(인덱스 href 는
+#   절단·최신화로 stale 할 수 있다)로 인덱스가 아니라 `docs/working/backlog/` 본문 파일명을
+#   술어로 쓴다.
 J13_LANDMARK=$(python3 - "$J12_LANDMARK_HOME_WIN" <<'PYEOF'
 import re, os, sys
 home = sys.argv[1]
@@ -1304,21 +1269,18 @@ found = any(len(suffixes) >= 2 for suffixes in by_base.values())
 print("FOUND" if found else "NONE")
 PYEOF
 )
-# FAIL 이 아니라 SKIP(콜드리뷰 R3 M6, J-12-landmark 와 동일 사유). **메시지도 갱신(R3 M7)** —
-# 이전엔 실패 메시지가 "실 11 인덱스파일에 …" 였는데, M6(R2) 로 술어를 인덱스가 아니라
-# `docs/working/backlog/` 본문 파일명 스캔으로 이미 바꿔놨었다 — 조사자를 없는 데이터(인덱스)로
-# 보내는 stale 메시지였다. SKIP 은 메시지 없이도 원인이 코드가 아니라 데이터 부재임이 명확하므로
-# 별도 fail_lines 자체가 불필요해졌다(SKIP 은 실패 상세에 나열되지 않는다).
+# FAIL 이 아니라 SKIP(J-12-landmark 와 동일 사유). 메시지는 술어(본문 파일명 스캔)와 일치시킨다 —
+# 인덱스를 가리키는 메시지는 조사자를 없는 데이터로 보낸다. SKIP 은 메시지 없이도 원인이 코드가
+# 아니라 데이터 부재임이 명확하므로 별도 fail_lines 가 불필요하다(SKIP 은 실패 상세에 나열되지 않는다).
 if [ "$J13_LANDMARK" = "FOUND" ]; then PASS=$((PASS+1)); else SKIP=$((SKIP+1)); skip_lines+=("[J-13 landmark] docs/working/backlog/ 에 해당 파일명 패턴이 없어 미검증(데이터 부재 — 코드 회귀 아님)"); fi
 
-# J-14. S1 결함면 — 인덱스 href 의 날짜가 실제 파일명 날짜와 어긋나면(수동 편집·이관 오차) 매칭이
-#   실패해 entry 가 잔존해야 하고, 그게 조용한 성공(✓)이 아니라 경고(△ + noref stderr)로 나와야 한다.
-#   **J-12(sibling) 와의 상태 분리(2026-08-07 콜드리뷰 M3 재정정)** — High 수정으로 sibling 판정이
-#   생기면서, 이 케이스도 텍스트만 보면 "다른 날짜의 backlog href 가 있다" 는 sibling 과 똑같은 모양이
-#   된다. 다른 점은 **08-01 날짜의 파일이 실재하지 않는다** 는 것 — sibling_re 매칭에 파일 실재
-#   검증을 추가해(backlog-lifecycle.sh) 이 케이스는 여전히 noref 로 남는다. 아래 J-14e 가 noref
-#   전용 메시지를 직접 assert 해 sibling 으로 오분류되지 않았음을 고정한다(J-11c 와 동일 이유 — 공용
-#   마커 △/✓ 만으론 sibling/noref/manual/removed_partial 4개 분기를 구분 못 한다).
+# J-14. 인덱스 href 의 날짜가 실제 파일명 날짜와 어긋나면(수동 편집·이관 오차) 매칭이 실패해 entry
+#   가 잔존해야 하고, 그게 조용한 성공(✓)이 아니라 경고(△ + noref stderr)로 나와야 한다.
+#   **J-12(sibling)와의 상태 분리** — 이 케이스도 텍스트만 보면 "다른 날짜의 backlog href 가 있다"는
+#   sibling 과 똑같은 모양이 된다. 다른 점은 **08-01 날짜의 파일이 실재하지 않는다**는 것 —
+#   sibling_re 매칭은 파일 실재 검증을 포함하므로 이 케이스는 noref 로 남는다. 아래 J-14e 가 noref
+#   전용 메시지를 직접 assert 해 sibling 으로 오분류되지 않았음을 고정한다(공용 마커 △/✓ 만으론
+#   sibling/noref/manual/removed_partial 4개 분기를 구분 못 한다).
 mkdir -p "$FH/.claude/projects/projJ14/memory"
 cat > "$FH/.claude/projects/projJ14/memory/MEMORY.md" <<'EOF'
 # Memory
@@ -1344,10 +1306,9 @@ if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-03-j14datemismatch.md" ]; th
 if echo "$J14_OUT" | grep -qF 'href 를 신 경로로 정정 필요'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-14e] noref 전용 메시지가 안 뜸(sibling 으로 오분류돼 △ 만 우연히 다른 사유로 떴을 가능성, M3 회귀) — 출력: $J14_OUT"); fi
 if ! echo "$J14_OUT" | grep -qF '형제 backlog entry'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-14f] 파일이 실재하지 않는데 sibling(형제 보존) 으로 오분류됨(High 재정정 회귀 — 파일존재 검증 누락)"); fi
 
-# J-15. S2(2026-08-07) — 화이트리스트(유효 문자)는 통과하지만 실재하지 않는 product 값은 유령
-#   docs/{product}/ 트리를 만들지 않고 이동을 스킵해야 한다(실측 오염: hongcafe-global-docs 하이픈
-#   오표기 등). fallback 으로 claude-harness 에 조용히 합류시키지도 않는다 — 원본 위치에 그대로
-#   남아야 사용자가 frontmatter 를 정정할 수 있다.
+# J-15. 화이트리스트(유효 문자)는 통과하지만 실재하지 않는 product 값은 유령 docs/{product}/ 트리를
+#   만들지 않고 이동을 스킵해야 한다(예: 하이픈 오표기 등 오탈자). fallback 으로 claude-harness 에
+#   조용히 합류시키지도 않는다 — 원본 위치에 그대로 남아야 사용자가 frontmatter 를 정정할 수 있다.
 cat > "$FH/.claude/docs/working/backlog/2026-08-04-j15ghostproduct.md" <<'EOF'
 ---
 name: j15ghostproduct
@@ -1361,22 +1322,20 @@ backlog_payload "$FH/.claude/docs/working/backlog/2026-08-04-j15ghostproduct.md"
 J15_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
 if [ -f "$FH/.claude/docs/working/backlog/2026-08-04-j15ghostproduct.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-15a] 실재하지 않는 product 인데 파일이 이동됨(유령 트리 생성 가능성) — 출력: $J15_OUT"); fi
 if [ ! -d "$FH/.claude/docs/ghostproducttest" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-15b] 유령 product 디렉토리(docs/ghostproducttest)가 새로 생성됨"); fi
-# `-name '*j15ghostproduct*'`(2026-08-07 콜드리뷰 R3 M2) — 이전엔 `j15ghostproduct*`(선두 고정)라
-# 실제 파일명 `2026-08-04-j15ghostproduct.md` 의 날짜 prefix 때문에 절대 매칭이 안 됐다(검출력 0,
-# claude-harness fallback 회귀를 영원히 못 잡는 상태였다 — 예약 가드를 통째로 제거해도 이 assertion
-# 은 계속 PASS 했을 것). 부분매칭으로 고친다.
+# `-name '*j15ghostproduct*'` — 선두 고정 패턴은 실제 파일명의 날짜 prefix 때문에 매칭되지 않는다.
+# 부분매칭을 써야 claude-harness fallback 회귀를 실제로 잡는다.
 if [ ! -d "$FH/.claude/docs/claude-harness/tasks" ] || ! find "$FH/.claude/docs/claude-harness/tasks" -name '*j15ghostproduct*' 2>/dev/null | grep -q .; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-15c] 유령 product 가 claude-harness 로 조용히 fallback 됨(원 product 정보 소실)"); fi
 if echo "$J15_OUT" | grep -qF '실재하지 않음'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-15d] 실재하지 않는 product 경고 stderr 가 없음 — 출력: $J15_OUT"); fi
-# J-15e. M6(2026-08-07 콜드리뷰) — "정정 필요" 는 오탈자를 전제한다. docs/{product}/ 는 지연 생성
-#   (코드 편집이 있었던 세션에서만 만들어짐)이라, 코드 편집 없이 backlog 부터 만든 신규 repo 는
-#   product 값이 맞아도 트리가 아직 없을 수 있다 — 메시지에 두 원인을 모두 남겨야 한다.
+# J-15e. "정정 필요"는 오탈자를 전제한다. docs/{product}/ 는 지연 생성(코드 편집이 있었던 세션에서만
+#   만들어짐)이라, 코드 편집 없이 backlog 부터 만든 신규 repo 는 product 값이 맞아도 트리가 아직
+#   없을 수 있다 — 메시지에 두 원인을 모두 남겨야 한다.
 if echo "$J15_OUT" | grep -qF '아직 생성되지 않음'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-15e] '아직 생성되지 않음' 대안 설명이 메시지에 없음(M6 회귀, 오탈자로만 오판 유도) — 출력: $J15_OUT"); fi
 
-# J-16. M5(2026-08-07 콜드리뷰) — `~/.claude/docs/` 는 git 추적 밖(gitignore)이라 새 설치·복구
-#   환경엔 `docs/claude-harness/` 가 아직 없을 수 있다. 그 상태에서도 product 필드 부재(기본값
-#   claude-harness, 40건 실측)로 떨어지는 backlog 는 스킵되면 안 된다 — claude-harness 는 실재
-#   검사에서 면제되고 기존 mkdir -p 로직이 자기부트스트랩해야 한다. 공유 $FH 는 §전역 부트스트랩에서
-#   이미 docs/claude-harness 를 만들어놔 이 시나리오를 재현 못 하므로 전용 fakehome 을 쓴다.
+# J-16. `~/.claude/docs/` 는 git 추적 밖(gitignore)이라 새 설치·복구 환경엔 `docs/claude-harness/`
+#   가 아직 없을 수 있다. 그 상태에서도 product 필드 부재(기본값 claude-harness)로 떨어지는 backlog
+#   는 스킵되면 안 된다 — claude-harness 는 실재 검사에서 면제되고 기존 mkdir -p 로직이
+#   자기부트스트랩해야 한다. 공유 $FH 는 이미 docs/claude-harness 를 만들어놔 이 시나리오를 재현
+#   못 하므로 전용 fakehome 을 쓴다.
 FH_M5="$TMP/backlog_fakehome_m5"
 mkdir -p "$FH_M5/.claude/docs/working/backlog" "$FH_M5/.claude/projects"
 cat > "$FH_M5/.claude/docs/working/backlog/2026-08-04-j16noharnessdir.md" <<'EOF'
@@ -1392,19 +1351,15 @@ J16_OUT=$(HOME="$FH_M5" BACKLOG_INDEX_LOCK="$TMP/bl-j16.lock.d" bash "$PLUGIN_HO
 if [ ! -f "$FH_M5/.claude/docs/working/backlog/2026-08-04-j16noharnessdir.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-16a] claude-harness 트리 미실재 새 환경에서 product 부재 backlog 가 스킵됨(M5 회귀) — 출력: $J16_OUT"); fi
 if compgen -G "$FH_M5/.claude/docs/claude-harness/tasks/*/backlog/2026-08-04-j16noharnessdir.md" >/dev/null 2>&1; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-16b] claude-harness 자기부트스트랩 이동 실패(M5 회귀) — 출력: $J16_OUT"); fi
 
-# J-17. M7(2026-08-07 콜드리뷰, R2 M5 재정정 — 8개 전부 루프) — docs/ 하위 공용 SSOT 예약
-#   디렉토리(working/indexing/references/hooks/scripts/share/source_tree/참조문서)는 **실재하더라도**
-#   product 값으로 거부돼야 한다. **이전 라운드는 8개 중 `references` 1개만 검증했다** — 하필 유일한
-#   비-ASCII 값(`참조문서`)이 "화이트리스트가 예약이름 검사보다 먼저 실행돼 도달 불가"(R2 M3) 결함을
-#   갖고 있었는데 그 축을 안 태워 green 으로 통과했다. 8개 전부 루프해 ASCII 7개 + 비-ASCII 1개를
-#   검증한다. 각 디렉토리를 FH 에도 실재시켜(값 매칭 자체를 검증 — 실재검사가 우연히 막는 게 아님을
-#   보장) 검사가 실제로 작동함을 보인다.
+# J-17. docs/ 하위 공용 SSOT 예약 디렉토리(working/indexing/references/hooks/scripts/share/
+#   source_tree/참조문서)는 **실재하더라도** product 값으로 거부돼야 한다. 8개 전부(ASCII 7개 +
+#   비-ASCII 1개)를 루프 검증한다. 각 디렉토리를 FH 에도 실재시켜 실재검사가 우연히 막는 게 아님을
+#   보장한다.
 #
-#   **단 `-b` 축은 8개 중 7개만 유효하다(2026-08-10 M5 주석 정정).** `참조문서`(비-ASCII)는 예약가드를
-#   통째로 제거해도 `-b` 가 실패하지 않는다 — 그땐 화이트리스트(`*[!A-Za-z0-9_-]*`)가 값을
-#   `claude-harness` 로 치환해버려 `docs/참조문서/tasks/` 에는 애초에 아무것도 안 써지기 때문이다
-#   (실측: 예약가드 제거 사본에서 31 FAIL 중 이 건만 PASS). `-a`/`-c` 가 같은 축을 덮으므로 검증
-#   사각은 아니지만, "8개 전부 같은 방식" 이라는 이전 문장은 사실이 아니었다.
+#   **단 `-b` 축은 8개 중 7개만 유효하다.** `참조문서`(비-ASCII)는 예약가드를 통째로 제거해도 `-b`
+#   가 실패하지 않는다 — 화이트리스트(`*[!A-Za-z0-9_-]*`)가 값을 `claude-harness` 로 치환해버려
+#   `docs/참조문서/tasks/` 에는 애초에 아무것도 안 써지기 때문이다. `-a`/`-c` 가 같은 축을 덮으므로
+#   검증 사각은 아니다.
 J17_RESERVED_NAMES=(working indexing references hooks scripts share source_tree 참조문서)
 for J17_NAME in "${J17_RESERVED_NAMES[@]}"; do
   mkdir -p "$FH/.claude/docs/$J17_NAME"
@@ -1414,23 +1369,21 @@ for J17_NAME in "${J17_RESERVED_NAMES[@]}"; do
   backlog_payload "$FH/.claude/docs/working/backlog/$J17_FILE"
   J17_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh" < "$TMP/p.json" 2>&1)
   if [ -f "$FH/.claude/docs/working/backlog/$J17_FILE" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-17-$J17_NAME-a] 예약 이름인데 이동됨(M7 회귀) — 출력: $J17_OUT"); fi
-  # `-name '*j17reserved-*'`(2026-08-07 콜드리뷰 R3 M1) — 이전엔 `j17reserved-*`(선두 고정)라 실제
-  # 파일명의 날짜 prefix(`2026-08-04-j17reserved-...`) 때문에 절대 매칭이 안 됐다. 실측(예약 가드
-  # 통째로 제거): `-a`·`-c` 8건씩 FAIL 하는데 `-b` 는 8건 모두 PASS — "24 assertion" 의 실질이 16
-  # 이었다. 부분매칭으로 고쳐 실제 검출력을 갖게 한다.
-  # **`$J17_NAME/tasks` 로 한정(자체발견, M1 수정 직후 실행에서 노출)** — `docs/$J17_NAME` 전체를
-  # 훑으면 `J17_NAME=working` 일 때 이 백로그 스위트의 SOURCE 디렉토리 자체(`docs/working/backlog/`,
-  # 모든 J 테스트 파일이 처리 전 잠깐 머무는 곳)가 걸려 자기 자신의(정상적으로 이동 **안** 된) 원본
-  # 파일을 "잘못 써짐" 으로 오탐한다. 잘못 이동됐다면 `{product}/tasks/{date}/backlog/…` 에 떨어지지
-  # `{product}/backlog/` 최상위에 남지 않으므로, `tasks` 하위만 본다.
+  # `-name '*j17reserved-*'` — 선두 고정 패턴은 실제 파일명의 날짜 prefix 때문에 매칭되지 않는다.
+  # 부분매칭을 써야 실제 검출력을 갖는다.
+  # **`$J17_NAME/tasks` 로 한정** — `docs/$J17_NAME` 전체를 훑으면 `J17_NAME=working` 일 때 이
+  # 백로그 스위트의 SOURCE 디렉토리 자체(`docs/working/backlog/`, 모든 J 테스트 파일이 처리 전 잠깐
+  # 머무는 곳)가 걸려 정상적으로 이동 안 된 원본 파일을 "잘못 써짐"으로 오탐한다. 잘못 이동됐다면
+  # `{product}/tasks/{date}/backlog/…` 에 떨어지지 `{product}/backlog/` 최상위에 남지 않으므로,
+  # `tasks` 하위만 본다.
   if ! find "$FH/.claude/docs/$J17_NAME/tasks" -name '*j17reserved-*' 2>/dev/null | grep -q .; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-17-$J17_NAME-b] 예약 SSOT 디렉토리에 backlog 파일이 써짐(M7 회귀)"); fi
   if echo "$J17_OUT" | grep -qF '공용 SSOT 예약'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-17-$J17_NAME-c] 예약 이름 차단 경고가 안 뜸(M7/M3 회귀) — 출력: $J17_OUT"); fi
 done
 
-# J-18. H1(2026-08-07 콜드리뷰 R3) — `find "$DOCS_ROOT" -iname "$product"` 가 `-mindepth 1` 없이
-#   depth 0(=`$DOCS_ROOT` 자기 자신, basename "docs")까지 매칭한다. `product: docs`(대소문자 무관이라
-#   `Docs`/`DOCS` 도)면 `$DOCS_ROOT` 자신이 "실재 확인"을 통과해, 실재하지 않던 `docs/docs/` 트리를
-#   만들며 `✓ 이동` 으로 오보고한다. **되돌리면(-mindepth 1 을 빼면) 이 테스트가 FAIL 해야 한다.**
+# J-18. `find "$DOCS_ROOT" -iname "$product"` 가 `-mindepth 1` 없이 depth 0(=`$DOCS_ROOT` 자기
+#   자신, basename "docs")까지 매칭한다. `product: docs`(대소문자 무관이라 `Docs`/`DOCS` 도)면
+#   `$DOCS_ROOT` 자신이 "실재 확인"을 통과해, 실재하지 않던 `docs/docs/` 트리를 만들며 `✓ 이동`으로
+#   오보고한다. **되돌리면(-mindepth 1 을 빼면) 이 테스트가 FAIL 해야 한다.**
 cat > "$FH/.claude/docs/working/backlog/2026-08-05-j18docsroot.md" <<'EOF'
 ---
 name: j18docsroot
@@ -1445,10 +1398,10 @@ J18_OUT=$(HOME="$FH" BACKLOG_INDEX_LOCK="$TMP/bl.lock.d" bash "$PLUGIN_HOOKS_DIR
 if [ -f "$FH/.claude/docs/working/backlog/2026-08-05-j18docsroot.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-18a] product=docs 인데 이동됨(H1 회귀 — DOCS_ROOT 자신이 매칭됨) — 출력: $J18_OUT"); fi
 if [ ! -d "$FH/.claude/docs/docs" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-18b] docs/docs/ 유령 트리가 생성됨(H1 회귀)"); fi
 
-# J-19. H2(2026-08-07 콜드리뷰 R3) — M4(R2) 가 대소문자 무관 실재검증을 들여오면서, 예약이름 차단이
-#   소문자 정확 일치만 보면 `product: Working`/`References`/... 가 예약검사를 통과한 뒤 대소문자
-#   무관 실재검증이 실물 소문자 디렉토리로 정규화해 공용 SSOT 안에 써넣는다(M7 이 막던 구멍 재발).
-#   **되돌리면(예약검사가 원값 그대로 비교하면) 이 테스트가 FAIL 해야 한다.**
+# J-19. 대소문자 무관 실재검증이 있는 상태에서 예약이름 차단이 소문자 정확 일치만 보면 `product:
+#   Working`/`References`/... 가 예약검사를 통과한 뒤 대소문자 무관 실재검증이 실물 소문자
+#   디렉토리로 정규화해 공용 SSOT 안에 써넣는다. **되돌리면(예약검사가 원값 그대로 비교하면)
+#   이 테스트가 FAIL 해야 한다.**
 mkdir -p "$FH/.claude/docs/references"
 cat > "$FH/.claude/docs/working/backlog/2026-08-05-j19mixedcase.md" <<'EOF'
 ---
@@ -1465,17 +1418,14 @@ if [ -f "$FH/.claude/docs/working/backlog/2026-08-05-j19mixedcase.md" ]; then PA
 if ! find "$FH/.claude/docs/references" -name '*j19mixedcase*' 2>/dev/null | grep -q .; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-19b] 예약 SSOT 디렉토리(references)에 대소문자 변형 값으로 파일이 써짐(H2 회귀)"); fi
 if echo "$J19_OUT" | grep -qF '공용 SSOT 예약'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-19c] 대소문자 변형 예약이름 차단 경고가 안 뜸(H2 회귀) — 출력: $J19_OUT"); fi
 
-# J-20. M10(2026-08-07 콜드리뷰 R3) — 대소문자 무관 매칭이 2건 이상이면(대소문자 구분 파일시스템에서
-#   `docs/TestProd`·`docs/testprod` 공존) 임의 선택 대신 경고 후 스킵해야 한다. 별도로, 대소문자 무관
-#   매칭이 여러 개라도 그중 하나가 `$product` 와 완전히 같은 문자열이면(정확 일치) 모호하지 않아야
-#   한다는 것도 확인한다(exact-match 우선).
+# J-20. 대소문자 무관 매칭이 2건 이상이면(대소문자 구분 파일시스템에서 `docs/TestProd`·
+#   `docs/testprod` 공존) 임의 선택 대신 경고 후 스킵해야 한다. 그중 하나가 `$product` 와 완전히
+#   같은 문자열이면(정확 일치) 모호하지 않아야 한다는 것도 확인한다(exact-match 우선).
 #
-#   **fixture 정정(2026-08-10 H2).** 이전 fixture 는 `j20lower` + `J20Upper` 를 만들었는데 이 둘은
-#   서로 대소문자 변형이 아니다(소문자화하면 `j20lower` vs `j20upper`). `find -iname 'j20lower'` 는
-#   **대소문자 구분 파일시스템에서도 항상 1건**이라 아래 가드가 모든 플랫폼에서 무조건 참이었다 —
-#   NTFS 한계가 아니라 fixture 버그였고, 그 결과 `match_count -gt 1` 분기 전체(모호 경고 + exact-match
-#   우선)가 **검증 0** 인 채 "환경 한계 SKIP" 으로 위장됐다. `J20Lower` 로 고쳐 진짜 변형을 만든다.
-#   이제 대소문자 구분 FS 에서는 2건이 되어 분기가 실제로 돌고, NTFS 에서만 1건으로 합쳐져 SKIP 된다
+#   fixture 는 `j20lower`/`J20Lower` 처럼 실제 대소문자 변형이어야 한다 — 서로 변형이 아닌 이름
+#   쌍(예: `j20lower`+`J20Upper`)은 `find -iname 'j20lower'` 가 대소문자 구분 파일시스템에서도
+#   항상 1건이라 `match_count -gt 1` 분기(모호 경고 + exact-match 우선)를 전혀 태우지 못한다.
+#   대소문자 구분 FS 에서는 2건이 되어 분기가 실제로 돌고, NTFS 에서만 1건으로 합쳐져 SKIP 된다
 #   (NTFS 에서는 이 코드 경로 자체가 도달 불가이므로 인위적 주입으로 태우지 않는다).
 mkdir -p "$FH/.claude/docs/j20lower" "$FH/.claude/docs/J20Lower"
 J20_DISTINCT=$(find -L "$FH/.claude/docs" -mindepth 1 -maxdepth 1 -iname 'j20lower' -type d 2>/dev/null | grep -c .)
@@ -1513,21 +1463,19 @@ EOF
   if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-05-j20exact.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-20c] 후보 2건 중 정확 일치가 있는데도 모호 판정(스킵)됨(M10 exact-match 우선 회귀) — 출력: $J20C_OUT"); fi
   if find "$FH/.claude/docs/j20lower" -name '*j20exact*' 2>/dev/null | grep -q .; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-20d] 정확 일치 후보(j20lower)로 이동되지 않음(M10 exact-match 우선 회귀) — 출력: $J20C_OUT"); fi
 fi
-# 단일 매칭 상황에서의 정규화(원 M4 시나리오)는 J-15/16 등 기존 테스트가 이미 고정하고 있어 별도
-# fixture 를 여기 추가하지 않는다(중복 방지) — J-20 은 오직 "2건 이상 공존" 축만 담당한다.
+# 단일 매칭 상황에서의 정규화는 J-15/16 등 기존 테스트가 이미 고정하고 있어 별도 fixture 를 여기
+# 추가하지 않는다(중복 방지) — J-20 은 오직 "2건 이상 공존" 축만 담당한다.
 
-# J-22. M11(2026-08-07 콜드리뷰 R3) — `find -type d`(`-L` 없음) 는 lstat 기준이라 dir 심링크에
-#   거짓을 반환한다. `docs/{product}` 를 심링크로 둔 환경에서 정상 product 를 영구 스킵시킬 수 있다.
-#   **이 환경(Git Bash/Windows)에서 `ln -s` 로 만든 디렉토리 심링크가 실제로 `find -type d`(비-`-L`)
-#   에서 거짓을 내는지 먼저 실측한다** — 재현 안 되면(이 플랫폼의 심링크 구현이 POSIX lstat 의미론과
-#   다르면) 코드 결함이 아니라 환경 한계이므로 SKIP(거짓 PASS 방지).
+# J-22. `find -type d`(`-L` 없음)는 lstat 기준이라 dir 심링크에 거짓을 반환한다. `docs/{product}`
+#   를 심링크로 둔 환경에서 정상 product 를 영구 스킵시킬 수 있다. 이 환경(Git Bash/Windows)에서
+#   `ln -s` 로 만든 디렉토리 심링크가 실제로 `find -type d`(비-`-L`)에서 거짓을 내는지 먼저 실측한다
+#   — 재현 안 되면(이 플랫폼의 심링크 구현이 POSIX lstat 의미론과 다르면) 코드 결함이 아니라 환경
+#   한계이므로 SKIP(거짓 PASS 방지).
 #
-#   **junction fallback(2026-08-10 M2).** 이전엔 `ln -s` 하나만 시도하고 실패하면 "환경 한계" 로
-#   SKIP 했는데, 그 정당화가 사실과 달랐다. MSYS 기본 설정의 `ln -s` 는 디렉토리를 **복사**해서
-#   `find -type d` 가 1건을 내지만(재현 실패), `cmd //c mklink //J`(junction, 관리자 권한 불요)는
-#   이 환경에서 그대로 재현된다 — 실측: junction 에 대해 `find -type d` = **0건** / `find -L -type d`
-#   = **1건**, 정확히 M11 시나리오다. 재현 가능한 fixture 를 만들 수 있는데 만들지 않아 M11 회귀가
-#   무방비였다. `ln -s` 가 심링크를 못 만들면 junction 으로 승격해 분기를 실제로 태운다.
+#   **junction fallback.** MSYS 기본 설정의 `ln -s` 는 디렉토리를 **복사**해서 `find -type d` 가
+#   1건을 내지만(재현 실패), `cmd //c mklink //J`(junction, 관리자 권한 불요)는 이 환경에서 그대로
+#   재현된다(junction 에 대해 `find -type d` = 0건 / `find -L -type d` = 1건). `ln -s` 가 심링크를
+#   못 만들면 junction 으로 승격해 분기를 실제로 태운다.
 mkdir -p "$FH/.claude/docs/j22realtarget"
 ln -s "$FH/.claude/docs/j22realtarget" "$FH/.claude/docs/j22symlinked" 2>/dev/null
 J22_NOFOLLOW=$(find "$FH/.claude/docs" -mindepth 1 -maxdepth 1 -iname 'j22symlinked' -type d 2>/dev/null | grep -c .)
@@ -1555,14 +1503,14 @@ EOF
   if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-05-j22symlinktest.md" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-22] 심링크 product 디렉토리가 영구 스킵됨(M11 회귀 — find -type d 가 -L 없이 심링크를 거짓 판정) — 출력: $J22_OUT"); fi
 fi
 
-# J-23. M1(2026-08-08 콜드리뷰 R4, [보안]) — R3 M9 가 실패할 수 없던 인라인 `case` 를 실패 가능한 lib
-# 의존으로 바꿨다. `source … || true` + `is_reserved_docs_name … 2>/dev/null` 조합이라 lib 이 없거나
-# 못 읽히면 127 이 억제된 채 false 로 평가돼 예약이름 가드가 통째로 사라진다. 실측(lib 만 rename):
-# `product: references` 인 done backlog 가 경고 한 줄 없이 `docs/references/tasks/{date}/backlog/` 에
-# 써지고 `△ 이동` 으로 성공 보고됐다(본문 + summary.md + history.md 3건 유출). 화이트리스트는 ASCII
+# J-23. [보안] `source … || true` + `is_reserved_docs_name … 2>/dev/null` 조합은 lib 이 없거나
+# 못 읽히면 127 이 억제된 채 false 로 평가돼 예약이름 가드가 통째로 사라진다. 그 결과 `product:
+# references` 같은 예약 이름 backlog 가 경고 없이 `docs/references/tasks/{date}/backlog/` 에 써지고
+# `△ 이동`으로 성공 보고될 수 있다(본문 + summary.md + history.md 3건 유출). 화이트리스트는 ASCII
 # 예약 7개를 전부 통과시키므로 2차 방어가 없다 — 가드를 못 세우면 아무것도 하지 않아야 한다.
-# backlog-lifecycle 은 taskflow 플러그인으로 옮겨 공유 lib 를 스크립트 위치 기준 ../../../hooks/lib 로
-# 찾는다 — 사본도 하니스와 같은 배치(hooks/ + custom-plugin/taskflow/hooks/)로 만들어야 그 lib 가 빠진다
+# backlog-lifecycle 은 taskflow 플러그인 소속이라 공유 lib 를 스크립트 위치 기준 ../../../hooks/lib
+# 로 찾는다 — 사본도 하니스와 같은 배치(hooks/ + custom-plugin/taskflow/hooks/)로 만들어야 그 lib
+# 가 빠진다.
 J23_ROOT="$TMP/nolib-root"
 mkdir -p "$J23_ROOT/custom-plugin/taskflow"
 cp -r "$HOOKS_DIR" "$J23_ROOT/hooks"
@@ -1584,14 +1532,13 @@ if [ -f "$FH/.claude/docs/working/backlog/2026-08-05-j23nolib.md" ]; then PASS=$
 if ! find "$FH/.claude/docs/references" -name '*j23nolib*' 2>/dev/null | grep -q .; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-23b] lib 부재 시 예약 SSOT 디렉토리(references)에 파일이 써짐(M1 회귀)"); fi
 if echo "$J23_OUT" | grep -qF 'fail-closed'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-23c] lib 부재 경고(fail-closed)가 안 뜸 — 침묵 fail-open(M1 회귀) — 출력: $J23_OUT"); fi
 
-# J-24. M1-③(2026-08-10) — stale lock 회수 경로가 재시도 카운터를 우회해 무한 스핀.
-#   `rmdir` 이 실패하는 lock(비어있지 않은 디렉토리)이 TTL 을 넘기면, 이전 코드는
-#   [stale 판정 → rmdir 실패 → continue] 를 카운터 증가 없이 반복해 종료 조건이 없었다.
-#   종료가 hook timeout 에만 의존했고 timeout 은 함수가 아니라 hook 전체를 죽인다.
-#   ⚠ `docs/projA` 를 여기서 만든다 — 이게 없으면 product 실재 검증(S2)이 lock 획득 **앞**에서
-#   `return 1` 해버려 이 케이스가 lock 코드를 한 줄도 안 태운 채 통과한다(2026-08-10 실측:
-#   수정 전 판본으로 반증했는데 PASS 가 나와 발견). J-20 이 겪은 "구조적으로 실패할 수 없는
-#   fixture" 와 같은 유형이다.
+# J-24. stale lock 회수 경로가 재시도 카운터를 우회해 무한 스핀할 수 있다. `rmdir` 이 실패하는
+#   lock(비어있지 않은 디렉토리)이 TTL 을 넘기면 [stale 판정 → rmdir 실패 → continue] 가 카운터
+#   증가 없이 반복돼 종료 조건이 없어진다 — 종료가 hook timeout 에만 의존하면 timeout 은 함수가
+#   아니라 hook 전체를 죽인다.
+#   ⚠ `docs/projA` 를 여기서 만든다 — 이게 없으면 product 실재 검증이 lock 획득 **앞**에서
+#   `return 1` 해버려 이 케이스가 lock 코드를 한 줄도 안 태운 채 통과한다(J-20 이 겪은 "구조적으로
+#   실패할 수 없는 fixture" 와 같은 유형).
 mkdir -p "$FH/.claude/docs/projA"
 J24_LOCK="$TMP/j24stale.lock.d"
 mkdir -p "$J24_LOCK"
@@ -1617,10 +1564,10 @@ if [ "$J24_RC" -ne 124 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lin
 if [ "$J24_ELAPSED" -lt 10 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-24b] stale lock 회수가 재시도 상한(3회×0.05s)보다 오래 걸림 ${J24_ELAPSED}s — 카운터 우회 의심"); fi
 rm -f "$J24_LOCK/blocker" 2>/dev/null; rmdir "$J24_LOCK" 2>/dev/null
 
-# J-25. M1-①(2026-08-10) — 원자 교체 도입 후 `.tmp` 잔해가 정상 경로에 남지 않아야 한다.
-#   tmp+os.replace 로 바꾸면서 성공 경로에서 rename 이 빠지면 원본은 그대로인데 tmp 만 쌓인다
-#   (인덱스·history·backlog 본문 3곳). 정상 이동 1건 후 트리 전체에 *.tmp 0건을 고정한다.
-mkdir -p "$FH/.claude/docs/projA"   # product 실재 검증(S2) 통과용 — projA 는 memory 경로일 뿐 docs 트리가 아니다
+# J-25. 원자 교체(tmp+os.replace) 도입 후 `.tmp` 잔해가 정상 경로에 남지 않아야 한다. 성공 경로에서
+#   rename 이 빠지면 원본은 그대로인데 tmp 만 쌓인다(인덱스·history·backlog 본문 3곳). 정상 이동
+#   1건 후 트리 전체에 *.tmp 0건을 고정한다.
+mkdir -p "$FH/.claude/docs/projA"   # product 실재 검증 통과용 — projA 는 memory 경로일 뿐 docs 트리가 아니다
 cat > "$FH/.claude/docs/working/backlog/2026-08-05-j25tmp.md" <<'EOF'
 ---
 name: j25tmp
@@ -1642,10 +1589,9 @@ if [ ! -f "$FH/.claude/docs/working/backlog/2026-08-05-j25tmp.md" ]; then PASS=$
 J25_REPL=$(grep -c 'os\.replace(' "$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh")
 if [ "${J25_REPL:-0}" -ge 3 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-25c] os.replace 원자 교체가 ${J25_REPL}곳뿐 — 3곳(본문·인덱스·history) 필요. 직접 'w' 쓰기로 되돌아가면 kill 시 truncate(M1-① 회귀)"); fi
 
-# J-26. M1-②(2026-08-10) — index lock 이 history.md·summary.md 갱신까지 덮어야 한다.
-#   release 가 그 둘보다 앞서면 동시 done 처리 시 read-modify-write 가 무보호로 겹쳐 한쪽 entry 가
-#   사라진다. 동시성 재현은 불안정하므로 **호출 순서를 정적으로 고정**한다 (release 를 다시 앞으로
-#   옮기면 이 케이스가 깨진다).
+# J-26. index lock 이 history.md·summary.md 갱신까지 덮어야 한다. release 가 그 둘보다 앞서면 동시
+#   done 처리 시 read-modify-write 가 무보호로 겹쳐 한쪽 entry 가 사라진다. 동시성 재현은 불안정하므로
+#   **호출 순서를 정적으로 고정**한다(release 를 다시 앞으로 옮기면 이 케이스가 깨진다).
 J26_SRC="$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh"
 J26_REL=$(grep -n 'index_locked" -eq 1 \] && backlog_index_lock_release' "$J26_SRC" | tail -1 | cut -d: -f1)
 J26_HIST=$(grep -n 'python3 - "\$history"' "$J26_SRC" | tail -1 | cut -d: -f1)
@@ -1656,12 +1602,12 @@ else
   FAIL=$((FAIL+1)); fail_lines+=("[J-26] index lock release(:$J26_REL) 가 history(:$J26_HIST)·summary(:$J26_SUMM) 갱신보다 앞섬 — 두 파일이 무보호(M1-② 회귀)")
 fi
 
-# J-27. M1-④(2026-08-10) — `error` arm 이 any_found 를 안 세워 **원인이 다른 경고가 겹쳐 나온다**.
-#   인덱스 읽기가 깨졌는데(인코딩·IO) "전 project index 에서 entry 미발견, 수동 정리 필요" 가 함께
-#   찍히면 조사자는 인덱스 등재 여부를 보러 가지만 실제로 볼 것은 파일 인코딩이다.
-#   유도: 인덱스 파일에 잘못된 UTF-8 바이트를 넣어 python open(encoding='utf-8') 을 UnicodeDecodeError
-#   로 떨어뜨린다(실측 확인). 이 slug 는 어떤 인덱스에도 없어서, 구 코드에서는 error 든 notfound 든
-#   any_found=0 이 되어 미발견 경고가 반드시 따라붙는다.
+# J-27. `error` arm 이 any_found 를 안 세우면 원인이 다른 경고가 겹쳐 나온다. 인덱스 읽기가
+#   깨졌는데(인코딩·IO) "전 project index 에서 entry 미발견, 수동 정리 필요"가 함께 찍히면 조사자는
+#   인덱스 등재 여부를 보러 가지만 실제로 볼 것은 파일 인코딩이다.
+#   유도: 인덱스 파일에 잘못된 UTF-8 바이트를 넣어 python open(encoding='utf-8')을 UnicodeDecodeError
+#   로 떨어뜨린다. 이 slug 는 어떤 인덱스에도 없어서, error 든 notfound 든 any_found=0 이 되면
+#   미발견 경고가 반드시 따라붙는다.
 mkdir -p "$FH/.claude/projects/projErr/memory"
 printf 'x\xff\xfe\xffy\n' > "$FH/.claude/projects/projErr/memory/MEMORY.md"
 cat > "$FH/.claude/docs/working/backlog/2026-08-05-j27encerr.md" <<'EOF'
@@ -1679,17 +1625,15 @@ if echo "$J27_OUT" | grep -qF '인덱스 처리 실패'; then PASS=$((PASS+1)); 
 if ! echo "$J27_OUT" | grep -qF 'entry 미발견'; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-27b] 읽기 실패인데 '미발견' 경고가 겹쳐 나옴 — 조사자를 엉뚱한 원인으로 보낸다(M1-④ 회귀) — 출력: $J27_OUT"); fi
 rm -f "$FH/.claude/projects/projErr/memory/MEMORY.md" 2>/dev/null   # 이후 케이스 오염 방지
 
-# J-28. 콜드리뷰 Medium(2026-08-10) — history.md 갱신 실패가 최종 마커에 반영돼야 한다.
-#   원자 교체 도입으로 이 단계의 실패 확률이 올라갔는데(Windows `os.replace` 는 대상이 읽기로
-#   열려만 있어도 PermissionError), 실패해도 `index_incomplete` 가 안 서서 인덱스 정리만 성공하면
-#   `✓ 이동` 으로 보고됐다 — 안 써졌는데 성공 신호가 나간다.
+# J-28. history.md 갱신 실패가 최종 마커에 반영돼야 한다. 원자 교체(Windows `os.replace` 는 대상이
+#   읽기로 열려만 있어도 PermissionError) 실패 시에도 `index_incomplete` 가 안 서면 인덱스 정리만
+#   성공해도 `✓ 이동`으로 보고된다 — 안 써졌는데 성공 신호가 나간다.
 #
-#   **정적 앵커를 쓴다(J-26 과 같은 이유가 아니다 — 여기는 동적 시도가 실패했다).** 동적 케이스를
-#   두 번 시도했고 두 번 다 **자기무효화**였다: (1) slug 가 인덱스에 없으면 `any_found=0` 이 되어
-#   history 와 무관하게 `index_incomplete` 가 서고 (2) entry 를 심어도 그 제거 판정이 `manual` 등으로
-#   갈리면 같은 결과가 된다. 즉 "△ 가 나왔다" 는 관측이 history 실패를 특정하지 못한다 —
-#   `index_incomplete` 를 세우는 경로가 여럿이라 원인을 격리하려면 그 전부를 0으로 눌러야 하는데,
-#   그 fixture 자체가 본 검증보다 깨지기 쉽다. 배선 존재를 직접 고정하는 편이 정직하다.
+#   **정적 앵커를 쓴다.** 동적 재현은 자기무효화된다: (1) slug 가 인덱스에 없으면 `any_found=0`
+#   이 되어 history 와 무관하게 `index_incomplete` 가 서고 (2) entry 를 심어도 그 제거 판정이
+#   `manual` 등으로 갈리면 같은 결과가 된다. 즉 "△ 가 나왔다"는 관측이 history 실패를 특정하지
+#   못한다 — `index_incomplete` 를 세우는 경로가 여럿이라 원인을 격리하려면 그 전부를 0으로 눌러야
+#   하는데, 그 fixture 자체가 본 검증보다 깨지기 쉽다. 배선 존재를 직접 고정하는 편이 정직하다.
 #   (반증 확인: 아래 두 줄 중 하나라도 지우면 이 케이스가 FAIL 한다.)
 J28_SRC="$PLUGIN_HOOKS_DIR/backlog-lifecycle.sh"
 if grep -qE '^\s*HIST_RC=\$\?' "$J28_SRC"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-28a] history python 블록의 종료코드를 받지 않음 — 갱신 실패가 감지되지 않는다(콜드리뷰 Medium 회귀)"); fi
@@ -1702,8 +1646,8 @@ if [ ${#fail_lines[@]} -gt 0 ]; then
   printf 'FAIL 상세:\n'
   for l in "${fail_lines[@]}"; do printf '  - %s\n' "$l"; done
 fi
-# SKIP 상세(2026-08-10 M4) — 무엇이 검증되지 않았는지 읽을 수 있어야 한다. SKIP 은 스위트를 red 로
-# 만들지 않지만, 라벨 없이 숫자만 늘면 환경 한계와 데이터 부재가 구분되지 않는다.
+# SKIP 상세 — 무엇이 검증되지 않았는지 읽을 수 있어야 한다. SKIP 은 스위트를 red 로 만들지 않지만,
+# 라벨 없이 숫자만 늘면 환경 한계와 데이터 부재가 구분되지 않는다.
 if [ ${#skip_lines[@]} -gt 0 ]; then
   printf 'SKIP 상세(미검증 항목):\n'
   for l in "${skip_lines[@]}"; do printf '  - %s\n' "$l"; done

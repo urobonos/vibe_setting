@@ -2,7 +2,7 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "phpunit-prd-guard" "enter" "pid=$$"
 # PreToolUse Hook: phpunit 실행 전 .env의 database.default.hostname이 prd Aurora를 가리키면 차단
-# 2026-04-22 phpunit-prd-db-incident 재발 방지 (Phase 5)
+# phpunit-prd-db-incident 재발 방지
 #
 # 차단 조건:
 #   1) Bash 명령어에 phpunit 포함
@@ -15,9 +15,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 #   - hostname이 localhost/127.0.0.1/private IP
 #   - phpunit.xml.dist가 CI_ENVIRONMENT=testing 를 강제하는 경우 (화이트리스트 방어)
 #
-# 파싱 (2026-09-29): 구판은 python eval 로 tool_name 을 먼저 뽑고 실패 시 공백 → "Bash 아님" 으로
-#   통과했다 = python 장애(WindowsApps 별칭 등)에 조용히 fail-open, 그리고 매 Bash 호출마다 python 1회.
-#   → 원문에 phpunit 이 없으면 즉시 통과(파싱 0), 있을 때만 hook-input.sh(bash→python→awk 3단)로 해석.
+# 파싱: 원문에 phpunit 이 없으면 즉시 통과(파싱 비용 0), 있을 때만 hook-input.sh(bash→python→awk 3단)로 해석한다.
 #   명령을 끝내 못 읽으면 phpunit 후보로 간주하고 .env 검사로 진행한다 (fail-closed).
 #   matcher 가 Bash 라 tool_name 검사는 두지 않는다.
 

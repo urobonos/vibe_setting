@@ -92,17 +92,17 @@ product_specs_dir() {
   echo "$(product_docs_root "${1:-$PWD}")/specs"
 }
 
-# 예약된 비-product docs/ 하위 디렉토리 이름(2026-08-07 콜드리뷰 R3 M9) — **backlog frontmatter 의
-# `product:` 값으로 쓸 수 없는 이름**의 단일 목록이다. `backlog-lifecycle.sh` 가 이 술어를 쓴다.
+# 예약된 비-product docs/ 하위 디렉토리 이름 — **backlog frontmatter 의 `product:` 값으로 쓸 수
+# 없는 이름**의 단일 목록이다. `backlog-lifecycle.sh` 가 이 술어를 쓴다.
 #
-# **`doc-index-maintain.sh` 의 자기제외는 이 목록이 아니다(2026-08-10 H1).** 두 소비자의 질문이
-# 다르다 — 여기는 "product 값으로 쓸 수 있는가"(8개), 인덱싱은 "인덱싱하지 않는 디렉토리인가"
-# (indexing/references 2개). 두 집합은 그 2개에서만 겹치고, 하나로 묶었을 때 나머지 6개가 인덱싱에서
-# 빠져 라이브 인덱스 5개가 영구 동결됐다. 통합 유혹이 다시 오면 이 문단을 먼저 읽을 것.
+# **`doc-index-maintain.sh` 의 자기제외는 이 목록이 아니다.** 두 소비자의 질문이 다르다 — 여기는
+# "product 값으로 쓸 수 있는가"(8개), 인덱싱은 "인덱싱하지 않는 디렉토리인가"(indexing/references
+# 2개). 두 집합은 그 2개에서만 겹치므로, 하나로 묶으면 나머지 6개가 인덱싱에서 빠져 라이브 인덱스가
+# 동결된다. 통합 유혹이 다시 오면 이 문단을 먼저 읽을 것.
 #
-# 배열 + readonly(2026-08-10 M8) — 문자열 + 비인용 `for n in $VAR` 분할은 호출부가 `IFS` 를 바꾼
-# 상태면 판정이 조용히 무너진다(현재 오염 0건이나, 5개 hook 이 source 하는 공용 lib 의 전역이라
-# 노출면이 넓다). 재 source 시 readonly 재할당 에러가 나지 않도록 미정의일 때만 선언한다.
+# 배열 + readonly — 문자열 + 비인용 `for n in $VAR` 분할은 호출부가 `IFS` 를 바꾼 상태면 판정이
+# 조용히 무너진다(5개 hook 이 source 하는 공용 lib 의 전역이라 노출면이 넓다). 재 source 시 readonly
+# 재할당 에러가 나지 않도록 미정의일 때만 선언한다.
 if [ -z "${RESERVED_DOCS_NAMES+x}" ]; then
   readonly -a RESERVED_DOCS_NAMES=(working indexing references hooks scripts share source_tree 참조문서)
 fi

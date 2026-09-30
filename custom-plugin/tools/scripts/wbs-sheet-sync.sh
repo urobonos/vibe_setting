@@ -58,10 +58,9 @@ command -v python >/dev/null 2>&1 || PY=python3
 # 데이터 3종의 지문과 xlsx 2종의 사본을 뜬다. 회차 끝에서 데이터가 그대로면
 # xlsx 를 이 사본으로 되돌려 재생성 타임스탬프 diff 를 지운다.
 #
-# 구 구현은 이 판정을 `git diff` 로 했다가 사고를 냈다 — develop 이 전진하면
-# "HEAD 대비 무변경" 이 엉뚱하게 성립해서 `git checkout` 이 파생물을 옛 커밋
-# 상태로 되돌렸다 (Done 12 → Done 5, 2026-08-13 실측). 비교 대상은 커밋이
-# 아니라 **직전 회차**여야 한다. 이제 git 을 전혀 보지 않는다.
+# 비교 대상은 git 커밋이 아니라 **직전 회차**다 — `git diff`/`git checkout` 기준으로 판정하면
+# develop 이 전진할 때 "HEAD 대비 무변경"이 엉뚱하게 성립해 파생물이 옛 커밋 상태로 되돌아간다.
+# git 을 전혀 보지 않는다.
 SNAP="$(mktemp -d 2>/dev/null)"
 snap_fingerprint() { md5sum "$TSV" "$CSV" "$CACHE" 2>/dev/null; }
 BEFORE="$(snap_fingerprint)"

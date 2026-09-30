@@ -33,7 +33,7 @@ SESSION_ID=""; [[ "$STDIN_DATA" =~ \"session_id\"[[:space:]]*:[[:space:]]*\"([^\
 FILE_PATH_NORM=$(normalize_path "$FILE_PATH")
 echo "$FILE_PATH_NORM" | grep -qE '/docs/working/[0-9]{8}/[^/]+\.md$' || exit 0
 
-# step 평면 파일은 마스터 작업의 파생 실행 단위 — 별도 last_update/lock touch 금지 (보완형 step 정책, 2026-05-29)
+# step 평면 파일은 마스터 작업의 파생 실행 단위 — 별도 last_update/lock touch 금지 (보완형 step 정책)
 # (register.sh 와 동일 가드 — step 은 registry 미등록이므로 heartbeat 도 대상 아님)
 echo "$FILE_PATH_NORM" | grep -qE -- '-step-[0-9]+-[^/]*\.md$' && exit 0
 
@@ -66,7 +66,7 @@ SID8="${SESSION_ID:0:8}"
 registry_update "$SLUG" "$SID8" "active" 2>/dev/null
 session_lock_touch "$SLUG" "$SID8" 2>/dev/null
 
-# 작성 정보 박스 점유 세션(sid)·점유 시작 자동 주입 (2026-06-09 사용자 결정)
+# 작성 정보 박스 점유 세션(sid)·점유 시작 자동 주입
 # working/ unified 문서 작성 정보 표의 placeholder/기존값을 REGISTRY 의 sid8·started 로 치환.
 # idempotent — 현재값과 동일하면 미기입 (Claude file-tracking 마찰 회피).
 # 행 없는 구 문서는 skip (역소급 면제). SSOT: unified-template.md 작성 정보 placeholder + CLAUDE.md.

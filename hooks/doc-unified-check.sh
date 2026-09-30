@@ -1,7 +1,7 @@
 #!/bin/bash
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 # doc-unified-check.sh
-# PostToolUse:Edit|Write Hook — doc 검증 8-hook 통합 (2026-07-08)
+# PostToolUse:Edit|Write Hook — doc 검증 8-hook 통합
 #
 # 통합 대상 (settings.json L131-178 8 블록 → 본 1 블록):
 #   doc-template-guard / reference-location-check / change-impact-section-check /
@@ -88,7 +88,7 @@ v_template_guard() {
     */docs/tasks/*|*/docs/specs/*|*/docs/*/tasks/*|*/docs/*/specs/*) ;;
     *) return 0 ;;
   esac
-  # output/ 은 2026-07-15 Scope 제외 — tasks 템플릿 warn 과잉 해소. output/ 실질 가드 = V2(참조 출처)·output-naming-check·output-report-share-guard 가 자체 스코프로 잔존.
+  # output/ 은 Scope 제외 — tasks 템플릿 warn 과잉을 피한다. output/ 실질 가드 = V2(참조 출처)·output-naming-check·output-report-share-guard 가 자체 스코프로 담당.
 
   local tgb=() tgh=()
   _g '^# '   || tgh+=("제목(# heading)")
@@ -198,7 +198,7 @@ v_template_guard() {
       tgb=()
     fi
   fi
-  # 게이트 1-bis (2026-07-20): 완료(lifecycle-closed) 문서 유지보수 강등
+  # 게이트 1-bis: 완료(lifecycle-closed) 문서 유지보수 강등
   # 조건: tasks/ 하위 + Status: Done|Partial (= 이미 종결·이관된 산출물) → 섹션 blocking 을 warn 으로 강등.
   # Why: 작성 시점 교정은 working/(위 L86 면제)와 taskflow 커맨드가 담당하고, working→tasks 자동 이동은
   #      mv 라 PostToolUse 미발동이다. 결국 tasks/ blocking 이 실제로 걸리는 유일한 지점은
@@ -207,7 +207,7 @@ v_template_guard() {
   #      (b) 통과하려면 존재 이유가 없는 §계획/§실행 섹션을 지어내야 해서 구조 위조가 유일한 우회로가 된다.
   #      진단형·audit 문서(코드 변경 0)는 애초에 §계획/§실행·이슈 4분류가 없어 영구 차단 대상이 된다.
   # 보존: specs/ 는 tasks/ 아니므로 blocking 유지. Status 없는 tasks/ 직접 작성분도 blocking 유지(진짜 authoring).
-  # SSOT: memory backlog_doc-unified-check-audit-doc-hardblock (실증 A=infra audit 아카이브 / B=be tasks 문서)
+  # SSOT: memory backlog_doc-unified-check-audit-doc-hardblock
   if [ ${#tgb[@]} -gt 0 ] && _ge '^Status[[:space:]]*[::][[:space:]]*(Done|Partial)'; then
     case "$FP" in
       */docs/tasks/*|*/docs/*/tasks/*)
@@ -360,10 +360,8 @@ v_checklist_count() {
   STAGE=$(echo "$BN" | grep -oE '\-(analyze|plan|result|unified)\.md$' | sed -E 's/^-//;s/\.md$//')
   [ -z "$STAGE" ] && return 0
 
-  # 임계 = "존재 강제" 하한이지 목표치가 아니다 (2026-09-04, 구 analyze/unified 30·plan/result 20).
-  # 실측 근거: tasks/ unified 667건 중앙값 40 인데 구 임계 미달이 226건(34%) — 그 미달분은 품질이
-  # 낮은 게 아니라 작은 작업이었다. 고정 하한이 작업 크기와 무관하게 걸려 형식 채우기(padding)를
-  # 부르는 쪽이 더 큰 비용이라 하한만 남기고 목표치는 권고로 내린다. 상한은 없다.
+  # 임계는 "존재 강제" 하한이지 목표치가 아니다 — 작업 크기와 무관한 고정 하한은 형식 채우기(padding)를
+  # 유발하는 비용이 더 크므로 하한만 두고 목표치는 권고로 남긴다. 상한은 없다.
   local MIN=5
   local COUNT
   COUNT=$(grep -cE '^[[:space:]]*-[[:space:]]+\[[[:space:]xX]\]' <<< "$CONTENT"); COUNT=${COUNT:-0}

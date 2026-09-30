@@ -10,7 +10,7 @@
 #   PostCompact 는 요약을 받지만 그때는 원 정보가 이미 사라진 뒤라 복구가 불가능하다.
 #   압축 전에 닿을 수 있는 유일한 지점이 PreCompact 다.
 #
-# 스키마 근거 (2026-09-16 `bin/claude.exe` 실측):
+# 스키마 근거 (`bin/claude.exe` 실측):
 #   PreCompact stdin = 공통필드(session_id · transcript_path · cwd) + trigger("manual"|"auto") + custom_instructions
 #   PreCompact 는 additionalContext 주입 스키마가 없다 → 출력은 **파일로만**, 경로 통지는 SessionStart(compact) 가 한다.
 #
@@ -48,7 +48,7 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 $(git status --porcelain 2>/dev/null | grep -v '^??' | head -30 | sed 's/^/    /')"
 fi
 
-# 이벤트 JSON 은 **환경변수로** 넘긴다 — heredoc 이 stdin 을 점유해 파이프가 무시되기 때문 (2026-09-16 실측)
+# 이벤트 JSON 은 **환경변수로** 넘긴다 — heredoc 이 stdin 을 점유해 파이프가 무시되기 때문
 export SNAP_OUT="$OUT_FILE" SNAP_SEQ="$SEQ_PAD" SNAP_GIT="$GIT_BLOCK" SNAP_SID="$SID8" SNAP_EVENT="$STDIN_DATA"
 "$HOOK_PY" - <<'PYEOF'
 import json, os, sys, datetime

@@ -37,8 +37,8 @@ def find_transcripts(prefixes, top):
             else:
                 picked.extend((os.path.basename(h)[:8], h) for h in hit)
         return picked
-    # sidechain(subagent) 선별은 하지 않는다 — 864개 transcript 전수 실측 결과 첫 레코드
-    # isSidechain 이 전부 false 라 판정 근거가 없고, 파일 864개 open 비용만 +1.1초 든다 (2026-07-27).
+    # sidechain(subagent) 선별은 하지 않는다 — 전수 실측 결과 첫 레코드
+    # isSidechain 이 전부 false 라 판정 근거가 없고, 파일을 모두 열면 비용만 든다.
     files.sort(key=os.path.getmtime, reverse=True)
     return [(os.path.basename(f)[:8], f) for f in files[:top]]
 

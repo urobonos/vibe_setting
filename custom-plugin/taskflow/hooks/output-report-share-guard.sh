@@ -5,7 +5,7 @@ HARNESS_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../hooks/lib" 2>/dev/nul
 [ -f "$HARNESS_LIB/hook-input.sh" ] || HARNESS_LIB="$HOME/.claude/hooks/lib"
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$HARNESS_LIB/log-helper.sh" 2>/dev/null && log_event "output-report-share-guard" "enter" "pid=$$"
-# PreToolUse:Edit|Write|MultiEdit Hook — 공유용 단일 통합 문서 양식 강제 (2026-05-12 신설)
+# PreToolUse:Edit|Write|MultiEdit Hook — 공유용 단일 통합 문서 양식 강제
 #
 # 대상 경로:
 #   - ~/.claude/docs/{product}/output/report/.../{filename}-(share|proposal|sharing)*.md
@@ -37,7 +37,7 @@ source "$HARNESS_LIB/path-utils.sh"
 hook_read_stdin
 hook_parse_file_path
 
-# 검사 대상 = **Write (전문 작성)만** (F1 2026-08-03)
+# 검사 대상 = **Write (전문 작성)만**
 #   본 게이트의 판정 단위는 "문서 전문에 7메타 + 12섹션이 있는가" 다. Edit/MultiEdit 의
 #   new_string 은 문서 **조각**이라 전문 기준을 적용하면 오타 1자 수정도 "메타 7개 부재" 로
 #   차단된다 (실측: 실존 share 문서 Edit → rc=2). 죽은 게이트를 살리려다 정상 편집을 막는
@@ -52,16 +52,15 @@ FILE_PATH=$(normalize_path "$FILE_PATH")
 # 대상 경로 매칭 — output/report/ 안 share/proposal/sharing 패턴 파일만
 echo "$FILE_PATH" | grep -qE '/docs/[^/]+/output/report/.+(share|proposal|sharing)[^/]*\.md$' || exit 0
 
-# Write content / Edit new_string 가져오기 — lib/hook-input.sh::hook_parse_content SSOT
-#   2026-08-03 픽스: 구 코드는 `TOOL_INPUT_CONTENT` / `TOOL_INPUT_NEW_STRING` 환경변수를 읽었으나
-#   그 이름을 채우는 주체가 hooks/ 전체에 없었다 (출현 = 이 2줄뿐) → CONTENT 항상 공백 →
-#   아래 `[ -z "$CONTENT" ] && exit 0` 로 **본 게이트 164줄이 0% 발동**. stdin JSON 을 직접 판다.
+# Write content / Edit new_string 가져오기 — lib/hook-input.sh::hook_parse_content SSOT.
+#   `TOOL_INPUT_CONTENT` / `TOOL_INPUT_NEW_STRING` 환경변수는 채우는 주체가 없어 항상 공백이라
+#   stdin JSON 을 직접 판다.
 hook_parse_content
 
 # 본문 비어 있으면 (file_path 만 입력) skip
 [ -z "$CONTENT" ] && exit 0
 
-# degraded 파싱에서 디코드 불가분이 남았으면 판정하지 않고 차단 (fail-closed, F10 2026-08-03)
+# degraded 파싱에서 디코드 불가분이 남았으면 판정하지 않고 차단 (fail-closed)
 if [ "${CONTENT_UNDECODED:-0}" = "1" ]; then
   echo "[BLOCKED] 공유용 문서 본문을 완전히 해석하지 못했습니다 (python 미가용 + 디코드 불가 이스케이프)." >&2
   echo "  파일: $FILE_PATH" >&2
@@ -94,9 +93,8 @@ META_NAMES=(
   "대상 독자"
   "개발언어/기술스택"
 )
-# 역소급 면제 (F2 2026-08-03, CLAUDE.md §4 "신규/강화 강제 룰은 도입 이전 산출물에 역소급 적용 안 함")
-#   "개발언어/기술스택"(index 6) 은 2026-06-01 도입 — 그 이전 생성 문서는 이 1건을 면제한다.
-#   실측: 레포 실존 share 문서 4건 중 3건(05-12·05-13·05-28)이 이 필드만 없어 전량 차단됐다.
+# 역소급 면제 (CLAUDE.md §4 "신규/강화 강제 룰은 도입 이전 산출물에 역소급 적용 안 함")
+#   "개발언어/기술스택"(index 6) 은 2026-06-01 부터 필수다 — 그 이전 생성 문서는 이 1건을 면제한다.
 META_LAST=$(( ${#META_PATTERNS[@]} - 1 ))
 if [ -n "$DOC_DATE" ] && [ "$DOC_DATE" \< "2026-06-01" ]; then
   META_LAST=$(( META_LAST - 1 ))

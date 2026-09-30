@@ -11,7 +11,7 @@ FILE="$FILE_PATH"
 if [ -z "$FILE" ]; then exit 0; fi
 
 # .claude/CLAUDE.md 또는 .claude/skills/ 변경 시 — stderr 안내만 출력 (자동 commit 제거)
-# 정책 (2026-05-06): 자동 git commit 제거. 매 Edit 마다 의도하지 않은 다중 commit 누적 +
+# 정책: 자동 git commit 제거. 매 Edit 마다 의도하지 않은 다중 commit 누적 +
 # 사용자 staging 흐름 가로채 + branch-enforce.sh protected 브랜치 차단과 충돌 위험.
 # Claude 는 Direct Execution 룰 (CLAUDE.md §4) 에 따라 사용자 승인 시 직접 git commit 실행.
 if echo "$FILE" | grep -qiE '\.claude/(CLAUDE\.md|skills/)'; then

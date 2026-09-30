@@ -5,11 +5,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_eve
 # 통합: git-commit-lint.sh + single-purpose-commit.sh + no-test-no-merge.sh
 # Fail-fast 순서: 1) 메시지 형식 → 2) 커밋 범위 → 3) 테스트 이력
 
-# JSON 파싱 — lib/hook-input.sh SSOT (C3 2026-08-03)
-#   구 코드는 python 을 `command -v` 로만 찾고 값 3개를 mapfile 로 받았다. python 이 검출되고
-#   **실행만 실패**하면(Store 별칭 exit 9 · 크래시) _GQ 가 빈 배열 → COMMAND="" → 아래 `exit 0` 로
-#   Conventional Commits + 커밋 범위 + No-Test-No-Merge 3단 게이트가 통째로 꺼졌다 (백스톱 0건).
-#   lib 는 bash 정규식 → python → bash JSON 디코더 3단이라 python 없이도 명령 원문을 회수한다.
+# JSON 파싱 — lib/hook-input.sh SSOT
+#   python 이 검출되고 **실행만 실패**하면(Store 별칭 exit 9 · 크래시) COMMAND="" 가 되어 아래
+#   `exit 0` 로 Conventional Commits + 커밋 범위 + No-Test-No-Merge 3단 게이트가 통째로 꺼지는
+#   경로가 생긴다. lib 는 bash 정규식 → python → bash JSON 디코더 3단이라 python 없이도 명령 원문을 회수한다.
 source "$(dirname "$0")/lib/hook-input.sh"
 hook_read_stdin
 
@@ -25,19 +24,16 @@ hook_parse_cwd
 hook_parse_command
 # JSON 이스케이프된 \\ 를 실제 \ 로 복원 (Windows 경로 — bash 정규식 경로에서만 발생)
 CWD="${CWD//\\\\/\\}"
-# 의도된 의미 변경 (F9 2026-08-03): 구 python 파서는 `cmd.replace('\n',' ')` 로 명령을 한 줄로
-#   눌러서 heredoc 커밋 본문 첫 줄과 제목 줄이 붙어버렸고, 그 때문에 heredoc 커밋이 형식 위반으로
-#   **오차단**됐다 (실측 OLD rc=2 / NEW rc=0). lib 은 개행을 보존하므로 heredoc 정규식이
-#   제목 줄만 정확히 집는다. 회귀 케이스 = hooks/tests/run-guard-tests.sh 의 heredoc 항목.
+# heredoc 커밋은 개행이 보존되어야 제목 줄만 정확히 집힌다 — 한 줄로 누르면 heredoc 본문
+#   첫 줄과 제목 줄이 붙어 형식 위반으로 오차단된다. 회귀 케이스 = hooks/tests/run-guard-tests.sh 의 heredoc 항목.
 
 if [ -z "$COMMAND" ]; then
   exit 0
 fi
 
 # git commit 명령만 검사
-#   `git -C <경로> commit` 도 포함한다 (2026-09-15). 구 정규식은 `git` 바로 뒤 `commit` 만 봐서
-#   그 형태가 **게이트 3단(메시지 형식·커밋 범위·테스트 이력)을 통짜로 건너뛰었다** — worktree 에서
-#   커밋할 때 흔히 쓰는 형태라 우회 통로가 열려 있었다 (실측 2026-09-15: exit 0, 검사 0건).
+#   `git -C <경로> commit` 도 검사 대상에 포함한다 — `git` 바로 뒤 `commit` 만 보면 이 형태가
+#   게이트 3단(메시지 형식·커밋 범위·테스트 이력)을 통째로 우회한다. worktree 에서 흔히 쓰는 형태다.
 if ! echo "$COMMAND" | grep -qE 'git\s+(-C\s+[^[:space:]]+\s+)?commit'; then
   exit 0
 fi
@@ -68,7 +64,7 @@ print('')
 " 2>/dev/null)
 fi
 
-# python 부재·실행실패 시 bash 정규식 백스톱 (C3 2026-08-03) — 여기가 비면 Phase 1 이 통째로
+# python 부재·실행실패 시 bash 정규식 백스톱 — 여기가 비면 Phase 1 이 통째로
 #   건너뛰어져 규격 위반 커밋이 통과한다. 순서·의미는 위 python 판과 동일 (heredoc 우선 → -m).
 if [ -z "$COMMIT_MSG" ]; then
   _re_heredoc=$'<<[\'"]?EOF[\'"]?[ \t]*\r?\n([^\n]*)'
@@ -101,16 +97,14 @@ if [ -n "$COMMIT_MSG" ]; then
     exit 2
   fi
 
-  # 문자 단위 길이 (multibyte safe — 한국어 / em dash 정합, 2026-05-12 정정)
+  # 문자 단위 길이 (multibyte safe — 한국어 / em dash 정합)
   # bash ${#var} 는 byte 단위 — 한국어 utf-8 (3 byte/char) + em dash (3 byte) 시 byte 계산 오류
   MSG_LEN=""
   [ -n "$HOOK_PY" ] && MSG_LEN=$(printf '%s' "$COMMIT_MSG" | "$HOOK_PY" -c "import sys; print(len(sys.stdin.read()))" 2>/dev/null)
   if [ -z "$MSG_LEN" ]; then
-    # python 없는 경로의 문자 수 계산 (F3 2026-08-03) — fork 0.
-    #   구 폴백 `${#COMMIT_MSG}` 는 **바이트**를 세서 한글 커밋을 거짓 차단했다. 실측:
-    #   `feat(taskflow): watch G2 사전조사 …` = 67자 / 87바이트 → 72 초과로 rc=2.
-    #   구 코드에서는 python 실패 시 COMMAND 가 비어 이 줄까지 오지 못했는데(=exit 0),
-    #   C3 백스톱이 COMMAND 를 복구하면서 이 잠복 버그가 활성화됐다.
+    # python 없는 경로의 문자 수 계산 — fork 0.
+    #   `${#COMMIT_MSG}` 를 그대로 쓰면 **바이트**를 세어 한글 커밋을 거짓 차단한다
+    #   (예: `feat(taskflow): watch G2 사전조사 …` = 67자 / 87바이트 → 72 초과로 오탐).
     #   로케일 판정: '한'(UTF-8 3바이트)의 길이가 1이면 bash 가 문자를, 3이면 바이트를 센다.
     _lc_probe=$'\xed\x95\x9c'
     if [ ${#_lc_probe} -eq 1 ]; then
@@ -132,11 +126,10 @@ fi
 
 # ===== Phase 2: 커밋 범위 검증 (1 커밋 = 1 변경) =====
 
-# 커밋 대상 디렉토리 — 명령이 지정한 곳을 먼저 본다 (2026-09-15)
+# 커밋 대상 디렉토리 — 명령이 지정한 곳을 먼저 본다.
 #   hook 프로세스의 cwd 는 세션 cwd(=메인 레포)다. worktree 에서 `cd <wt> && git commit` 이나
-#   `git -C <wt> commit` 으로 커밋하면 여기서 읽던 인덱스가 그 worktree 가 아니라 메인 레포였고,
-#   staged 가 비어 아래 :185 의 docs/config-only 면제를 건너뛰어 [NO TEST, NO MERGE] 로 **오차단**됐다
-#   (실측 2026-09-15: 한 세션에서 2회. 사용자가 직접 커밋해 우회했다).
+#   `git -C <wt> commit` 으로 커밋하면 그 worktree 가 아니라 메인 레포의 인덱스를 읽게 되어,
+#   staged 가 비어 아래 docs/config-only 면제를 건너뛰고 [NO TEST, NO MERGE] 로 오차단될 수 있다.
 #   경로에 공백이 있으면 첫 토큰만 잡는다 — worktree 경로 관례상 공백이 없고, 빗나가도 아래
 #   `[ -d ]` 검사가 $CWD 로 되돌려 구동작과 같아진다 (fail-safe).
 REPO_DIR="$CWD"

@@ -2,13 +2,12 @@
 # script-request-enforce.sh
 # Stop Hook: 마지막 assistant 응답에 "비-§3 미스크립트 `! cmd` 실행요청"이 있으면 차단 → 재진입.
 #
-# 사용자 명시 승인: 2026-05-27 "실행요청을 할때는 스크립트생성해서 요청하는부분 강제시켜 자꾸 드리프트일으키네"
+# 사용자 명시 승인: "실행요청을 할때는 스크립트생성해서 요청하는부분 강제시켜 자꾸 드리프트일으키네"
 #   강제 강도 = 하드 차단(exit 2)+재진입 / 탐지 = 백틱 `! cmd` 토큰 정밀 / 예외 = 정상형 + §3.
 #
 # 동작:
 #   1. SKIP_HOOKS=1 → 통과
 #   2. transcript 마지막 assistant 텍스트 추출 + 인라인 백틱 `! cmd` 토큰 추출·분류를 단일 python 프로세스에서 처리
-#      (2026-07-16 최적화: 기존 python -c 2회 순차 호출 → 1회 병합, 정규식·로직 동일)
 #   3. 분류: placeholder skip / 정상형(bash …docs/scripts…sh) skip / §3 skip / 그 외 = 위반
 #   4. 위반 0 → exit 0. 위반 ≥1 → 5회 회로차단기 확인 후 exit 2 + 재진입 stderr
 #   5. fail-open: transcript 부재 / python 실패 / 빈 텍스트 = exit 0
@@ -27,7 +26,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null
 command -v log_event >/dev/null 2>&1 && log_event "script-request-enforce" "enter" "pid=$$"
 
-# stdin 파싱 = lib/hook-input.sh SSOT (M5 2026-08-03 — grep+sed 재구현 제거, bash 정규식 primary)
+# stdin 파싱 = lib/hook-input.sh SSOT (bash 정규식 primary)
 # shellcheck disable=SC1091
 source "$(dirname "$0")/lib/hook-input.sh"
 hook_read_stdin
@@ -41,7 +40,7 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
     exit 0   # fail-open
 fi
 
-# transcript 마지막 assistant 텍스트 추출 + 백틱 `! cmd` 토큰 분류를 단일 프로세스에서 처리 (기존 python -c 2회 → 1회 병합)
+# transcript 마지막 assistant 텍스트 추출 + 백틱 `! cmd` 토큰 분류를 단일 프로세스에서 처리
 VIOLATIONS=$(tail -200 "$TRANSCRIPT_PATH" 2>/dev/null | python -c "
 import sys, json, re
 last_text = ''

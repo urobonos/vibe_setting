@@ -2,7 +2,7 @@
 [ "${SKIP_HOOKS:-0}" = "1" ] && exit 0
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null && log_event "dangerous-ops-guard" "enter" "pid=$$"
 
-# block telemetry wrapper (Phase 2b) — 정의 실패와 독립: log_event 미정의여도 echo+exit 2 항상 보장 (C1/H1)
+# block telemetry wrapper — 정의 실패와 독립: log_event 미정의여도 echo+exit 2 항상 보장
 block_exit() {
   command -v log_event >/dev/null 2>&1 && log_event "dangerous-ops-guard" "block" "reason=$1"
   echo "$2" >&2
@@ -52,8 +52,8 @@ if [[ "$TOOL_NAME" != "Bash" ]]; then
   exit 0
 fi
 
-# python 호출 timeout prefix (2026-07-30) — hook 이 kill 될 때 파이프 안 python 손자가
-#   Windows 에서 고아로 남는 것을 막는다. Why·실측 = hooks/lib/hook-input.sh §HOOK_PY_TIMEOUT SSOT.
+# python 호출 timeout prefix — hook 이 kill 될 때 파이프 안 python 손자가
+#   Windows 에서 고아로 남는 것을 막는다. Why = hooks/lib/hook-input.sh §HOOK_PY_TIMEOUT SSOT.
 #   본 파일은 hook-input.sh 를 source 하지 않는 자체 검출 경로라 지역 변수로 둔다.
 _TO=""
 command -v timeout >/dev/null 2>&1 && _TO="timeout 2"
@@ -78,7 +78,7 @@ except:
     [ -n "$_pc" ] && COMMAND="$_pc"
   fi
 fi
-# python 부재·bash 실패 시 grep+sed 백스톱 (fail-open → fail-soft, H1 2026-06-16)
+# python 부재·bash 실패 시 grep+sed 백스톱 (fail-open → fail-soft)
 if [ -z "$COMMAND" ]; then
   COMMAND=$(echo "$STDIN_DATA" | grep -o '"command"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*:[[:space:]]*"\([^"]*\)"/\1/')
 fi
@@ -113,7 +113,7 @@ gg_is() {
 
 # ===== headless code-loop 스텝 전용 (code-loop.sh 가 CODE_LOOP_SPEC export) =====
 # claude -p 는 턴이 1개라 background 완료 알림을 받을 다음 턴이 없다 → 산출물 없이 종료.
-# stash 는 그 조기 종료 시 변경분을 숨긴 채 남긴다 (2026-09-23 ISS-181 step-01 2회 재현).
+# stash 는 그 조기 종료 시 변경분을 숨긴 채 남긴다.
 if [ -n "${CODE_LOOP_SPEC:-}" ]; then
   if [[ "$STDIN_DATA" =~ \"run_in_background\"[[:space:]]*:[[:space:]]*true ]]; then
     block_exit "codeloop-background" "[BLOCKED] code-loop headless 스텝에서 run_in_background 금지 — 턴이 1개라 완료 알림을 받지 못하고 산출물 없이 끝난다. 같은 명령을 foreground 로 다시 실행하라 (오래 걸리면 대상 테스트를 좁혀라)."
@@ -123,9 +123,9 @@ if [ -n "${CODE_LOOP_SPEC:-}" ]; then
   fi
 fi
 
-# ===== 루트·드라이브·홈 전체 find 차단 (2026-09-28) =====
+# ===== 루트·드라이브·홈 전체 find 차단 =====
 # 도구 타임아웃은 Windows 에서 손자 프로세스를 죽이지 않는다 — 전체 스캔 find 는 호출이 끝난 뒤에도
-# 고아로 남아 코어를 점유한다 (2026-09-23 `find / -maxdepth 6` 이 코어 1개 100% → hook 전부 타임아웃).
+# 고아로 남아 코어를 점유한다 (예: `find / -maxdepth 6` 이 코어 1개를 100% 점유해 hook 전부가 타임아웃될 수 있다).
 # 대화 기록 실측 find 2,801회 중 이 형태 53회. 좁은 경로의 find 는 금방 끝나므로 막지 않는다.
 if printf '%s\n' "$LOWER_CMD" | grep -qE "(^|[;&|(])[[:space:]]*find[[:space:]]+(-[hlp][[:space:]]+)*[\"']?(/|/[a-z]/?|[a-z]:[/\\\\]*|~/?|\\\$\{?home\}?/?|/[a-z]/users(/[^/[:space:]\"']+)?/?)[\"']?([[:space:]]|\$)"; then
   block_exit "find-root-scan" "[BLOCKED] 루트·드라이브·홈 전체 find 금지 — 타임아웃 뒤에도 고아 프로세스로 남아 CPU 를 점유한다. 대신: Glob 도구(파일명) · Grep 도구(내용) · 셸이면 rg --files <좁힌 경로> 또는 git ls-files. find 를 꼭 써야 하면 시작 경로를 프로젝트 하위로 좁혀라 (CLAUDE.md §4.2 파일 탐색 도구)."
@@ -149,7 +149,7 @@ if gg_is clean-f || { [ -z "$GG_ALL" ] && echo "$COMMAND" | grep -qE 'git\s+clea
   block_exit "clean-f" "[BLOCKED] git clean -f 차단 (git -C 정규화 포함) — 추적되지 않는 파일이 삭제됩니다. 사용자 승인 후 수동 실행하세요."
 fi
 # git branch -D — 머지 안 된 브랜치 강제 삭제 차단.
-# 예외: worktree 정착 정리용 단일 `git branch -D wip/…` 만 면제 (2026-06-04 사용자 명시 승인 — worktree 머지·remove·wip 정리 Claude 자동화).
+# 예외: worktree 정착 정리용 단일 `git branch -D wip/…` 만 면제 (사용자 명시 승인 — worktree 머지·remove·wip 정리 Claude 자동화).
 #   임의 브랜치(feature/main/master 등) -D 는 차단 유지. command 생성 형태 = 개별 호출 단일 `git branch -D wip/{sid}-{slug}`.
 #   단일 라인 전체 매칭(`^…$`)으로 결합 명령(`&&`/`;`/`|`) 안 임의 -D 우회 차단.
 if gg_is branch-D || { [ -z "$GG_ALL" ] \
@@ -186,7 +186,7 @@ fi
 
 # 6. Co-Authored-By trailer 차단 (라인 시작 + 콜론 형식만 매칭, 본문 단어 언급은 허용)
 # CLAUDE.md §4 "공동 작성자 trailer 라인 금지" SSOT 룰. trailer 형식(예: "Co-Authored-By: Claude...")만 차단.
-# 본문에 "Co-Authored-By 단일화" 같이 설명용 단어 사용은 통과 (이전 차단 false positive 회피).
+# 본문에 "Co-Authored-By 단일화" 같이 설명용 단어 사용은 통과시킨다 (형식이 아닌 단어 언급까지 막으면 false positive 가 된다).
 # bash =~ 의 ^ 는 문자열 전체 시작에만 걸려 heredoc·여러 줄 -m 의 trailer 를 놓친다 → 줄 단위 grep.
 # 별도 -m 인자·--trailer 로 넣는 trailer 도 같은 결과라 함께 잡는다.
 if printf '%s\n' "$LOWER_CMD" | grep -qE "(^|-m[[:space:]]+[\"']?|--trailer[=[:space:]]+[\"']?)[[:space:]]*co-authored-by:"; then
@@ -195,7 +195,7 @@ fi
 
 # ===== Checkpoint 경고 (exit 0) =====
 
-# SSM send-command — 조회계/변경계 분류 (2026-07-29)
+# SSM send-command — 조회계/변경계 분류
 #
 # 무인 tick 이 조회계 SSM 을 승인 대기 없이 돌 수 있게 "조회냐 변경이냐"를 여기서 판정한다.
 # 산문 룰로 두면 판정 주체가 Claude 자신이라 안전장치가 아니다 — send-command 는 임의 셸이고
@@ -209,7 +209,7 @@ fi
 #   사용자가 이미 승인한 변경계 명령까지 hook 이 막아 기존 흐름이 죽는다. 본 분기는
 #   차단 강화가 아니라 조회계 라벨링이다.
 #
-# env 판정을 인스턴스 ID 로 안 하는 이유 (2026-07-29 실측): 리전당 SSM 인스턴스가 1대뿐이고
+# env 판정을 인스턴스 ID 로 안 하는 이유: 리전당 SSM 인스턴스가 1대뿐이고
 #   (us-east-1 i-0183f9ab360cc9d80 / ap-northeast-1 i-00e741e10d528c7e5) 그 한 대가
 #   prd/dev/stg 를 함께 호스팅한다(env 구분 = /works/hongcafe-global/{env}/be 경로).
 #   인스턴스로는 env 를 못 가르므로 명령 본문의 prd 마커를 배제하는 쪽으로 간다.

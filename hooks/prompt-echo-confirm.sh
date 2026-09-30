@@ -24,7 +24,7 @@ hook_parse_session_id
 
 PROMPT=$(hook_parse_field "prompt")
 
-# --- 디버그 로그 설정 (2026-05-13 telemetry lib 마이그레이션) ---
+# --- 디버그 로그 설정 ---
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/lib/log-helper.sh" 2>/dev/null || {
   LOG_FILE="$HOME/.claude/prompt-echo-confirm.log"
@@ -96,7 +96,7 @@ if [ -f "$PENDING_MARKER" ]; then
   exit 0
 fi
 
-# --- 스킵 6 (T1-b, 2026-05-11): 묶음 승인 후 60분 후속 면제 ---
+# --- 스킵 6: 묶음 승인 후 60분 후속 면제 ---
 # gate-approve.sh 가 BUNDLED_APPROVED=true 매칭 시 GATE_FILE 을 2 로 설정.
 # 묶음 승인 직후 60분 내 후속 mutation/분석 지시는 의도 정리 단계 면제.
 # — 단일 묶음 승인이 권고 처리 흐름 끝까지 자동 진행 보장.

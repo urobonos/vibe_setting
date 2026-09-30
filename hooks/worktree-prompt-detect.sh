@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# worktree-prompt-detect.sh — UserPromptSubmit hook (2026-05-20 도입)
+# worktree-prompt-detect.sh — UserPromptSubmit hook
 #
 # 작업 키워드 매칭 시 worktree 자동 생성 안내 stderr 주입 (차단 X, exit 0)
 # Why: PreToolUse worktree-enforce.sh 가 mutation 차단 → 사용자가 worktree 진입까지 도달 못 함.

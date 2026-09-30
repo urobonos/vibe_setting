@@ -24,9 +24,10 @@ REGISTRY_LOCK_TTL_MIN="${REGISTRY_LOCK_TTL_MIN:-2}"
 registry_lock_acquire() {
   local i=0
   while ! mkdir "$REGISTRY_LOCK" 2>/dev/null; do
-    # stale steal (M/§3 2026-06-16, backlog registry-lock-stale-leak): acquire 후 rmdir 전 프로세스 즉사 시
-    #   lock 영구 잔존 → 모든 CRUD 가 retry 소진 후 silent 실패(REGISTRY 동결)하던 문제 차단. mtime 기반 회수
-    #   (Git Bash kill -0 PID liveness 불확실 → dispatch-utils 의 TTL 방식과 정합). mkdir atomic 으로 회수 race 안전.
+    # stale steal — acquire 후 rmdir 전 프로세스가 즉사하면 lock 이 영구 잔존해 모든 CRUD 가
+    #   retry 소진 후 silent 실패(REGISTRY 동결)한다. mtime 기반으로 회수한다(Git Bash 는
+    #   kill -0 PID liveness 가 불확실 → dispatch-utils 의 TTL 방식과 정합). mkdir atomic 으로
+    #   회수 race 는 안전하다.
     if [ -d "$REGISTRY_LOCK" ] && find "$REGISTRY_LOCK" -maxdepth 0 -mmin "+$REGISTRY_LOCK_TTL_MIN" 2>/dev/null | grep -q .; then
       rmdir "$REGISTRY_LOCK" 2>/dev/null
       echo "[registry-utils] stale lock 회수 (>${REGISTRY_LOCK_TTL_MIN}min orphan): $REGISTRY_LOCK" >&2
@@ -145,9 +146,9 @@ registry_add() {
   return 0
 }
 
-# 원자 claim (2026-07-23) — lock 안에서 active 점유 확인 + add 를 한 번에 수행해
+# 원자 claim — lock 안에서 active 점유 확인 + add 를 한 번에 수행해
 # registry_find(확인) → registry_add(점유) 분리로 인한 TOCTOU race 를 차단한다.
-# 병렬 워커(tick-team)가 동시에 같은 slug 를 잡는 것을 원천 방지.
+# 병렬 워커(tick-team)가 동시에 같은 slug 를 잡는 것을 원천 방지한다.
 #   registry_claim <slug> <product> <sid> <cwd> <working_file>
 #   stdout: CLAIMED:<slug> (신규 점유) / ALREADY:<sid> (본인 재claim) / TAKEN:<other_sid> (타 sid 점유) / ERR:<사유>
 registry_claim() {

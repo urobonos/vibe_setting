@@ -18,7 +18,7 @@ check() {
 # 대신 실제 REGISTRY 에 없을 SID 를 써서 매칭 실패를 만든다.
 run_hook() { # $1 sid
   # gate 파일이 없으면 hook 이 맨 앞에서 exit 0 한다 — 그러면 검사 자체가 안 돌아
-  # 모든 케이스가 "통과" 로 보인다 (첫 시도에서 이것 때문에 4건이 거짓 통과했다)
+  # 모든 케이스가 "통과" 로 보일 수 있다.
   : > "/tmp/claude_gate_$1"
   printf '{"session_id":"%s","tool_name":"Write","cwd":"%s","tool_input":{"file_path":"%s"}}' \
     "$1" "$TMP" "$CODE" \
@@ -55,8 +55,8 @@ printf '아무 내용\n' > "$TMP/00-spec.md"
 check "GATE 줄 부재" 2 "$(run_hook aaaaaaaa-5)"
 
 echo "== 6~9. 판정 줄 표기 — spec 스텝(모델)이 마크다운으로 쓰는 경우 =="
-# 2026-09-17 실측: 전 run spec 25건 중 2건이 `## GATE: OK` 였고, 그중 하나는 개발자가
-# 5라운드 내내 이 게이트에 막혀 코드 0줄로 끝났다. 판정 SSOT = lib/code-loop-gate.sh
+# 스텝(모델)이 마크다운으로 감싸 쓰면(`## GATE: OK` 등) 개발자가 게이트에 막혀 코드를
+# 못 쓸 수 있다. 판정 SSOT = lib/code-loop-gate.sh
 export CODE_LOOP_SPEC="$TMP/00-spec.md"
 mkraw '## GATE: OK'
 check "## GATE: OK 인정" 0 "$(run_hook aaaaaaaa-6)"

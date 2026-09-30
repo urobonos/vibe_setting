@@ -10,9 +10,9 @@
 #   L5. Why: 라인 짝지움 — 강제 어휘 빈도 vs Why: 라인 빈도 (목표 30% 이상)
 #   L6. depends_on 의 모든 스킬 실재 (글로벌 스킬 폴더 + `{plugin}:{skill}` 네임스페이스)
 #   L7. conflicts_with 의 모든 스킬 실재 + 자기 참조 경고 (L6 과 동일 네임스페이스 해석)
-#   L8. depends_on 순환 의존 감지 (DAG 그래프 + DFS, 2026-05-13 신규, CLAUDE.md §5.4)
-#   L9. version semver 형식 검증 (^\d+\.\d+\.\d+$, 2026-05-13 신규, CLAUDE.md §5.4)
-#   L10. min_claude_md_version 호환성 검증 (CLAUDE.md 현재 버전과 대조, 2026-05-13 신규)
+#   L8. depends_on 순환 의존 감지 (DAG 그래프 + DFS, CLAUDE.md §5.4)
+#   L9. version semver 형식 검증 (^\d+\.\d+\.\d+$, CLAUDE.md §5.4)
+#   L10. min_claude_md_version 호환성 검증 (CLAUDE.md 현재 버전과 대조)
 #
 # 사용법:
 #   bash ~/.claude/bin/lint-skills.sh                    # 글로벌 모든 스킬 검증
@@ -58,7 +58,7 @@ ALL_SKILLS=$(ls -1 "$SKILLS_DIR" 2>/dev/null | sort)
 
 # ─────────────────────────────────────────────────────────
 # L8 사전 준비: depends_on 순환 의존 그래프 빌드 + DFS 순환 탐지 (Python)
-# 2026-05-13 신규, CLAUDE.md §5.4 "depends_on 방향성"
+# CLAUDE.md §5.4 "depends_on 방향성"
 # ─────────────────────────────────────────────────────────
 CIRCULAR_DEPS=$(SKILLS_DIR="$SKILLS_DIR" python3 - <<'PYEOF' 2>/dev/null
 import os, re
@@ -147,8 +147,9 @@ echo "$CLAUDE_MD_VERSION" | grep -qE '^[0-9]+\.[0-9]+$' && CLAUDE_MD_VERSION="${
 
 # --- 스킬 참조 해석 (L6/L7 공용) ---
 # 글로벌 스킬 폴더 + `{plugin}:{skill}` 네임스페이스 (custom-plugin/{plugin}/skills/{skill}/SKILL.md).
-# Why: 플러그인 이동(2026-07-15) 후에도 해석기가 글로벌 폴더만 조회해 `backend:mysql8` 이 상시
-#      L6-FAIL -> lint 가 항상 exit 1 = 신호 자체가 죽었다. frontmatter 가 아니라 해석기가 틀렸다.
+# Why: 스킬이 플러그인으로 옮겨간 뒤에도 해석기가 글로벌 폴더만 조회하면 `backend:mysql8` 같은
+#      네임스페이스 참조가 상시 L6-FAIL 되어 lint 가 항상 exit 1 = 신호 자체가 죽는다.
+#      frontmatter 가 아니라 해석기가 이 네임스페이스를 봐야 한다.
 skill_ref_exists() {
   local ref="$1"
   echo "$ALL_SKILLS" | grep -qx "$ref" && return 0
@@ -289,7 +290,7 @@ lint_skill() {
     [ "$status" = "PASS" ] && status="WARN"
   fi
 
-  # L8 — depends_on 순환 의존 (CIRCULAR_DEPS 사전 빌드 결과 매칭, 2026-05-13 신규)
+  # L8 — depends_on 순환 의존 (CIRCULAR_DEPS 사전 빌드 결과 매칭)
   if [ -n "$CIRCULAR_DEPS" ]; then
     while IFS= read -r cyc; do
       [ -z "$cyc" ] && continue
@@ -305,7 +306,7 @@ lint_skill() {
     done <<< "$CIRCULAR_DEPS"
   fi
 
-  # L9 — version semver 형식 검증 (^\d+\.\d+\.\d+$, 2026-05-13 신규)
+  # L9 — version semver 형식 검증 (^\d+\.\d+\.\d+$)
   # L8 (depends_on 순환) 은 전체 스킬 그래프 필요 → 본 함수 외부 (lint_circular_deps) 에서 일괄 처리
   # L10 (min_claude_md_version 호환성) 도 CLAUDE.md 버전 read 후 일괄 처리
   local version_raw

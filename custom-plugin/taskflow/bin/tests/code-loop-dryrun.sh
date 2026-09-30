@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# code-loop.sh 루프 제어 흐름 드라이런 (2026-09-16)
+# code-loop.sh 루프 제어 흐름 드라이런
 #
 # claude 를 stub 으로 가로채고 HOME 을 임시 디렉토리로 격리해서, API 를 한 번도
 # 부르지 않고 루프 제어만 검증한다. 검증 대상은 셸이 책임지는 것 전부 —
@@ -16,9 +16,9 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"
 export PATH="$TMP/bin:$PATH"
-# 러너 기본 캡은 2026-09-21 부터 무제한(0)이다. 시나리오 C 처럼 지적이 영원히 남는 경우
-# 캡을 안 주면 루프가 끝나지 않는다 — 2026-09-24 02:2x 드라이런이 좀비로 남아 하루 넘게
-# 하위 프로세스를 띄운 원인이다. 이 테스트의 기대값(캡 5)을 명시하고, 실행마다 상한을 건다
+# 러너 기본 캡은 무제한(0)이다. 시나리오 C 처럼 지적이 영원히 남는 경우 캡을 안 주면
+# 루프가 끝나지 않고 드라이런이 좀비로 남아 하위 프로세스를 띄운다.
+# 이 테스트의 기대값(캡 5)을 명시하고, 실행마다 상한을 건다
 export CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2
 RUN_TIMEOUT=300   # 전체 실행 부하에서 시나리오 C(5라운드)가 120초를 넘긴다 — 무한 루프만 끊으면 된다
 ST="$HOME/.claude/state/code-loop"
@@ -176,7 +176,7 @@ check "adv 미실행" 0 "$(cnt 'adv-*.md')"
 check "캡 메시지" 1 "$(grep -c '캡 5 소진' "$TMP/out.txt")"
 
 echo "== D. adv BROKEN → dev 재진입 + 리뷰 1라운드(정규 캡 계상) =="
-# 2026-09-16 ISS-570 실전 회귀: BROKEN 뒤 dev 수정분이 리뷰 없이 다음 게이트로 갔다.
+# BROKEN 뒤 dev 수정분이 리뷰 없이 다음 게이트로 가면 안 된다.
 # adversary 는 깨는 역할이지 판정 역할이 아니라 그 수정은 아무도 안 본 변경이 된다
 reset; rc=$(runit T_REV=CLEAN T_ADV='BROKEN,UPHELD')
 check "dev 라운드수(1+재진입)" 2 "$(cnt 'dev-*.md')"
@@ -216,8 +216,8 @@ env T_REV='FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash 
 check "기존 산출물 보존" "$before" "$(md5sum "$ST/$RUN/dev-01.md" | cut -d' ' -f1)"
 
 echo "== I. stdout 이 끊겨도 루프는 완주한다 (SIGPIPE 내성) =="
-# 2026-09-16 회귀: tee 로 미러링하던 때는 호출자가 head 로 파이프를 닫으면 tee 가
-# SIGPIPE 로 죽고 루프까지 죽었다 (run.log 205 bytes 에서 중단, RESULT.md 미생성)
+# tee 로 미러링하면 호출자가 head 로 파이프를 닫을 때 tee 가 SIGPIPE 로 죽고
+# 루프까지 죽을 수 있다
 reset
 env T_REV=CLEAN T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" "드라이런 요청" 2>&1 | head -3 > /dev/null
 check "완주" 1 "$(grep -c 'code-loop 종료' "$(d)/run.log" 2>/dev/null || echo 0)"
@@ -229,9 +229,9 @@ check "라운드 로그" 2 "$(grep -c 'dev-loop 라운드' "$(d)/run.log")"
 check "스텝 로그" 1 "$([ "$(grep -c '^--- .*\[' "$(d)/run.log")" -ge 8 ] && echo 1 || echo 0)"
 
 echo "== K. 도구 제한이 스텝별로 전달된다 =="
-# 2026-09-16 실사용 회귀: 정의의 tools 는 Agent 도구로 spawn 할 때만 적용된다.
-# claude -p 로 띄우면 제한이 없어 리뷰어·adversary 가 Edit/Write 를 쓸 수 있었다 —
-# 짠 쪽과 본 쪽을 가르는 것이 이 루프의 값 전부라 여기가 비면 루프가 무의미해진다
+# 정의의 tools 는 Agent 도구로 spawn 할 때만 적용된다. claude -p 로 띄우면 제한이
+# 없어 리뷰어·adversary 가 Edit/Write 를 쓸 수 있다 — 짠 쪽과 본 쪽을 가르는 것이
+# 이 루프의 값 전부라 여기가 비면 루프가 무의미해진다
 reset; export T_TOOLSLOG="$TMP/tools.log"; : > "$T_TOOLSLOG"
 runit T_REV=CLEAN T_ADV=UPHELD > /dev/null
 rev_tools=$(grep '^rev-01-correctness.md|' "$T_TOOLSLOG" | cut -d'|' -f2)
@@ -256,8 +256,8 @@ check "제한 있는 dev 도 strict"   1 "$(grep '^dev-01.md|' "$T_TOOLSLOG" | c
 unset T_TOOLSLOG
 
 echo "== N. --resume 이 adv 수정분 판정을 덮지 않는다 =="
-# adv BROKEN 뒤 dev 수정은 "FILES: 없음"(고칠 코드가 없다)으로 끝나는 경우가 실재한다.
-# 그 판정이 재실행으로 덮이면 왜 안 고쳤는지가 함께 사라진다 (ISS-570 dev-02 실측)
+# adv BROKEN 뒤 dev 수정은 "FILES: 없음"(고칠 코드가 없다)으로 끝나는 경우가 있다.
+# 그 판정이 재실행으로 덮이면 왜 안 고쳤는지가 함께 사라진다
 reset; runit T_REV=CLEAN T_ADV='BROKEN,UPHELD' > /dev/null
 RUN=$(basename "$(d)")
 printf '판정: FILES 없음 — 고칠 코드가 없다\n' > "$ST/$RUN/dev-02.md"
@@ -267,7 +267,6 @@ check "adv 수정분 판정 보존" "$before" "$(md5sum "$ST/$RUN/dev-02.md" | c
 check "재사용 로그" 1 "$(grep -c '기존 산출물 재사용' "$TMP/out.txt")"
 
 echo "== W. GATE 판정 줄 — 헤더·강조 표기는 인정, 줄 없음·본문 언급은 중단 (fail-closed) =="
-# 러너가 TOO-LARGE 로 시작하는 줄만 찾던 시절엔 헤더형 TOO-LARGE 도, 판정 줄 없음도 진행했다
 reset; rc=$(runit T_GATE_LINE='## GATE: OK' T_REV=CLEAN T_ADV=UPHELD)
 check "## GATE: OK 진행" 0 "$rc"
 check "## GATE: OK 개발자 실행" 1 "$(cnt 'dev-*.md')"
@@ -284,8 +283,8 @@ reset; rc=$(runit T_GATE_LINE='- 이전엔 GATE: OK 였다')
 check "본문 언급만 있으면 중단" 1 "$rc"
 
 echo "== X. VERDICT 판정 줄 — 헤더·강조 표기는 인정, 본문 언급은 중단 (fail-closed) =="
-# 2026-09-24 ISS-966 run: 합본 스텝이 `## VERDICT: …` 로 써서 러너가 "VERDICT 줄 없음" 으로
-# 두 번 중단했다. GATE 줄(W)은 헤더 표기를 인정하는데 VERDICT 줄만 못 읽는 비대칭이었다
+# 합본 스텝이 `## VERDICT: …` 로 쓰면 헤더 표기를 인정해야 한다 — GATE 줄(W)은 헤더
+# 표기를 인정하는데 VERDICT 줄만 못 읽는 비대칭을 막는다
 reset; rc=$(runit T_VFMT='## VERDICT: %s' T_REV=CLEAN T_ADV=UPHELD)
 check "헤더 표기 — 완주" 0 "$rc"
 check "헤더 표기 — adv 도달" 1 "$(cnt 'adv-*.md')"
@@ -298,7 +297,7 @@ check "본문 언급 — adv 미실행" 0 "$(cnt 'adv-*.md')"
 
 echo "== Y. 러너가 WORKTREE 의 vendor 를 직접 채운다 (ISS-285 후속) =="
 # 에이전트 재량에 두면 원본 vendor 로 junction 을 건다 — 그 worktree 를 --force 로 지우면
-# 원본 vendor 가 따라 지워진다(ISS-285). 그래서 러너가 WORKTREE: 줄을 읽고 ensure 를 부른다
+# 원본 vendor 가 따라 지워진다. 그래서 러너가 WORKTREE: 줄을 읽고 ensure 를 부른다
 WT_PHP="$TMP/wt-php"; WT_NOLOCK="$TMP/wt-nolock"
 mkdir -p "$WT_PHP" "$WT_NOLOCK"; : > "$WT_PHP/composer.lock"
 reset; : > "$HOME/vendor-pool.calls"

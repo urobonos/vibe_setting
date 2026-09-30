@@ -8,7 +8,7 @@
 #   요약이 worktree 경로를 빠뜨리면 압축 후 develop 직접 편집(§4.3 worktree 강제 위반) ·
 #   미커밋 변이 유실(메모리 local-athena-mutation-revert-destroys-uncommitted)로 이어진다 — 실발생 축이다.
 #
-# 스키마 근거 (2026-09-16 `bin/claude.exe` 실측):
+# 스키마 근거 (`bin/claude.exe` 실측):
 #   SessionStart source enum = ["startup","resume","clear","compact","fork"]  + additionalContext 주입 지원
 #   PostCompact 는 compact_summary 를 stdin 으로 받지만 hookSpecificOutput 스키마가 없어 **되먹임 불가**
 #   PreCompact 는 exit 2 로 압축을 막을 뿐 지시를 바꾸지 못한다

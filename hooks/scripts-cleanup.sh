@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts-cleanup.sh — SessionStart hook (2026-05-20 도입)
+# scripts-cleanup.sh — SessionStart hook
 #
 # 정책: 사용자 직접 실행 명령 스크립트화 (CLAUDE.md §4.2) 의 GC.
 #   `~/.claude/docs/scripts/*.sh` 중 mtime > 7일 자동 삭제.

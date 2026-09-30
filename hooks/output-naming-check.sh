@@ -5,11 +5,11 @@
 # 대상:
 #   - ~/.claude/docs/{product}/output/{topic-slug}/{파일명}.md
 #   - ~/.claude/docs/{product}/tasks/YYYYMMDD/{작업명}/{파일명}.md
-#   - ~/.claude/docs/working/YYYYMMDD/{파일명}.md  (2026-05-12 시행, product 분리 없음)
+#   - ~/.claude/docs/working/YYYYMMDD/{파일명}.md  (product 분리 없음)
 #
 # 규칙 (task-docs SKILL.md §산출물 네이밍 규칙):
 #   - output/ 허용:  {yyyy-mm-dd}-{topic-slug}-{type}.md
-#   - tasks/ 허용:   {yyyy-mm-dd}-{작업명}-{analyze|plan|result|unified}.md (unified 는 2026-05-12~ 신규)
+#   - tasks/ 허용:   {yyyy-mm-dd}-{작업명}-{analyze|plan|result|unified}.md
 #   - working/ 허용: {yyyy-mm-dd}-{product}-{작업명}.md  (단일 파일, 하위 폴더 금지)
 #   - 공통 필수:     파일명은 ^[0-9]{4}-[0-9]{2}-[0-9]{2}- 날짜 prefix 로 시작
 #   - 공통 금지:     generic 단독 이름 (analysis.md, result.md, report.md, recommendation.md, comparison.md, guide.md, proposal.md, summary.md, doc.md, notes.md, readme.md, analyze.md, unified.md)
@@ -21,7 +21,7 @@
 #   - tasks/YYYYMMDD/{작업명}/steps/{단계}.md (날짜 prefix 면제, generic 금지는 유지)
 #     working-lifecycle.sh 의 `step 평면 파일 → steps/ 분배 이동` 이 mv 로 배치 — 회귀 테스트 = tests/run-guard-tests.sh §H
 
-# early-exit 최적화 (2026-07-03): docs/ 경로 여부를 lib source 전 bash 내장으로 판정.
+# early-exit 최적화: docs/ 경로 여부를 lib source 전 bash 내장으로 판정.
 #   본 hook 은 output//tasks//working/ (전부 /docs/ 하위) 전용 → docs 무관 편집은 즉시 exit.
 #   lib 2개(hook-input+path-utils) source + normalize fork 세금을 대부분 편집에서 회피.
 STDIN_DATA=$(cat 2>/dev/null)
@@ -96,7 +96,7 @@ if [ "$KIND" = "tasks" ]; then
   CONTEXT_SLUG="$WORK_NAME"
 fi
 
-# working/ 구조 검증 — working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md 단일 파일 (2026-05-12 시행)
+# working/ 구조 검증 — working/YYYYMMDD/{yyyy-mm-dd}-{product}-{작업명}.md 단일 파일
 if [ "$KIND" = "working" ]; then
   REL_FROM_DATE=$(echo "$FILE_PATH" | sed -E 's|.*/docs/working/[0-9]{8}/||')
   DEPTH=$(echo "$REL_FROM_DATE" | awk -F/ '{print NF}')
