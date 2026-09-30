@@ -21,7 +21,8 @@
 #   code-loop.sh --resume {run}     중단된 run 을 마지막 스텝 다음부터
 #   code-loop.sh status             run 목록
 #
-# 환경변수: CODE_LOOP_PERM(기본 auto) / CODE_LOOP_MODEL_{SPEC,DEV,REV,ADV}
+# 환경변수: CODE_LOOP_PERM(기본 auto) / CODE_LOOP_MODEL_{SPEC,DEV,REV,ADV} / CODE_LOOP_EFFORT_{DEV,REV,ADV}
+#           CODE_LOOP_TIER(기본 auto — 지정 안 한 역할은 spec 판정·라운드로 등급 결정, off = frontmatter 고정)
 # SSOT: custom-plugin/taskflow/commands/code-loop.md
 set -uo pipefail
 
@@ -48,6 +49,97 @@ M_REV="${M_REV:-sonnet}"
 # adversary 는 opus 고정이다. 이 역할만 "리뷰어가 통과시킨 것을 깨는" 일이고,
 # 클린을 못 깨면 루프가 거기서 끝나므로 마지막 방어선의 판단력은 내리지 않는다
 M_ADV="${CODE_LOOP_MODEL_ADV:-opus}"
+
+# ── 등급(모델:effort) 자동 결정 ────────────────────────────────────────────
+# M_* 는 "모델" 또는 "모델:effort" 다. run_step 이 둘로 나눠 --model / --effort 로 넘긴다.
+# 환경변수로 지정한 역할은 사람 지정이라 자동 결정·승격 모두 건드리지 않는다.
+TIER_MODE="${CODE_LOOP_TIER:-auto}"
+F_DEV="${CODE_LOOP_MODEL_DEV:+1}${CODE_LOOP_EFFORT_DEV:+1}"
+F_REV="${CODE_LOOP_MODEL_REV:+1}${CODE_LOOP_EFFORT_REV:+1}"
+F_ADV="${CODE_LOOP_MODEL_ADV:+1}${CODE_LOOP_EFFORT_ADV:+1}"
+[ -n "${CODE_LOOP_EFFORT_DEV:-}" ] && M_DEV="$M_DEV:$CODE_LOOP_EFFORT_DEV"
+[ -n "${CODE_LOOP_EFFORT_REV:-}" ] && M_REV="$M_REV:$CODE_LOOP_EFFORT_REV"
+[ -n "${CODE_LOOP_EFFORT_ADV:-}" ] && M_ADV="$M_ADV:$CODE_LOOP_EFFORT_ADV"
+
+model_rank()  { case "$1" in opus) echo 2 ;; *) echo 1 ;; esac; }
+effort_rank() { case "$1" in xhigh) echo 3 ;; high) echo 2 ;; *) echo 1 ;; esac; }
+
+# effort 는 medium 이 바닥이다 — dev 가 테스트·호출부 확인을 건너뛰면 리뷰 1라운드가 더 돌고,
+# 그 비용이 low 로 아낀 것보다 크다. 상한은 sonnet=high · opus=xhigh, max 는 쓰지 않는다.
+tier_clamp() {
+  local m="${1%%:*}" e="${1#*:}"
+  [ "$e" = "$1" ] && e=medium
+  case "$e" in medium|high|xhigh) ;; max) e=xhigh ;; *) e=medium ;; esac
+  [ "$m" = opus ] || [ "$e" != xhigh ] || e=high
+  printf '%s:%s' "$m" "$e"
+}
+
+# 둘 중 높은 등급 — 모델·effort 를 각각 올린다
+tier_max() {
+  local a b m e
+  a=$(tier_clamp "$1"); b=$(tier_clamp "$2")
+  m=${a%%:*}; [ "$(model_rank "${b%%:*}")" -gt "$(model_rank "$m")" ] && m=${b%%:*}
+  e=${a#*:};  [ "$(effort_rank "${b#*:}")" -gt "$(effort_rank "$e")" ] && e=${b#*:}
+  tier_clamp "$m:$e"
+}
+
+# 기계 최소치 — spec 제목·SCOPE_FILES 에 위험 영역이 보이면 LLM 이 낮게 봐도 opus:high.
+# 성공 기준 개수는 게이트가 이미 3개 이하로 걸러 난이도를 가르지 못한다.
+TIER_RISK_RE='migrat|\.sql|/database/|auth|login|password|payment|coin|pii|security|crypt|token|session|cookie|permission'
+tier_floor() {
+  local spec="$1"
+  if { head -1 "$spec"; grep -m1 '^SCOPE_FILES:' "$spec"; } | grep -qiE "$TIER_RISK_RE"; then
+    echo "opus:high 위험영역"
+  else
+    echo "sonnet:medium 기본"
+  fi
+}
+
+TIER_LOG=""
+tier_note() { echo "=== 등급: $1"; [ -n "$TIER_LOG" ] && echo "- $1" >> "$TIER_LOG"; }
+
+# spec 직후 시작 등급 = max(기계 최소치, spec 의 TIER/EFFORT). 판정 줄이 없거나 이상하면 opus:high.
+tier_init() {
+  local spec="$1" floor why llm m e start
+  TIER_LOG="$(dirname "$spec")/TIER.md"
+  read -r floor why <<<"$(tier_floor "$spec")"
+  m=$(sed -n 's/^TIER:[[:space:]]*\([a-z]*\).*/\1/p' "$spec" | head -1)
+  e=$(sed -n 's/^EFFORT:[[:space:]]*\([a-z]*\).*/\1/p' "$spec" | head -1)
+  case "$m" in sonnet|opus) ;; *) m=opus; e=high ;; esac
+  case "$e" in medium|high|xhigh) ;; low) e=medium ;; *) e=high ;; esac
+  llm="$m:$e"
+  start=$(tier_max "$floor" "$llm")
+  [ -s "$TIER_LOG" ] || echo "# 등급 이력" > "$TIER_LOG"
+  [ -z "$F_DEV" ] && M_DEV="$start"
+  [ -z "$F_REV" ] && M_REV="$start"
+  [ -z "$F_ADV" ] && M_ADV=$(tier_max "$M_ADV" "opus:high")
+  tier_note "시작 dev=$M_DEV rev=$M_REV adv=$M_ADV — 최소치=$floor($why) · spec=$llm"
+}
+
+# adversary 가 깬 횟수 — resume 해도 같은 값이 나오게 파일에서 센다
+adv_broken_count() {
+  local f c=0
+  for f in "$1"/adv-*.md; do
+    [ -s "$f" ] || continue
+    case "$(verdict_of "$f")" in BROKEN-UNDECIDED*) ;; BROKEN*) c=$((c + 1)) ;; esac
+  done
+  echo "$c"
+}
+
+# 승격 — 올라가기만 한다. 리뷰 3라운드째·adv 가 1번 깨면 dev·rev 를 opus:high 로,
+# adv 가 2번 이상 깨면 리뷰어가 클린을 거듭 잘못 낸 것이라 dev·rev·adv 모두 opus:xhigh 로.
+tier_escalate() {
+  local round="$1" broken="$2" target="" why="" before="$M_DEV/$M_REV/$M_ADV"
+  [ "$TIER_MODE" = auto ] || return 0
+  if [ "$broken" -ge 2 ]; then target="opus:xhigh"; why="adv $broken회 깸"
+  elif [ "$broken" -ge 1 ]; then target="opus:high"; why="adv $broken회 깸"
+  elif [ "$round" -ge 3 ]; then target="opus:high"; why="리뷰 ${round}라운드째"
+  else return 0; fi
+  [ -z "$F_DEV" ] && M_DEV=$(tier_max "$M_DEV" "$target")
+  [ -z "$F_REV" ] && M_REV=$(tier_max "$M_REV" "$target")
+  [ -z "$F_ADV" ] && [ "$broken" -ge 2 ] && M_ADV=$(tier_max "$M_ADV" "$target")
+  [ "$before" = "$M_DEV/$M_REV/$M_ADV" ] || tier_note "승격 dev=$M_DEV rev=$M_REV adv=$M_ADV — $why"
+}
 
 # 기본 무제한(0). 캡을 걸려면 환경변수로:
 #   CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2 code-loop.sh "요청"
@@ -136,11 +228,12 @@ claude_with_timeout() {
 # 모델이 "못 하겠다"고 말하고 끝난 경우에도 나오므로 성공 신호가 못 된다
 # $1 라벨 / $2 모델 / $3 허용 도구(비면 제한 없음) / $4 산출 파일 / $5 프롬프트
 run_step() {
-  local label="$1" model="$2" tools="$3" out="$4" prompt="$5" rc try=0 limit log
+  local label="$1" model="${2%%:*}" tools="$3" out="$4" prompt="$5" rc try=0 limit log effort=()
+  [ "$2" = "$model" ] || effort=(--effort "${2#*:}")
   limit=$(step_timeout_min "$label")
   while [ "$try" -lt 2 ]; do
     try=$((try + 1))
-    echo "--- $(date '+%T') [$label] model=$model tools=${tools:-*} try=$try"
+    echo "--- $(date '+%T') [$label] model=$model${effort[1]:+ effort=${effort[1]}} tools=${tools:-*} try=$try"
     log=$(mktemp)
     cd "$CLAUDE_HOME" || return 1
     # 프롬프트는 stdin 으로 준다. 인자로 주면 두 군데서 깨진다:
@@ -154,11 +247,11 @@ run_step() {
     # 메모리 파일은 꺼도 필요하면 경로로 직접 읽힌다. 싣지 않으면 첫 호출 토큰이 크게 준다.
     if [ -n "$tools" ]; then
       printf '%s' "$prompt" | CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude_with_timeout "$limit" "$log" -p --model "$model" \
-        --strict-mcp-config --disable-slash-commands \
+        "${effort[@]}" --strict-mcp-config --disable-slash-commands \
         --allowed-tools "$tools" --permission-mode "$PERM"
     else
       printf '%s' "$prompt" | CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 claude_with_timeout "$limit" "$log" -p --model "$model" \
-        --strict-mcp-config --disable-slash-commands \
+        "${effort[@]}" --strict-mcp-config --disable-slash-commands \
         --permission-mode "$PERM"
     fi
     rc=${PIPESTATUS[1]}
@@ -939,6 +1032,10 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
 테스트 파일 경로도 넣는다). 셸이 이 밖의 변경을 리뷰어와 결과문서에 드러낸다:
   SCOPE_FILES: {glob}, {glob}
 vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·symlink 로 링크하지 않는다.
+개발자·리뷰어의 등급을 기계 판독용 두 줄로 쓴다 (러너가 모델·effort 를 고른다. 위험 영역은 러너가 따로 올린다):
+  TIER: sonnet | opus          — sonnet 은 로직 변경이 없거나 이미 검증된 처방을 그대로 반복하는 국소 수정만
+  EFFORT: medium | high | xhigh — xhigh 는 opus 에만, 설계 판단·다파일 정합이 걸린 경우
+판단이 서지 않으면 TIER: opus / EFFORT: high 를 쓴다.
 구현할 것이 없으면(코드 작업이 남지 않았거나 사용자 결정·§3 판단이 미결) worktree·00-spec.md 를 만들지 않고
 $dir/RESULT.md 에만 남긴다. 판정 줄은 정확히 한 줄 \`## 판정: 미착수\` 이고 그 아래에 이유와 재진입 조건을 적는다 —
 러너는 이것을 실패가 아니라 반환으로 기록한다.
@@ -996,6 +1093,12 @@ $request"
   # (SSOT = custom-plugin/taskflow/hooks/gate-enforce.sh plan-before 절)
   export CODE_LOOP_SPEC="$dir/00-spec.md"
 
+  if [ "$TIER_MODE" = auto ]; then
+    tier_init "$dir/00-spec.md"
+  else
+    echo "=== 등급: 자동 결정 꺼짐(CODE_LOOP_TIER=$TIER_MODE) — dev=$M_DEV rev=$M_REV adv=$M_ADV"
+  fi
+
   # vendor 는 에이전트 재량에 두지 않고 러너가 채운다. 에이전트가 원본
   # vendor 로 junction 을 걸면 `git worktree remove --force` 가 그걸 따라가 원본을 지운다.
   local spec_worktree
@@ -1022,6 +1125,7 @@ $request"
     if [ "$DEV_CAP" -gt 0 ] && [ "$n" -gt "$DEV_CAP" ]; then break; fi
     nn=$(printf '%02d' "$n")
     echo "=== dev-loop 라운드 $n/$(cap_label "$DEV_CAP")"
+    tier_escalate "$n" 0
 
     if [ ! -s "$dir/dev-$nn.md" ]; then
       local prev_rev="" whys=""
@@ -1083,6 +1187,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
         if [ "$ADV_CAP" -gt 0 ] && [ "$m" -gt "$ADV_CAP" ]; then break; fi
         mm=$(printf '%02d' "$m")
         echo "=== adv-loop $m/$(cap_label "$ADV_CAP")"
+        tier_escalate "$n" "$(adv_broken_count "$dir")"
         if [ ! -s "$dir/adv-$mm.md" ]; then
           local adv_body="$common
 
@@ -1125,6 +1230,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
               break
             fi
             echo "=== BROKEN — dev-loop 재진입 (라운드 $n, 정규 캡 계상)"
+            tier_escalate "$n" "$(adv_broken_count "$dir")"
             nn2=$(printf '%02d' "$n")
             local fix_body="$common
 적대적 검증이 깼다: $dir/adv-$mm.md 의 재현 명령·출력을 읽고 고친다.
@@ -1167,7 +1273,7 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
   local result_body="$common
 
 $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md 를 쓴다.
-담을 것: 변경 요약(파일·무엇을) · 라운드 로그(dev 라운드 수 · adv 회차 · 각 VERDICT) ·
+담을 것: 변경 요약(파일·무엇을) · 라운드 로그(dev 라운드 수 · adv 회차 · 각 VERDICT · $dir/TIER.md 의 등급 이력) ·
 잔여 핸드오프(범위밖·Low·재현물) · worktree 경로와 커밋 여부.
 이것만 메인이 읽는다 — 여기 없는 것은 메인에 존재하지 않는다. 간결하게 쓴다."
   if ! run_step result "$M_SPEC" "" "$dir/RESULT.md" "$result_body"; then

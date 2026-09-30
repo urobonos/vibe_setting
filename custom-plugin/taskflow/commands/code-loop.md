@@ -59,7 +59,13 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        └ claude -p [result]            sonnet  → RESULT.md  ← 메인은 이것만 읽는다
 ```
 
-dev·rev 모델은 러너가 에이전트 정의(`step-developer.md` · `reviewer-correctness.md`)의 `model:` 에서 읽는다. 전환 = `/taskflow:models dev=… rev=…`, 1회만 바꿀 때 = `CODE_LOOP_MODEL_DEV` / `CODE_LOOP_MODEL_REV` 환경변수.
+**dev·rev·adv 등급(모델·effort)은 러너가 run 마다 정한다** (`CODE_LOOP_TIER=auto`, 기본).
+
+- 시작 = max(기계 최소치, spec 의 `TIER:`/`EFFORT:` 줄). spec 제목·`SCOPE_FILES` 에 위험 영역(migration·sql·auth·결제·coin·PII·보안·세션·쿠키·권한)이 보이면 최소치 opus:high, 아니면 sonnet:medium. 판정 줄이 없으면 opus:high. adv 는 opus:high 바닥.
+- 승격(올라가기만) = 리뷰 3라운드째 또는 adv 1회 깸 → dev·rev opus:high / adv 2회 이상 깸 → dev·rev·adv opus:xhigh.
+- effort 범위 = medium~high(sonnet) · medium~xhigh(opus). low·max 는 쓰지 않는다.
+- 이력 = `{run}/TIER.md` → RESULT.md 라운드 로그.
+- 사람 지정이 이긴다 — `CODE_LOOP_MODEL_{DEV,REV,ADV}` · `CODE_LOOP_EFFORT_{DEV,REV,ADV}` 로 지정한 역할은 자동 결정·승격 모두 건너뛴다. `CODE_LOOP_TIER=off` 면 에이전트 정의 frontmatter `model:` 고정(effort 미지정).
 
 **각 `claude -p` 의 프롬프트 = 에이전트 정의 전문 + 작업 지시다.** Agent 도구로 spawn 하는 것이 아니라 **프로세스 자체가 그 역할을 수행한다.** 그래서 정의 파일(`agents/*.md`)이 그대로 계약으로 작동하고, 모델은 정의 frontmatter 와 일치시킨다.
 

@@ -61,10 +61,12 @@ cat > "$TMP/bin/claude" <<'STUB'
 # 실제 CLI 와 같은 계약으로 받는다 — 프롬프트는 stdin, 도구 제한은 --allowed-tools.
 # (인자로 받던 예전 stub 은 프롬프트가 --- 로 시작할 때 CLI 가 옵션으로 파싱하는
 #  실제 결함을 못 잡았다. 2026-09-16 실사용에서 처음 드러났다)
-tools=""; strict=0
+tools=""; strict=0; model=""; effort=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --allowed-tools) tools="${2:-}"; shift 2 ;;
+    --model) model="${2:-}"; shift 2 ;;
+    --effort) effort="${2:-}"; shift 2 ;;
     --strict-mcp-config) strict=1; shift ;;
     *) shift ;;
   esac
@@ -123,6 +125,7 @@ esac
 if [ -n "${T_TOOLSLOG:-}" ]; then
   printf '%s|%s|%s|%s\n' "$base" "$tools" "$(printf '%s' "$prompt" | head -1)" "$strict" >> "$T_TOOLSLOG"
 fi
+[ -n "${T_MODELLOG:-}" ] && printf '%s|%s|%s\n' "$base" "$model" "${effort:--}" >> "$T_MODELLOG"
 echo "stub: wrote $base"
 STUB
 chmod +x "$TMP/bin/claude"
@@ -449,6 +452,42 @@ check "산출·RESULT 없음 — 실패(1)" 1 "$rc"
 check "산출·RESULT 없음 — 기존대로 재시도" 2 "$(grep -c '\[spec\] model=' "$TMP/out.txt")"
 reset; rc=$(runit T_SPEC_DECLINE=1 T_SPEC_DECLINE_RC=1)
 check "미착수라도 exit≠0 — 실패(1)" 1 "$rc"
+
+echo "== AJ. 등급 자동 결정 — 시작 = max(위험영역 최소치, spec 판정) · 라운드·adv 깸으로 승격 =="
+ML="$TMP/models.log"
+tier_of() { grep "^$1|" "$ML" | tail -1 | cut -d'|' -f2,3; }
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: medium' T_REV=CLEAN T_ADV=UPHELD)
+check "spec 판정 sonnet — dev" "sonnet|medium" "$(tier_of dev-01.md)"
+check "spec 판정 sonnet — 리뷰어" "sonnet|medium" "$(tier_of rev-01-correctness.md)"
+check "adv 는 opus:high 바닥" "opus|high" "$(tier_of adv-01.md)"
+check "spec 스텝은 effort 미지정" "sonnet|-" "$(tier_of 00-spec.md)"
+check "등급 이력 TIER.md" 1 "$(grep -c '^- 시작 dev=sonnet:medium' "$(d)/TIER.md")"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: medium\nSCOPE_FILES: app/Database/Migrations/*' T_REV=CLEAN T_ADV=UPHELD)
+check "위험영역 — spec 이 sonnet 이어도 opus:high" "opus|high" "$(tier_of dev-01.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_REV=CLEAN T_ADV=UPHELD)
+check "판정 줄 없음 — opus:high" "opus|high" "$(tier_of dev-01.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: low' T_REV=CLEAN T_ADV=UPHELD)
+check "effort low — medium 으로 올림" "sonnet|medium" "$(tier_of dev-01.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: xhigh' T_REV=CLEAN T_ADV=UPHELD)
+check "sonnet xhigh — high 로 내림" "sonnet|high" "$(tier_of dev-01.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet\nEFFORT: medium' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
+check "리뷰 2라운드까지 유지" "sonnet|medium" "$(tier_of dev-02.md)"
+check "3라운드째 승격 — dev" "opus|high" "$(tier_of dev-03.md)"
+check "3라운드째 승격 — 리뷰어" "opus|high" "$(tier_of rev-03-design.md)"
+check "승격 이력" 1 "$(grep -c '승격 .*리뷰 3라운드째' "$(d)/TIER.md")"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_ADV_CAP=3 T_SPECNOTE='TIER: sonnet\nEFFORT: medium' T_REV=CLEAN T_ADV='BROKEN,BROKEN,UPHELD')
+check "adv 1회 깸 — 수정 dev opus:high" "opus|high" "$(tier_of dev-02.md)"
+check "adv 1회 깸 — 수정분 리뷰어 opus:high" "opus|high" "$(tier_of rev-02-correctness.md)"
+check "adv 1회 깸 — adv 는 그대로" "opus|high" "$(tier_of adv-02.md)"
+check "adv 2회 깸 — 수정 dev opus:xhigh" "opus|xhigh" "$(tier_of dev-03.md)"
+check "adv 2회 깸 — adv opus:xhigh" "opus|xhigh" "$(tier_of adv-03.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_MODEL_DEV=sonnet T_SPECNOTE='TIER: opus\nEFFORT: high' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
+check "환경변수 지정 dev — 자동 결정·승격 안 함" "sonnet|-" "$(tier_of dev-03.md)"
+check "지정 안 한 리뷰어는 자동" "opus|high" "$(tier_of rev-01-correctness.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_TIER=off T_SPECNOTE='TIER: opus\nEFFORT: xhigh' T_REV='FINDINGS C=0 H=1 M=0,FINDINGS C=0 H=1 M=0,CLEAN' T_ADV=UPHELD)
+check "TIER=off — frontmatter 그대로" "sonnet|-" "$(tier_of dev-03.md)"
+check "TIER=off — TIER.md 없음" 0 "$([ -e "$(d)/TIER.md" ] && echo 1 || echo 0)"
+check "spec 프롬프트에 TIER 지시" 1 "$(T_PROMPTDIR="$TMP/p2"; mkdir -p "$T_PROMPTDIR"; reset; runit T_PROMPTDIR="$T_PROMPTDIR" T_REV=CLEAN T_ADV=UPHELD >/dev/null; grep -c 'TIER: sonnet | opus' "$T_PROMPTDIR/00-spec.md.prompt")"
 
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
