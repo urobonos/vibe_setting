@@ -21,7 +21,7 @@
 #   code-loop.sh --resume {run}     중단된 run 을 마지막 스텝 다음부터
 #   code-loop.sh status             run 목록
 #
-# 환경변수: CODE_LOOP_PERM(기본 auto) / CODE_LOOP_MODEL_{SPEC,DEV,REV,ADV} / CODE_LOOP_EFFORT_{DEV,REV,ADV}
+# 환경변수: CODE_LOOP_PERM(기본 auto) / CODE_LOOP_MODEL_{SPEC,SUM,DEV,REV,ADV} / CODE_LOOP_EFFORT_{DEV,REV,ADV}
 #           CODE_LOOP_TIER(기본 auto — 지정 안 한 역할은 spec 판정·라운드로 등급 결정, off = frontmatter 고정)
 # SSOT: custom-plugin/taskflow/commands/code-loop.md
 set -uo pipefail
@@ -41,7 +41,10 @@ PERM="${CODE_LOOP_PERM:-auto}"
 agent_model() {
   sed -n '1,/^---$/{/^model:[[:space:]]*/{s///;s/[[:space:]]*$//;p;q;}}' "$AGENT_DIR/$1" 2>/dev/null
 }
-M_SPEC="${CODE_LOOP_MODEL_SPEC:-sonnet}"
+# spec 은 opus:medium — spec 이 모집단을 못 닫으면 adv 가 매 회차 같은 구멍으로 깬다 (701·850 BROKEN 반복, 10-01).
+# merge·RESULT 는 요약 스텝이라 sonnet 그대로 (M_SUM)
+M_SPEC="${CODE_LOOP_MODEL_SPEC:-opus:medium}"
+M_SUM="${CODE_LOOP_MODEL_SUM:-sonnet}"
 M_DEV="${CODE_LOOP_MODEL_DEV:-$(agent_model step-developer.md)}"
 M_DEV="${M_DEV:-sonnet}"
 M_REV="${CODE_LOOP_MODEL_REV:-$(agent_model reviewer-correctness.md)}"
@@ -139,12 +142,12 @@ tier_escalate() {
   [ "$before" = "$M_DEV/$M_REV/$M_ADV" ] || tier_note "승격 dev=$M_DEV rev=$M_REV adv=$M_ADV — $why"
 }
 
-# dev 캡은 기본 무제한(0), adv 캡은 기본 5. 바꾸려면 환경변수로 (0 = 무제한):
+# dev 캡은 기본 무제한(0), adv 캡은 기본 3. 바꾸려면 환경변수로 (0 = 무제한):
 #   CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2 code-loop.sh "요청"
 # 루프의 정상 종료는 캡이 아니라 판정이다 — dev 는 리뷰 CLEAN, adv 는 UPHELD.
 # adv 는 캡이 있다 — 깰 때마다 dev 재진입·리뷰가 한 벌씩 붙어 무제한이면 비용이 끝없이 쌓인다.
 DEV_CAP="${CODE_LOOP_DEV_CAP:-0}"   # 정규 라운드 캡 · 0 = 무제한
-ADV_CAP="${CODE_LOOP_ADV_CAP:-5}"   # 적대적 게이트 캡 · 0 = 무제한
+ADV_CAP="${CODE_LOOP_ADV_CAP:-3}"   # 적대적 게이트 캡 · 0 = 무제한
 ADV_CAP_EXIT=4                      # adv 캡에서 BROKEN 으로 멈춘 run 의 종료 코드 — RESULT 는 있지만 수렴 못 했다
 ADV_UNDECIDED_CAP=3                 # BROKEN-UNDECIDED 재스폰 상한 — 회차·캡과 별도로 센다
 cap_label() { if [ "${1:-0}" -gt 0 ]; then printf '%s' "$1"; else printf '무제한'; fi; }
@@ -497,7 +500,7 @@ $hist"
 마지막 줄에 기계 판독용으로 정확히 한 줄:
   VERDICT: CLEAN                      (Critical·High·Medium 모두 0)
   VERDICT: FINDINGS C=n H=n M=n       (하나라도 잔존)"
-  if ! run_step "merge-$nn" "$M_SPEC" "" "$dir/rev-$nn.md" "$merge_body"; then
+  if ! run_step "merge-$nn" "$M_SUM" "" "$dir/rev-$nn.md" "$merge_body"; then
     echo "!!! 합본 실패 — 중단"
     return 1
   fi
@@ -1452,7 +1455,7 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
 담을 것: 변경 요약(파일·무엇을) · 라운드 로그(dev 라운드 수 · adv 회차 · 각 VERDICT · $dir/TIER.md 의 등급 이력) ·
 잔여 핸드오프(범위밖·Low·재현물) · worktree 경로와 커밋 여부.
 이것만 메인이 읽는다 — 여기 없는 것은 메인에 존재하지 않는다. 간결하게 쓴다."
-  if ! run_step result "$M_SPEC" "" "$dir/RESULT.md" "$result_body"; then
+  if ! run_step result "$M_SUM" "" "$dir/RESULT.md" "$result_body"; then
     echo "!!! RESULT.md 생성 실패"
   fi
 

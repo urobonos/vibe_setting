@@ -469,7 +469,8 @@ reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: sonnet' T_REV=CL
 check "spec 판정 sonnet — dev" "sonnet|medium" "$(tier_of dev-01.md)"
 check "spec 판정 sonnet — 리뷰어" "sonnet|medium" "$(tier_of rev-01-correctness.md)"
 check "adv 는 opus:medium 시작" "opus|medium" "$(tier_of adv-01.md)"
-check "spec 스텝은 effort 미지정" "sonnet|-" "$(tier_of 00-spec.md)"
+check "spec 스텝은 opus:medium" "opus|medium" "$(tier_of 00-spec.md)"
+check "RESULT 스텝은 sonnet" "sonnet|-" "$(tier_of RESULT.md)"
 check "등급 이력 TIER.md" 1 "$(grep -c '^- 시작 dev=sonnet:medium' "$(d)/TIER.md")"
 reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" T_SPECNOTE='TIER: opus\nEFFORT: xhigh' T_REV=CLEAN T_ADV=UPHELD)
 check "spec 판정 opus — medium 에서 시작(EFFORT 줄 무시)" "opus|medium" "$(tier_of dev-01.md)"
@@ -644,14 +645,14 @@ check "UNDECIDED — 소진 로그" 1 "$(grep -c 'BROKEN-UNDECIDED 재스폰 3�
 check "UNDECIDED — 마지막 판정 보존" 1 "$(cnt 'adv-*.md')"
 check "UNDECIDED — RESULT 첫 줄 [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=CLEAN adv=BROKEN-UNDECIDED')"
 
-echo "== AP. adv 캡 기본 5 — 캡 회차에서 BROKEN 이면 dev 재진입 없이 종료(4) · 0 은 무제한 =="
+echo "== AP. adv 캡 기본 3 — 캡 회차에서 BROKEN 이면 dev 재진입 없이 종료(4) · 0 은 무제한 =="
 # 빈 값 = 미지정 — 이 테스트 전역의 CODE_LOOP_ADV_CAP=2 를 걷어 기본값을 본다
-reset; rc=$(runit CODE_LOOP_ADV_CAP= CODE_LOOP_DEV_CAP=0 T_REV=CLEAN T_ADV='BROKEN,BROKEN,BROKEN,BROKEN,BROKEN')
+reset; rc=$(runit CODE_LOOP_ADV_CAP= CODE_LOOP_DEV_CAP=0 T_REV=CLEAN T_ADV='BROKEN,BROKEN,BROKEN')
 check "기본 캡 — 종료 4" 4 "$rc"
-check "기본 캡 — adv 5회" 5 "$(cnt 'adv-*.md')"
-check "기본 캡 — 5회째 BROKEN 뒤 dev 재진입 없음" 5 "$(cnt 'dev-*.md')"
-check "기본 캡 — 캡 도달 로그" 1 "$(grep -c '=== adv 캡 도달 (5/5) — dev 재진입 없이 종료' "$TMP/out.txt")"
-check "기본 캡 — RESULT 첫 줄" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=CLEAN adv=BROKEN (adv 캡 도달 5/5)$')"
+check "기본 캡 — adv 3회" 3 "$(cnt 'adv-*.md')"
+check "기본 캡 — 3회째 BROKEN 뒤 dev 재진입 없음" 3 "$(cnt 'dev-*.md')"
+check "기본 캡 — 캡 도달 로그" 1 "$(grep -c '=== adv 캡 도달 (3/3) — dev 재진입 없이 종료' "$TMP/out.txt")"
+check "기본 캡 — RESULT 첫 줄" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=CLEAN adv=BROKEN (adv 캡 도달 3/3)$')"
 check "기본 캡 — status 표기" 1 "$(bash "$SUT" status 2>/dev/null | grep -c 'adv 캡 도달')"
 reset; rc=$(runit CODE_LOOP_ADV_CAP=2 T_REV=CLEAN T_ADV='BROKEN,BROKEN')
 check "캡 2 — 종료 4" 4 "$rc"
