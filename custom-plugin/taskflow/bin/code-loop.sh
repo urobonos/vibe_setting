@@ -900,10 +900,16 @@ verify_mutations() {
     # 조각은 한 줄·파일 안 유일이어야 한다. 이스케이프(\n·\t)는 풀지 않는다 — PHP 소스엔 FQCN
     # (\App\Libraries\notify…)·정규식('\d')·"\n" 처럼 리터럴 백슬래시가 흔해, 풀면 지금 맞는 조각이
     # 틀어진다. 여러 곳에 있는데 첫 위치만 바꾸면 의도와 다른 곳을 변이해 red/green 을 조용히 오판한다.
-    local mrc=0
-    python - "$scratch/$file" "$from" "$to" <<'PY' || mrc=$?
+    # 조각은 파일로 넘긴다 — Git Bash 는 네이티브 python 의 argv·환경변수에서 `/` 로 시작하는 값을
+    # Windows 경로로 바꾼다 ("/api/x" → "C:/Program Files/Git/api/x", "// a" → "/ a").
+    local mrc=0 frag_dir
+    frag_dir=$(dirname "$scratch")
+    printf '%s' "$from" > "$frag_dir/mut-from"; printf '%s' "$to" > "$frag_dir/mut-to"
+    python - "$scratch/$file" "$frag_dir/mut-from" "$frag_dir/mut-to" <<'PY' || mrc=$?
 import sys
-path, before, after = sys.argv[1:]
+path, before_f, after_f = sys.argv[1:]
+before = open(before_f, encoding="utf-8", newline="").read()
+after = open(after_f, encoding="utf-8", newline="").read()
 text = open(path, encoding="utf-8").read()
 n = text.count(before)
 if n == 0:
@@ -913,6 +919,7 @@ if n > 1:
     sys.exit(2)
 open(path, "w", encoding="utf-8", newline="").write(text.replace(before, after, 1))
 PY
+    rm -f "$frag_dir/mut-from" "$frag_dir/mut-to"
     if [ "$mrc" = 1 ]; then
       case "$from" in
         *'\n'*|*'\t'*) echo "!!! [dev-$nn] 변이 원문 조각이 $file 에 없다 — 여러 줄 조각은 지원하지 않는다(\\n·\\t 를 풀지 않는다), 파일 안에서 유일한 한 줄로 — $from" | tee -a "$report" ;;
@@ -929,6 +936,11 @@ PY
     mv -f "$scratch/$file.mutation-orig" "$scratch/$file"
     if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then
       echo "- red ✓ $file: \`$from\` ==> \`$to\`" >> "$report"
+    elif [ "$rc" -ne 0 ]; then
+      # 실패 집계 없이 죽었다(Parse error·Fatal) — 테스트가 판별한 게 아니라 변이가 실행을 깼다
+      echo "!!! [dev-$nn] 판정 무효(변이 후 실행 오류) — 실행 가능한 변이로 바꾼다: $file \`$from\` ==> \`$to\`" | tee -a "$report"
+      printf '%s\n' "$out" | tail -3 | sed 's/^/    /' >> "$report"
+      fail=1
     else
       echo "!!! [dev-$nn] 변이가 GREEN — 테스트가 이 변이를 판별하지 못한다: $file \`$from\` ==> \`$to\`" | tee -a "$report"
       fail=1
@@ -1450,7 +1462,8 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
             nn2=$(printf '%02d' "$n")
             local fix_body="$common
 적대적 검증이 깼다: $dir/adv-$mm.md 의 재현 명령·출력을 읽고 고친다.
-범위는 $dir/00-spec.md 그대로다. $dir/dev-$nn2.md 를 쓴다 (FILES/TESTS/NOTES/BASELINE/WHY)."
+범위는 $dir/00-spec.md 그대로다. $dir/dev-$nn2.md 를 쓴다 (FILES/TESTS/NOTES/BASELINE/CRITERIA/WHY).
+CRITERIA 는 정규 라운드와 같다 — 셸이 같은 재검증(CRITERIA·BASELINE·변이)을 돌린다."
             # dev-loop 의 dev 스텝과 같은 재개 가드. 없으면 --resume 이 끝난 수정을
             # 다시 태우고, 그때 덮이는 것은 코드가 아니라 **판정**이다 — adv 수정분이
             # "FILES: 없음"(고칠 코드가 없다)으로 끝나는 경우가 있고, 그 판정이 사라지면
@@ -1461,6 +1474,8 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
                 echo "!!! adv 수정 실패 — 중단"
                 return 1
               fi
+              verify_gate "$dir" "$nn2" "$common" || return 1
+              wt_mark "$dir" "$nn2"
             else
               echo "--- [dev-$nn2(adv)] 기존 산출물 재사용 ($(wc -c < "$dir/dev-$nn2.md") bytes)"
             fi
@@ -1511,7 +1526,8 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
   local last_dev
   last_dev=$(ls "$dir"/dev-*.md 2>/dev/null | sort | tail -1)
   if [ -n "$last_dev" ] && [ -s "$dir/RESULT.md" ] && ! grep -q '^> \[미검증\]' "$dir/RESULT.md" \
-     && awk '/^BASELINE:/{f=1} f&&/^[A-Z][A-Z-]*:/&&!/^BASELINE:/{exit} f' "$last_dev" | grep -qE "$MUTATION_VACUOUS_RE"; then
+     && awk '/^BASELINE:/{f=1} f&&/^[A-Z][A-Z-]*:/&&!/^BASELINE:/{exit} f' "$last_dev" \
+          | grep -vE '(Errors|Failures): [1-9]' | grep -qE "$MUTATION_VACUOUS_RE"; then
     { echo "> [미검증] 마지막 dev 의 BASELINE 이 assertion 0건(전건 skip 등) — 이 판정은 실행 증거 없이 났다. 정착 전에 실행 환경을 갖춰 다시 돌린다."
       echo
       cat "$dir/RESULT.md"; } > "$dir/RESULT.md.tmp" && mv -f "$dir/RESULT.md.tmp" "$dir/RESULT.md"
