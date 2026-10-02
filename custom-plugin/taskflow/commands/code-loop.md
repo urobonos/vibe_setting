@@ -53,7 +53,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log
        │    └ 아니면 claude -p [merge] sonnet → rev-NN.md
        │    └ 셸이 VERDICT 만 읽고 분기
        │
-       ├ adv-loop  (캡 3 — CODE_LOOP_ADV_CAP, 0 = 무제한)
+       ├ adv-loop  (캡 2 — CODE_LOOP_ADV_CAP, 0 = 무제한)
        │    claude -p [adversary]      opus    → adv-MM.md (+ VERDICT 줄)
        │    BROKEN → dev 재진입(정규 캡 계상) → 리뷰 1라운드
        │
@@ -161,7 +161,7 @@ MM = 1 .. 3   (CODE_LOOP_ADV_CAP, 0 = 무제한)
 
 **`BROKEN` 뒤 리뷰 1라운드는 뺄 수 없다.** adversary 는 깨는 역할이지 판정 역할이 아니라서, 그 수정분을 아무도 안 보면 무검증 변경이 클린을 달고 남는다. 이 라운드는 **정규 캡(5)에 계상한다** — 게이트 캡 2회가 정규 캡을 늘리는 통로가 되면 클린 직전에 라운드가 무한히 열린다.
 
-**adv 캡(기본 3)은 이 러너의 값이다.** 캡 회차에서 `BROKEN` 이면 고치러 들어가지 않고 멈춘다 — 재진입하면 그 수정을 반증할 adv 회차가 없다. worktree 는 커밋 없이 그대로 두고, run.log 에 `=== adv 캡 도달 (3/3) — dev 재진입 없이 종료`, RESULT.md 첫 줄에 `> [미수렴] dev=… adv=BROKEN (adv 캡 도달 3/3)`, `code-loop.sh status` 에 `adv 캡 도달` 로 남고 종료 코드는 4 다.
+**adv 캡(기본 2)은 이 러너의 값이다.** 캡 회차에서 `BROKEN` 이면 고치러 들어가지 않고 멈춘다 — 재진입하면 그 수정을 반증할 adv 회차가 없다. worktree 는 커밋 없이 그대로 두고, run.log 에 `=== adv 캡 도달 (2/2) — dev 재진입 없이 종료`, RESULT.md 첫 줄에 `> [미수렴] dev=… adv=BROKEN (adv 캡 도달 2/2)`, `code-loop.sh status` 에 `adv 캡 도달` 로 남고 종료 코드는 4 다.
 
 그 리뷰가 `FINDINGS` 를 내면 **게이트를 닫고 잔여로 넘긴다. 정규 루프로 되돌리지 않는다** — 되돌리면 방금 말한 그 통로가 그대로 생긴다. dev-loop 와 이 재진입은 `review_round()` 하나를 공유하므로 두 경로의 판정 기준이 갈라지지 않는다.
 

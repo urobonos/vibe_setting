@@ -24,7 +24,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log                        # 진행 
 | `CODE_LOOP_MODEL_SUM` | `sonnet` | merge·RESULT 요약 단계 |
 | `CODE_LOOP_TIER` | `auto` | `off` = 자동 등급 끄고 에이전트 정의 frontmatter 모델 고정 |
 | `CODE_LOOP_DEV_CAP` | `0` (무제한) | 리뷰 라운드 캡 |
-| `CODE_LOOP_ADV_CAP` | `3` | red team 회차 캡, `0` = 무제한 |
+| `CODE_LOOP_ADV_CAP` | `2` | red team 회차 캡, `0` = 무제한 |
 | `CODE_LOOP_STEP_TIMEOUT_MIN` | 스텝별 | 전 스텝 시간 상한 일괄 재정의(분) |
 | `CODE_LOOP_PERM` | `auto` | headless 권한 모드 |
 

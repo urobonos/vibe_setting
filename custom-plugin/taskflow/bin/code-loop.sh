@@ -142,12 +142,12 @@ tier_escalate() {
   [ "$before" = "$M_DEV/$M_REV/$M_ADV" ] || tier_note "승격 dev=$M_DEV rev=$M_REV adv=$M_ADV — $why"
 }
 
-# dev 캡은 기본 무제한(0), adv 캡은 기본 3. 바꾸려면 환경변수로 (0 = 무제한):
-#   CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2 code-loop.sh "요청"
+# dev 캡은 기본 무제한(0), adv 캡은 기본 2. 바꾸려면 환경변수로 (0 = 무제한):
+#   CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=3 code-loop.sh "요청"
 # 루프의 정상 종료는 캡이 아니라 판정이다 — dev 는 리뷰 CLEAN, adv 는 UPHELD.
 # adv 는 캡이 있다 — 깰 때마다 dev 재진입·리뷰가 한 벌씩 붙어 무제한이면 비용이 끝없이 쌓인다.
 DEV_CAP="${CODE_LOOP_DEV_CAP:-0}"   # 정규 라운드 캡 · 0 = 무제한
-ADV_CAP="${CODE_LOOP_ADV_CAP:-3}"   # 적대적 게이트 캡 · 0 = 무제한
+ADV_CAP="${CODE_LOOP_ADV_CAP:-2}"   # 적대적 게이트 캡 · 0 = 무제한
 ADV_CAP_EXIT=4                      # adv 캡에서 BROKEN 으로 멈춘 run 의 종료 코드 — RESULT 는 있지만 수렴 못 했다
 ADV_UNDECIDED_CAP=3                 # BROKEN-UNDECIDED 재스폰 상한 — 회차·캡과 별도로 센다
 cap_label() { if [ "${1:-0}" -gt 0 ]; then printf '%s' "$1"; else printf '무제한'; fi; }
