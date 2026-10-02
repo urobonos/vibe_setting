@@ -20,7 +20,7 @@ export PATH="$TMP/bin:$PATH"
 # 루프가 끝나지 않고 드라이런이 좀비로 남아 하위 프로세스를 띄운다.
 # 이 테스트의 기대값(캡 5)을 명시하고, 실행마다 상한을 건다
 export CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2
-RUN_TIMEOUT=300   # 전체 실행 부하에서 시나리오 C(5라운드)가 120초를 넘긴다 — 무한 루프만 끊으면 된다
+RUN_TIMEOUT=900   # 무한 루프만 끊으면 된다 — 동시 code-loop 부하에서 7왕복 시나리오가 300초를 넘는다
 ST="$HOME/.claude/state/code-loop"
 mkdir -p "$TMP/bin" "$ST" \
          "$HOME/.claude/custom-plugin/taskflow/agents" \
