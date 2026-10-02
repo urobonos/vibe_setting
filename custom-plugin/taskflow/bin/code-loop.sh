@@ -652,9 +652,34 @@ verify_mechanical() {
 # 임의 토큰 eval 의 부작용면도 여기서 닫는다.
 # 생략 표기(`…`·`...`)가 든 명령도 거른다 — 리뷰어가 줄여 쓴 `--filter '...'` 를 그대로 돌리면 필터가 전 테스트에
 # 매치해 스위트 전체(17분)가 돈다.
+# 작은따옴표 구간 안은 셸이 아무것도 해석하지 않으므로 메타문자 검사에서 뺀다 (`--filter 'A|B'`).
+# 큰따옴표 구간은 `$(`·백틱이 살아 있어 그대로 검사한다. 따옴표 판정은 셸과 같은 상태기계로 한다 —
+# 정규식으로 '...' 만 지우면 `\'`·`"'"` 처럼 셸은 따옴표로 안 보는 자리를 구간으로 오인해 `;` 를 숨긴다.
+# 닫히지 않은 작은따옴표는 거부한다. 라운드마다 백틱 토큰 수십 개가 여기를 지나므로 프로세스를 아낀다 —
+# phpunit 이 아니면 fork 없이 거르고, 따옴표·백슬래시가 없으면 셸 패턴으로 끝내고, 그 외에만 awk 상태기계 1회.
 is_phpunit_cmd() {
-  case "$1" in *[\;\&\|\>\<\`]*|*'$('*|*'…'*|*'...'*) return 1 ;; esac
-  printf '%s' "$1" | grep -qE '^([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |$)'
+  case "$1" in *'…'*|*'...'*) return 1 ;; *'vendor/bin/phpunit'*) ;; *) return 1 ;; esac
+  case "$1" in
+    *[\'\"\\]*) ;;
+    *) case "$1" in *[\;\&\|\>\<\`]*|*'$('*) return 1 ;; esac
+       printf '%s' "$1" | grep -qE '^([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |$)'
+       return ;;
+  esac
+  printf '%s' "$1" | awk '
+    { s = s (NR > 1 ? "\n" : "") $0 }
+    END {
+      n = length(s); bare = ""; sq = 0; dq = 0
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        if (sq) { if (c == "\047") sq = 0; continue }
+        if (c == "\\") { bare = bare substr(s, i, 2); i++; continue }
+        if (c == "\047" && !dq) { sq = 1; continue }
+        if (c == "\"") dq = !dq
+        bare = bare c
+      }
+      if (sq || bare ~ /[;&|><`]/ || index(bare, "$(")) exit 1
+      if (s !~ /^([^ ]*php(\.exe)? +)?[^ ]*vendor\/bin\/phpunit( |$)/) exit 1
+    }'
 }
 
 # phpunit 요약에서 테스트·assertion 수를 뽑아 "N tests, M assertions" 한 형식으로 낸다. OK 요약은
@@ -744,6 +769,21 @@ verify_criteria() {
 #
 #   MUTATIONS: {n}                                          (00-spec.md — 변이 기준 개수)
 #   MUTATION: {파일} | {원문 조각} ==> {변이 조각} | {phpunit 명령}   (spec 또는 dev-NN.md)
+# MUTATION 줄 분리 → file · from · to · cmd. 명령은 첫 "| {phpunit 접두}" 부터 끝까지다 — 마지막 `|` 로
+# 자르면 `--filter 'A|B'` 가 `B'` 로 잘린다. file·from·to 는 그 앞부분에서만 읽어 조각 안의 `|` 도 견딘다.
+# 접두가 안 보이면 cmd 는 비어 "해석 불가" 로 간다.
+mutation_split() {
+  local sep=$'\x01' split head
+  split=$(printf '%s' "$1" | sed -E "s#[[:space:]]*\|[[:space:]]*(([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |\$))#${sep}\1#")
+  case "$split" in
+    *"$sep"*) head="${split%%"$sep"*}"; cmd="${split#*"$sep"}" ;;
+    *) head="$1"; cmd="" ;;
+  esac
+  file=$(printf '%s' "$head" | sed -E 's/[[:space:]]*\|.*$//')
+  from=$(printf '%s' "$head" | sed -E 's/^[^|]*\|[[:space:]]*//; s/[[:space:]]*==>.*$//')
+  to=$(printf '%s' "$head" | sed -E 's/^[^|]*\|[[:space:]]*//; s/^.*==>[[:space:]]*//')
+}
+
 MUTATION_RED_RE='FAILURES!|ERRORS!|Tests: [0-9]+.*(Failures|Errors): [1-9]'
 # 대조군이 exit 0 이어도 assertion 이 0 이면(전건 skip·테스트 0개) 변이도 당연히 통과한다 —
 # 그걸 GREEN(약한 테스트)으로 적으면 dev 가 고칠 수 없는 걸로 재보고만 소진한다.
@@ -841,10 +881,7 @@ verify_mutations() {
   rm -f "$errlog"
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    file=$(printf '%s' "$line" | sed -E 's/[[:space:]]*\|.*$//')
-    cmd=$(printf '%s' "$line" | sed -E 's/^.*\|[[:space:]]*//')
-    from=$(printf '%s' "$line" | sed -E 's/^[^|]*\|[[:space:]]*//; s/[[:space:]]*\|[^|]*$//; s/[[:space:]]*==>.*$//')
-    to=$(printf '%s' "$line" | sed -E 's/^[^|]*\|[[:space:]]*//; s/[[:space:]]*\|[^|]*$//; s/^.*==>[[:space:]]*//')
+    mutation_split "$line"
     if ! is_phpunit_cmd "$cmd" || [ -z "$from" ] || [ ! -f "$scratch/$file" ]; then
       echo "!!! [dev-$nn] MUTATION 줄 해석 불가 — $line" | tee -a "$report"
       fail=1; continue
