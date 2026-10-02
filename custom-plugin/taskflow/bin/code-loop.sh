@@ -41,6 +41,9 @@ PERM="${CODE_LOOP_PERM:-auto}"
 agent_model() {
   sed -n '1,/^---$/{/^model:[[:space:]]*/{s///;s/[[:space:]]*$//;p;q;}}' "$AGENT_DIR/$1" 2>/dev/null
 }
+# 임시 고정 (2026-10-02 ~ 10-03 10:00 원복, 토큰 절약): dev·rev = sonnet:medium.
+# 환경변수로 지정한 것과 같아서 자동 등급 결정·승격을 타지 않는다. 원복 = 이 블록 3줄 삭제
+: "${CODE_LOOP_MODEL_DEV:=sonnet}" "${CODE_LOOP_EFFORT_DEV:=medium}" "${CODE_LOOP_MODEL_REV:=sonnet}" "${CODE_LOOP_EFFORT_REV:=medium}"
 # spec 은 opus:medium — spec 이 모집단을 못 닫으면 adv 가 매 회차 같은 구멍으로 깬다 (701·850 BROKEN 반복, 10-01).
 # merge·RESULT 는 요약 스텝이라 sonnet 그대로 (M_SUM)
 M_SPEC="${CODE_LOOP_MODEL_SPEC:-opus:medium}"
