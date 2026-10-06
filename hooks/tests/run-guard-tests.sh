@@ -284,6 +284,25 @@ EOF" "$TMP/repo_master"
   bash_payload "git status" "$TMP/repo_master"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 비커밋 명령" 0 $?
 
+  # ── code-loop run ID — 제목 밖(본문 -m · heredoc · -F 파일)에 있어도 막는다. 날짜·경로는 통과 ──
+  bash_payload "$GC -m \"fix(x): 정상 제목\" -m \"code-loop 20261006-140053 (ISS-856 R10): dev 2\"" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 본문 -m 의 run ID 차단" 2 $?
+
+  bash_payload "$GC -F- <<'EOF'
+feat(x): 한도 인지
+
+1단계 실패로 끝냈다(run 20260917-132300).
+EOF" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] heredoc 본문의 run ID 차단" 2 $?
+
+  printf 'fix(x): y\n\ncode-loop run 20261006-161455 기준\n' > "$TMP/runid_msg.txt"
+  bash_payload "$GC -F $TMP/runid_msg.txt" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] -F 파일의 run ID 차단" 2 $?
+
+  printf 'docs(x): 2026-10-06 정착\n\n근거 docs/working/20261006-140053-iss.md\n# code-loop 20261006-140053\n' > "$TMP/date_msg.txt"
+  bash_payload "$GC -F $TMP/date_msg.txt" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 날짜·경로·# 주석 줄은 통과" 0 $?
+
   # ── worktree 대상 커밋 ──
   #   hook 프로세스의 cwd 는 세션 cwd(메인 레포)다. `cd <wt> && git commit` / `git -C <wt> commit` 이면
   #   staged 목록을 **그 디렉토리에서** 읽어야 docs/config-only 면제가 성립한다. cwd 인덱스만 읽으면

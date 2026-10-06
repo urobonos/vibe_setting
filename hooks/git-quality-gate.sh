@@ -122,6 +122,29 @@ if [ -n "$COMMIT_MSG" ]; then
   fi
 fi
 
+# ===== Phase 1-b: code-loop run ID 차단 — 제목뿐 아니라 본문(-m 여러 개·heredoc)과 -F 파일까지 =====
+# run ID 는 로컬 state 디렉토리 이름이라 레포 밖에서 아무것도 가리키지 않는다. 날짜·경로는 통과한다.
+# `bash 스크립트` 경유 커밋은 여기서 안 보인다 — 레포 쪽 commit-msg 훅(athena .githooks)이 같은 패턴으로 받친다.
+RUNID_RE='(code-loop|run)[[:space:]]+(run[[:space:]]+)?20[0-9]{6}-[0-9]{6}'
+_runid_text="$COMMAND"
+_re_msgfile=$'(-F|--file)[ \t=]+("([^"]+)"|\'([^\']+)\'|([^ \t;&|]+))'
+if [[ "$COMMAND" =~ $_re_msgfile ]]; then
+  _msgfile="${BASH_REMATCH[3]}${BASH_REMATCH[4]}${BASH_REMATCH[5]}"
+  _re_gitdir=$'git[ \t]+-C[ \t]+("([^"]+)"|\'([^\']+)\'|([^ \t;&|]+))'
+  if [ ! -f "$_msgfile" ] && [[ "$COMMAND" =~ $_re_gitdir ]]; then
+    _msgfile="${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}/$_msgfile"
+  fi
+  [ -f "$_msgfile" ] && _runid_text+=$'\n'"$(grep -v '^#' "$_msgfile" 2>/dev/null)"
+fi
+_runid_hits=$(printf '%s\n' "$_runid_text" | grep -oE "$RUNID_RE" | sort -u)
+if [ -n "$_runid_hits" ]; then
+  echo "[BLOCKED] 커밋 메시지에 code-loop run ID — 지우고 다시 커밋하세요." >&2
+  printf '%s\n' "$_runid_hits" | sed 's/^/  /' >&2
+  echo "  경위는 ISS 번호·라운드로 적는다 (예: 'ISS-856 R10: dev 2 · rev CLEAN · adv UPHELD')." >&2
+  command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=run-id"
+  exit 2
+fi
+
 # Co-Authored-By 차단은 dangerous-ops-guard.sh 에서 단일 처리 (SSOT) — 본 hook 에서는 검사하지 않음
 
 # ===== Phase 2: 커밋 범위 검증 (1 커밋 = 1 변경) =====
