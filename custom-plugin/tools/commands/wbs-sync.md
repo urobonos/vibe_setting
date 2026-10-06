@@ -1,10 +1,10 @@
 ---
-description: 구글 시트 → WBS 간트(xlsx) 상태·담당자 동기화 한 방 실행 — 시트 캐시 → tsv/csv → xlsx 재생성 + 결과 요약
+description: 이슈 문서 → 구글 시트 `ISS` 원장·`요약` 탭 동기화 한 방 실행 (기본). WBS 간트 재생성은 WBS_GANTT=1 일 때만
 ---
 
 # /tools:wbs-sync
 
-구글 시트의 태스크 상태·담당자를 WBS 간트 xlsx 에 반영한다. 3 단계를 한 번에 돌리고 결과를 요약한다.
+이슈 문서의 상태를 구글 시트 `ISS` 원장 탭과 `요약` 탭 이슈 블록에 반영한다. **WBS 간트 싱크는 완료돼 기본 꺼져 있다** — 간트를 다시 만들 때만 `WBS_GANTT=1 bash …/wbs-sheet-sync.sh` 로 아래 간트 단계까지 돌린다.
 
 ## 실행
 
@@ -21,6 +21,15 @@ bash ~/.claude/custom-plugin/tools/scripts/wbs-sheet-sync.sh /c/Works/hongcafe_l
 ```
 
 ## 무엇이 도는가
+
+기본 = 이슈 2단계 (`custom-plugin/tools/scripts/`):
+
+| 단계 | 스크립트 | 입력 → 출력 |
+|---|---|---|
+| 6 | `issue-sheet-sync.py` | 이슈 md → 구글 시트 `ISS` 원장 탭 (문서가 정본) |
+| 7 | `gsheet-push-issue-summary.py` | 이슈 md → 구글 시트 `요약` 탭 하단 이슈 블록 |
+
+`WBS_GANTT=1` 일 때만 앞에 간트 단계가 더 돈다:
 
 | 단계 | 스크립트 (레포 `docs/wbs/tools/`) | 입력 → 출력 |
 |---|---|---|
@@ -68,4 +77,4 @@ bash ~/.claude/custom-plugin/tools/scripts/wbs-sheet-sync.sh /c/Works/hongcafe_l
 
 ## 보고
 
-실행 후 결론 1~2줄 + 상태·담당자 카운트만 보고한다 (CLAUDE.md §4.4 응답 간결). 변경 0건이면 "무변경" 한 줄로 끝낸다 — 같은 표를 매 5분 다시 그리지 않는다.
+실행 후 결론 1~2줄 + 이슈 카운트(신규·상태 갱신·미해결)만 보고한다. 간트 모드일 때만 상태·담당자 카운트를 붙인다 (CLAUDE.md §4.4 응답 간결). 변경 0건이면 "무변경" 한 줄로 끝낸다 — 같은 표를 매 5분 다시 그리지 않는다.
