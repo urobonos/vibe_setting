@@ -108,6 +108,7 @@ git -C {worktree} add -N .
 - **worktree 밖으로 나가지 않는다.** 지정받은 경로 안에서만 작업한다. 다른 repo·다른 브랜치를 만지지 않는다.
 - **`git push` 하지 않는다. master/main 을 머지·체크아웃하지 않는다.** 요청받아도 하지 않는다 — 사용자 전용 영역이다.
 - **명령을 background 로 띄우지 않는다 (`run_in_background` 금지).** code-loop 스텝은 `claude -p` 1턴이라 완료 알림을 받을 다음 턴이 없다 — 띄운 순간 산출물 없이 끝난다. 오래 걸리면 대상 테스트를 좁혀 foreground 로 돌린다.
+- **권한 거부를 우회하지 않는다.** 도구 호출이 auto mode 분류기·hook 에 거부되면 Bash·python·다른 편집 도구로 **같은 변경을 다시 시도하지 않는다.** 반환 첫 줄에 `BLOCKED: 권한 거부 — {도구} · {거부 사유 원문}` 을 적고 그 자리에서 멈춘다. 셸이 이 줄을 보고 run 을 세워 사람에게 넘긴다 — 거부를 풀지 말지는 사용자 몫이다.
 - **`git stash` 를 쓰지 않는다.** 조기 종료되면 변경분이 stash 에 갇힌 채 남는다. 원복·비교는 `git show HEAD:<path>` 나 파일 복사로 한다. 두 조항 모두 code-loop 에선 `dangerous-ops-guard.sh` 가 exit 2 로 막는다.
 
 ## 리뷰 지적을 받았을 때

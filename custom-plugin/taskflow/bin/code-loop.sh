@@ -231,6 +231,20 @@ claude_with_timeout() {
 
 # 사용량 한도로 멈춘 run 의 종료 코드 (EX_TEMPFAIL) — 백그라운드 스텝의 exit 는 review_round 가 이 값으로 전파한다
 LIMIT_EXIT=75
+# dev 가 권한 거부를 받고 멈춘 run 의 종료 코드 (EX_NOPERM)
+BLOCKED_EXIT=77
+
+# dev 반환에 `BLOCKED:` 줄이 있는가 = 권한 분류기·hook 거부를 받고 멈췄다.
+# 재보고·다음 라운드로 넘기면 dev 가 다른 도구로 같은 변경을 우회 적용한다 — 거부는 사람이 판단할 일이라 run 을 멈춘다.
+# 반환은 blocked-dev-NN.md 로 옮긴다: dev-NN.md 가 남으면 --resume 이 dev 를 건너뛰고 리뷰로 간다.
+dev_blocked() {
+  local dir="$1" nn="$2" reason
+  reason=$(grep -m1 -E '^BLOCKED:' "$dir/dev-$nn.md" 2>/dev/null) || return 1
+  mv -f "$dir/dev-$nn.md" "$dir/blocked-dev-$nn.md"
+  printf '# 권한 거부 — 중단\n\n%s\n\n원문: blocked-dev-%s.md\n재개: 권한을 판단한 뒤 code-loop.sh --resume %s\n' \
+    "$reason" "$nn" "$(basename "$dir")" > "$dir/BLOCKED.md"
+  echo "!!! [dev-$nn] $reason — 우회하지 않고 멈춘다: $dir/BLOCKED.md"
+}
 
 # 스텝 1개 = claude -p 1회. 출력 파일이 생겼는지로 성공을 판정한다 — exit 0 은
 # 모델이 "못 하겠다"고 말하고 끝난 경우에도 나오므로 성공 신호가 못 된다
@@ -1014,6 +1028,8 @@ verify_gate() {
 실측이 틀렸다면 그 근거를 NOTES 에 남긴다.
 CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행해 증거를 붙인다. 환경 탓에
 정말 못 돌리면 시도한 명령과 그 출력을 그 줄에 적는다 — 안 한 것을 한 것으로 적지 않는다.
+편집이 권한 분류기·hook 에 거부돼 못 고쳤다면 다른 도구로 같은 변경을 시도하지 않는다 —
+반환 첫 줄에 \`BLOCKED: 권한 거부 — {도구} · {거부 사유 원문}\` 을 적고 멈춘다.
 변이가 GREEN 으로 걸렸으면 보고가 아니라 테스트를 고친다 — 그 테스트는 약속한 동작을 판별하지
 못한다. 결과는 $dir/mut-$nn.md 에 있다.
 갱신한 반환은 같은 경로 $dir/dev-$nn.md 에 다시 쓴다."
@@ -1023,6 +1039,7 @@ CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행
       echo "!!! [dev-$nn] 재보고 실패 — 중단"
       return 1
     fi
+    dev_blocked "$dir" "$nn" && return "$BLOCKED_EXIT"
   done
   echo "=== [dev-$nn] 셸 재검증 재시도 소진($VERIFY_RETRY_CAP) — 중단하지 않고 리뷰어에게 넘긴다"
   return 0
@@ -1207,6 +1224,8 @@ run_loop() {
   trap 'exit 143' TERM
   echo "=== $(date '+%F %T') code-loop 시작 (run=$run perm=$PERM)"
   echo "=== 결과문서: $dir"
+  # 재개 = 사람이 권한 거부를 판단했다. 남겨 두면 status 가 진행 중인 run 을 거부 상태로 읽는다
+  rm -f "$dir/BLOCKED.md"
   # 판정 lib 가 없으면 크기 게이트를 읽을 수 없다 — spec 스텝을 태우기 전에 멈춘다
   if ! declare -F code_loop_gate >/dev/null; then
     echo "!!! GATE 판정 lib 를 못 읽었다: $GATE_LIB — 중단"
@@ -1363,9 +1382,13 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
         echo "!!! dev-$nn 실패 — 중단"
         return 1
       fi
+      dev_blocked "$dir" "$nn" && return "$BLOCKED_EXIT"
       # 셸 독립 재검증 — 이번에 새로 반환된 dev-$nn.md 만 검증한다. resume 으로
       # 기존 파일을 다시 만난 경우는 이전 프로세스에서 이미 통과했다고 간주한다
-      verify_gate "$dir" "$nn" "$common" || return 1
+      local gate_rc=0
+      verify_gate "$dir" "$nn" "$common" || gate_rc=$?
+      [ "$gate_rc" = "$BLOCKED_EXIT" ] && return "$BLOCKED_EXIT"
+      [ "$gate_rc" = 0 ] || return 1
       wt_mark "$dir" "$nn"
     fi
 
@@ -1474,7 +1497,11 @@ CRITERIA 는 정규 라운드와 같다 — 셸이 같은 재검증(CRITERIA·BA
                 echo "!!! adv 수정 실패 — 중단"
                 return 1
               fi
-              verify_gate "$dir" "$nn2" "$common" || return 1
+              dev_blocked "$dir" "$nn2" && return "$BLOCKED_EXIT"
+              local gate_rc=0
+              verify_gate "$dir" "$nn2" "$common" || gate_rc=$?
+              [ "$gate_rc" = "$BLOCKED_EXIT" ] && return "$BLOCKED_EXIT"
+              [ "$gate_rc" = 0 ] || return 1
               wt_mark "$dir" "$nn2"
             else
               echo "--- [dev-$nn2(adv)] 기존 산출물 재사용 ($(wc -c < "$dir/dev-$nn2.md") bytes)"

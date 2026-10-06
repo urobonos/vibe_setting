@@ -663,6 +663,26 @@ check "캡 0 — 무제한 완주" 0 "$rc"
 check "캡 0 — adv 7회" 7 "$(cnt 'adv-*.md')"
 check "캡 0 — 캡 도달 없음" 0 "$(grep -c 'adv 캡 도달' "$TMP/out.txt")"
 
+echo "== AQ. dev 권한 거부 — BLOCKED 줄이면 재보고·리뷰 없이 멈추고(77) --resume 으로 dev 부터 다시 =="
+# 재보고로 다시 시키면 dev 가 다른 도구로 같은 변경을 우회 적용한다 — 셸이 멈춰 사람에게 넘겨야 한다
+reset; rc=$(runit T_DEVNOTE='BLOCKED: 권한 거부 — Edit · stub' T_REV=CLEAN T_ADV=UPHELD)
+check "거부 — 종료 77" 77 "$rc"
+check "거부 — 리뷰 미실행" 0 "$(cnt 'rev-*.md')"
+check "거부 — 재보고 요청 없음" 0 "$(grep -c '재보고 요청' "$TMP/out.txt")"
+check "거부 — dev-01.md 를 옮김(resume 이 dev 를 건너뛰지 않게)" 0 "$(cnt 'dev-01.md')"
+check "거부 — 원문 보존" 1 "$(grep -c '^BLOCKED: 권한 거부 — Edit · stub' "$(d)/blocked-dev-01.md")"
+check "거부 — BLOCKED.md 사유" 1 "$(grep -c '^BLOCKED: 권한 거부 — Edit · stub' "$(d)/BLOCKED.md")"
+check "거부 — RESULT 없음" 0 "$([ -e "$(d)/RESULT.md" ] && echo 1 || echo 0)"
+RUN=$(basename "$(d)")
+env T_REV=CLEAN T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+check "거부 — resume 이 dev 를 다시 태움" 1 "$([ -s "$ST/$RUN/dev-01.md" ] && grep -q '\[dev-01\] model=' "$TMP/out.txt" && echo 1 || echo 0)"
+check "거부 — resume 완주" 1 "$([ -s "$ST/$RUN/RESULT.md" ] && echo 1 || echo 0)"
+check "거부 — resume 뒤 BLOCKED.md 제거" 0 "$([ -e "$ST/$RUN/BLOCKED.md" ] && echo 1 || echo 0)"
+# 대조군 — 줄 머리가 아닌 인용은 거부가 아니다
+reset; rc=$(runit T_DEVNOTE='NOTES: 직전 시도의 BLOCKED: 줄은 없음' T_REV=CLEAN T_ADV=UPHELD)
+check "인용(줄 머리 아님) — 정상 완주" 0 "$rc"
+check "인용 — BLOCKED.md 없음" 0 "$([ -e "$(d)/BLOCKED.md" ] && echo 1 || echo 0)"
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="
