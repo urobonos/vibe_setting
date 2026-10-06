@@ -56,6 +56,11 @@ resolve_product() {
       cwd=$(resolve_origin_cwd "$cwd")
       cwd="${cwd//\\//}"
       cwd="${cwd%/}"
+      # 역해석 실패(이미 제거된 worktree 등) = product 불명 → 빈 값 + rc 1.
+      # worktree 폴더명을 product 로 쓰면 `docs/{wt이름}/tasks/` 빈 껍데기가 생긴다.
+      case "$cwd" in
+        */.claude/worktrees/*) return 1 ;;
+      esac
       ;;
   esac
   # self-nesting 가드: 산출물 저장소(`~/.claude/docs`) 내부 cwd → `claude-harness` 폴백.
@@ -75,21 +80,28 @@ resolve_product() {
 product_docs_root() {
   local cwd="${1:-$PWD}"
   local product
-  product=$(resolve_product "$cwd")
+  product=$(resolve_product "$cwd") || return 1
   local home_unix="${HOME//\\//}"
   echo "$home_unix/.claude/docs/$product"
 }
 
+# product 불명이면 빈 값 + rc 1 — `docs/` 루트 아래 `/tasks` 같은 경로를 만들지 않는다.
 product_tasks_dir() {
-  echo "$(product_docs_root "${1:-$PWD}")/tasks"
+  local root
+  root=$(product_docs_root "${1:-$PWD}") || return 1
+  echo "$root/tasks"
 }
 
 product_output_dir() {
-  echo "$(product_docs_root "${1:-$PWD}")/output"
+  local root
+  root=$(product_docs_root "${1:-$PWD}") || return 1
+  echo "$root/output"
 }
 
 product_specs_dir() {
-  echo "$(product_docs_root "${1:-$PWD}")/specs"
+  local root
+  root=$(product_docs_root "${1:-$PWD}") || return 1
+  echo "$root/specs"
 }
 
 # 예약된 비-product docs/ 하위 디렉토리 이름 — **backlog frontmatter 의 `product:` 값으로 쓸 수

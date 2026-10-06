@@ -40,6 +40,8 @@ source "$HARNESS_LIB/product-resolver.sh" 2>/dev/null || {
   exit 0
 }
 PRODUCT=$(resolve_product "$CWD")
+# product 불명(제거된 worktree cwd 등) = 기록 대상 없음. 빈 껍데기 tasks/ 를 만들지 않는다.
+[ -n "$PRODUCT" ] || exit 0
 TASKS_DIR=$(product_tasks_dir "$CWD")
 
 EDIT_FLAG="/tmp/claude_edit_flag_${SESSION_ID}"

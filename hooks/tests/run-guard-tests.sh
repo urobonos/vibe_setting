@@ -1640,6 +1640,28 @@ if grep -qE '^\s*HIST_RC=\$\?' "$J28_SRC"; then PASS=$((PASS+1)); else FAIL=$((F
 if grep -qE '^\s*\[ "\$HIST_RC" -ne 0 \] && index_incomplete=1' "$J28_SRC"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-28b] history 갱신 실패가 index_incomplete 에 반영되지 않음 — 실패가 ✓ 로 보고된다(콜드리뷰 Medium 회귀)"); fi
 if grep -qF 'history.md 갱신 실패' "$J28_SRC"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-28c] history 실패 시 규약 메시지가 없음 — python traceback 이 그대로 노출된다"); fi
 
+
+# J-29: 제거된 worktree cwd → product 불명. worktree 폴더명이 product 로 새면 `docs/{wt이름}/tasks/` 빈
+#   껍데기가 Stop 마다 쌓인다(실측 62쌍). 살아 있는 worktree 는 원본 repo 이름으로 풀려야 한다.
+J29_FH="$TMP/j29home"; J29_REPO="$TMP/j29repo/athena_like"
+mkdir -p "$J29_FH/.claude/docs" "$J29_REPO"
+git -C "$J29_REPO" init -q && git -C "$J29_REPO" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+J29_LIVE="$TMP/j29repo/.claude/worktrees/live-wt"
+git -C "$J29_REPO" worktree add -q --detach "$J29_LIVE" HEAD 2>/dev/null
+J29_GONE="$TMP/j29repo/.claude/worktrees/20261006-115448-gone-wt"
+J29_OUT=$(bash -c 'source "$1"; resolve_product "$2"' _ "$HOOKS_DIR/lib/product-resolver.sh" "$J29_LIVE")
+if [ "$J29_OUT" = "athena_like" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-29a] 살아 있는 worktree 가 원본 repo 로 안 풀림 — 출력: $J29_OUT"); fi
+J29_OUT=$(bash -c 'source "$1"; resolve_product "$2"; echo "rc=$?"' _ "$HOOKS_DIR/lib/product-resolver.sh" "$J29_GONE")
+if [ "$J29_OUT" = "rc=1" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-29b] 제거된 worktree 가 product 로 풀림(빈 값+rc1 기대) — 출력: $J29_OUT"); fi
+J29_OUT=$(bash -c 'source "$1"; product_tasks_dir "$2"; echo "rc=$?"' _ "$HOOKS_DIR/lib/product-resolver.sh" "$J29_GONE")
+if [ "$J29_OUT" = "rc=1" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-29c] 제거된 worktree 에서 tasks 경로가 만들어짐 — 출력: $J29_OUT"); fi
+J29_SID="j29sid$$"; touch "/tmp/claude_edit_flag_${J29_SID}"
+printf '{"session_id":"%s","cwd":"%s"}' "$J29_SID" "$J29_GONE" | HOME="$J29_FH" bash "$PLUGIN_HOOKS_DIR/session-completeness-check.sh" >/dev/null 2>&1
+rm -f "/tmp/claude_edit_flag_${J29_SID}"
+J29_LEFT=$(ls -A "$J29_FH/.claude/docs")
+if [ -z "$J29_LEFT" ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fail_lines+=("[J-29d] 제거된 worktree cwd 의 Stop 에서 docs/ 아래 폴더가 생김: $J29_LEFT"); fi
+git -C "$J29_REPO" worktree remove --force "$J29_LIVE" 2>/dev/null
+
 # ═══════════════════════════════════════════════════════════════════
 printf '\n────────────────────────────────────────\n'
 if [ ${#fail_lines[@]} -gt 0 ]; then
