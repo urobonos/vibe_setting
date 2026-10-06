@@ -683,6 +683,21 @@ reset; rc=$(runit T_DEVNOTE='NOTES: 직전 시도의 BLOCKED: 줄은 없음' T_R
 check "인용(줄 머리 아님) — 정상 완주" 0 "$rc"
 check "인용 — BLOCKED.md 없음" 0 "$([ -e "$(d)/BLOCKED.md" ] && echo 1 || echo 0)"
 
+echo "== AR. 성공 기준 상한 — CODE_LOOP_CRITERIA_CAP 이 spec 프롬프트·게이트 안내를 바꾼다 (기본 3 · 0 = 상한 없음) =="
+export T_PROMPTDIR="$TMP/prompts"
+reset; rm -rf "$T_PROMPTDIR"; mkdir -p "$T_PROMPTDIR"; rc=$(runit T_REV=CLEAN T_ADV=UPHELD)
+check "기본 — 3개 이하 문구" 1 "$(grep -c '성공 기준 3개 이하' "$T_PROMPTDIR/00-spec.md.prompt")"
+check "기본 — 4개 이상 TOO-LARGE" 1 "$(grep -c 'GATE: TOO-LARGE   (4개 이상' "$T_PROMPTDIR/00-spec.md.prompt")"
+reset; rm -rf "$T_PROMPTDIR"; mkdir -p "$T_PROMPTDIR"; rc=$(runit CODE_LOOP_CRITERIA_CAP=5 T_GATE=TOO-LARGE)
+check "캡 5 — 6개 이상 TOO-LARGE" 1 "$(grep -c 'GATE: TOO-LARGE   (6개 이상' "$T_PROMPTDIR/00-spec.md.prompt")"
+check "캡 5 — 게이트 종료 2" 2 "$rc"
+check "캡 5 — 안내 문구" 1 "$(grep -c '성공 기준 6개 이상 — 이 커맨드로 받지 않는다. (상한 CODE_LOOP_CRITERIA_CAP=5)' "$TMP/out.txt")"
+reset; rm -rf "$T_PROMPTDIR"; mkdir -p "$T_PROMPTDIR"; rc=$(runit CODE_LOOP_CRITERIA_CAP=0 T_REV=CLEAN T_ADV=UPHELD)
+check "캡 0 — 상한 없음 문구" 1 "$(grep -c '성공 기준 상한 없음' "$T_PROMPTDIR/00-spec.md.prompt")"
+check "캡 0 — TOO-LARGE 판정 줄 지시 없음" 0 "$(grep -c 'GATE: TOO-LARGE' "$T_PROMPTDIR/00-spec.md.prompt")"
+check "캡 0 — 완주" 0 "$rc"
+unset T_PROMPTDIR
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="

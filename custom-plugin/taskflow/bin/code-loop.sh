@@ -150,6 +150,9 @@ DEV_CAP="${CODE_LOOP_DEV_CAP:-0}"   # 정규 라운드 캡 · 0 = 무제한
 ADV_CAP="${CODE_LOOP_ADV_CAP:-2}"   # 적대적 게이트 캡 · 0 = 무제한
 ADV_CAP_EXIT=4                      # adv 캡에서 BROKEN 으로 멈춘 run 의 종료 코드 — RESULT 는 있지만 수렴 못 했다
 ADV_UNDECIDED_CAP=3                 # BROKEN-UNDECIDED 재스폰 상한 — 회차·캡과 별도로 센다
+# 크기 게이트 — 성공 기준이 이 수를 넘으면 spec 이 TOO-LARGE 를 쓴다 · 0 = 상한 없음.
+# 판정은 spec 이 쓴 GATE 줄이라 셸은 이 값을 프롬프트·안내 문구에만 쓴다.
+CRITERIA_CAP="${CODE_LOOP_CRITERIA_CAP:-3}"
 cap_label() { if [ "${1:-0}" -gt 0 ]; then printf '%s' "$1"; else printf '무제한'; fi; }
 
 mkdir -p "$STATE_DIR"
@@ -1239,6 +1242,13 @@ run_loop() {
   # ── 1단계: 범위 확정 + worktree ───────────────────────────────────────
   VENDOR_BG_PID="" VENDOR_BG_WT="" VENDOR_BG_LOG=""
   if [ ! -s "$dir/00-spec.md" ]; then
+    local gate_rule
+    if [ "$CRITERIA_CAP" = 0 ]; then
+      gate_rule="  GATE: OK          (성공 기준 상한 없음 — CODE_LOOP_CRITERIA_CAP=0. TOO-LARGE 를 쓰지 않는다)"
+    else
+      gate_rule="  GATE: OK          (성공 기준 ${CRITERIA_CAP}개 이하 — 진행)
+  GATE: TOO-LARGE   ($((CRITERIA_CAP + 1))개 이상 — /taskflow:plan 으로 넘길 것)"
+    fi
     local spec_body="$common
 
 루프 계약의 1단계(범위 확인)와 크기 게이트를 그대로 수행해 $dir/00-spec.md 를 쓴다.
@@ -1268,8 +1278,7 @@ vendor 는 러너가 채운다(vendor-pool.sh ensure) — vendor 를 junction·s
 $dir/RESULT.md 에만 남긴다. 판정 줄은 정확히 한 줄 \`## 판정: 미착수\` 이고 그 아래에 이유와 재진입 조건을 적는다 —
 러너는 이것을 실패가 아니라 반환으로 기록한다.
 마지막 줄에 기계 판독용으로 정확히 한 줄을 쓴다:
-  GATE: OK          (성공 기준 3개 이하 — 진행)
-  GATE: TOO-LARGE   (4개 이상 — /taskflow:plan 으로 넘길 것)
+$gate_rule
 
 구현 요청:
 $request"
@@ -1306,7 +1315,7 @@ $request"
   case "$(code_loop_gate "$dir/00-spec.md")" in
     OK) ;;
     TOO-LARGE)
-      echo "=== 크기 게이트: 성공 기준 4개 이상 — 이 커맨드로 받지 않는다."
+      echo "=== 크기 게이트: 성공 기준 $((CRITERIA_CAP + 1))개 이상 — 이 커맨드로 받지 않는다. (상한 CODE_LOOP_CRITERIA_CAP=$CRITERIA_CAP)"
       echo "=== /taskflow:plan 경로를 쓴다. spec: $dir/00-spec.md"
       return 2 ;;
     *)
