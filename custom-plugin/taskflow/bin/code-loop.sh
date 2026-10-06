@@ -664,7 +664,7 @@ verify_mechanical() {
   return "$fail"
 }
 
-# 재실행 대상은 phpunit 실행 명령뿐이다. 리뷰어가 백틱에 경로만 적거나(`tests/unit/Filters/` →
+# 재실행 대상은 phpunit·pytest 실행 명령뿐이다. 리뷰어가 백틱에 경로만 적거나(`tests/unit/Filters/` →
 # OK (387 tests…)) 옵션 조각을 적으면 그 토큰을 eval 해 "매치 없음" 불일치가 날 수 있다.
 # 임의 토큰 eval 의 부작용면도 여기서 닫는다.
 # 생략 표기(`…`·`...`)가 든 명령도 거른다 — 리뷰어가 줄여 쓴 `--filter '...'` 를 그대로 돌리면 필터가 전 테스트에
@@ -673,16 +673,19 @@ verify_mechanical() {
 # 큰따옴표 구간은 `$(`·백틱이 살아 있어 그대로 검사한다. 따옴표 판정은 셸과 같은 상태기계로 한다 —
 # 정규식으로 '...' 만 지우면 `\'`·`"'"` 처럼 셸은 따옴표로 안 보는 자리를 구간으로 오인해 `;` 를 숨긴다.
 # 닫히지 않은 작은따옴표는 거부한다. 라운드마다 백틱 토큰 수십 개가 여기를 지나므로 프로세스를 아낀다 —
-# phpunit 이 아니면 fork 없이 거르고, 따옴표·백슬래시가 없으면 셸 패턴으로 끝내고, 그 외에만 awk 상태기계 1회.
-is_phpunit_cmd() {
-  case "$1" in *'…'*|*'...'*) return 1 ;; *'vendor/bin/phpunit'*) ;; *) return 1 ;; esac
-  case "$1" in
+# 따옴표·백슬래시가 없으면 셸 패턴으로 끝내고, 그 외에만 awk 상태기계 1회.
+PHPUNIT_PREFIX_RE='^([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |$)'
+PYTEST_PREFIX_RE='^[^ ]*python[0-9.]*(\.exe)?( +-[A-Za-z]+)* +-m +pytest( |$)'
+safe_cmd_with_prefix() {
+  local cmd="$1" re="$2"
+  case "$cmd" in *'…'*|*'...'*) return 1 ;; esac
+  case "$cmd" in
     *[\'\"\\]*) ;;
-    *) case "$1" in *[\;\&\|\>\<\`]*|*'$('*) return 1 ;; esac
-       printf '%s' "$1" | grep -qE '^([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |$)'
+    *) case "$cmd" in *[\;\&\|\>\<\`]*|*'$('*) return 1 ;; esac
+       printf '%s' "$cmd" | grep -qE "$re"
        return ;;
   esac
-  printf '%s' "$1" | awk '
+  printf '%s' "$cmd" | PREFIX_RE="$re" awk '
     { s = s (NR > 1 ? "\n" : "") $0 }
     END {
       n = length(s); bare = ""; sq = 0; dq = 0
@@ -695,8 +698,18 @@ is_phpunit_cmd() {
         bare = bare c
       }
       if (sq || bare ~ /[;&|><`]/ || index(bare, "$(")) exit 1
-      if (s !~ /^([^ ]*php(\.exe)? +)?[^ ]*vendor\/bin\/phpunit( |$)/) exit 1
+      if (s !~ ENVIRON["PREFIX_RE"]) exit 1
     }'
+}
+# phpunit 이 아니면 fork 없이 거른다
+is_phpunit_cmd() {
+  case "$1" in *'vendor/bin/phpunit'*) ;; *) return 1 ;; esac
+  safe_cmd_with_prefix "$1" "$PHPUNIT_PREFIX_RE"
+}
+# 변이 검증 전용 — 수치 재검증(verify_baseline_counts·리뷰어 인용)은 phpunit 요약 형식만 읽는다
+is_pytest_cmd() {
+  case "$1" in *pytest*) ;; *) return 1 ;; esac
+  safe_cmd_with_prefix "$1" "$PYTEST_PREFIX_RE"
 }
 
 # phpunit 요약에서 테스트·assertion 수를 뽑아 "N tests, M assertions" 한 형식으로 낸다. OK 요약은
@@ -785,13 +798,13 @@ verify_criteria() {
 # (환경 누락 등) red 가 변이 때문인지 가를 수 없어 판정 무효로 적고 dev 를 탓하지 않는다.
 #
 #   MUTATIONS: {n}                                          (00-spec.md — 변이 기준 개수)
-#   MUTATION: {파일} | {원문 조각} ==> {변이 조각} | {phpunit 명령}   (spec 또는 dev-NN.md)
-# MUTATION 줄 분리 → file · from · to · cmd. 명령은 첫 "| {phpunit 접두}" 부터 끝까지다 — 마지막 `|` 로
+#   MUTATION: {파일} | {원문 조각} ==> {변이 조각} | {phpunit·pytest 명령}   (spec 또는 dev-NN.md)
+# MUTATION 줄 분리 → file · from · to · cmd. 명령은 첫 "| {phpunit·pytest 접두}" 부터 끝까지다 — 마지막 `|` 로
 # 자르면 `--filter 'A|B'` 가 `B'` 로 잘린다. file·from·to 는 그 앞부분에서만 읽어 조각 안의 `|` 도 견딘다.
 # 접두가 안 보이면 cmd 는 비어 "해석 불가" 로 간다.
 mutation_split() {
   local sep=$'\x01' split head
-  split=$(printf '%s' "$1" | sed -E "s#[[:space:]]*\|[[:space:]]*(([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |\$))#${sep}\1#")
+  split=$(printf '%s' "$1" | sed -E "s#[[:space:]]*\|[[:space:]]*(([^ ]*php(\.exe)? +)?[^ ]*vendor/bin/phpunit( |\$)|[^ ]*python[0-9.]*(\.exe)?( +-[A-Za-z]+)* +-m +pytest( |\$))#${sep}\1#")
   case "$split" in
     *"$sep"*) head="${split%%"$sep"*}"; cmd="${split#*"$sep"}" ;;
     *) head="$1"; cmd="" ;;
@@ -805,6 +818,43 @@ MUTATION_RED_RE='FAILURES!|ERRORS!|Tests: [0-9]+.*(Failures|Errors): [1-9]'
 # 대조군이 exit 0 이어도 assertion 이 0 이면(전건 skip·테스트 0개) 변이도 당연히 통과한다 —
 # 그걸 GREEN(약한 테스트)으로 적으면 dev 가 고칠 수 없는 걸로 재보고만 소진한다.
 MUTATION_VACUOUS_RE='Assertions: 0([^0-9]|$)|No tests executed|OK \(0 tests'
+
+# 변이 명령 종류 — phpunit · pytest. 그 밖은 빈 값(해석 불가)
+mutation_runner() {
+  if is_phpunit_cmd "$1"; then echo phpunit
+  elif is_pytest_cmd "$1"; then echo pytest
+  fi
+}
+
+# 대조군(무변이) 판정 — ok · red(green 이 아님) · vacuous(돌 테스트가 없음)
+# pytest: rc 5 = 수집 0건, rc 1 = 실패, rc 2·3·4 = 수집 오류·중단. skip 만 있고 passed 가 없으면 vacuous.
+mutation_control_verdict() {
+  local kind="$1" rc="$2" out="$3"
+  if [ "$kind" = pytest ]; then
+    if [ "$rc" -eq 5 ] || printf '%s' "$out" | grep -qE 'no tests ran'; then echo vacuous; return; fi
+    [ "$rc" -eq 0 ] || { echo red; return; }
+    if ! printf '%s' "$out" | grep -qE '[0-9]+ passed'; then echo vacuous; return; fi
+    echo ok; return
+  fi
+  if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then echo red; return; fi
+  if printf '%s' "$out" | grep -qE "$MUTATION_VACUOUS_RE"; then echo vacuous; return; fi
+  echo ok
+}
+
+# 변이 후 판정 — red(테스트가 잡았다) · crash(실행이 깨졌다 = 판정 무효) · green(못 잡았다)
+# pytest: red 는 rc 1 + "N failed" 뿐이다. rc 2(수집 오류 — 변이가 import 를 깸)·5 는 crash.
+mutation_mutant_verdict() {
+  local kind="$1" rc="$2" out="$3"
+  if [ "$kind" = pytest ]; then
+    if [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -qE '[0-9]+ failed'; then echo red
+    elif [ "$rc" -ne 0 ]; then echo crash
+    else echo green; fi
+    return
+  fi
+  if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then echo red
+  elif [ "$rc" -ne 0 ]; then echo crash
+  else echo green; fi
+}
 
 mutation_lines() {
   grep -hE '^[[:space:]#>*-]*MUTATION:' "$@" 2>/dev/null \
@@ -866,7 +916,7 @@ mutation_scratch_remove() {
 }
 
 verify_mutations() {
-  local dir="$1" nn="$2" want root lines count scratch report fail=0 line file from to cmd out rc before_sha
+  local dir="$1" nn="$2" want root lines count scratch report fail=0 line file from to cmd out rc before_sha kind verdict
   report="$dir/mut-$nn.md"
   want=$(sed -nE 's/^[[:space:]#>*]*MUTATIONS:[[:space:]*]*([0-9]+)[[:space:]*]*$/\1/p' "$dir/00-spec.md" 2>/dev/null | tail -1)
   lines=$(mutation_lines "$dir/00-spec.md" "$dir/dev-$nn.md")
@@ -899,20 +949,21 @@ verify_mutations() {
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     mutation_split "$line"
-    if ! is_phpunit_cmd "$cmd" || [ -z "$from" ] || [ ! -f "$scratch/$file" ]; then
+    kind=$(mutation_runner "$cmd")
+    if [ -z "$kind" ] || [ -z "$from" ] || [ ! -f "$scratch/$file" ]; then
       echo "!!! [dev-$nn] MUTATION 줄 해석 불가 — $line" | tee -a "$report"
       fail=1; continue
     fi
     before_sha=$(sha256sum "$root/$file" 2>/dev/null | cut -d' ' -f1)
     out=$(cd "$scratch" && eval "$cmd" 2>&1); rc=$?
-    if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then
-      echo "--- [mut-$nn] 대조군이 green 이 아니다 — 판정 무효: $cmd" | tee -a "$report"
-      continue
-    fi
-    if printf '%s' "$out" | grep -qE "$MUTATION_VACUOUS_RE"; then
-      echo "--- [mut-$nn] 대조군 assertion 0(전건 skip·테스트 없음) — 실행 환경이 없어 판정 무효: $cmd" | tee -a "$report"
-      continue
-    fi
+    case "$(mutation_control_verdict "$kind" "$rc" "$out")" in
+      red)
+        echo "--- [mut-$nn] 대조군이 green 이 아니다 — 판정 무효: $cmd" | tee -a "$report"
+        continue ;;
+      vacuous)
+        echo "--- [mut-$nn] 대조군 assertion 0(전건 skip·테스트 없음) — 실행 환경이 없어 판정 무효: $cmd" | tee -a "$report"
+        continue ;;
+    esac
     cp -p "$scratch/$file" "$scratch/$file.mutation-orig"
     # 조각은 한 줄·파일 안 유일이어야 한다. 이스케이프(\n·\t)는 풀지 않는다 — PHP 소스엔 FQCN
     # (\App\Libraries\notify…)·정규식('\d')·"\n" 처럼 리터럴 백슬래시가 흔해, 풀면 지금 맞는 조각이
@@ -951,9 +1002,10 @@ PY
     fi
     out=$(cd "$scratch" && eval "$cmd" 2>&1); rc=$?
     mv -f "$scratch/$file.mutation-orig" "$scratch/$file"
-    if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qE "$MUTATION_RED_RE"; then
+    verdict=$(mutation_mutant_verdict "$kind" "$rc" "$out")
+    if [ "$verdict" = red ]; then
       echo "- red ✓ $file: \`$from\` ==> \`$to\`" >> "$report"
-    elif [ "$rc" -ne 0 ]; then
+    elif [ "$verdict" = crash ]; then
       # 실패 집계 없이 죽었다(Parse error·Fatal) — 테스트가 판별한 게 아니라 변이가 실행을 깼다
       echo "!!! [dev-$nn] 판정 무효(변이 후 실행 오류) — 실행 가능한 변이로 바꾼다: $file \`$from\` ==> \`$to\`" | tee -a "$report"
       printf '%s\n' "$out" | tail -3 | sed 's/^/    /' >> "$report"
@@ -1264,7 +1316,7 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
 실 소스에 직접 가해 확인한다 — 테스트 안에서 변이를 흉내 내는 방식은 판별력이 0 이 된다(ISS-694):
   MUTATIONS: {변이 기준 개수}
 대상 코드가 이미 있어 원문을 지금 확정할 수 있으면 변이마다 한 줄씩 쓴다 (새로 짤 코드면 dev 가 쓴다):
-  MUTATION: {파일 상대경로} | {원문 조각} ==> {변이 조각} | {phpunit 명령}
+  MUTATION: {파일 상대경로} | {원문 조각} ==> {변이 조각} | {vendor/bin/phpunit 명령 또는 python -m pytest 명령}
 원문 조각은 한 줄이고 그 파일 안에서 유일해야 한다 — 여러 곳에 있으면 셸이 '모호' 로 해석 불가 처리하고,
 줄바꿈을 넣은 조각은 찾지 못한다. 여러 줄 변경이면 그 변경을 대표하는 고유한 한 줄을 고른다.
 수정을 허용하는 경로를 기계 판독용 한 줄로 쓴다 (worktree 루트 기준 glob, 쉼표 구분, * 는 / 도 넘는다 —
