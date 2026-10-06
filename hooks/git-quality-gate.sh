@@ -123,10 +123,23 @@ if [ -n "$COMMIT_MSG" ]; then
 fi
 
 # ===== Phase 1-b: code-loop run ID 차단 — 제목뿐 아니라 본문(-m 여러 개·heredoc)과 -F 파일까지 =====
-# run ID 는 로컬 state 디렉토리 이름이라 레포 밖에서 아무것도 가리키지 않는다. 날짜·경로는 통과한다.
+# run ID(YYYYMMDD-HHMMSS)는 로컬 state 디렉토리 이름이라 레포 밖에서 아무것도 가리키지 않는다.
+# 명령 전체가 아니라 메시지 부분만 본다 — `git -C …/worktrees/20261006-115448-…` 같은 경로가 같은 모양이다.
 # `bash 스크립트` 경유 커밋은 여기서 안 보인다 — 레포 쪽 commit-msg 훅(athena .githooks)이 같은 패턴으로 받친다.
-RUNID_RE='(code-loop|run)[[:space:]]+(run[[:space:]]+)?20[0-9]{6}-[0-9]{6}'
-_runid_text="$COMMAND"
+RUNID_RE='(^|[^0-9])20[0-9]{6}-[0-9]{6}([^0-9]|$)'
+_runid_text=""
+_runid_rest="$COMMAND"
+_re_m_arg=$'-m[ \t]+("(([^"\\\\]|\\\\.)*)"|\'([^\']*)\')'
+while [[ "$_runid_rest" =~ $_re_m_arg ]]; do
+  _runid_text+="${BASH_REMATCH[2]}${BASH_REMATCH[4]}"$'\n'
+  _runid_rest="${_runid_rest#*"${BASH_REMATCH[0]}"}"
+done
+_re_heredoc_tag=$'<<-?[ \t]*[\'"]?([A-Za-z_]+)[\'"]?[^\n]*\n'
+if [[ "$COMMAND" =~ $_re_heredoc_tag ]]; then
+  _heredoc_tag="${BASH_REMATCH[1]}"
+  _heredoc_body="${COMMAND#*"${BASH_REMATCH[0]}"}"
+  _runid_text+="${_heredoc_body%%$'\n'"$_heredoc_tag"*}"$'\n'
+fi
 _re_msgfile=$'(-F|--file)[ \t=]+("([^"]+)"|\'([^\']+)\'|([^ \t;&|]+))'
 if [[ "$COMMAND" =~ $_re_msgfile ]]; then
   _msgfile="${BASH_REMATCH[3]}${BASH_REMATCH[4]}${BASH_REMATCH[5]}"
@@ -134,11 +147,13 @@ if [[ "$COMMAND" =~ $_re_msgfile ]]; then
   if [ ! -f "$_msgfile" ] && [[ "$COMMAND" =~ $_re_gitdir ]]; then
     _msgfile="${BASH_REMATCH[2]}${BASH_REMATCH[3]}${BASH_REMATCH[4]}/$_msgfile"
   fi
-  [ -f "$_msgfile" ] && _runid_text+=$'\n'"$(grep -v '^#' "$_msgfile" 2>/dev/null)"
+  [ -f "$_msgfile" ] && _runid_text+="$(cat "$_msgfile" 2>/dev/null)"$'\n'
 fi
-_runid_hits=$(printf '%s\n' "$_runid_text" | grep -oE "$RUNID_RE" | sort -u)
+# `#` 주석 줄은 커밋 메시지에 들어가지 않는다
+# 서버 백업 파일명(.env.bak-20260821-173327)은 롤백 근거라 통과시킨다
+_runid_hits=$(printf '%s' "$_runid_text" | grep -v '^#' | sed -E 's/bak[-_.a-z]*20[0-9]{6}-[0-9]{6}//g' | grep -E "$RUNID_RE")
 if [ -n "$_runid_hits" ]; then
-  echo "[BLOCKED] 커밋 메시지에 code-loop run ID — 지우고 다시 커밋하세요." >&2
+  echo "[BLOCKED] 커밋 메시지에 code-loop run ID(YYYYMMDD-HHMMSS) — 지우고 다시 커밋하세요." >&2
   printf '%s\n' "$_runid_hits" | sed 's/^/  /' >&2
   echo "  경위는 ISS 번호·라운드로 적는다 (예: 'ISS-856 R10: dev 2 · rev CLEAN · adv UPHELD')." >&2
   command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=run-id"

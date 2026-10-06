@@ -284,7 +284,7 @@ EOF" "$TMP/repo_master"
   bash_payload "git status" "$TMP/repo_master"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 비커밋 명령" 0 $?
 
-  # ── code-loop run ID — 제목 밖(본문 -m · heredoc · -F 파일)에 있어도 막는다. 날짜·경로는 통과 ──
+  # ── code-loop run ID(YYYYMMDD-HHMMSS) — 제목 밖(본문 -m · heredoc · -F 파일)에 있어도 막는다 ──
   bash_payload "$GC -m \"fix(x): 정상 제목\" -m \"code-loop 20261006-140053 (ISS-856 R10): dev 2\"" "$TMP/repo_master"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 본문 -m 의 run ID 차단" 2 $?
 
@@ -295,13 +295,21 @@ feat(x): 한도 인지
 EOF" "$TMP/repo_master"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] heredoc 본문의 run ID 차단" 2 $?
 
-  printf 'fix(x): y\n\ncode-loop run 20261006-161455 기준\n' > "$TMP/runid_msg.txt"
+  printf 'fix(x): y\n\n근거 20261006-164305-iss-856-r10b-call 참조\n' > "$TMP/runid_msg.txt"
   bash_payload "$GC -F $TMP/runid_msg.txt" "$TMP/repo_master"
-  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] -F 파일의 run ID 차단" 2 $?
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] -F 파일의 run 디렉토리명 차단" 2 $?
 
-  printf 'docs(x): 2026-10-06 정착\n\n근거 docs/working/20261006-140053-iss.md\n# code-loop 20261006-140053\n' > "$TMP/date_msg.txt"
+  bash_payload "$GC -m \"fix(x): y\" -m \"정착 (20261006-140053)\"" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 괄호 속 run ID 차단" 2 $?
+
+  # 통과: 날짜(대시형)·날짜 범위(뒤 8자리)·서버 백업 파일명·# 주석 줄 · 경로 속 run ID(-C worktree)
+  printf 'docs(x): 2026-10-06 정착\n\n기간 20261006-20261007 · docs/wbs/2026-10-06-ISS-1.md · 백업 .env.bak-20260821-173327\n# code-loop 20261006-140053\n' > "$TMP/date_msg.txt"
   bash_payload "$GC -F $TMP/date_msg.txt" "$TMP/repo_master"
-  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 날짜·경로·# 주석 줄은 통과" 0 $?
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 날짜·날짜범위·백업 파일명·# 주석 줄은 통과" 0 $?
+
+  bash_payload "git -C $TMP/worktrees/20261006-115448-iss-1010 ${GC#git } -m \"fix(x): 정상 제목\"" "$TMP/repo_cwd"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_cwd"
+  check "[$mode] -C 경로 속 run ID 는 메시지가 아니다" 0 "$(printf '%s' "$LAST_OUT" | grep -c 'run ID')"
 
   # ── worktree 대상 커밋 ──
   #   hook 프로세스의 cwd 는 세션 cwd(메인 레포)다. `cd <wt> && git commit` / `git -C <wt> commit` 이면
