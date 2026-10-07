@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""구글 시트 `소통` 탭 — B1 요청을 꺼내고, 답변을 B2 에 쓴다.
+"""구글 시트 `채팅` 탭 — B1 요청을 꺼내고, 답변을 B2 에 쓴다.
 
 답변은 이 스크립트가 만들지 않는다. **대화 중인 Claude 세션이 자기 맥락 그대로**
 답한다 — 새로 뜬 헤드리스 세션은 지금 하던 작업을 몰라 "무엇이 잘됐는지 근거가
@@ -26,7 +26,7 @@ for _s in (sys.stdout, sys.stderr):
 
 KEY = os.path.expanduser('~/.claude/custom-plugin/tools/.token/gsheet.token')
 DOC = '1ef2TzudeRfXzdAyKH7AmYwACFSjVgmafYHPMGwKurHQ'
-GID = 568626710               # `소통` 탭. 탭 이름은 바뀌므로 gid 로 잡는다.
+GID = 568626710               # `채팅` 탭. 탭 이름은 바뀌므로 gid 로 잡는다.
 REQ, ANS = 'B1', 'B2'
 CELL_MAX = 49000              # 시트 셀 상한 50000자 — 여유를 둔다
 STATE_DIR = os.path.expanduser('~/.cache/gsheet-chat')
