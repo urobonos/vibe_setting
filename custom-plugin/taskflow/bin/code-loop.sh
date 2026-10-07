@@ -23,6 +23,7 @@
 #
 # 환경변수: CODE_LOOP_PERM(기본 auto) / CODE_LOOP_MODEL_{SPEC,SUM,DEV,REV,ADV} / CODE_LOOP_EFFORT_{DEV,REV,ADV}
 #           CODE_LOOP_TIER(기본 auto — 지정 안 한 역할은 spec 판정·라운드로 등급 결정, off = frontmatter 고정)
+#           CODE_LOOP_BASE_ROOT(요청 상대경로 기준 강제) / CODE_LOOP_WORKS_DIR(기준 탐색 위치, 기본 /c/Works)
 # SSOT: custom-plugin/taskflow/commands/code-loop.md
 set -uo pipefail
 
@@ -1269,6 +1270,29 @@ presettle_checks() {
   fi
 }
 
+# 요청서·참조문서(docs/wbs/issue/request/)는 커밋하지 않는 로컬 폴더라 메인 트리에만 있고, 요청서는 그 경로를
+# 레포 루트 기준 상대경로로 적는다. 러너 cwd 는 ~/.claude 라 그대로 두면 엉뚱한 곳으로 풀려 find 로 샌다(ISS-694).
+# 요청이 그 경로를 가리키면 폴더와 .git 디렉토리(= 메인 트리, worktree 는 .git 파일)를 가진 레포 루트를 찾는다.
+REQUEST_REL_RE='docs[\/]wbs[\/]issue[\/]request'
+request_base_root() {
+  local d root=""
+  if [ -n "${CODE_LOOP_BASE_ROOT:-}" ]; then
+    root="$CODE_LOOP_BASE_ROOT"
+  else
+    printf '%s' "$1" | grep -qE "$REQUEST_REL_RE" || return 0
+    for d in "${CODE_LOOP_WORKS_DIR:-/c/Works}"/*/; do
+      if [ -d "${d}docs/wbs/issue/request" ] && [ -d "${d}.git" ]; then
+        root="${d%/}"
+        break
+      fi
+    done
+  fi
+  [ -n "$root" ] || return 0
+  # Read 도구가 읽는 형식(C:/…)으로 넘긴다
+  command -v cygpath >/dev/null 2>&1 && root=$(cygpath -m "$root")
+  printf '%s' "$root"
+}
+
 run_loop() {
   local request="$1" run="$2" resume="${3:-}" dir="$STATE_DIR/$2"
   mkdir -p "$dir"
@@ -1290,6 +1314,19 @@ run_loop() {
   local common="결과문서 디렉토리: $dir
 루프 계약 SSOT = $CLAUDE_HOME/custom-plugin/taskflow/references/review-contract.md (루프 계약 절) · 흐름 = $CMD_DIR/code.md · 결과문서 규약 SSOT = $CMD_DIR/code-loop.md
 필요한 문서는 직접 Read 한다. 머지·push 하지 않는다."
+  # 요청서 상대경로의 기준 — resume 은 요청 원문이 없으므로 첫 기동 때 찾은 값을 run 에 남겨 읽는다
+  local base_root=""
+  [ -n "$request" ] && base_root=$(request_base_root "$request")
+  if [ -n "$base_root" ]; then
+    printf '%s\n' "$base_root" > "$dir/BASE_ROOT"
+  else
+    base_root=$(cat "$dir/BASE_ROOT" 2>/dev/null)
+  fi
+  if [ -n "$base_root" ]; then
+    echo "=== 요청 상대경로 기준: $base_root"
+    common="$common
+요청에 나오는 상대경로(docs\\wbs\\issue\\request\\…)는 메인 트리 $base_root 기준이다 — worktree 에는 없는 로컬 폴더다. find 로 찾지 말고 $base_root/ 에 붙여 Read 한다."
+  fi
 
   # ── 1단계: 범위 확정 + worktree ───────────────────────────────────────
   VENDOR_BG_PID="" VENDOR_BG_WT="" VENDOR_BG_LOG=""
