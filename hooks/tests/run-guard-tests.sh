@@ -311,6 +311,22 @@ EOF" "$TMP/repo_master"
   run_hook git-quality-gate.sh "$mode" "$TMP/repo_cwd"
   check "[$mode] -C 경로 속 run ID 는 메시지가 아니다" 0 "$(printf '%s' "$LAST_OUT" | grep -c 'run ID')"
 
+  # ── 검증 경위(dev · rev CLEAN · red team UPHELD · 변이 N/N red) — 본문·제목 어디든 막는다 ──
+  bash_payload "$GC -m \"fix(x): 정상 제목\" -m \"dev 1 · rev CLEAN · red team UPHELD · 변이 26/26 red\"" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 본문 검증 경위 차단" 2 $?
+
+  printf 'fix(x): y\n\n본문\n\n검증: dev 1 · rev CLEAN · adv UPHELD · 변이 2/2 red.\n' > "$TMP/verdict_msg.txt"
+  bash_payload "$GC -F $TMP/verdict_msg.txt" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] -F 파일의 검증 경위 차단" 2 $?
+
+  bash_payload "$GC -m \"docs(issue): ISS-1 정착 · 사후 태스크 red team UPHELD 기록\"" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"; check "[$mode] 제목의 red team 판정 차단" 2 $?
+
+  # 통과: dev 서버 수치·"변이 시 red" 서술은 검증 경위가 아니다
+  bash_payload "$GC -m \"fix(x): y\" -m \"레거시 170 / dev 219 · dev DB 부재 · 변이 시 red 를 요구한다\"" "$TMP/repo_master"
+  run_hook git-quality-gate.sh "$mode" "$TMP/repo_master"
+  check "[$mode] dev 서버 수치·변이 서술은 통과" 0 "$(printf '%s' "$LAST_OUT" | grep -c '검증 경위')"
+
   # ── worktree 대상 커밋 ──
   #   hook 프로세스의 cwd 는 세션 cwd(메인 레포)다. `cd <wt> && git commit` / `git -C <wt> commit` 이면
   #   staged 목록을 **그 디렉토리에서** 읽어야 docs/config-only 면제가 성립한다. cwd 인덱스만 읽으면

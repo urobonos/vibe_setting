@@ -155,8 +155,18 @@ _runid_hits=$(printf '%s' "$_runid_text" | grep -v '^#' | sed -E 's/bak[-_.a-z]*
 if [ -n "$_runid_hits" ]; then
   echo "[BLOCKED] 커밋 메시지에 code-loop run ID(YYYYMMDD-HHMMSS) — 지우고 다시 커밋하세요." >&2
   printf '%s\n' "$_runid_hits" | sed 's/^/  /' >&2
-  echo "  경위는 ISS 번호·라운드로 적는다 (예: 'ISS-856 R10: dev 2 · rev CLEAN · adv UPHELD')." >&2
+  echo "  커밋은 제목 + 무엇을·왜만 적는다. 경위는 ISS 번호·라운드로 충분하다." >&2
   command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=run-id"
+  exit 2
+fi
+# 검증 경위(dev 1 · rev CLEAN · red team UPHELD · 변이 26/26 red)도 루프 내부 판정이라 커밋에 남기지 않는다 — 기록은 이슈 문서에
+VERDICT_RE='rev(-[0-9]+)? CLEAN|(adv|red ?team) (UPHELD|BROKEN)|변이 ([0-9]+/[0-9]+ )?red'
+_verdict_hits=$(printf '%s' "$_runid_text" | grep -v '^#' | grep -iE "$VERDICT_RE")
+if [ -n "$_verdict_hits" ]; then
+  echo "[BLOCKED] 커밋 메시지에 검증 경위(dev·rev·red team·변이 수치) — 지우고 다시 커밋하세요." >&2
+  printf '%s\n' "$_verdict_hits" | sed 's/^/  /' >&2
+  echo "  커밋은 제목 + 무엇을·왜만 적는다. 검증 기록은 이슈 문서에 둔다." >&2
+  command -v log_event >/dev/null 2>&1 && log_event "git-quality-gate" "block" "reason=verdict-line"
   exit 2
 fi
 
