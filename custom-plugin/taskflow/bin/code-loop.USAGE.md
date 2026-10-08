@@ -39,6 +39,10 @@ CODE_LOOP_MODEL_DEV=sonnet CODE_LOOP_EFFORT_DEV=medium \
 CODE_LOOP_MODEL_REV=sonnet CODE_LOOP_EFFORT_REV=medium \
   bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh "{요청}"
 
+# haiku 5.5 지정 — 기본값은 아니다. 모델 값은 opus · sonnet · haiku 아무거나 역할별로 넣는다
+# (haiku 4.5 는 결과문서 경로 ~/.claude 쓰기가 CLI 에서 거부된다. 별칭 `haiku` = 5.5 라 통과)
+CODE_LOOP_MODEL_SUM=haiku bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh "{요청}"
+
 # red team 회차를 이번만 늘리기/줄이기
 CODE_LOOP_ADV_CAP=5 bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh "{요청}"
 

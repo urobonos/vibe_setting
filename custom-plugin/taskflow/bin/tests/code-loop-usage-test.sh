@@ -67,6 +67,12 @@ mkrun r-opus '--- 10:00:00 [adv-01] model=opus try=1'
 mkjsonl s-opus r-opus claude-opus-5 1000000 1000000 1000000 1000000
 check "opus 환산" 'r-opus +.*\$40\.50' "$(run)"
 
+echo "== E2. haiku 5.5 단가 (0.1/0.5, cr=x0.1, cw=x2) — 빠지면 sonnet 단가로 20배 센다 =="
+# in 1M*0.1 + cr 1M*0.01 + cw 1M*0.2 + out 1M*0.5 = $0.81
+mkrun r-haiku '--- 10:00:00 [dev-01] model=haiku try=1'
+mkjsonl s-haiku r-haiku claude-haiku-5-5 1000000 1000000 1000000 1000000
+check "haiku 환산" 'r-haiku +.*\$0\.81' "$(run)"
+
 echo "== F. 무관한 jsonl 은 귀속되지 않는다 =="
 printf '{"type":"user","content":"그냥 대화"}\n{"type":"assistant","message":{"model":"claude-opus-5","usage":{"input_tokens":9000000,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"output_tokens":0}}}\n' \
   > "$PROJ/s-unrelated.jsonl"
