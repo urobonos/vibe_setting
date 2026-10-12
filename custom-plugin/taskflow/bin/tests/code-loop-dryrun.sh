@@ -16,7 +16,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"
 export PATH="$TMP/bin:$PATH"
-# 러너 기본 캡은 무제한(0)이다. 시나리오 C 처럼 지적이 영원히 남는 경우 캡을 안 주면
+# 러너 기본 캡은 5 다(무제한은 0 명시). 시나리오 C 처럼 지적이 영원히 남는 경우 캡을 안 주면
 # 루프가 끝나지 않고 드라이런이 좀비로 남아 하위 프로세스를 띄운다.
 # 이 테스트의 기대값(캡 5)을 명시하고, 실행마다 상한을 건다
 export CODE_LOOP_DEV_CAP=5 CODE_LOOP_ADV_CAP=2
@@ -520,6 +520,13 @@ reset; rc=$(runit T_WT="$WT_STALL" T_DEVTOUCH="$WT_STALL/touch.txt" T_REV="$REV_
 check "대조군 코드 변경 있음 — 캡까지 감" 5 "$(cnt 'dev-*.md')"
 check "대조군 — 정체 정지 없음" 0 "$(grep -c '정체 정지' "$TMP/out.txt")"
 check "대조군 — 배너에 정체 정지 없음" 0 "$(grep -c '정체 정지' "$(d)/RESULT.md")"
+rm -f "$WT_STALL/touch.txt"
+# 기본 캡 — 환경변수를 비우면 러너 기본값(5)이 걸린다. 위 전역 export 가 5 를 주므로 비워야 기본값 자체를 본다.
+# 판정이 매번 달라 정체 정지로는 안 끊기는 폭주(21라운드 run)를 캡이 막는지
+REV_VARY6="$REV_VARY,FINDINGS C=0 H=6 M=0"
+reset; rc=$(runit CODE_LOOP_DEV_CAP= T_WT="$WT_STALL" T_DEVTOUCH="$WT_STALL/touch.txt" T_REV="$REV_VARY6" T_ADV=UPHELD)
+check "기본 캡 — 5라운드에서 멈춤" 5 "$(cnt 'dev-*.md')"
+check "기본 캡 — 라운드 표기 /5" 1 "$(grep -c '=== dev-loop 라운드 1/5' "$TMP/out.txt")"
 rm -f "$WT_STALL/touch.txt"
 
 echo "== AL. 사용량 한도 — 재시도·대기 없이 멈추고 --resume 으로 이어진다 (run 20260917-132300) =="
