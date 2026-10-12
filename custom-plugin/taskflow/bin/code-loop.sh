@@ -1410,7 +1410,7 @@ request_base_root() {
   printf '%s' "$root"
 }
 
-# 이슈 문서 종료 이력 — run_loop 의 EXIT trap 이 부른다. 정상 종료는 ISSUE_OUTCOME 이 판정을 갖고 오고,
+# 이슈 종료 로그·시트 동기화 — run_loop 의 EXIT trap 이 부른다. 정상 종료는 ISSUE_OUTCOME 이 판정을 갖고 오고,
 # 나머지는 종료 코드로 가른다 (0 완료 · 1 실패 · 2 크기 게이트 · 3 반환, run_loop 주석과 같은 표)
 issue_end() {
   local rc="$1" outcome="${ISSUE_OUTCOME:-}"
@@ -1431,7 +1431,7 @@ run_loop() {
   # 중단(return·한도 exit·TERM)도 run.log 에 끝을 남긴다 — 없으면 tail -f 로 보는 쪽이 멈춤과 진행을 못 가른다.
   # run_loop 는 tee_run 이 띄운 백그라운드 서브셸에서 돌아 trap 이 러너 본체로 새지 않는다
   loop_finished=""
-  # 이슈 문서 종료 이력은 어떤 경로로 끝나든 남긴다 — trap 은 run_loop 가 돌아간 뒤 돌아 지역변수가 없으므로 전역으로 넘긴다
+  # 이슈 종료 로그는 어떤 경로로 끝나든 남긴다 — trap 은 run_loop 가 돌아간 뒤 돌아 지역변수가 없으므로 전역으로 넘긴다
   ISSUE_DIR="$dir" ISSUE_RUN="$run" ISSUE_OUTCOME=""
   trap 'rc=$?; [ -n "$loop_finished" ] || echo "=== $(date "+%F %T") code-loop 종료 (abort=$rc)"; issue_end "$rc"' EXIT
   trap 'exit 143' TERM

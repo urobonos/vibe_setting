@@ -58,10 +58,9 @@ reset() {
   printf '%s\n' "$REPO" > "$TMP/run/BASE_ROOT"
 }
 doc() { ls "$ISS"/*/*-ISS-"$1"-*.md 2>/dev/null; }
-row_last() { awk '/^## 6\./{s=1;next} /^## /{s=0} s&&/^\|/{l=$0} END{print l}' "$(doc "$1")"; }
 syncs() { grep -c sync "$SYNCLOG" 2>/dev/null || echo 0; }
 
-echo "== A. pending → 시작하면 progress 로 옮기고 상태·착수일·이력을 같이 바꾼다 =="
+echo "== A. pending → 시작하면 progress 로 옮기고 상태·착수일을 같이 바꾼다. 이력 행은 쓰지 않는다(허브 소관) =="
 reset
 bash "$SUT" start "$TMP/run" "ISS-9001 R1 — 샘플 요청 (ISS-9002 와 무관)" > "$TMP/out.txt" 2>&1
 check "폴더 progress" "progress" "$(basename "$(dirname "$(doc 9001)")")"
@@ -69,25 +68,28 @@ check "pending 에서 빠짐" 0 "$(ls "$ISS/pending" | grep -c 9001)"
 check "git 이 이동으로 안다" 1 "$(git -C "$REPO" status --short | grep -c '^R.*ISS-9001')"
 check "frontmatter 상태" "상태: progress          # pending | progress | resolved" "$(grep '^상태:' "$(doc 9001)")"
 check "착수일 기입" "착수일: $TODAY" "$(grep '^착수일:' "$(doc 9001)")"
-check "이력 행 — 표 안에 붙음" 1 "$(row_last 9001 | grep -c "^| $TODAY | progress | code-loop .*run .* | 착수")"
+check "이력 행 안 씀" 0 "$(grep -c 'code-loop' "$(doc 9001)")"
 check "§7 은 그대로" 1 "$(grep -c '^## 7. 참조' "$(doc 9001)")"
 check "ISSUE 기록" "$(doc 9001)" "$(cat "$TMP/run/ISSUE")"
 check "시트 동기화 1회" 1 "$(syncs)"
 check "첫 ISS 번호만 본다(9002 무변경)" 1 "$(grep -c '^| ' "$(doc 9002)" | awk '{print ($1==2)}')"
 
-echo "== B. 종료 — 결과와 상관없이 progress 유지 + 이력 행 =="
+echo "== B. 종료 — 결과와 상관없이 progress 유지, 문서는 건드리지 않고 로그·동기화만 =="
 bash "$SUT" end "$TMP/run" "미수렴 — dev=FINDINGS C=0 H=0 M=2" > "$TMP/out.txt" 2>&1
 check "폴더 그대로 progress" "progress" "$(basename "$(dirname "$(doc 9001)")")"
 check "상태 그대로" 1 "$(grep -c '^상태: progress' "$(doc 9001)")"
-check "종료 이력 행" 1 "$(row_last 9001 | grep -c "^| $TODAY | (현 상태 유지) | code-loop .* | 종료 — 미수렴 — dev=FINDINGS C=0 H=0 M=2")"
+check "종료 — 문서 무변경" 0 "$(grep -c 'code-loop' "$(doc 9001)")"
+check "종료 — 결과는 로그로" 1 "$(grep -c '종료 — 미수렴 — dev=FINDINGS C=0 H=0 M=2' "$TMP/out.txt")"
 check "시트 동기화 2회째" 2 "$(syncs)"
 
-echo "== C. 이미 progress — 옮기지 않고 착수일도 보존, 이력만 =="
+echo "== C. 이미 progress — 문서를 전혀 건드리지 않는다(재run 이 메인 트리를 더럽히지 않게) =="
 reset
 bash "$SUT" start "$TMP/run" "ISS-9002 R2 — 두 번째 run" > /dev/null 2>&1
 check "폴더 progress" "progress" "$(basename "$(dirname "$(doc 9002)")")"
 check "착수일 보존" "착수일: 2026-10-05" "$(grep '^착수일:' "$(doc 9002)")"
-check "이력 행 (현 상태 유지)" 1 "$(row_last 9002 | grep -c '| (현 상태 유지) | code-loop .* | 착수')"
+check "메인 트리 무변경" 0 "$(git -C "$REPO" status --short | grep -c .)"
+check "동기화 안 함(바뀐 게 없다)" 0 "$(syncs)"
+check "ISSUE 기록(종료 동기화용)" "$(doc 9002)" "$(cat "$TMP/run/ISSUE")"
 
 echo "== D. resolved — 전이하지 않고 이력도 안 쓴다 (정착 쪽 소관) =="
 reset

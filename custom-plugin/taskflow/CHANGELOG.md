@@ -47,6 +47,7 @@
 
 ## commands/code-loop.md
 
+- 2026-10-12: 이슈 전이에서 **이력 행 쓰기 제거** — 러너가 run 마다 메인 트리에 미커밋 이력 행을 남겨 정착 ff 를 막았다(ISS-HUB 지적, ISS-1074 재run). pending → progress 전이(폴더 + frontmatter)만 남기고, 이미 progress 인 재run 은 문서 무변경. 결과는 run.log, 이력은 허브가 커밋. 사용자 결정 "이력 행 제거·전이만 유지" — 같은 날 앞선 "이력 행" 결정을 대체.
 - 2026-10-12: **셸 회귀 게이트 + MUTATION 템플릿 고정** (ISS-WORKER 제안 → ISS-THINK 판정 1·3 채택, 2 는 1 에 흡수). spec `REGRESSION:` 줄을 리뷰 CLEAN 뒤·adv 앞 셸이 1회 실행 — red 면 1회 재실행(flaky 판별) 후 dev 재진입, 전 run 공통 mkdir 잠금(Git Bash 에 flock 없음). 변이 조각이 `(삭제)` 류 설명문이면 해석 불가, spec 프롬프트에 "삭제 = 빈 치환"·"spec 이 쓴 MUTATION 은 dev 가 다시 쓰지 않는다". TEMP tempnam 고갈 점검은 프로젝트 운영 사안이라 미반영.
 - 2026-10-12: haiku 를 effort 없이 지정하면 기본 `high` (사용자 지시). 미지정이면 `--effort` 가 안 넘어가 CLI 기본값에 맡겨지고 run.log 에도 안 남았다(ISS-1088·1030).
 - 2026-10-12: **이슈 문서 상태 전이 + 시트 동기화** (`bin/code-loop-issue.sh` 신설). 요청의 첫 `ISS-N` 문서를 spec 전에 pending → progress(`git mv` + frontmatter + 이력), 어떤 종료든 EXIT trap 에서 이력 1행 — progress 유지, resolved 는 정착 쪽 소관. 두 시점 모두 `wbs-sheet-sync.sh` 호출. 문서 변경은 본 체크아웃에 미커밋. 사용자 결정 3건(완료·미수렴 모두 progress 유지, 미커밋).

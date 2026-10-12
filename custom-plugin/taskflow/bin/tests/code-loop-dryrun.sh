@@ -705,7 +705,7 @@ check "캡 0 — TOO-LARGE 판정 줄 지시 없음" 0 "$(grep -c 'GATE: TOO-LAR
 check "캡 0 — 완주" 0 "$rc"
 unset T_PROMPTDIR
 
-echo "== AS. 이슈 문서 상태 전이 — spec 전에 pending→progress, 어떤 종료든 이력 1행 (2026-10-12) =="
+echo "== AS. 이슈 문서 상태 전이 — spec 전에 pending→progress, 어떤 종료든 로그·동기화. 이력 행은 안 쓴다 (2026-10-12) =="
 # 전이 규칙 자체는 tests/code-loop-issue-test.sh 가 본다. 여기서는 러너 배선(시작 시점·EXIT trap·resume)만 본다
 IREPO="$TMP/issrepo"; ISSD="$IREPO/docs/wbs/issue"
 issue_reset() {
@@ -721,16 +721,17 @@ issue_reset; reset; rm -f "$TMP/isync.log"; rc=$(issue_run T_REV=CLEAN T_ADV=UPH
 check "이슈 완료 — 완주" 0 "$rc"
 check "이슈 완료 — progress 로 이동" progress "$(basename "$(dirname "$(idoc)")")"
 check "이슈 완료 — 착수 전이가 spec 보다 먼저" 1 "$(awk '/\[issue\] ISS-9001 pending → progress/{i=NR} /\[spec\] model=/{if(!s)s=NR} END{print (i&&s&&i<s)?1:0}' "$TMP/out.txt")"
-check "이슈 완료 — 착수·종료 이력 2행" 2 "$(grep -c '| code-loop (run' "$(idoc)")"
-check "이슈 완료 — 종료 행에 판정" 1 "$(grep -c '종료 — 완료 (dev=CLEAN.* adv=UPHELD.*) — 정착 대기' "$(idoc)")"
+check "이슈 완료 — 이력 행 안 씀" 0 "$(grep -c 'code-loop' "$(idoc)")"
+check "이슈 완료 — 종료 로그에 판정" 1 "$(grep -c '\[issue\] .* 종료 — 완료 (dev=CLEAN.* adv=UPHELD.*) — 정착 대기' "$TMP/out.txt")"
 check "이슈 완료 — 시트 동기화 2회" 2 "$(grep -c sync "$TMP/isync.log")"
 issue_reset; reset; rc=$(issue_run T_GATE=TOO-LARGE)
-check "이슈 게이트 반려 — 종료 이력이 사유를 단다" 1 "$(grep -c '종료 — 크기 게이트 초과' "$(idoc)")"
+check "이슈 게이트 반려 — 종료 로그가 사유를 단다" 1 "$(grep -c '종료 — 크기 게이트 초과' "$TMP/out.txt")"
 issue_reset; reset; rc=$(issue_run T_REV=CLEAN T_ADV=UPHELD)
 RUN=$(basename "$(d)"); rm -f "$ST/$RUN/RESULT.md"
 env CODE_LOOP_BASE_ROOT="$IREPO" CODE_LOOP_ISSUE_SYNC_CMD=true T_REV=CLEAN T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
-check "이슈 resume — 착수 이력은 다시 안 쓴다" 1 "$(grep -c '| 착수 — code-loop 시작' "$(idoc)")"
-check "이슈 resume — 종료 이력은 회차마다" 2 "$(grep -c '| 종료 — ' "$(idoc)")"
+check "이슈 resume — 착수 전이는 1회(출력은 run.log 누적)" 1 "$(grep -c 'pending → progress' "$TMP/out.txt")"
+check "이슈 resume — 종료 로그는 회차마다" 2 "$(grep -c '\[issue\] .* 종료 — ' "$TMP/out.txt")"
+check "이슈 resume — 문서에 이력 행 없음" 0 "$(grep -c 'code-loop' "$(idoc)")"
 # runit 시나리오 전부(이슈 무관 요청)의 누적 출력 — issue_run 은 all-out 에 붙이지 않는다
 check "이슈 무관 요청 — 전이 시도 0" 0 "$(grep -c '\[issue\]' "$TMP/all-out.txt")"
 
