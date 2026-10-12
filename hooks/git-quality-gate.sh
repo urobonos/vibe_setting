@@ -190,6 +190,18 @@ fi
 
 STAGED_FILES=$(git -C "$REPO_DIR" diff --cached --name-only 2>/dev/null)
 
+# 같은 명령 안의 `git add <paths>` 는 PreToolUse 시점엔 아직 안 돌았다 — `add && commit` 한 줄이면 staged 가
+# 비어 docs-only 면제를 못 탄다. 각 add 의 대상을 `git add --dry-run` 으로 미리 풀어 staged 에 합친다.
+# 치환(`$(`·백틱)이 든 add 는 풀지 않는다(hook 이 명령보다 먼저 실행하게 된다) — 합치지 않으면 구동작 그대로다.
+while IFS= read -r ADD_SEG; do
+  case "$ADD_SEG" in *'$('*|*'`'*) continue ;; esac
+  ADD_ARGS=$(printf '%s' "$ADD_SEG" | sed -E 's/^.*[[:space:]]add([[:space:]]+|$)//')
+  read -r -a ADD_ARGV <<< "$ADD_ARGS"
+  for i in "${!ADD_ARGV[@]}"; do ADD_ARGV[$i]=$(printf '%s' "${ADD_ARGV[$i]}" | sed -E "s/^[\"']//; s/[\"']\$//"); done
+  PENDING=$(git -C "$REPO_DIR" add --dry-run "${ADD_ARGV[@]}" 2>/dev/null | sed -nE "s/^add '(.*)'\$/\1/p")
+  [ -n "$PENDING" ] && STAGED_FILES=$(printf '%s\n%s\n' "$STAGED_FILES" "$PENDING" | sed '/^$/d' | sort -u)
+done < <(printf '%s\n' "$COMMAND" | sed -E 's/(&&|\|\||;)/\n/g' | grep -E '(^|[[:space:]])git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+add([[:space:]]|$)')
+
 if [ -n "$STAGED_FILES" ]; then
   MODULE_COUNT=$(echo "$STAGED_FILES" | grep -oE 'app/Modules/[A-Za-z]+' | sort -u | wc -l)
 
