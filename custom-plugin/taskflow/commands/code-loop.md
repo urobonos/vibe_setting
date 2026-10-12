@@ -138,8 +138,12 @@ NN = 1 .. 5
                       → rev-NN-correctness.md · rev-NN-design.md
 3. merge      셸 → 반박·양식 이탈 시 fresh LLM   합본 + REBUTTED 근거 3종 확인 + BASELINE 전·후 동일성 확인
                       → rev-NN.md + VERDICT
-4. CLEAN → adv-loop / FINDINGS → NN+1 / 캡 소진 → adv 안 돈다 (깰 것이 없다)
+4. CLEAN → 셸 회귀 게이트(REGRESSION 줄 있을 때) → green 이면 adv-loop / FINDINGS·회귀 red → NN+1 / 캡 소진 → adv 안 돈다 (깰 것이 없다)
 ```
+
+**셸 회귀 게이트 — 전체 회귀는 dev 자기신고가 아니라 셸 실측이다.** spec 의 `REGRESSION: {phpunit·pytest 명령}` 줄을 리뷰 CLEAN 뒤·adv 앞에 셸이 worktree 에서 분할 없이 1회 돌린다(명령당 `CODE_LOOP_REGRESSION_TIMEOUT_MIN`, 기본 60분). dev 의 Bash 600s 상한에 걸려 전체 unit 이 분할·생략되고 그 자백이 재보고 왕복을 만들던 자리다(10-12 ISS-1074·1090·1088·1030). red 면 1회 재실행 — green 이면 flaky 로 `reg-NN.md` 에 적고 통과, 아니면 dev 재진입(정규 캡 계상, 직전 지적 = `reg-NN.md`). adv BROKEN 수정분도 리뷰 CLEAN 뒤 같은 게이트를 지나고, red 면 잔여로 닫는다. 동시 run 의 메모리 압박 때문에 전 run 공통 잠금(`state/code-loop/.regression.lock`)으로 직렬화한다. `REGRESSION_RESULT:` 줄이 남은 라운드는 `--resume` 때 다시 돌리지 않는다.
+
+**MUTATION 줄 — spec 이 완성형으로 쓰면 dev 는 다시 쓰지 않는다.** 삭제는 `==>` 뒤를 비운다. `(삭제)` 같은 괄호 설명문은 실행 전에 해석 불가로 돌린다(리터럴 치환 → crash 왕복, ISS-1067).
 
 3번이 `code.md` 가 "본체" 에 맡긴 일이다. **그 본체도 여기선 단발이다** — 판단은 하되 라운드를 들고 있지 않는다.
 

@@ -65,6 +65,11 @@ F_ADV="${CODE_LOOP_MODEL_ADV:+1}${CODE_LOOP_EFFORT_ADV:+1}"
 [ -n "${CODE_LOOP_EFFORT_DEV:-}" ] && M_DEV="$M_DEV:$CODE_LOOP_EFFORT_DEV"
 [ -n "${CODE_LOOP_EFFORT_REV:-}" ] && M_REV="$M_REV:$CODE_LOOP_EFFORT_REV"
 [ -n "${CODE_LOOP_EFFORT_ADV:-}" ] && M_ADV="$M_ADV:$CODE_LOOP_EFFORT_ADV"
+# haiku 는 effort 를 안 주면 high — 미지정이면 --effort 가 안 넘어가 CLI 기본값에 맡겨지고 run.log 에도
+# 안 남는다(10-12 ISS-1088·1030). 명시한 effort(`haiku:low`·CODE_LOOP_EFFORT_*)는 그대로 둔다
+haiku_effort() { case "$1" in *:*) echo "$1" ;; *haiku*) echo "$1:high" ;; *) echo "$1" ;; esac; }
+M_SPEC=$(haiku_effort "$M_SPEC"); M_SUM=$(haiku_effort "$M_SUM")
+M_DEV=$(haiku_effort "$M_DEV"); M_REV=$(haiku_effort "$M_REV"); M_ADV=$(haiku_effort "$M_ADV")
 
 model_rank()  { case "$1" in opus) echo 2 ;; *) echo 1 ;; esac; }
 effort_rank() { case "$1" in xhigh) echo 3 ;; high) echo 2 ;; *) echo 1 ;; esac; }
@@ -818,6 +823,14 @@ mutation_split() {
   to=$(printf '%s' "$head" | sed -E 's/^[^|]*\|[[:space:]]*//; s/^.*==>[[:space:]]*//')
 }
 
+# 변이 조각이 코드가 아니라 괄호 설명문인가 — `==> (삭제)` 를 리터럴로 치환하면 문법이 깨져 crash(판정 무효)로
+# 재보고 1왕복을 쓴다(run ISS-1067). 실행 전에 해석 불가로 돌린다. 삭제는 `==>` 뒤를 비운다.
+# 목록으로만 거른다 — (int)·($a) 같은 코드 조각을 설명문으로 오인하지 않게
+mutation_placeholder() {
+  printf '%s' "$1" | tr -d ' ' \
+    | grep -qiE '^\((삭제|제거|삭제됨|빈문자열|빈값|빈줄|없음|비움|공백|delete|deleted|remove|removed|empty|blank|none|nothing)\)$'
+}
+
 MUTATION_RED_RE='FAILURES!|ERRORS!|Tests: [0-9]+.*(Failures|Errors): [1-9]'
 # 대조군이 exit 0 이어도 assertion 이 0 이면(전건 skip·테스트 0개) 변이도 당연히 통과한다 —
 # 그걸 GREEN(약한 테스트)으로 적으면 dev 가 고칠 수 없는 걸로 재보고만 소진한다.
@@ -956,6 +969,10 @@ verify_mutations() {
     kind=$(mutation_runner "$cmd")
     if [ -z "$kind" ] || [ -z "$from" ] || [ ! -f "$scratch/$file" ]; then
       echo "!!! [dev-$nn] MUTATION 줄 해석 불가 — $line" | tee -a "$report"
+      fail=1; continue
+    fi
+    if mutation_placeholder "$to"; then
+      echo "!!! [dev-$nn] MUTATION 줄 해석 불가 — 변이 조각 '$to' 는 설명문이다. 삭제는 \`==>\` 뒤를 비운다 — $line" | tee -a "$report"
       fail=1; continue
     fi
     before_sha=$(sha256sum "$root/$file" 2>/dev/null | cut -d' ' -f1)
@@ -1101,6 +1118,103 @@ CRITERIA 에 빠졌거나 안 했다고 적힌 성공 기준은 실제로 실행
     dev_blocked "$dir" "$nn" && return "$BLOCKED_EXIT"
   done
   echo "=== [dev-$nn] 셸 재검증 재시도 소진($VERIFY_RETRY_CAP) — 중단하지 않고 리뷰어에게 넘긴다"
+  return 0
+}
+
+# ── 셸 회귀 게이트 ── spec 의 `REGRESSION: {phpunit·pytest 명령}` 줄을 리뷰 CLEAN 뒤·adv 앞에 셸이 직접 돌린다.
+# 전체 회귀를 dev 자기신고에 맡기면 dev Bash 600s 상한에 걸려 분할·생략되고, 그 자백이 재보고 왕복이 됐다
+# (10-12 ISS-1074·1090·1088·1030). 셸엔 그 상한이 없다 — 명령마다 CODE_LOOP_REGRESSION_TIMEOUT_MIN(기본 60분).
+# 동시 run 8~9개가 전체 스위트를 같이 돌리면 메모리가 모자라 전 run 공통 잠금으로 직렬화한다
+# (Git Bash 엔 flock 이 없어 mkdir 잠금 — 잡은 러너가 죽었으면 넘겨받는다).
+# 결과 reg-NN.md 의 `REGRESSION_RESULT:` 줄이 있으면 재개 때 다시 돌리지 않는다 — RED 였던 라운드를
+# 고친 코드로 다시 돌리면 green 이 나와 다음 라운드의 리뷰를 건너뛴다.
+REGRESSION_TIMEOUT_MIN="${CODE_LOOP_REGRESSION_TIMEOUT_MIN:-60}"
+REGRESSION_LOCK="$STATE_DIR/.regression.lock"
+
+regression_lines() {
+  grep -hE '^[[:space:]#>*-]*REGRESSION:' "$1" 2>/dev/null \
+    | sed -E 's/^[[:space:]#>*-]*REGRESSION:[[:space:]]*//; s/[[:space:]]+$//'
+}
+
+regression_lock() {
+  local p
+  until mkdir "$REGRESSION_LOCK" 2>/dev/null; do
+    p=$(cat "$REGRESSION_LOCK/pid" 2>/dev/null)
+    if [ -n "$p" ] && ! kill -0 "$p" 2>/dev/null; then
+      rm -f "$REGRESSION_LOCK/pid"; rmdir "$REGRESSION_LOCK" 2>/dev/null; continue
+    fi
+    sleep 10
+  done
+  echo "$$" > "$REGRESSION_LOCK/pid"
+}
+regression_unlock() { rm -f "$REGRESSION_LOCK/pid"; rmdir "$REGRESSION_LOCK" 2>/dev/null; }
+
+# $1 worktree / $2 명령 / $3 출력 파일. 상한을 넘기면 124 — claude_with_timeout 과 같은 이유로 winpid 트리째 끊는다
+regression_run() {
+  /usr/bin/timeout --foreground --kill-after=60 "${REGRESSION_TIMEOUT_MIN}m" bash -c '
+    cd "$1" || exit 1
+    bash -c "$2" < /dev/null > "$3" 2>&1 &
+    c=$!
+    trap '\''w=$(cat /proc/$c/winpid 2>/dev/null)
+          { [ -n "$w" ] && taskkill //T //F //PID "$w" >/dev/null 2>&1; } || kill "$c" 2>/dev/null
+          exit 124'\'' TERM
+    wait "$c"' _ "$1" "$2" "$3" < /dev/null
+}
+
+# 0 = 통과(줄 없음·GREEN·판정 무효) / 1 = red
+regression_gate() {
+  local dir="$1" nn="$2" report="$dir/reg-$2.md" cmds root cmd kind log rc verdict red=0 i=0
+  cmds=$(regression_lines "$dir/00-spec.md")
+  [ -n "$cmds" ] || return 0
+  case "$(sed -nE 's/^REGRESSION_RESULT: ([A-Z]+).*/\1/p' "$report" 2>/dev/null | tail -1)" in
+    GREEN) echo "--- [reg-$nn] 기존 결과 재사용 — GREEN"; return 0 ;;
+    RED)   echo "--- [reg-$nn] 기존 결과 재사용 — RED"; return 1 ;;
+  esac
+  root=$(worktree_of "$dir/00-spec.md")
+  if [ -z "$root" ] || [ ! -d "$root" ]; then
+    echo "!!! [reg-$nn] 회귀 검증 불가 — WORKTREE 없음 (막지 않고 넘긴다)"
+    return 0
+  fi
+  echo "=== [reg-$nn] 셸 회귀 게이트 — 전 run 공통 잠금 대기"
+  regression_lock
+  { echo "# 셸 회귀 게이트 (라운드 $nn)"; echo; } > "$report"
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    i=$((i + 1)); log="$dir/reg-$nn-$i.log"
+    kind=$(mutation_runner "$cmd")
+    if [ -z "$kind" ]; then
+      echo "!!! [reg-$nn] REGRESSION 줄 해석 불가(phpunit·pytest 명령만) — 건너뜀: $cmd" | tee -a "$report"
+      continue
+    fi
+    echo "=== [reg-$nn] $i: $cmd"
+    regression_run "$root" "$cmd" "$log"; rc=$?
+    verdict=$(mutation_control_verdict "$kind" "$rc" "$(cat "$log")")
+    if [ "$verdict" = red ] && [ "$rc" -ne 124 ]; then
+      mv -f "$log" "$log.first"
+      regression_run "$root" "$cmd" "$log"; rc=$?
+      verdict=$(mutation_control_verdict "$kind" "$rc" "$(cat "$log")")
+      if [ "$verdict" = red ]; then rm -f "$log.first"
+      else echo "--- [reg-$nn] flaky — 첫 실행 red, 재실행 $verdict (첫 출력 $log.first)" | tee -a "$report"; fi
+    fi
+    case "$verdict" in
+      ok)      echo "- \`$cmd\` → GREEN" >> "$report" ;;
+      vacuous) echo "--- [reg-$nn] 판정 무효(assertion 0·테스트 없음 — 실행 환경 확인): $cmd" | tee -a "$report" ;;
+      *)
+        red=1
+        { [ "$rc" -eq 124 ] && echo "- \`$cmd\` → RED (시간 상한 ${REGRESSION_TIMEOUT_MIN}분 초과)" || echo "- \`$cmd\` → RED (rc=$rc, 재실행도 red)"
+          echo "  전체 출력: $log"; echo '```'
+          grep -E '^[0-9]+\) |^FAILED |^ERROR ' "$log" | head -50
+          echo '...'; tail -n 15 "$log"; echo '```'; } >> "$report" ;;
+    esac
+  done <<< "$cmds"
+  regression_unlock
+  if [ "$red" -eq 1 ]; then
+    echo "REGRESSION_RESULT: RED" >> "$report"
+    echo "!!! [reg-$nn] 셸 회귀 red — $report"
+    return 1
+  fi
+  echo "REGRESSION_RESULT: GREEN" >> "$report"
+  echo "=== [reg-$nn] 셸 회귀 GREEN"
   return 0
 }
 
@@ -1377,10 +1491,15 @@ worktree 는 여기서 실제로 만들고 그 절대 경로를 문서에 박는
 성공 기준 중 '이 변이에서 red' 를 요구하는 것의 개수를 한 줄로 쓴다 (없으면 0). 변이는 셸이
 실 소스에 직접 가해 확인한다 — 테스트 안에서 변이를 흉내 내는 방식은 판별력이 0 이 된다(ISS-694):
   MUTATIONS: {변이 기준 개수}
-대상 코드가 이미 있어 원문을 지금 확정할 수 있으면 변이마다 한 줄씩 쓴다 (새로 짤 코드면 dev 가 쓴다):
+대상 코드가 이미 있어 원문을 지금 확정할 수 있으면 변이마다 한 줄씩 완성형으로 쓴다 — 그러면 dev 는 이 줄을
+다시 쓰지 않는다(셸이 spec·dev 양쪽 줄을 다 읽는다). 새로 짤 코드면 MUTATIONS 개수만큼 dev 가 쓴다:
   MUTATION: {파일 상대경로} | {원문 조각} ==> {변이 조각} | {vendor/bin/phpunit 명령 또는 python -m pytest 명령}
 원문 조각은 한 줄이고 그 파일 안에서 유일해야 한다 — 여러 곳에 있으면 셸이 '모호' 로 해석 불가 처리하고,
 줄바꿈을 넣은 조각은 찾지 못한다. 여러 줄 변경이면 그 변경을 대표하는 고유한 한 줄을 고른다.
+변이 조각은 실제로 넣을 코드 그대로다. 삭제는 \`==>\` 뒤를 비운다 — \`(삭제)\` 같은 괄호 설명문은 해석 불가로 돌려보낸다.
+전체 회귀(전체 unit 등 오래 걸리는 명령)는 성공 기준에 넣지 않는다. 기계 판독 줄로 쓰면 셸이 리뷰 CLEAN 뒤·적대적
+검증 전에 worktree 에서 분할 없이 1회 직접 돌린다 (명령마다 한 줄, 없으면 쓰지 않는다):
+  REGRESSION: {vendor/bin/phpunit 명령 또는 python -m pytest 명령}
 수정을 허용하는 경로를 기계 판독용 한 줄로 쓴다 (worktree 루트 기준 glob, 쉼표 구분, * 는 / 도 넘는다 —
 테스트 파일 경로도 넣는다). 셸이 이 밖의 변경을 리뷰어와 결과문서에 드러낸다:
   SCOPE_FILES: {glob}, {glob}
@@ -1482,7 +1601,12 @@ $request"
     if [ ! -s "$dir/dev-$nn.md" ]; then
       local prev_rev="" whys=""
       if [ "$n" -gt 1 ]; then
-        prev_rev="직전 지적: $dir/rev-$(printf '%02d' $((n - 1))).md 를 읽고 전건 처리한다."
+        local pn; pn=$(printf '%02d' $((n - 1)))
+        if grep -q '^REGRESSION_RESULT: RED' "$dir/reg-$pn.md" 2>/dev/null; then
+          prev_rev="직전 지적: 리뷰는 CLEAN 이었으나 셸이 돌린 회귀 명령이 red 다 — $dir/reg-$pn.md 의 실패 목록(전체 출력은 거기 적힌 .log)을 읽고 고친다. 회귀 명령은 셸이 리뷰 뒤에 다시 돌린다."
+        else
+          prev_rev="직전 지적: $dir/rev-$pn.md 를 읽고 전건 처리한다."
+        fi
         whys=$(ls "$dir"/dev-*.md 2>/dev/null | tr '\n' ' ')
       fi
       local dev_body="$common
@@ -1522,7 +1646,12 @@ WHY 에는 무엇을 왜 그렇게 했는지 + 남겨둔 선택지와 이유 + �
     echo "=== 라운드 $n 판정: ${verdict:-(VERDICT 줄 없음)}"
     case "$verdict" in
       CLEAN*)
-        break ;;
+        # 리뷰 CLEAN 이어도 셸 회귀가 red 면 dev 로 되돌린다 (정규 캡 계상)
+        regression_gate "$dir" "$nn" && break
+        verdict="FINDINGS (셸 회귀 red — reg-$nn.md)"
+        if [ "$DEV_CAP" -gt 0 ] && [ "$n" -eq "$DEV_CAP" ]; then
+          echo "=== 캡 $DEV_CAP 소진 — 회귀 red 를 잔여로 넘긴다"
+        fi ;;
       FINDINGS*)
         if [ "$DEV_CAP" -gt 0 ] && [ "$n" -eq "$DEV_CAP" ]; then
           echo "=== 캡 $DEV_CAP 소진 — 적대적 게이트를 돌리지 않는다 (깰 것이 없다)"
@@ -1635,7 +1764,13 @@ CRITERIA 는 정규 라운드와 같다 — 셸이 같은 재검증(CRITERIA·BA
             verdict=$(verdict_of "$dir/rev-$nn2.md")
             echo "=== adv 수정분 리뷰 판정: ${verdict:-(VERDICT 줄 없음)}"
             case "$verdict" in
-              CLEAN*) ;;   # 통과 — 다음 adv 회차로
+              CLEAN*)
+                # 수정분도 셸 회귀를 거친다. red 면 정규 루프로 되돌리지 않고 잔여로 닫는다 (아래 * 와 같은 이유)
+                if ! regression_gate "$dir" "$nn2"; then
+                  verdict="FINDINGS (셸 회귀 red — reg-$nn2.md)"
+                  echo "=== adv 수정분 회귀 red — 잔여로 넘기고 게이트를 닫는다"
+                  break
+                fi ;;   # 통과 — 다음 adv 회차로
               *)
                 # 정규 루프로 되돌리지 않는다. 게이트 캡이 정규 캡을 늘리는 통로가 되면
                 # 클린 직전에 라운드가 무한히 열린다 (code.md 와 같은 이유)

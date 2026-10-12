@@ -2,7 +2,7 @@
 # MUTATION 줄 분리(mutation_split)·phpunit/pytest 명령 검증·변이 판정 단위 테스트 — 러너 전체를 돌리지 않는다.
 # 실행: bash ~/.claude/custom-plugin/taskflow/bin/tests/code-loop-mutation-parse.sh
 SUT="$(cd "$(dirname "$0")/.." && pwd)/code-loop.sh"
-eval "$(sed -n '/^PHPUNIT_PREFIX_RE=/p;/^PYTEST_PREFIX_RE=/p;/^MUTATION_RED_RE=/p;/^MUTATION_VACUOUS_RE=/p;/^safe_cmd_with_prefix()/,/^}/p;/^is_phpunit_cmd()/,/^}/p;/^is_pytest_cmd()/,/^}/p;/^mutation_runner()/,/^}/p;/^mutation_control_verdict()/,/^}/p;/^mutation_mutant_verdict()/,/^}/p;/^mutation_split()/,/^}/p' "$SUT")"
+eval "$(sed -n '/^PHPUNIT_PREFIX_RE=/p;/^PYTEST_PREFIX_RE=/p;/^MUTATION_RED_RE=/p;/^MUTATION_VACUOUS_RE=/p;/^safe_cmd_with_prefix()/,/^}/p;/^is_phpunit_cmd()/,/^}/p;/^is_pytest_cmd()/,/^}/p;/^mutation_runner()/,/^}/p;/^mutation_control_verdict()/,/^}/p;/^mutation_mutant_verdict()/,/^}/p;/^mutation_split()/,/^}/p;/^mutation_placeholder()/,/^}/p' "$SUT")"
 pass=0 fail=0
 check() { if [ "$2" = "$3" ]; then pass=$((pass + 1)); echo "   PASS $1"; else fail=$((fail + 1)); echo "   FAIL $1 — 기대 [$2] 실제 [$3]"; fi; }
 ok() { is_phpunit_cmd "$1" && echo 1 || echo 0; }
@@ -68,6 +68,20 @@ check "변이 rc0 → green"                green   "$(mutation_mutant_verdict p
 check "phpunit 변이 FAILURES → red(불변)" red   "$(mutation_mutant_verdict phpunit 1 'FAILURES! Tests: 3, Assertions: 4, Failures: 1.')"
 check "phpunit 변이 Fatal → crash(불변)"  crash "$(mutation_mutant_verdict phpunit 255 'PHP Parse error')"
 check "phpunit 대조군 Assertions 0 → vacuous(불변)" vacuous "$(mutation_control_verdict phpunit 0 'OK, but incomplete. Tests: 1, Assertions: 0')"
+
+echo "== mutation_placeholder — 변이 조각이 괄호 설명문이면 해석 불가 (1067 '==> (삭제)') =="
+ph() { mutation_placeholder "$1" && echo 1 || echo 0; }
+check "(삭제) 거부"            1 "$(ph '(삭제)')"
+check "( 제거 ) 거부"          1 "$(ph '( 제거 )')"
+check "(빈 문자열) 거부"       1 "$(ph '(빈 문자열)')"
+check "(delete) 거부"          1 "$(ph '(delete)')"
+check "빈 to = 삭제 — 통과"    0 "$(ph '')"
+check "코드 (int) — 통과"      0 "$(ph '(int)')"
+check "코드 (\$a) — 통과"      0 "$(ph '($a)')"
+check "코드 return null; — 통과" 0 "$(ph 'return null;')"
+mutation_split "app/E.php | \$x = 1; ==> | $P"
+check "빈 to 분리 — to 비움"   ""        "$to"
+check "빈 to 분리 — from"      '$x = 1;' "$from"
 
 echo "===== PASS $pass / FAIL $fail ====="
 [ "$fail" -eq 0 ]

@@ -27,6 +27,7 @@ tail -f ~/.claude/state/code-loop/{run}/run.log                        # 진행 
 | `CODE_LOOP_ADV_CAP` | `2` | red team 회차 캡, `0` = 무제한 |
 | `CODE_LOOP_STEP_TIMEOUT_MIN` | 스텝별 | 전 스텝 시간 상한 일괄 재정의(분) |
 | `CODE_LOOP_PERM` | `auto` | headless 권한 모드 |
+| `CODE_LOOP_REGRESSION_TIMEOUT_MIN` | `60` | spec `REGRESSION:` 명령 1개의 시간 상한(분) — 셸 회귀 게이트 |
 | `CODE_LOOP_ISSUE_SYNC_CMD` | `wbs-sheet-sync.sh` | 이슈 전이 뒤 시트 동기화 명령 (테스트 stub 용) |
 
 요청에 `ISS-N` 이 있으면 시작 때 이슈 문서를 pending → progress 로 옮기고, 끝날 때(어떤 종료든) 이력 1행을 남긴 뒤 시트에 동기화한다. resolved 전이는 하지 않는다 — `commands/code-loop.md` §이슈 문서 상태 전이.
@@ -43,6 +44,7 @@ CODE_LOOP_MODEL_REV=sonnet CODE_LOOP_EFFORT_REV=medium \
   bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh "{요청}"
 
 # haiku 5.5 지정 — 기본값은 아니다. 모델 값은 opus · sonnet · haiku 아무거나 역할별로 넣는다
+# haiku 는 effort 를 안 주면 high 로 돈다. 바꾸려면 CODE_LOOP_EFFORT_DEV=medium · CODE_LOOP_MODEL_SUM=haiku:low
 # (haiku 4.5 는 결과문서 경로 ~/.claude 쓰기가 CLI 에서 거부된다. 별칭 `haiku` = 5.5 라 통과)
 CODE_LOOP_MODEL_SUM=haiku bash ~/.claude/custom-plugin/taskflow/bin/code-loop.sh "{요청}"
 

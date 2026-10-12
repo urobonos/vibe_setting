@@ -734,6 +734,65 @@ check "이슈 resume — 종료 이력은 회차마다" 2 "$(grep -c '| 종료 �
 # runit 시나리오 전부(이슈 무관 요청)의 누적 출력 — issue_run 은 all-out 에 붙이지 않는다
 check "이슈 무관 요청 — 전이 시도 0" 0 "$(grep -c '\[issue\]' "$TMP/all-out.txt")"
 
+echo "== AT. 셸 회귀 게이트 — REGRESSION 줄을 리뷰 CLEAN 뒤·adv 앞에 셸이 1회 · red 면 dev 재진입 · flaky 1회 재시도 (2026-10-12) =="
+WT_REG="$TMP/wt-reg"; mkdir -p "$WT_REG/vendor/bin"
+printf '<?php\n$a = 1;\n' > "$WT_REG/a.php"
+git -C "$WT_REG" init -q; git -C "$WT_REG" add a.php
+git -C "$WT_REG" -c user.email=t@t -c user.name=t commit -qm init
+# 호출마다 REG_SEQ 의 다음 값(red·green, 소진 후 마지막 값)을 낸다
+cat > "$WT_REG/vendor/bin/phpunit" <<'PU'
+#!/usr/bin/env bash
+f="$(dirname "$0")/../../reg.calls"; echo "$*" >> "$f"; k=$(wc -l < "$f")
+v=$(printf '%s' "${REG_SEQ:-green}" | cut -d, -f"$k"); [ -n "$v" ] || v=$(printf '%s' "${REG_SEQ:-green}" | rev | cut -d, -f1 | rev)
+if [ "$v" = red ]; then printf 'FAILURES!\n1) FooTest::testBar\nTests: 5, Assertions: 9, Failures: 1.\n'; exit 1; fi
+echo 'OK (5 tests, 9 assertions)'
+PU
+chmod +x "$WT_REG/vendor/bin/phpunit"
+REG_NOTE='REGRESSION: vendor/bin/phpunit tests/unit'
+regc() { wc -l < "$WT_REG/reg.calls" 2>/dev/null | tr -d ' ' || echo 0; }
+rm -f "$WT_REG/reg.calls"; reset; rc=$(runit T_WT="$WT_REG" T_SPECNOTE="$REG_NOTE" REG_SEQ=green T_REV=CLEAN T_ADV=UPHELD)
+check "GREEN — 완주" 0 "$rc"
+check "GREEN — 1회 실행" 1 "$(regc)"
+check "GREEN — reg-01.md 판정" 1 "$(grep -c '^REGRESSION_RESULT: GREEN' "$(d)/reg-01.md" 2>/dev/null)"
+check "GREEN — 회귀가 adv 보다 먼저" 1 "$(awk '/\[reg-01\] 셸 회귀 GREEN/{r=NR} /\[adv-01\] model=/{if(!a)a=NR} END{print (r&&a&&r<a)?1:0}' "$TMP/out.txt")"
+check "GREEN — 잠금 해제" 0 "$([ -d "$ST/.regression.lock" ] && echo 1 || echo 0)"
+rm -f "$WT_REG/reg.calls"; reset; export T_PROMPTDIR="$TMP/prompts"; rm -rf "$T_PROMPTDIR"; mkdir -p "$T_PROMPTDIR"
+rc=$(runit T_WT="$WT_REG" T_SPECNOTE="$REG_NOTE" REG_SEQ=red,red,green T_REV=CLEAN T_ADV=UPHELD)
+check "RED — 완주" 0 "$rc"
+check "RED — dev 재진입(2라운드)" 2 "$(cnt 'dev-*.md')"
+check "RED — 재진입 dev 가 reg-01.md 를 본다" 1 "$([ "$(grep -c 'reg-01.md' "$T_PROMPTDIR/dev-02.md.prompt" 2>/dev/null)" -ge 1 ] && echo 1 || echo 0)"
+check "RED — 실패 목록이 reg-01.md 에" 1 "$([ "$(grep -c 'FooTest::testBar' "$(d)/reg-01.md")" -ge 1 ] && echo 1 || echo 0)"
+check "RED — 재실행 포함 3회" 3 "$(regc)"
+check "RED — adv 1회" 1 "$(cnt 'adv-*.md')"
+check "spec 프롬프트 — REGRESSION 줄 안내" 1 "$([ "$(grep -c 'REGRESSION: {vendor/bin/phpunit' "$T_PROMPTDIR/00-spec.md.prompt")" -ge 1 ] && echo 1 || echo 0)"
+check "spec 프롬프트 — 삭제는 빈 치환" 1 "$(grep -c '삭제는 `==>` 뒤를 비운다' "$T_PROMPTDIR/00-spec.md.prompt")"
+unset T_PROMPTDIR
+RUN=$(basename "$(d)"); rm -f "$ST/$RUN/RESULT.md"
+env T_WT="$WT_REG" T_SPECNOTE="$REG_NOTE" REG_SEQ=green T_REV=CLEAN T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+check "RED resume — 기록된 판정 재사용(재실행 0)" 3 "$(regc)"
+check "RED resume — 라운드 그대로" 2 "$(cnt 'dev-*.md')"
+rm -f "$WT_REG/reg.calls"; reset; rc=$(runit T_WT="$WT_REG" T_SPECNOTE="$REG_NOTE" REG_SEQ=red,green T_REV=CLEAN T_ADV=UPHELD)
+check "flaky — 1라운드로 통과" 1 "$(cnt 'dev-*.md')"
+check "flaky — 기록" 1 "$(grep -c 'flaky' "$(d)/reg-01.md")"
+rm -f "$WT_REG/reg.calls"; reset; rc=$(runit CODE_LOOP_DEV_CAP=1 T_WT="$WT_REG" T_SPECNOTE="$REG_NOTE" REG_SEQ=red T_REV=CLEAN T_ADV=UPHELD)
+check "캡 소진 RED — adv 없음" 0 "$(cnt 'adv-*.md')"
+check "캡 소진 RED — [미수렴]" 1 "$(head -1 "$(d)/RESULT.md" | grep -c '^> \[미수렴\] dev=FINDINGS (셸 회귀 red')"
+rm -f "$WT_REG/reg.calls"; reset; rc=$(runit T_WT="$WT_REG" T_SPECNOTE='MUTATIONS: 1\nMUTATION: a.php | $a = 1; ==> (삭제) | vendor/bin/phpunit tests/unit' T_REV=CLEAN T_ADV=UPHELD)
+check "변이 설명문 — 해석 불가로 재보고" 1 "$([ "$(grep -c "변이 조각 '(삭제)' 는 설명문이다" "$TMP/out.txt")" -ge 1 ] && echo 1 || echo 0)"
+check "REGRESSION 줄 없음 — 게이트 안 돈다" 0 "$(grep -c '\[reg-' "$TMP/out.txt")"
+
+echo "== AU. haiku 는 effort 미지정이면 high — 명시 effort 는 그대로 (2026-10-12) =="
+ML="$TMP/models.log"
+tier_of() { grep "^$1|" "$ML" | tail -1 | cut -d'|' -f2,3; }
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_MODEL_DEV=haiku CODE_LOOP_MODEL_REV=claude-haiku-5-5 CODE_LOOP_MODEL_SUM=haiku T_REV=CLEAN T_ADV=UPHELD)
+check "haiku dev — high" "haiku|high" "$(tier_of dev-01.md)"
+check "haiku 전체 ID rev — high" "claude-haiku-5-5|high" "$(tier_of rev-01-correctness.md)"
+check "haiku sum — high" "haiku|high" "$(tier_of RESULT.md)"
+check "haiku 아닌 spec — 그대로" "opus|medium" "$(tier_of 00-spec.md)"
+reset; : > "$ML"; rc=$(runit T_MODELLOG="$ML" CODE_LOOP_MODEL_DEV=haiku CODE_LOOP_EFFORT_DEV=low CODE_LOOP_MODEL_SUM=haiku:medium T_REV=CLEAN T_ADV=UPHELD)
+check "명시 effort — dev low 유지" "haiku|low" "$(tier_of dev-01.md)"
+check "명시 effort — sum medium 유지" "haiku|medium" "$(tier_of RESULT.md)"
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="
