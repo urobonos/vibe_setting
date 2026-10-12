@@ -33,6 +33,7 @@ CMD_DIR="$CLAUDE_HOME/custom-plugin/taskflow/commands"
 # 크기 게이트 판정 줄 읽기 — hook(gate-enforce.sh)과 같은 함수를 쓴다. 러너 위치 기준으로
 # 찾으므로 worktree 의 러너는 같은 worktree 의 lib 를 읽는다 (SSOT = custom-plugin/taskflow/hooks/lib/code-loop-gate.sh)
 GATE_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hooks/lib/code-loop-gate.sh"   # taskflow/bin → taskflow/hooks/lib
+ISSUE_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/code-loop-issue.sh"   # 이슈 문서 상태 전이 + 시트 동기화
 . "$GATE_LIB" 2>/dev/null
 AGENT_DIR="$CLAUDE_HOME/custom-plugin/taskflow/agents"
 PERM="${CODE_LOOP_PERM:-auto}"
@@ -1295,13 +1296,30 @@ request_base_root() {
   printf '%s' "$root"
 }
 
+# 이슈 문서 종료 이력 — run_loop 의 EXIT trap 이 부른다. 정상 종료는 ISSUE_OUTCOME 이 판정을 갖고 오고,
+# 나머지는 종료 코드로 가른다 (0 완료 · 1 실패 · 2 크기 게이트 · 3 반환, run_loop 주석과 같은 표)
+issue_end() {
+  local rc="$1" outcome="${ISSUE_OUTCOME:-}"
+  [ -n "${ISSUE_DIR:-}" ] && [ -s "$ISSUE_DIR/ISSUE" ] || return 0
+  if [ -z "$outcome" ]; then
+    case "$rc" in
+      2) outcome="크기 게이트 초과(TOO-LARGE) — 받지 않음, /taskflow:plan 경로" ;;
+      3) outcome="반환(착수 불가) — 코드 변경 없음" ;;
+      *) outcome="중단 (rc=$rc) — 재개: code-loop.sh --resume $ISSUE_RUN" ;;
+    esac
+  fi
+  bash "$ISSUE_SH" end "$ISSUE_DIR" "$outcome"
+}
+
 run_loop() {
   local request="$1" run="$2" resume="${3:-}" dir="$STATE_DIR/$2"
   mkdir -p "$dir"
   # 중단(return·한도 exit·TERM)도 run.log 에 끝을 남긴다 — 없으면 tail -f 로 보는 쪽이 멈춤과 진행을 못 가른다.
   # run_loop 는 tee_run 이 띄운 백그라운드 서브셸에서 돌아 trap 이 러너 본체로 새지 않는다
   loop_finished=""
-  trap 'rc=$?; [ -n "$loop_finished" ] || echo "=== $(date "+%F %T") code-loop 종료 (abort=$rc)"' EXIT
+  # 이슈 문서 종료 이력은 어떤 경로로 끝나든 남긴다 — trap 은 run_loop 가 돌아간 뒤 돌아 지역변수가 없으므로 전역으로 넘긴다
+  ISSUE_DIR="$dir" ISSUE_RUN="$run" ISSUE_OUTCOME=""
+  trap 'rc=$?; [ -n "$loop_finished" ] || echo "=== $(date "+%F %T") code-loop 종료 (abort=$rc)"; issue_end "$rc"' EXIT
   trap 'exit 143' TERM
   echo "=== $(date '+%F %T') code-loop 시작 (run=$run perm=$PERM)"
   echo "=== 결과문서: $dir"
@@ -1328,6 +1346,11 @@ run_loop() {
     echo "=== 요청 상대경로 기준: $base_root"
     common="$common
 요청에 나오는 상대경로(docs\\wbs\\issue\\request\\…)는 메인 트리 $base_root 기준이다 — worktree 에는 없는 로컬 폴더다. find 로 찾지 말고 $base_root/ 에 붙여 Read 한다."
+  fi
+  # 이슈 문서 착수 전이는 spec 보다 먼저 한다. resume 은 첫 기동 때 이미 했다 (요청 원문도 없다)
+  if [ -n "$request" ] && [ ! -e "$dir/ISSUE_STARTED" ]; then
+    bash "$ISSUE_SH" start "$dir" "$request"
+    : > "$dir/ISSUE_STARTED"
   fi
 
   # ── 1단계: 범위 확정 + worktree ───────────────────────────────────────
@@ -1698,6 +1721,10 @@ $dir 의 결과문서 전부를 읽고 메인 세션에 돌려줄 $dir/RESULT.md
   esac
 
   echo "=== $(date '+%F %T') code-loop 종료 (dev=$verdict adv=$adv_verdict)"
+  case "$verdict/$adv_verdict" in
+    CLEAN*/UPHELD*) ISSUE_OUTCOME="완료 (dev=$verdict adv=$adv_verdict) — 정착 대기" ;;
+    *)              ISSUE_OUTCOME="미수렴 (dev=$verdict adv=$adv_verdict${adv_capped:+, adv 캡 도달})" ;;
+  esac
   loop_finished=1
   if [ -s "$dir/RESULT.md" ]; then
     echo

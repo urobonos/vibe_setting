@@ -27,6 +27,9 @@ tail -f ~/.claude/state/code-loop/{run}/run.log                        # 진행 
 | `CODE_LOOP_ADV_CAP` | `2` | red team 회차 캡, `0` = 무제한 |
 | `CODE_LOOP_STEP_TIMEOUT_MIN` | 스텝별 | 전 스텝 시간 상한 일괄 재정의(분) |
 | `CODE_LOOP_PERM` | `auto` | headless 권한 모드 |
+| `CODE_LOOP_ISSUE_SYNC_CMD` | `wbs-sheet-sync.sh` | 이슈 전이 뒤 시트 동기화 명령 (테스트 stub 용) |
+
+요청에 `ISS-N` 이 있으면 시작 때 이슈 문서를 pending → progress 로 옮기고, 끝날 때(어떤 종료든) 이력 1행을 남긴 뒤 시트에 동기화한다. resolved 전이는 하지 않는다 — `commands/code-loop.md` §이슈 문서 상태 전이.
 
 자동 등급(`TIER=auto`, 지정 안 한 dev·rev): 시작 = max(위험영역 최소치, spec 의 `TIER:` 줄), effort 는 medium.
 리뷰 3라운드째·red team 1회 깸 → opus:high, 2회 이상 → opus:xhigh 로 승격.

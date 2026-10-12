@@ -181,6 +181,20 @@ MM = 1 .. 3   (CODE_LOOP_ADV_CAP, 0 = 무제한)
 
 **머지·push 하지 않는다 (§3).** worktree 와 커밋만 남기고 정착은 사용자가 한다.
 
+## 이슈 문서 상태 전이 — 시작에 한 번, 종료에 한 번
+
+요청에 `ISS-N` 이 있고 기준 레포(BASE_ROOT)에 그 이슈 문서가 있으면 러너가 문서 상태를 맞춘다. 로직은 `bin/code-loop-issue.sh` 하나다.
+
+| 시점 | 문서가 pending | progress | resolved |
+|---|---|---|---|
+| **시작** — spec 보다 먼저 | `progress/` 로 `git mv` + frontmatter `상태`·`착수일` + 이력 1행 | 이력 1행 | 전이·이력 없음 |
+| **종료** — 완료·미수렴·게이트·반환·중단 전부(EXIT trap) | — | 이력 1행(판정·사유), **progress 유지** | — |
+
+- 두 시점 모두 끝에 시트 동기화(`tools/scripts/wbs-sheet-sync.sh {레포}`)를 부른다. 실패해도 run 은 계속한다 — 다음 동기화가 문서 기준으로 덮는다.
+- **resolved 로는 옮기지 않는다.** R 으로 나뉜 이슈는 run 1개 끝이 종결이 아니고, 정착·검증하는 쪽(허브)이 옮긴다. 변경은 본 체크아웃에 미커밋으로 남는다 — 러너가 공동 브랜치에 커밋하지 않는다 (2026-10-12 사용자 결정).
+- 첫 번째 `ISS-N` 만 본다 — 요청서 첫 줄이 `ISS-N Rn — …` 이다. `--resume` 은 착수 전이를 다시 하지 않고(`ISSUE_STARTED`), 종료 이력은 끝날 때마다 남긴다.
+- 이슈 상태 규약 SSOT 는 레포 `docs/wbs/issue/README.md` §1(폴더 + frontmatter 를 같이 바꾼다)이다.
+
 ## 재개
 
 스텝 산출 파일이 이미 있으면 그 스텝을 건너뛴다. 중단된 run 은 `code-loop.sh --resume {run}` 으로 마지막 스텝 다음부터 이어진다 (`code-loop.sh status` 로 목록). **요청 원문은 `00-spec.md` 가 SSOT 다** — 재개할 때 요청을 다시 받지 않는다.
@@ -206,6 +220,7 @@ MM = 1 .. 3   (CODE_LOOP_ADV_CAP, 0 = 무제한)
 | 리뷰어 합본 규약 | `custom-plugin/taskflow/references/review-contract.md` §"코드 축" |
 | **러너 (스텝 오케스트레이션 · VERDICT 분기 · 캡 · 재개)** | **`~/.claude/custom-plugin/taskflow/bin/code-loop.sh`** |
 | worktree 생성·정착 | `custom-plugin/git/commands/{create,merge}.md` |
+| 이슈 문서 상태 전이 · 시트 동기화 호출 | `~/.claude/custom-plugin/taskflow/bin/code-loop-issue.sh` |
 
 ## Changelog
 

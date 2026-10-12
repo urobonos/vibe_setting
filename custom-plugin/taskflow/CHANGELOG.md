@@ -47,6 +47,8 @@
 
 ## commands/code-loop.md
 
+- 2026-10-12: **이슈 문서 상태 전이 + 시트 동기화** (`bin/code-loop-issue.sh` 신설). 요청의 첫 `ISS-N` 문서를 spec 전에 pending → progress(`git mv` + frontmatter + 이력), 어떤 종료든 EXIT trap 에서 이력 1행 — progress 유지, resolved 는 정착 쪽 소관. 두 시점 모두 `wbs-sheet-sync.sh` 호출. 문서 변경은 본 체크아웃에 미커밋. 사용자 결정 3건(완료·미수렴 모두 progress 유지, 미커밋).
+- 2026-10-12: 리뷰 라운드 캡 기본값 0(무제한) → 5 — 클린 도달 run 의 99.8% 가 5라운드 이내.
 - 2026-09-29: MUTATION 조각 = 한 줄·파일 안 유일. 러너는 이스케이프를 풀지 않는다(PHP 소스의 리터럴 `
 `·FQCN 을 깨뜨린다). 0곳이면 기존대로 "없다"(조각에 `
 `·`	` 가 있으면 "여러 줄 조각 미지원" 원인 문구), 2곳 이상이면 첫 위치를 조용히 변이하지 않고 "모호" 로 해석 불가 — 첫 매치 치환이 의도와 다른 곳을 변이해 red/green 을 오판할 수 있었다(run 760 · ISS-THKING). spec 프롬프트·step-developer 규약에 반영, step-developer FILES 는 한 줄 한 파일 명시

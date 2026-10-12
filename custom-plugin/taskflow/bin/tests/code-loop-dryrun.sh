@@ -705,6 +705,35 @@ check "캡 0 — TOO-LARGE 판정 줄 지시 없음" 0 "$(grep -c 'GATE: TOO-LAR
 check "캡 0 — 완주" 0 "$rc"
 unset T_PROMPTDIR
 
+echo "== AS. 이슈 문서 상태 전이 — spec 전에 pending→progress, 어떤 종료든 이력 1행 (2026-10-12) =="
+# 전이 규칙 자체는 tests/code-loop-issue-test.sh 가 본다. 여기서는 러너 배선(시작 시점·EXIT trap·resume)만 본다
+IREPO="$TMP/issrepo"; ISSD="$IREPO/docs/wbs/issue"
+issue_reset() {
+  rm -rf "$IREPO"; mkdir -p "$ISSD/pending" "$ISSD/progress" "$ISSD/resolved" "$IREPO/docs/wbs/issue/request"
+  printf -- '---\n이슈: ISS-9001\n상태: pending\n착수일: 없음\n---\n\n## 6. 이력\n\n| 날짜 | 상태 | 누가 | 무엇을 |\n|---|---|---|---|\n| 2026-10-01 | pending | t | 등재 |\n' \
+    > "$ISSD/pending/2026-10-01-ISS-9001-x.md"
+  git -C "$IREPO" init -q; git -C "$IREPO" add -A; git -C "$IREPO" -c user.email=t@t -c user.name=t commit -qm init
+}
+issue_run() { env CODE_LOOP_BASE_ROOT="$IREPO" CODE_LOOP_ISSUE_SYNC_CMD="echo sync >> $TMP/isync.log; echo" "$@" \
+  timeout "$RUN_TIMEOUT" bash "$SUT" "ISS-9001 R1 — 드라이런 이슈 요청" > "$TMP/out.txt" 2>&1; echo $?; }
+idoc() { ls "$ISSD"/*/*-ISS-9001-*.md; }
+issue_reset; reset; rm -f "$TMP/isync.log"; rc=$(issue_run T_REV=CLEAN T_ADV=UPHELD)
+check "이슈 완료 — 완주" 0 "$rc"
+check "이슈 완료 — progress 로 이동" progress "$(basename "$(dirname "$(idoc)")")"
+check "이슈 완료 — 착수 전이가 spec 보다 먼저" 1 "$(awk '/\[issue\] ISS-9001 pending → progress/{i=NR} /\[spec\] model=/{if(!s)s=NR} END{print (i&&s&&i<s)?1:0}' "$TMP/out.txt")"
+check "이슈 완료 — 착수·종료 이력 2행" 2 "$(grep -c '| code-loop (run' "$(idoc)")"
+check "이슈 완료 — 종료 행에 판정" 1 "$(grep -c '종료 — 완료 (dev=CLEAN.* adv=UPHELD.*) — 정착 대기' "$(idoc)")"
+check "이슈 완료 — 시트 동기화 2회" 2 "$(grep -c sync "$TMP/isync.log")"
+issue_reset; reset; rc=$(issue_run T_GATE=TOO-LARGE)
+check "이슈 게이트 반려 — 종료 이력이 사유를 단다" 1 "$(grep -c '종료 — 크기 게이트 초과' "$(idoc)")"
+issue_reset; reset; rc=$(issue_run T_REV=CLEAN T_ADV=UPHELD)
+RUN=$(basename "$(d)"); rm -f "$ST/$RUN/RESULT.md"
+env CODE_LOOP_BASE_ROOT="$IREPO" CODE_LOOP_ISSUE_SYNC_CMD=true T_REV=CLEAN T_ADV=UPHELD timeout "$RUN_TIMEOUT" bash "$SUT" --resume "$RUN" > "$TMP/out.txt" 2>&1
+check "이슈 resume — 착수 이력은 다시 안 쓴다" 1 "$(grep -c '| 착수 — code-loop 시작' "$(idoc)")"
+check "이슈 resume — 종료 이력은 회차마다" 2 "$(grep -c '| 종료 — ' "$(idoc)")"
+# runit 시나리오 전부(이슈 무관 요청)의 누적 출력 — issue_run 은 all-out 에 붙이지 않는다
+check "이슈 무관 요청 — 전이 시도 0" 0 "$(grep -c '\[issue\]' "$TMP/all-out.txt")"
+
 # 전 시나리오 누적 출력에서 셸 오류 — 어느 스텝 프롬프트든 따옴표 절단·오타가 나면 여기서 잡힌다
 check "전 시나리오 셸 오류 0" 0 "$(grep -cE 'not a valid identifier|command not found|syntax error|unexpected EOF' "$TMP/all-out.txt")"
 echo "===== PASS $pass / FAIL $fail ====="
